@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
@@ -68,7 +69,7 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - scaleW(200)) {
       viewModel.loadMore();
     }
   }
@@ -90,7 +91,6 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
   }
 
   ScreenChromeData _buildChromeData(BuildContext context) {
-    final theme = Theme.of(context);
     return ScreenChromeData(
       forceLocalChrome: true,
       leading: IconButton(
@@ -102,7 +102,6 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
       titleWidget: _SearchInputField(
         controller: _searchController,
         focusNode: _focusNode,
-        theme: theme,
         onSubmitted: (_) => _doSearch(),
         onClear: _clearSearch,
         onChanged: (val) {
@@ -149,8 +148,8 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: AppTheme.metrics.radius16.topLeft),
       ),
       builder: (_) => _CategoryFilterSheet(
         selected: List<String>.from(viewModel.selectedCategories),
@@ -194,7 +193,7 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
 
   /// 搜索结果区域（使用 Obx 监听 RxList 变化，修复 loadMore 后列表不更新的问题）
   Widget _buildResults(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
 
     /// isLoading / errorMessage 由基类 GetBuilder 触发重建，此处直接读取
@@ -205,7 +204,7 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
       return Center(
         child: Text(
           viewModel.errorMessage!,
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
+          style: AppTextStyles.body(context).copyWith(color: s.danger.color),
         ),
       );
     }
@@ -216,9 +215,7 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
         return Center(
           child: Text(
             '没有找到相关漫画',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
+            style: AppTextStyles.body(context),
           ),
         );
       }
@@ -231,8 +228,8 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
         padding: EdgeInsets.all(metrics.kSpace16),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: crossAxisCount,
-          mainAxisSpacing: scaleW(8),
-          crossAxisSpacing: scaleW(8),
+          mainAxisSpacing: metrics.kSpace8,
+          crossAxisSpacing: metrics.kSpace8,
           childAspectRatio: 0.6,
         ),
         itemCount: viewModel.results.length + (viewModel.hasMore ? 1 : 0),
@@ -240,7 +237,7 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
           if (i >= viewModel.results.length) {
             return Center(
               child: Padding(
-                padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+                padding: EdgeInsets.all(metrics.kSpace16),
                 child: const CircularProgressIndicator(),
               ),
             );
@@ -260,7 +257,6 @@ class _SearchInputField extends StatelessWidget {
   const _SearchInputField({
     required this.controller,
     required this.focusNode,
-    required this.theme,
     required this.onSubmitted,
     required this.onClear,
     required this.onChanged,
@@ -268,29 +264,27 @@ class _SearchInputField extends StatelessWidget {
 
   final TextEditingController controller;
   final FocusNode focusNode;
-  final ThemeData theme;
   final ValueChanged<String> onSubmitted;
   final VoidCallback onClear;
   final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return AppTextField(
       controller: controller,
       focusNode: focusNode,
       decoration: InputDecoration(
         hintText: '搜索漫画、作者、标签...',
         border: InputBorder.none,
-        hintStyle: theme.textTheme.bodyMedium?.copyWith(
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-        ),
+        hintStyle: AppTheme.fieldTextStyle.copyWith(color: s.textTertiary),
         suffixIcon: ListenableBuilder(
           listenable: controller,
           builder: (_, _) => controller.text.isNotEmpty
               ? IconButton(
                   icon: DrawIcon(StrokeIcons.close,
-                    size: scaleW(18),
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    size: AppTheme.metrics.iconSize18,
+                    color: s.textTertiary,
                   ),
                   onPressed: onClear,
                 )
@@ -322,7 +316,7 @@ class _SearchHistorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
 
     return Obx(() {
@@ -336,15 +330,17 @@ class _SearchHistorySection extends StatelessWidget {
             Row(
               children: [
                 DrawIcon(StrokeIcons.history,
-                  size: scaleW(16),
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  size: metrics.iconSize16,
+                  color: s.textTertiary,
                 ),
                 SizedBox(width: metrics.kSpace6),
                 Text(
                   '搜索历史',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.w600,
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: metrics.fontSize12,
+                    color: s.textTertiary,
+                    weight: FontWeight.w600,
                   ),
                 ),
                 const Spacer(),
@@ -354,15 +350,13 @@ class _SearchHistorySection extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DrawIcon(StrokeIcons.deleteSweep,
-                        size: scaleW(14),
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
+                        size: metrics.iconSize14,
+                        color: s.textDisabled,
                       ),
                       SizedBox(width: metrics.kSpace3),
                       Text(
                         '清空',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
-                        ),
+                        style: AppTextStyles.caption(context).copyWith(color: s.textDisabled),
                       ),
                     ],
                   ),
@@ -371,8 +365,8 @@ class _SearchHistorySection extends StatelessWidget {
             ),
             SizedBox(height: metrics.kSpace10),
             Wrap(
-              spacing: scaleW(8),
-              runSpacing: scaleW(8),
+              spacing: metrics.kSpace8,
+              runSpacing: metrics.kSpace8,
               children: history
                   .map(
                     (tag) => _HistoryTag(
@@ -401,31 +395,39 @@ class _HistoryTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: metrics.kSpace10, vertical: metrics.kSpace6),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest,
+          color: s.surfaceSunken,
           borderRadius: metrics.radius12,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            // 标签在 Wrap 里，父约束宽度无限，只能给文字加封顶而不是 Flexible。
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: scaleW(140)),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: metrics.fontSize12,
+                  color: s.textSecondary,
+                ),
               ),
             ),
             SizedBox(width: metrics.kSpace4),
             GestureDetector(
               onTap: onDelete,
               child: DrawIcon(StrokeIcons.close,
-                size: scaleW(12),
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                size: metrics.iconSize12,
+                color: s.textDisabled,
               ),
             ),
           ],
@@ -530,7 +532,6 @@ class _CategoryFilterSheetState extends State<_CategoryFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final metrics = appMetrics;
     return DraggableScrollableSheet(
       initialChildSize: 0.55,
@@ -543,13 +544,13 @@ class _CategoryFilterSheetState extends State<_CategoryFilterSheet> {
             padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16, vertical: metrics.kSpace12),
             child: Row(
               children: [
-                Text('分类过滤', style: theme.textTheme.titleMedium),
+                Text('分类过滤', style: AppTextStyles.sectionTitle(context)),
                 const Spacer(),
                 TextButton(
                   onPressed: () => setState(() => _selected.clear()),
                   child: const Text('清空'),
                 ),
-                SizedBox(width: AppTheme.metrics.kSpace8),
+                SizedBox(width: metrics.kSpace8),
                 FilledButton(
                   onPressed: () {
                     Navigator.pop(context);
@@ -560,19 +561,20 @@ class _CategoryFilterSheetState extends State<_CategoryFilterSheet> {
               ],
             ),
           ),
-          const Divider(height: 1),
+          // 分割线颜色由主题的 dividerTheme 提供，这里只定高度
+          Divider(height: metrics.kSpace1),
           Expanded(
             child: ListView(
               controller: controller,
               padding: EdgeInsets.all(metrics.kSpace12),
               children: [
                 Wrap(
-                  spacing: scaleW(8),
-                  runSpacing: scaleW(6),
+                  spacing: metrics.kSpace8,
+                  runSpacing: metrics.kSpace6,
                   children: _kMangaCategories.map((cat) {
                     final selected = _selected.contains(cat);
                     return FilterChip(
-                      label: Text(cat, style: theme.textTheme.bodySmall),
+                      label: Text(cat),
                       selected: selected,
                       onSelected: (v) => setState(() {
                         if (v) {

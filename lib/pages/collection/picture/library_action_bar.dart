@@ -32,6 +32,7 @@ class LibraryActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final inDetail = viewModel.isInDetail;
     final showBack = inDetail || viewModel.currentFolderId.value != null;
 
@@ -53,7 +54,7 @@ class LibraryActionBar extends StatelessWidget {
               children: [
                 AnimatedOpacity(
                   opacity: showBack ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 150),
+                  duration: AppMotion.fast,
                   child: IgnorePointer(
                     ignoring: !showBack,
                     child: IconButton(
@@ -72,7 +73,7 @@ class LibraryActionBar extends StatelessWidget {
                 Flexible(
                   child: Text(
                     '集合内媒体 ${items.length} 项 · ${_formatBytes(totalSize)}',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: AppTextStyles.body(context),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -82,7 +83,7 @@ class LibraryActionBar extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    DrawIcon(StrokeIcons.gridView, size: scaleW(16), color: Theme.of(context).hintColor),
+                    DrawIcon(StrokeIcons.gridView, size: scaleW(16), color: s.textTertiary),
                     SizedBox(width: appMetrics.kSpace4),
                     IconButton(
                       icon: DrawIcon(StrokeIcons.remove),
@@ -92,7 +93,11 @@ class LibraryActionBar extends StatelessWidget {
                       tooltip: '减少列数',
                       onPressed: onColumnDecrement,
                     ),
-                    Text('$columnCount 列', style: Theme.of(context).textTheme.bodySmall),
+                    Text('$columnCount 列', style: AppTextStyles.role(
+                      context,
+                      fontSize: appMetrics.fontSize12,
+                      color: s.textTertiary,
+                    )),
                     IconButton(
                       icon: DrawIcon(StrokeIcons.add),
                       iconSize: scaleW(16),
@@ -116,7 +121,11 @@ class LibraryActionBar extends StatelessWidget {
                         constraints: BoxConstraints(maxWidth: scaleW(72)),
                         child: Text(
                           viewModel.itemSortOrder.value.label,
-                          style: Theme.of(context).textTheme.bodySmall,
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: appMetrics.fontSize12,
+                            color: s.textTertiary,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -163,7 +172,11 @@ class LibraryActionBar extends StatelessWidget {
                 Flexible(
                   child: Text(
                     '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: appMetrics.fontSize12,
+                      color: s.textTertiary,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -172,7 +185,7 @@ class LibraryActionBar extends StatelessWidget {
               Flexible(
                 flex: 0,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 200),
+                  constraints: BoxConstraints(maxWidth: scaleW(200)),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -181,7 +194,11 @@ class LibraryActionBar extends StatelessWidget {
                           constraints: BoxConstraints(maxWidth: scaleW(80)),
                           child: Text(
                             '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: appMetrics.fontSize12,
+                              color: s.textTertiary,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -198,7 +215,11 @@ class LibraryActionBar extends StatelessWidget {
                               constraints: BoxConstraints(maxWidth: scaleW(72)),
                               child: Text(
                                 viewModel.collectionSortOrder.value.label,
-                                style: Theme.of(context).textTheme.bodySmall,
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: appMetrics.fontSize12,
+                                  color: s.textTertiary,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -254,7 +275,12 @@ Widget _buildBreadcrumb(
             children: [
               DrawIcon(StrokeIcons.autoAwesome, size: scaleW(14)),
               SizedBox(width: appMetrics.kSpace4),
-              Text(smartFolder.name, style: Theme.of(context).textTheme.labelMedium),
+              Text(smartFolder.name, style: AppTextStyles.role(
+            context,
+            fontSize: appMetrics.fontSize12,
+            color: AppSemantic.of(context).textSecondary,
+            weight: FontWeight.w500,
+          )),
             ],
           ),
         ],

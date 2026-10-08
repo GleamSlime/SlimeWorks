@@ -46,10 +46,9 @@ class _TransferActionsState extends State<TransferActions> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
-    final bg = isDark ? DarkColors.background1 : LightColors.background1;
-    final border = isDark ? DarkColors.white10 : LightColors.black10;
+    // 取色只走语义层：isDark 三元分支与裸 Colors.* 一律收敛到 AppSemantic
+    final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
 
     return Obx(() {
       final isOnline = widget.viewModel.discoveredDevices.any(
@@ -58,8 +57,8 @@ class _TransferActionsState extends State<TransferActions> {
 
       return Container(
         decoration: BoxDecoration(
-          color: bg,
-          border: Border(top: BorderSide(color: border)),
+          color: s.surface,
+          border: Border(top: BorderSide(color: s.border)),
         ),
         child: SafeArea(
           top: false,
@@ -69,28 +68,29 @@ class _TransferActionsState extends State<TransferActions> {
               // 对端在线状态提示条
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                  AppTheme.metrics.kSpace16,
-                  AppTheme.metrics.kSpace12,
-                  AppTheme.metrics.kSpace16,
+                  m.kSpace16,
+                  m.kSpace12,
+                  m.kSpace16,
                   0,
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: 6,
-                      height: 6,
+                      width: m.kSpace6,
+                      height: m.kSpace6,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isOnline ? Colors.green : Colors.grey,
+                        color: isOnline ? s.success.color : s.neutral.color,
                       ),
                     ),
-                    SizedBox(width: AppTheme.metrics.kSpace4),
+                    SizedBox(width: m.kSpace4),
                     Text(
                       isOnline ? '已连接' : '不在线·发送后排队',
-                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
-                        color: isOnline
-                            ? Colors.green
-                            : (isDark ? DarkColors.white40 : LightColors.black40),
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: m.fontSize11,
+                        height: 1.4,
+                        color: isOnline ? s.success.onContainer : s.textTertiary,
                       ),
                     ),
                   ],
@@ -100,13 +100,13 @@ class _TransferActionsState extends State<TransferActions> {
               // 文本输入区（带展开/收起）
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                  AppTheme.metrics.kSpace16,
-                  AppTheme.metrics.kSpace10,
-                  AppTheme.metrics.kSpace16,
+                  m.kSpace16,
+                  m.kSpace10,
+                  m.kSpace16,
                   0,
                 ),
                 child: AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
+                  duration: AppMotion.base,
                   child: _textFieldExpanded
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -117,26 +117,32 @@ class _TransferActionsState extends State<TransferActions> {
                                 textInputAction: TextInputAction.send,
                                 maxLines: 1,
                                 minLines: 1,
-                                style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5,
-                                  color: isDark ? DarkColors.white100 : LightColors.black100,
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: m.fontSize13,
+                                  height: 1.5,
+                                  color: s.textPrimary,
                                 ),
                                 decoration: InputDecoration(
                                   hintText: '输入要发送的文本...',
-                                  hintStyle: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5,
-                                    color: isDark ? DarkColors.white40 : LightColors.black40,
+                                  hintStyle: AppTextStyles.role(
+                                    context,
+                                    fontSize: m.fontSize13,
+                                    height: 1.5,
+                                    color: s.textTertiary,
                                   ),
                                   filled: true,
-                                  fillColor: isDark ? DarkColors.white10 : LightColors.black10,
+                                  fillColor: s.surfaceSunken,
                                   border: OutlineInputBorder(
-                                    borderRadius: AppTheme.metrics.radius10,
+                                    borderRadius: m.radius10,
                                     borderSide: BorderSide.none,
                                   ),
-                                  contentPadding: EdgeInsets.all(AppTheme.metrics.kSpace12),
+                                  contentPadding: EdgeInsets.all(m.kSpace12),
                                 ),
                                 onSubmitted: (_) => _sendText(),
                               ),
                             ),
-                            SizedBox(width: AppTheme.metrics.kSpace8),
+                            SizedBox(width: m.kSpace8),
                             // 发送按鈕（单击发送）
                             ValueListenableBuilder<TextEditingValue>(
                               valueListenable: _textController,
@@ -145,18 +151,15 @@ class _TransferActionsState extends State<TransferActions> {
                                 return GestureDetector(
                                   onTap: hasText ? _sendText : null,
                                   child: Container(
-                                    padding: EdgeInsets.all(AppTheme.metrics.kSpace10),
+                                    padding: EdgeInsets.all(m.kSpace10),
                                     decoration: BoxDecoration(
-                                      color: hasText
-                                          ? primaryColor.withValues(alpha: 0.15)
-                                          : (isDark ? DarkColors.white10 : LightColors.black10),
-                                      borderRadius: AppTheme.metrics.radius10,
+                                      // 有文本走"强调容器"，无文本走下沉表面
+                                      color: hasText ? s.accentContainer : s.surfaceSunken,
+                                      borderRadius: m.radius10,
                                     ),
                                     child: DrawIcon(StrokeIcons.send,
                                       size: scaleW(20),
-                                      color: hasText
-                                          ? primaryColor
-                                          : (isDark ? DarkColors.white40 : LightColors.black40),
+                                      color: hasText ? s.accent : s.textTertiary,
                                     ),
                                   ),
                                 );
@@ -171,8 +174,8 @@ class _TransferActionsState extends State<TransferActions> {
               // 操作按鈕行
               Padding(
                 padding: EdgeInsets.symmetric(
-                  horizontal: AppTheme.metrics.kSpace12,
-                  vertical: AppTheme.metrics.kSpace10,
+                  horizontal: m.kSpace12,
+                  vertical: m.kSpace10,
                 ),
                 child: Row(
                   children: [
@@ -182,28 +185,24 @@ class _TransferActionsState extends State<TransferActions> {
                       label: '文本',
                       isActive: _textFieldExpanded,
                       onPressed: () => setState(() => _textFieldExpanded = !_textFieldExpanded),
-                      isDark: isDark,
                     ),
-                    SizedBox(width: AppTheme.metrics.kSpace8),
+                    SizedBox(width: m.kSpace8),
                     _buildActionIcon(
                       icon: StrokeIcons.photo,
                       label: '图片',
                       onPressed: _pickAndSendImage,
-                      isDark: isDark,
                     ),
-                    SizedBox(width: AppTheme.metrics.kSpace8),
+                    SizedBox(width: m.kSpace8),
                     _buildActionIcon(
                       icon: StrokeIcons.videoLibrary,
                       label: '视频',
                       onPressed: _pickAndSendVideo,
-                      isDark: isDark,
                     ),
-                    SizedBox(width: AppTheme.metrics.kSpace8),
+                    SizedBox(width: m.kSpace8),
                     _buildActionIcon(
                       icon: StrokeIcons.insertDriveFile,
                       label: '文件',
                       onPressed: _pickAndSendFile,
-                      isDark: isDark,
                     ),
                   ],
                 ),
@@ -220,37 +219,34 @@ class _TransferActionsState extends State<TransferActions> {
     required StrokeIcon icon,
     required String label,
     required VoidCallback onPressed,
-    required bool isDark,
     bool isActive = false,
   }) {
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+    final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     return Expanded(
       child: GestureDetector(
         onTap: onPressed,
         child: Container(
-          padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),
+          padding: EdgeInsets.symmetric(vertical: m.kSpace10),
           decoration: BoxDecoration(
-            color: isActive
-                ? primaryColor.withValues(alpha: 0.12)
-                : (isDark ? DarkColors.white10 : LightColors.black10),
-            borderRadius: AppTheme.metrics.radius10,
+            color: isActive ? s.accentContainer : s.surfaceSunken,
+            borderRadius: m.radius10,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               DrawIcon(icon,
                 size: scaleW(20),
-                color: isActive
-                    ? primaryColor
-                    : (isDark ? DarkColors.white80 : LightColors.black80),
+                color: isActive ? s.accent : s.textSecondary,
               ),
-              SizedBox(height: AppTheme.metrics.kSpace4),
+              SizedBox(height: m.kSpace4),
               Text(
                 label,
-                style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
-                  color: isActive
-                      ? primaryColor
-                      : (isDark ? DarkColors.white80 : LightColors.black80),
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: m.fontSize11,
+                  height: 1.4,
+                  color: isActive ? s.accent : s.textSecondary,
                 ),
                 textScaler: const TextScaler.linear(0.9),
               ),

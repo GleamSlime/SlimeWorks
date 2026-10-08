@@ -270,7 +270,8 @@ class _ColorTab extends StatelessWidget {
             () => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('当前 ${AppTheme.fontScaleObs.value.toStringAsFixed(2)}x'),
+                Text('当前 ${AppTheme.fontScaleObs.value.toStringAsFixed(2)}x',
+                    style: AppTextStyles.body(context)),
                 SizedBox(height: m.kSpace8),
                 Slider(
                   value: AppTheme.fontScaleObs.value,
@@ -334,6 +335,7 @@ class _AccentPickerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Wrap(
       spacing: m.kSpace10,
@@ -350,7 +352,8 @@ class _AccentPickerRow extends StatelessWidget {
                 color: c,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: c == color ? Colors.black : Colors.transparent,
+                  // 选中环要跟底色相反：写死黑色的话，深色主题下这颗环就看不见了
+                  color: c == color ? s.textPrimary : Colors.transparent,
                   width: scaleW(2),
                 ),
               ),
@@ -381,12 +384,20 @@ class _TypographyTab extends StatelessWidget {
           textBaseline: TextBaseline.alphabetic,
           children: [
             SizedBox(
+              // 定宽格 + 字号族文字：字号拉到 2.0 时这两格会先想变长，
+              // 一律封顶截断，不许把这一行顶出去（§3.1 那两次溢出）
               width: scaleW(120),
-              child: Text(role, style: AppTextStyles.caption(context)),
+              child: Text(role,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption(context)),
             ),
             SizedBox(
               width: scaleW(110),
-              child: Text(source, style: AppTextStyles.mono(context, size: m.fontSize10)),
+              child: Text(source,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.mono(context, size: m.fontSize10)),
             ),
             Expanded(
               child: Text('SlimeWorks 设计系统 Aa 0123456789', style: style),
@@ -453,7 +464,11 @@ class _TypographyTab extends StatelessWidget {
                 'fontSize28': m.fontSize28,
               }.entries)
                 Text('${e.key} · ${e.value.toStringAsFixed(1)}',
-                    style: TextStyle(fontSize: e.value, color: AppSemantic.of(context).textSecondary)),
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: e.value,
+                      color: AppSemantic.of(context).textSecondary,
+                    )),
             ],
           ),
         ),
@@ -664,13 +679,14 @@ class _ComponentsTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SkeletonBox(height: 18, width: 140),
+                      // 骨架条与同一张卡里的间距同族，全部走宽度族，不掺字号比例
+                      SkeletonBox(height: scaleW(18), width: scaleW(140)),
                       SizedBox(height: m.kSpace10),
-                      const SkeletonBox(height: 12),
+                      SkeletonBox(height: scaleW(12)),
                       SizedBox(height: m.kSpace6),
-                      const SkeletonBox(height: 12, width: 200),
+                      SkeletonBox(height: scaleW(12), width: scaleW(200)),
                       SizedBox(height: m.kSpace14),
-                      const SkeletonBox(height: 60, borderRadius: null),
+                      SkeletonBox(height: scaleW(60), borderRadius: null),
                     ],
                   ),
                 ),

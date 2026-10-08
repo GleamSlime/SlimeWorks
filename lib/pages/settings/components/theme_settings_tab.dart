@@ -5,6 +5,8 @@ import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/window/live_frost.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 
 class ThemeSettingsTab extends StatefulWidget {
@@ -127,21 +129,20 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   }
 
   Widget _buildModeChip(ThemeMode mode) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     final isSelected = _themeMode == mode;
     return GestureDetector(
       onTap: () => _onThemeModeChanged(mode),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: AppMotion.base,
+        curve: AppMotion.standardCurve,
         padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace12),
         decoration: BoxDecoration(
-          color: isSelected
-              ? theme.colorScheme.primary.withAlpha(25)
-              : theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+          color: isSelected ? s.accent.withAlpha(25) : s.surface,
           borderRadius: m.radius12,
           border: Border.all(
-            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant.withAlpha(80),
+            color: isSelected ? s.accent : s.border,
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -151,16 +152,22 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             DrawIcon(
               _themeModeIcon(mode),
               size: m.iconSize20,
-              color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface.withAlpha(120),
+              color: isSelected ? s.accent : s.textTertiary,
             ),
             SizedBox(width: m.kSpace8),
-            Text(
-              _themeModeLabel(mode),
-              style: TextStyle(
-                fontSize: m.fontSize13,
-                height: 1.5,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface,
+            // 标签吃字号族，界面字号拉到 2.0 时必须能被压，否则这颗 chip 会顶破 Wrap
+            Flexible(
+              child: Text(
+                _themeModeLabel(mode),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: m.fontSize13,
+                  height: 1.5,
+                  weight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: isSelected ? s.accent : s.textPrimary,
+                ),
               ),
             ),
           ],
@@ -170,21 +177,23 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   }
 
   Widget _buildAccentSwatch(Color color) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     final isSelected = _accentColor.toARGB32() == color.toARGB32();
     return GestureDetector(
       onTap: () => _onAccentColorTap(color),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: AppMotion.base,
+        curve: AppMotion.standardCurve,
         width: m.iconSize44,
         height: m.iconSize44,
         margin: EdgeInsets.only(bottom: m.kSpace4),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
+          // 色板预览：这里必须铺原始候选色本身，不能换成当前主题的语义色
           color: color,
           border: Border.all(
-            color: isSelected ? theme.colorScheme.onSurface : Colors.transparent,
+            color: isSelected ? s.textPrimary : Colors.transparent,
             width: isSelected ? 3 : 0,
           ),
           boxShadow: [
@@ -199,6 +208,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
         child: isSelected
             ? DrawIcon(
                 StrokeIcons.check,
+                // 勾的墨色跟着色板深浅走，与语义层无关
                 color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
                 size: m.iconSize20,
               )
@@ -208,7 +218,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   }
 
   Widget _buildSectionTitle(String title, StrokeIcon icon) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Row(
       children: [
@@ -216,24 +226,19 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           width: m.kSpace24,
           height: m.kSpace24,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withAlpha(20),
+            color: s.accentContainer,
             borderRadius: m.radius6,
           ),
           child: DrawIcon(
             icon,
             size: m.iconSize12,
-            color: theme.colorScheme.primary,
+            color: s.accent,
           ),
         ),
         SizedBox(width: m.kSpace8),
         Text(
           title,
-          style: TextStyle(
-            fontSize: m.fontSize15,
-            height: 1.4,
-            color: theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppTextStyles.sectionTitle(context),
         ),
       ],
     );
@@ -242,6 +247,7 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
 
     return SingleChildScrollView(
@@ -255,9 +261,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             width: double.infinity,
             padding: EdgeInsets.all(m.kSpace16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+              color: s.surface,
               borderRadius: m.radius12,
-              border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+              border: Border.all(color: s.border),
             ),
             child: Wrap(
               spacing: m.kSpace12,
@@ -270,10 +276,11 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           SizedBox(height: m.kSpace4),
           Text(
             '选择全局强调色，将影响按钮、标签、滑块等组件',
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: m.fontSize12,
               height: 1.5,
-              color: theme.colorScheme.onSurface.withAlpha(120),
+              color: s.textTertiary,
             ),
           ),
           SizedBox(height: m.kSpace12),
@@ -281,9 +288,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             width: double.infinity,
             padding: EdgeInsets.all(m.kSpace16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+              color: s.surface,
               borderRadius: m.radius12,
-              border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+              border: Border.all(color: s.border),
             ),
             child: Wrap(
               spacing: m.kSpace12,
@@ -296,10 +303,11 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           SizedBox(height: m.kSpace4),
           Text(
             '调整全局文本缩放比例，影响所有页面的文字大小',
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: m.fontSize12,
               height: 1.5,
-              color: theme.colorScheme.onSurface.withAlpha(120),
+              color: s.textTertiary,
             ),
           ),
           SizedBox(height: m.kSpace12),
@@ -307,9 +315,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             width: double.infinity,
             padding: EdgeInsets.all(m.kSpace16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+              color: s.surface,
               borderRadius: m.radius12,
-              border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+              border: Border.all(color: s.border),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -330,15 +338,17 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace3),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer,
+                        color: s.accentContainer,
                         borderRadius: m.radius999,
                       ),
                       child: Text(
                         '${(_fontScale * 100).round()}%',
-                        style: TextStyle(
+                        maxLines: 1,
+                        style: AppTextStyles.role(
+                          context,
                           fontSize: m.fontSize12,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onPrimaryContainer,
+                          weight: FontWeight.w600,
+                          color: s.accent,
                         ),
                       ),
                     ),
@@ -353,10 +363,11 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             SizedBox(height: m.kSpace4),
             Text(
               '开启后窗口底色实时透出并模糊桌面内容（磨砂质感）；关闭则使用不透明底色',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: m.fontSize12,
                 height: 1.5,
-                color: theme.colorScheme.onSurface.withAlpha(120),
+                color: s.textTertiary,
               ),
             ),
             SizedBox(height: m.kSpace12),
@@ -364,18 +375,19 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
               width: double.infinity,
               padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace8),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+                color: s.surface,
                 borderRadius: m.radius12,
-                border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+                border: Border.all(color: s.border),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       '实时半透明',
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: m.fontSize14,
-                        color: theme.colorScheme.onSurface,
+                        color: s.textPrimary,
                       ),
                     ),
                   ),
@@ -394,9 +406,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             width: double.infinity,
             padding: EdgeInsets.all(m.kSpace20),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+              color: s.surface,
               borderRadius: m.radius12,
-              border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+              border: Border.all(color: s.border),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

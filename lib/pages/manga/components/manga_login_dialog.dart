@@ -3,7 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/manga_service.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
@@ -90,13 +92,13 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(metrics.kSpace16)),
+      shape: RoundedRectangleBorder(borderRadius: metrics.radiusOverlay),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 380, maxHeight: 540),
+        constraints: BoxConstraints(maxWidth: scaleW(380), maxHeight: scaleH(540)),
         child: SingleChildScrollView(
           padding: EdgeInsets.all(metrics.kSpace20),
           child: Form(
@@ -111,12 +113,14 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                       width: metrics.kSpace40,
                       height: metrics.kSpace40,
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                        color: s.accentContainer,
                         borderRadius: metrics.radius10,
                       ),
                       child: DrawIcon(StrokeIcons.autoStories,
-                        size: AppTheme.metrics.iconSize22,
-                        color: theme.colorScheme.primary,
+                        // 图标装在固定 40×40 的方格里，尺寸必须走宽度族，
+                        // 否则字号滑杆一拉图标就顶出方格。
+                        size: scaleW(22),
+                        color: s.accent,
                       ),
                     ),
                     SizedBox(width: metrics.kSpace12),
@@ -124,13 +128,11 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Manga 登录', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                          Text('Manga 登录', style: AppTextStyles.sectionTitle(context)),
                           SizedBox(height: metrics.kSpace2),
                           Text(
                             '登录后即可浏览和收藏漫画',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                            ),
+                            style: AppTextStyles.caption(context),
                           ),
                         ],
                       ),
@@ -191,21 +193,21 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                   Container(
                     padding: EdgeInsets.all(AppTheme.metrics.kSpace10),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.error.withValues(alpha: 0.08),
+                      color: s.danger.container,
                       borderRadius: AppTheme.metrics.radius8,
                       border: Border.all(
-                        color: theme.colorScheme.error.withValues(alpha: 0.2),
-                        width: 1,
+                        color: s.danger.containerBorder,
+                        width: scaleW(1),
                       ),
                     ),
                     child: Row(
                       children: [
-                        DrawIcon(StrokeIcons.errorOutline, size: AppTheme.metrics.iconSize16, color: theme.colorScheme.error),
+                        DrawIcon(StrokeIcons.errorOutline, size: AppTheme.metrics.iconSize16, color: s.danger.color),
                         SizedBox(width: AppTheme.metrics.kSpace8),
                         Expanded(
                           child: Text(
                             _errorMessage!,
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                            style: AppTextStyles.caption(context).copyWith(color: s.danger.color),
                           ),
                         ),
                       ],
@@ -224,7 +226,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                       ? SizedBox(
                           height: AppTheme.metrics.kSpace20,
                           width: AppTheme.metrics.kSpace20,
-                          child: const CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(strokeWidth: scaleW(2)),
                         )
                       : const Text('登录'),
                 ),

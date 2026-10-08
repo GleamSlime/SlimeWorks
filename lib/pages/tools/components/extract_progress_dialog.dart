@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/services/extract_service.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/pages/tools/components/extract_result_dialog.dart';
 
 class ExtractProgressDialog extends StatefulWidget {
@@ -42,8 +44,8 @@ class _ExtractProgressDialogState extends State<ExtractProgressDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     final service = getIt.get<ExtractService>();
 
     return AlertDialog(
@@ -52,7 +54,7 @@ class _ExtractProgressDialogState extends State<ExtractProgressDialog> {
           SizedBox(
             width: m.iconSize20,
             height: m.iconSize20,
-            child: const CircularProgressIndicator(strokeWidth: 2),
+            child: CircularProgressIndicator(strokeWidth: scaleW(2)),
           ),
           SizedBox(width: m.kSpace12),
           const Text('正在解压'),
@@ -61,12 +63,20 @@ class _ExtractProgressDialogState extends State<ExtractProgressDialog> {
       content: Obx(() {
         final progress = service.progress.value;
         return SizedBox(
-          width: 420,
+          width: scaleW(420),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('总体进度', style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor)),
+              Text(
+                '总体进度',
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: m.fontSize12,
+                  height: 1.6,
+                  color: s.textTertiary,
+                ),
+              ),
               SizedBox(height: m.kSpace4),
               _buildProgressBar(
                 context,
@@ -78,7 +88,12 @@ class _ExtractProgressDialogState extends State<ExtractProgressDialog> {
               if (progress.currentArchiveName.isNotEmpty) ...[
                 Text(
                   '当前: ${progress.currentArchiveName}',
-                  style: theme.textTheme.bodySmall,
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize12,
+                    height: 1.6,
+                    color: s.textTertiary,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -110,12 +125,16 @@ class _ExtractProgressDialogState extends State<ExtractProgressDialog> {
 
   Widget _buildProgressBar(BuildContext context, double value, String label) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     return Row(
       children: [
         Expanded(
           child: ClipRRect(
             borderRadius: m.radius4,
-            child: LinearProgressIndicator(value: value.clamp(0.0, 1.0), minHeight: 8),
+            child: LinearProgressIndicator(
+              value: value.clamp(0.0, 1.0),
+              minHeight: m.kSpace8,
+            ),
           ),
         ),
         SizedBox(width: m.kSpace8),
@@ -124,7 +143,14 @@ class _ExtractProgressDialogState extends State<ExtractProgressDialog> {
           child: Text(
             label,
             textAlign: TextAlign.end,
-            style: Theme.of(context).textTheme.bodySmall,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.role(
+              context,
+              fontSize: m.fontSize12,
+              height: 1.6,
+              color: s.textTertiary,
+            ),
           ),
         ),
       ],
@@ -136,15 +162,15 @@ class _ExtractProgressDialogState extends State<ExtractProgressDialog> {
     ExtractService service,
     ExtractProgressInfo progress,
   ) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: s.surface,
         borderRadius: m.radius8,
-        border: Border.all(color: theme.dividerColor.withAlpha(30)),
+        border: Border.all(color: s.hairline),
       ),
       child: Column(
         children: [
@@ -169,12 +195,35 @@ class _ExtractProgressDialogState extends State<ExtractProgressDialog> {
   }
 
   Widget _buildStatItem(BuildContext context, String label, String value) {
-    final theme = Theme.of(context);
+    final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor)),
-        Text(value, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: AppTextStyles.role(
+            context,
+            fontSize: m.fontSize12,
+            height: 1.6,
+            color: s.textTertiary,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.role(
+              context,
+              fontSize: m.fontSize12,
+              height: 1.6,
+              weight: FontWeight.w600,
+              color: s.textPrimary,
+            ),
+          ),
+        ),
       ],
     );
   }

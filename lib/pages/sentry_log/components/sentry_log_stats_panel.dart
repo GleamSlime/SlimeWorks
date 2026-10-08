@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -19,7 +21,7 @@ class SentryLogStatsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final theme = Theme.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
 
     return Obx(() {
       final stats = viewModel.stats;
@@ -36,14 +38,14 @@ class SentryLogStatsPanel extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      theme.colorScheme.primary.withAlpha(20),
-                      theme.colorScheme.primary.withAlpha(8),
+                      s.accent.withAlpha(20),
+                      s.accent.withAlpha(8),
                     ],
                   ),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: theme.colorScheme.primary.withAlpha(10),
+                      color: s.accent.withAlpha(10),
                       blurRadius: scaleW(16),
                       offset: Offset(0, scaleW(4)),
                     ),
@@ -51,13 +53,13 @@ class SentryLogStatsPanel extends StatelessWidget {
                 ),
                 child: DrawIcon(StrokeIcons.barChart,
                   size: m.iconSize32,
-                  color: theme.colorScheme.primary.withAlpha(100),
+                  color: s.accent.withAlpha(100),
                 ),
               ),
               SizedBox(height: m.kSpace12),
               Text(
                 '暂无统计数据',
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+                style: theme.textTheme.bodyMedium?.copyWith(color: s.textTertiary),
               ),
             ],
           ),
@@ -77,18 +79,18 @@ class SentryLogStatsPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildOverviewRow(theme, m, isDark, totalEvents, projects.length),
+            _buildOverviewRow(theme, m, s, totalEvents, projects.length),
             SizedBox(height: m.kSpace16),
             if (levelCounts.isNotEmpty) ...[
-              _buildSectionTitle(theme, m, '级别分布'),
+              _buildSectionTitle(theme, m, s, '级别分布'),
               SizedBox(height: m.kSpace8),
-              _buildLevelDistribution(theme, m, isDark, levelCounts),
+              _buildLevelDistribution(theme, m, s, levelCounts),
               SizedBox(height: m.kSpace16),
             ],
             if (projects.isNotEmpty) ...[
-              _buildSectionTitle(theme, m, '项目列表'),
+              _buildSectionTitle(theme, m, s, '项目列表'),
               SizedBox(height: m.kSpace8),
-              _buildProjectGrid(context, theme, m, isDark, projects),
+              _buildProjectGrid(context, theme, m, s, projects),
             ],
           ],
         ),
@@ -97,18 +99,18 @@ class SentryLogStatsPanel extends StatelessWidget {
   }
 
   /// 构建分区标题
-  Widget _buildSectionTitle(ThemeData theme, ThemeMetrics m, String title) {
+  Widget _buildSectionTitle(ThemeData theme, ThemeMetrics m, AppSemantic s, String title) {
     return Row(
       children: [
         Container(
-          width: 3,
+          width: m.kSpace3,
           height: m.kSpace14,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary,
+            color: s.accent,
             borderRadius: m.radius2,
             boxShadow: [
               BoxShadow(
-                color: theme.colorScheme.primary.withAlpha(40),
+                color: s.accent.withAlpha(40),
                 blurRadius: scaleW(4),
                 offset: Offset(scaleW(2), 0),
               ),
@@ -130,7 +132,7 @@ class SentryLogStatsPanel extends StatelessWidget {
   Widget _buildOverviewRow(
     ThemeData theme,
     ThemeMetrics m,
-    bool isDark,
+    AppSemantic s,
     int totalEvents,
     int projectCount,
   ) {
@@ -140,11 +142,11 @@ class SentryLogStatsPanel extends StatelessWidget {
           child: _buildStatCard(
             theme,
             m,
-            isDark,
+            s,
             icon: StrokeIcons.crisisAlert,
             label: '总事件数',
             value: _formatNumber(totalEvents),
-            accentColor: const Color(0xFFE53935),
+            accentColor: s.danger.color,
           ),
         ),
         SizedBox(width: m.kSpace12),
@@ -152,11 +154,11 @@ class SentryLogStatsPanel extends StatelessWidget {
           child: _buildStatCard(
             theme,
             m,
-            isDark,
+            s,
             icon: StrokeIcons.folder,
             label: '接入项目',
             value: projectCount.toString(),
-            accentColor: const Color(0xFF1E88E5),
+            accentColor: s.info.color,
           ),
         ),
       ],
@@ -167,7 +169,7 @@ class SentryLogStatsPanel extends StatelessWidget {
   Widget _buildStatCard(
     ThemeData theme,
     ThemeMetrics m,
-    bool isDark, {
+    AppSemantic s, {
     required StrokeIcon icon,
     required String label,
     required String value,
@@ -175,7 +177,6 @@ class SentryLogStatsPanel extends StatelessWidget {
   }) {
     return _StatCardHover(
       accentColor: accentColor,
-      isDark: isDark,
       child: Padding(
         padding: EdgeInsets.all(m.kSpace16),
         child: Row(
@@ -189,7 +190,7 @@ class SentryLogStatsPanel extends StatelessWidget {
                   end: Alignment.bottomRight,
                   colors: [accentColor.withAlpha(40), accentColor.withAlpha(15)],
                 ),
-                borderRadius: m.radius10,
+                borderRadius: m.radiusCard,
                 boxShadow: [
                   BoxShadow(
                     color: accentColor.withAlpha(20),
@@ -207,7 +208,7 @@ class SentryLogStatsPanel extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+                    style: theme.textTheme.labelSmall?.copyWith(color: s.textTertiary),
                   ),
                   SizedBox(height: m.kSpace2),
                   Text(
@@ -230,7 +231,7 @@ class SentryLogStatsPanel extends StatelessWidget {
   Widget _buildLevelDistribution(
     ThemeData theme,
     ThemeMetrics m,
-    bool isDark,
+    AppSemantic s,
     List<Map<String, dynamic>> levelCounts,
   ) {
     final total = levelCounts.fold<int>(0, (sum, lc) => sum + ((lc['count'] as num?)?.toInt() ?? 0));
@@ -238,50 +239,41 @@ class SentryLogStatsPanel extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(m.kSpace16),
       decoration: BoxDecoration(
-        color: isDark
-            ? DarkColors.background1.withAlpha(200)
-            : LightColors.background1.withAlpha(230),
-        borderRadius: m.radius12,
-        border: Border.all(
-          color: isDark ? DarkColors.white10.withAlpha(30) : LightColors.black10.withAlpha(20),
-          width: 0.5,
-        ),
+        color: s.glassTint,
+        borderRadius: m.radiusPanel,
+        border: Border.all(color: s.glassBorder, width: 0.5),
         boxShadow: [
+          ...s.elevation(Elevation.raised),
           BoxShadow(
-            color: isDark ? DarkColors.black10 : LightColors.black10,
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-          BoxShadow(
-            color: (isDark ? DarkColors.primary : LightColors.primary).withAlpha(6),
+            color: s.accent.withAlpha(6),
             blurRadius: scaleW(16),
             offset: Offset(0, scaleW(4)),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: m.radius12,
+        borderRadius: m.radiusPanel,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
           child: Column(
             children: [
-              _buildStackedBar(theme, m, isDark, levelCounts, total),
+              _buildStackedBar(theme, m, s, levelCounts, total),
               SizedBox(height: m.kSpace12),
-              Divider(color: isDark ? DarkColors.white10 : LightColors.black10, height: 1),
+              Divider(color: s.hairline, height: 1),
               SizedBox(height: m.kSpace12),
               ...levelCounts.map((lc) {
                 final level = lc['level']?.toString() ?? 'unknown';
                 final count = (lc['count'] as num?)?.toInt() ?? 0;
                 final percentage = total > 0 ? (count / total * 100) : 0.0;
-                final color = viewModel.getLevelColor(level);
+                final color = _levelColor(s, level);
 
                 return Padding(
                   padding: EdgeInsets.only(bottom: m.kSpace8),
                   child: Row(
                     children: [
                       Container(
-                        width: 10,
-                        height: 10,
+                        width: m.kSpace10,
+                        height: m.kSpace10,
                         decoration: BoxDecoration(
                           color: color,
                           shape: BoxShape.circle,
@@ -289,14 +281,14 @@ class SentryLogStatsPanel extends StatelessWidget {
                             BoxShadow(
                               color: color.withAlpha(80),
                               blurRadius: scaleW(4),
-                              offset: const Offset(0, 1),
+                              offset: Offset(0, m.kSpace1),
                             ),
                           ],
                         ),
                       ),
                       SizedBox(width: m.kSpace8),
                       SizedBox(
-                        width: 56,
+                        width: m.kSpace56,
                         child: Text(
                           level.toUpperCase(),
                           style: theme.textTheme.labelSmall?.copyWith(
@@ -311,16 +303,16 @@ class SentryLogStatsPanel extends StatelessWidget {
                           child: Stack(
                             children: [
                               Container(
-                                height: 8,
+                                height: m.kSpace8,
                                 decoration: BoxDecoration(
-                                  color: isDark ? DarkColors.background2 : LightColors.background2,
+                                  color: s.surfaceSunken,
                                   borderRadius: m.radius4,
                                 ),
                               ),
                               FractionallySizedBox(
                                 widthFactor: percentage / 100,
                                 child: Container(
-                                  height: 8,
+                                  height: m.kSpace8,
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
                                       colors: [color, color.withAlpha(180)],
@@ -342,11 +334,11 @@ class SentryLogStatsPanel extends StatelessWidget {
                       ),
                       SizedBox(width: m.kSpace8),
                       SizedBox(
-                        width: 70,
+                        width: scaleW(70),
                         child: Text(
                           '${_formatNumber(count)} (${percentage.toStringAsFixed(1)}%)',
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.hintColor,
+                            color: s.textTertiary,
                             fontFeatures: [const FontFeature.tabularFigures()],
                           ),
                           textAlign: TextAlign.end,
@@ -367,7 +359,7 @@ class SentryLogStatsPanel extends StatelessWidget {
   Widget _buildStackedBar(
     ThemeData theme,
     ThemeMetrics m,
-    bool isDark,
+    AppSemantic s,
     List<Map<String, dynamic>> levelCounts,
     int total,
   ) {
@@ -376,11 +368,11 @@ class SentryLogStatsPanel extends StatelessWidget {
     return ClipRRect(
       borderRadius: m.radius6,
       child: SizedBox(
-        height: 12,
+        height: m.kSpace12,
         child: Row(
           children: levelCounts.map((lc) {
             final count = (lc['count'] as num?)?.toInt() ?? 0;
-            final color = viewModel.getLevelColor(lc['level']?.toString() ?? 'unknown');
+            final color = _levelColor(s, lc['level']?.toString() ?? 'unknown');
             return Expanded(
               flex: count,
               child: Container(
@@ -390,7 +382,7 @@ class SentryLogStatsPanel extends StatelessWidget {
                     BoxShadow(
                       color: color.withAlpha(30),
                       blurRadius: scaleW(4),
-                      offset: const Offset(0, 1),
+                      offset: Offset(0, m.kSpace1),
                     ),
                   ],
                 ),
@@ -402,12 +394,27 @@ class SentryLogStatsPanel extends StatelessWidget {
     );
   }
 
+  /// 级别 → 状态色：语义层没有"致命"这一档，fatal 与 error 同归 danger
+  Color _levelColor(AppSemantic s, String level) {
+    switch (level) {
+      case 'fatal':
+      case 'error':
+        return s.danger.color;
+      case 'warning':
+        return s.warning.color;
+      case 'info':
+        return s.info.color;
+      default:
+        return s.neutral.color;
+    }
+  }
+
   /// 构建项目网格
   Widget _buildProjectGrid(
     BuildContext context,
     ThemeData theme,
     ThemeMetrics m,
-    bool isDark,
+    AppSemantic s,
     List<Map<String, dynamic>> projects,
   ) {
     return Wrap(
@@ -420,9 +427,8 @@ class SentryLogStatsPanel extends StatelessWidget {
         final lastEventAt = project['last_event_at']?.toString();
 
         return _ProjectCardHover(
-          isDark: isDark,
           child: Container(
-            width: 240,
+            width: scaleW(240),
             padding: EdgeInsets.all(m.kSpace14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -437,23 +443,20 @@ class SentryLogStatsPanel extends StatelessWidget {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            theme.colorScheme.primary.withAlpha(30),
-                            theme.colorScheme.primary.withAlpha(10),
+                            s.accent.withAlpha(30),
+                            s.accent.withAlpha(10),
                           ],
                         ),
-                        borderRadius: m.radius8,
+                        borderRadius: m.radiusControl,
                         boxShadow: [
                           BoxShadow(
-                            color: theme.colorScheme.primary.withAlpha(15),
+                            color: s.accent.withAlpha(15),
                             blurRadius: scaleW(6),
                             offset: Offset(0, scaleW(2)),
                           ),
                         ],
                       ),
-                      child: DrawIcon(StrokeIcons.dns,
-                        size: m.iconSize16,
-                        color: theme.colorScheme.primary,
-                      ),
+                      child: DrawIcon(StrokeIcons.dns, size: m.iconSize16, color: s.accent),
                     ),
                     SizedBox(width: m.kSpace8),
                     Expanded(
@@ -467,7 +470,7 @@ class SentryLogStatsPanel extends StatelessWidget {
                     IconButton(
                       icon: DrawIcon(StrokeIcons.deleteSweep,
                         size: m.iconSize16,
-                        color: Colors.red.shade300,
+                        color: s.danger.color,
                       ),
                       tooltip: '清空事件',
                       onPressed: () => _confirmClearProject(context, projectId, projectName),
@@ -490,14 +493,14 @@ class SentryLogStatsPanel extends StatelessWidget {
                     SizedBox(width: m.kSpace4),
                     Text(
                       '事件',
-                      style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+                      style: theme.textTheme.labelSmall?.copyWith(color: s.textTertiary),
                     ),
                     const Spacer(),
                     if (lastEventAt != null)
                       Text(
                         viewModel.formatTimestamp(lastEventAt),
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.hintColor,
+                          color: s.textTertiary,
                           fontFeatures: [const FontFeature.tabularFigures()],
                         ),
                       ),
@@ -514,6 +517,7 @@ class SentryLogStatsPanel extends StatelessWidget {
   /// 确认清空项目弹窗
   void _confirmClearProject(BuildContext context, String projectId, String projectName) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     final navigator = Navigator.of(context);
     showDialog(
       context: context,
@@ -521,7 +525,7 @@ class SentryLogStatsPanel extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: m.radius12),
         title: Row(
           children: [
-            DrawIcon(StrokeIcons.warningAmber, color: Colors.orange.shade700, size: m.iconSize20),
+            DrawIcon(StrokeIcons.warningAmber, color: s.warning.color, size: m.iconSize20),
             SizedBox(width: m.kSpace8),
             const Text('确认清空'),
           ],
@@ -538,9 +542,9 @@ class SentryLogStatsPanel extends StatelessWidget {
               await viewModel.clearProjectEvents(projectId);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: m.radius8),
+              backgroundColor: s.danger.color,
+              foregroundColor: s.accentOn,
+              shape: RoundedRectangleBorder(borderRadius: m.radiusControl),
             ),
             child: const Text('清空'),
           ),
@@ -560,12 +564,10 @@ class SentryLogStatsPanel extends StatelessWidget {
 /// 统计卡片悬停效果组件
 class _StatCardHover extends StatefulWidget {
   final Color accentColor;
-  final bool isDark;
   final Widget child;
 
   const _StatCardHover({
     required this.accentColor,
-    required this.isDark,
     required this.child,
   });
 
@@ -579,29 +581,22 @@ class _StatCardHoverState extends State<_StatCardHover> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
+        duration: AppMotion.base,
+        curve: AppMotion.standard,
         decoration: BoxDecoration(
-          color: widget.isDark
-              ? DarkColors.background1.withAlpha(_hovered ? 240 : 200)
-              : LightColors.background1.withAlpha(_hovered ? 250 : 230),
-          borderRadius: m.radius12,
+          color: s.surface.withAlpha(_hovered ? 250 : 230),
+          borderRadius: m.radiusPanel,
           border: Border.all(
-            color: _hovered
-                ? widget.accentColor.withAlpha(30)
-                : (widget.isDark ? DarkColors.white10 : LightColors.black10).withAlpha(30),
+            color: _hovered ? widget.accentColor.withAlpha(30) : s.border,
             width: 0.5,
           ),
           boxShadow: [
-            BoxShadow(
-              color: widget.isDark ? DarkColors.black10 : LightColors.black10,
-              blurRadius: _hovered ? 10 : 6,
-              offset: Offset(0, _hovered ? 4 : 2),
-            ),
+            ...s.elevation(_hovered ? Elevation.card : Elevation.raised),
             if (_hovered)
               BoxShadow(
                 color: widget.accentColor.withAlpha(15),
@@ -609,16 +604,16 @@ class _StatCardHoverState extends State<_StatCardHover> {
                 offset: Offset(0, scaleW(4)),
               ),
             BoxShadow(
-              color: (widget.isDark ? DarkColors.primary : LightColors.primary).withAlpha(6),
+              color: s.accent.withAlpha(6),
               blurRadius: scaleW(16),
               offset: Offset(0, scaleW(4)),
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: m.radius12,
+          borderRadius: m.radiusPanel,
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
             child: widget.child,
           ),
         ),
@@ -629,11 +624,9 @@ class _StatCardHoverState extends State<_StatCardHover> {
 
 /// 项目卡片悬停效果组件
 class _ProjectCardHover extends StatefulWidget {
-  final bool isDark;
   final Widget child;
 
   const _ProjectCardHover({
-    required this.isDark,
     required this.child,
   });
 
@@ -647,43 +640,35 @@ class _ProjectCardHoverState extends State<_ProjectCardHover> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        width: 240,
+        duration: AppMotion.base,
+        curve: AppMotion.standard,
+        width: scaleW(240),
         decoration: BoxDecoration(
-          color: widget.isDark
-              ? DarkColors.background1.withAlpha(_hovered ? 240 : 200)
-              : LightColors.background1.withAlpha(_hovered ? 250 : 230),
-          borderRadius: m.radius12,
+          color: s.surface.withAlpha(_hovered ? 250 : 230),
+          borderRadius: m.radiusPanel,
           border: Border.all(
-            color: _hovered
-                ? theme.colorScheme.primary.withAlpha(25)
-                : (widget.isDark ? DarkColors.white10 : LightColors.black10).withAlpha(30),
+            color: _hovered ? s.accent.withAlpha(25) : s.border,
             width: 0.5,
           ),
           boxShadow: [
-            BoxShadow(
-              color: widget.isDark ? DarkColors.black10 : LightColors.black10,
-              blurRadius: _hovered ? 8 : 4,
-              offset: Offset(0, _hovered ? 3 : 1),
-            ),
+            ...s.elevation(_hovered ? Elevation.card : Elevation.raised),
             if (_hovered)
               BoxShadow(
-                color: theme.colorScheme.primary.withAlpha(12),
+                color: s.accent.withAlpha(12),
                 blurRadius: scaleW(16),
                 offset: Offset(0, scaleW(4)),
               ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: m.radius12,
+          borderRadius: m.radiusPanel,
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
             child: widget.child,
           ),
         ),

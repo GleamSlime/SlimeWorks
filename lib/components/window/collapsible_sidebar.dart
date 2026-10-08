@@ -593,11 +593,8 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                     top: AppTheme.metrics.kSpace8,
                     left: isExpanded ? AppTheme.metrics.kSpace8 : 0,
                   ),
-                  child: MacWindowButtons(
-                    mainAxisAlignment: showExtends
-                        ? MainAxisAlignment.start
-                        : MainAxisAlignment.center,
-                  ),
+                  // 原生红黄绿常驻窗口左上角，这里留等大空白，保证撤销自绘后头部不位移
+                  child: const MacWindowButtonsReserve(),
                 )
               : const SizedBox.shrink(),
         ),
@@ -871,7 +868,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                         ),
                       ),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         if (item.route.sidebarIcon != null)
                           isExpanded

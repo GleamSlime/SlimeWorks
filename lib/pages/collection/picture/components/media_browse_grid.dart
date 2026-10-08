@@ -179,7 +179,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
     required Widget child,
   }) {
     if (!highlighted) return child;
-    final color = Theme.of(context).colorScheme.primary;
+    final color = AppSemantic.of(context).accent;
     return Stack(
       children: [
         child,
@@ -431,7 +431,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       data: collection.id,
       feedback: Material(
         // canvasColor 现为透明，拖拽浮影需要自己铺底
-        color: Theme.of(context).colorScheme.surface,
+        color: AppSemantic.of(context).surface,
         elevation: 8,
         borderRadius: appMetrics.radius8,
         child: SizedBox(
@@ -443,7 +443,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
               collection.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: AppTextStyles.body(context),
             ),
           ),
         ),
@@ -568,22 +568,20 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
   }
 
   Widget _buildEmptyPlaceholder(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
     final isRoot = vm.currentFolderId.value == null;
     return Center(
       child: Container(
         padding: EdgeInsets.all(appMetrics.kSpace32),
         margin: EdgeInsets.symmetric(horizontal: appMetrics.kSpace24),
         decoration: BoxDecoration(
-          color: isDark ? DarkColors.background2 : LightColors.background1,
+          color: s.surface,
           borderRadius: appMetrics.radius16,
           boxShadow: [
             BoxShadow(
-              color: Theme.of(
-                context,
-              ).shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
+              color: s.shadowKey,
+              blurRadius: scaleW(16),
+              offset: Offset(0, scaleW(6)),
             ),
           ],
         ),
@@ -594,33 +592,29 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
               width: scaleW(72),
               height: scaleW(72),
               decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.12),
+                color: s.accent.withValues(alpha: 0.12),
                 borderRadius: appMetrics.radius16,
               ),
               child: DrawIcon(StrokeIcons.permMedia,
                 size: scaleW(36),
-                color: Theme.of(context).colorScheme.primary,
+                color: s.accent,
               ),
             ),
             SizedBox(height: appMetrics.kSpace20),
             Text(
               isRoot ? '媒体库为空' : '当前文件夹为空',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.7),
-                fontWeight: FontWeight.w600,
+              style: AppTextStyles.role(context,
+                fontSize: appMetrics.fontSize14,
+                color: s.textPrimary.withValues(alpha: 0.7),
+                weight: FontWeight.w600,
               ),
             ),
             SizedBox(height: appMetrics.kSpace8),
             Text(
               isRoot ? '使用上方操作按钮导入集合' : '拖拽或导入媒体到此处',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.4),
+              style: AppTextStyles.role(context,
+                fontSize: appMetrics.fontSize12,
+                color: s.textPrimary.withValues(alpha: 0.4),
               ),
             ),
           ],

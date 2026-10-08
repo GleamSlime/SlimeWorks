@@ -2,7 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -108,8 +107,8 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
       borderRadius: BorderRadius.zero,
       child: BackdropFilter(
         filter: ImageFilter.blur(
-          sigmaX: AppGlass.blurMedium,
-          sigmaY: AppGlass.blurMedium,
+          sigmaX: s.glassBlur,
+          sigmaY: s.glassBlur,
         ),
         child: Container(
           decoration: BoxDecoration(

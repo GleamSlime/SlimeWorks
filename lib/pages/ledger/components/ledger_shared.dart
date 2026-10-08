@@ -1135,7 +1135,7 @@ class LedgerTagPickerState extends State<LedgerTagPicker> {
       backgroundColor: s.surface,
       shape: RoundedRectangleBorder(borderRadius: m.radiusOverlay, side: BorderSide(color: s.hairline)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
+        constraints: BoxConstraints(maxWidth: scaleW(420)),
         child: Padding(
           padding: EdgeInsets.all(m.kSpace20),
           child: Column(

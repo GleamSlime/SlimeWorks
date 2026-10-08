@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/src/rust/api/whisper.dart' as whisper_api;
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -192,62 +194,65 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+
     return ListView(
-      padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
+      padding: EdgeInsets.all(m.kSpace24),
       children: [
         Row(
           children: [
             Container(
-              width: AppTheme.metrics.kSpace24,
-              height: AppTheme.metrics.kSpace24,
+              width: m.kSpace24,
+              height: m.kSpace24,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withAlpha(20),
-                borderRadius: AppTheme.metrics.radius6,
+                color: s.accentContainer,
+                borderRadius: m.radius6,
               ),
-              child: DrawIcon(StrokeIcons.graphicEq, size: AppTheme.metrics.iconSize12, color: Theme.of(context).colorScheme.primary),
+              child: DrawIcon(StrokeIcons.graphicEq, size: m.iconSize12, color: s.accent),
             ),
-            SizedBox(width: AppTheme.metrics.kSpace8),
+            SizedBox(width: m.kSpace8),
             Text(
               '语音识别设置',
-              style: TextStyle(
-                fontSize: AppTheme.metrics.fontSize15,
-                height: 1.4,
-                color: Theme.of(context).colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTextStyles.sectionTitle(context),
             ),
           ],
         ),
-        SizedBox(height: AppTheme.metrics.kSpace8),
+        SizedBox(height: m.kSpace8),
         Text(
           '播放音频没有歌词时，自动使用 Whisper 模型识别语音并生成 CUE 歌词文件。',
-          style: TextStyle(
-            fontSize: AppTheme.metrics.fontSize12,
-            color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+          style: AppTextStyles.role(
+            context,
+            fontSize: m.fontSize12,
+            color: s.textTertiary,
+            height: 1.6,
           ),
         ),
-        SizedBox(height: AppTheme.metrics.kSpace16),
+        SizedBox(height: m.kSpace16),
         ..._models.map((model) => _buildModelTile(context, model)),
       ],
     );
   }
 
   Widget _buildModelTile(BuildContext context, _ModelInfo model) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     final isSelected = model.presetName == _selectedModel;
     final isDownloading = _downloadingModel == model.presetName;
 
     return Card(
-      margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace8),
+      margin: EdgeInsets.only(bottom: m.kSpace8),
       child: Column(
         children: [
           ListTile(
             selected: isSelected,
-            selectedTileColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+            // 选中行只铺一层极淡的强调水洗：实心强调底会把整行变成一个按钮
+            selectedTileColor: s.accent.withValues(alpha: 0.05),
             leading: DrawIcon(
               isSelected
                   ? StrokeIcons.radioButtonChecked
                   : StrokeIcons.radioButtonUnchecked,
-              color: isSelected ? Theme.of(context).colorScheme.primary : null,
+              color: isSelected ? s.accent : null,
             ),
             title: Row(
               children: [
@@ -263,10 +268,23 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
               ],
             ),
             subtitle: model.exists
-                ? Text('已下载', style: TextStyle(color: Colors.green.shade600))
+                ? Text(
+                    '已下载',
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize12,
+                      color: s.success.color,
+                      height: 1.6,
+                    ),
+                  )
                 : Text(
                     '未下载（约 ${model.approxSizeMb}MB）',
-                    style: TextStyle(color: Theme.of(context).hintColor),
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize12,
+                      color: s.textTertiary,
+                      height: 1.6,
+                    ),
                   ),
             trailing: _buildTrailing(context, model, isSelected, isDownloading),
             onTap: model.exists ? () => _selectModel(model.presetName) : null,
@@ -274,36 +292,42 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
           // 下载进度条
           if (isDownloading && _downloadProgress > 0)
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
+              padding: EdgeInsets.symmetric(horizontal: m.kSpace16),
               child: Column(
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace2),
+                    borderRadius: m.radius2,
                     child: LinearProgressIndicator(
                       value: _downloadProgress,
-                      minHeight: 4,
-                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      minHeight: m.kSpace4,
+                      backgroundColor: s.surfaceSunken,
                     ),
                   ),
-                  SizedBox(height: AppTheme.metrics.kSpace4),
+                  SizedBox(height: m.kSpace4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         '${(_downloadProgress * 100).toStringAsFixed(1)}%',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).hintColor,
-                            ),
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize12,
+                          color: s.textTertiary,
+                          height: 1.6,
+                        ),
                       ),
                       Text(
                         _formatFileSize((_downloadProgress * _progressTracker!.totalBytes).round()),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).hintColor,
-                            ),
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize12,
+                          color: s.textTertiary,
+                          height: 1.6,
+                        ),
                       ),
                     ],
                   ),
-                  SizedBox(height: AppTheme.metrics.kSpace8),
+                  SizedBox(height: m.kSpace8),
                 ],
               ),
             ),
@@ -318,11 +342,14 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
     bool isSelected,
     bool isDownloading,
   ) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+
     if (isDownloading) {
-      return const SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator(strokeWidth: 2),
+      return SizedBox(
+        width: m.iconSize24,
+        height: m.iconSize24,
+        child: CircularProgressIndicator(strokeWidth: scaleW(2)),
       );
     }
 
@@ -332,14 +359,14 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
         children: [
           if (isSelected)
             Padding(
-              padding: EdgeInsets.only(right: AppTheme.metrics.kSpace8),
+              padding: EdgeInsets.only(right: m.kSpace8),
               child: DrawIcon(StrokeIcons.checkCircle,
-                color: Theme.of(context).colorScheme.primary,
-                size: 20,
+                color: s.accent,
+                size: m.iconSize20,
               ),
             ),
           IconButton(
-            icon: DrawIcon(StrokeIcons.deleteOutline, size: 18),
+            icon: DrawIcon(StrokeIcons.deleteOutline, size: m.iconSize18),
             onPressed: () => _deleteModel(model.presetName),
             tooltip: '删除模型',
           ),
@@ -348,7 +375,7 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
     }
 
     return IconButton(
-      icon: DrawIcon(StrokeIcons.download, size: 20),
+      icon: DrawIcon(StrokeIcons.download, size: m.iconSize20),
       onPressed: () => _downloadModel(model.presetName, model.approxSizeMb),
       tooltip: '下载模型',
     );

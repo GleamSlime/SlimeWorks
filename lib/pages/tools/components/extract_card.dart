@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/services/extract_service.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/pages/tools/components/extract_params_dialog.dart';
 import 'package:slime_works/pages/tools/components/extract_progress_dialog.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -17,15 +19,15 @@ class ExtractCard extends StatefulWidget {
 class _ExtractCardState extends State<ExtractCard> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
 
     return Card(
       child: InkWell(
         borderRadius: m.radius12,
         onTap: () => _onTap(context),
         child: Container(
-          width: 200,
+          width: scaleW(200),
           padding: EdgeInsets.all(m.kSpace16),
           child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -34,18 +36,18 @@ class _ExtractCardState extends State<ExtractCard> {
                 width: m.kSpace48,
                 height: m.kSpace48,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withAlpha(25),
+                  color: s.accentContainer,
                   borderRadius: m.radius12,
                 ),
                 child: DrawIcon(StrokeIcons.folderZip,
-                  color: theme.colorScheme.primary,
+                  color: s.accent,
                   size: m.iconSize24,
                 ),
               ),
               SizedBox(height: m.kSpace12),
-              Text('解压工具', style: theme.textTheme.titleMedium),
+              Text('解压工具', style: AppTextStyles.cardTitle(context)),
               SizedBox(height: m.kSpace4),
-              Text('批量解压压缩包', style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor)),
+              Text('批量解压压缩包', style: AppTextStyles.caption(context)),
             ],
           ),
         ),

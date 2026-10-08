@@ -179,7 +179,9 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
             child: const Text('仅删除文件夹'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(dlgCtx).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppSemantic.of(dlgCtx).danger.color,
+            ),
             onPressed: () {
               Navigator.pop(dlgCtx);
               widget.viewModel.deleteFolderWithNovels(widget.folder.id);
@@ -193,8 +195,10 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final accent = theme.colorScheme.primary;
+    final s = AppSemantic.of(context);
+    final accent = s.accent;
+    // 拖放目标/文件夹身份统一走 info 这一族，和拖拽浮影、幽灵占位同色
+    final dropTint = s.info.color;
     final folderBookCount = widget.viewModel.getFolderNovelCount(widget.folder.id);
 
     return GestureDetector(
@@ -215,7 +219,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
             side: widget.isSelected
                 ? BorderSide(color: accent, width: scaleW(2))
                 : widget.isBookHover
-                ? BorderSide(color: theme.colorScheme.tertiary, width: scaleW(2))
+                ? BorderSide(color: dropTint, width: scaleW(2))
                 : BorderSide.none,
           ),
           child: Stack(
@@ -229,10 +233,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: widget.isBookHover
-                        ? [
-                            theme.colorScheme.tertiary.withAlpha(60),
-                            theme.colorScheme.tertiary.withAlpha(30),
-                          ]
+                        ? [dropTint.withAlpha(60), dropTint.withAlpha(30)]
                         : [accent.withAlpha(40), accent.withAlpha(20)],
                   ),
                 ),
@@ -307,7 +308,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [Colors.black.withAlpha(100), Colors.black.withAlpha(180)],
+                              // 走 scrim 的色底，两个 alpha 只是这条渐变的起收
+                              colors: [s.scrim.withAlpha(100), s.scrim.withAlpha(180)],
                             ),
                           ),
                         ),
@@ -342,7 +344,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                               child: Container(
                                 padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withAlpha(120),
+                                  color: s.scrim.withAlpha(120),
                                   borderRadius: AppTheme.metrics.radius999,
                                 ),
                                 child: DrawIcon(StrokeIcons.lockOutline,
@@ -370,9 +372,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                     // 文件夹图标
                     DrawIcon(StrokeIcons.folder,
                       size: scaleW(56),
-                      color: widget.isBookHover
-                          ? theme.colorScheme.tertiary.withAlpha(220)
-                          : Colors.white.withAlpha(220),
+                      color: widget.isBookHover ? dropTint.withAlpha(220) : Colors.white.withAlpha(220),
                     ),
                     SizedBox(height: appMetrics.kSpace8),
                     // 文件夹名称 / 拖放提示
@@ -383,9 +383,11 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                               controller: _editController,
                               focusNode: _editFocusNode,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: AppTextStyles.role(
+                                context,
                                 fontSize: appMetrics.fontSize11,
-                                fontWeight: FontWeight.w600,
+                                weight: FontWeight.w600,
+                                color: s.textPrimary,
                               ),
                               decoration: InputDecoration(
                                 isDense: true,
@@ -412,12 +414,11 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                   : _startEditing,
                               child: Text(
                                 widget.isBookHover ? '放入此文件夹' : widget.folder.name,
-                                style: TextStyle(
+                                style: AppTextStyles.role(
+                                  context,
                                   fontSize: appMetrics.fontSize11,
-                                  fontWeight: FontWeight.w600,
-                                  color: widget.isBookHover
-                                      ? theme.colorScheme.tertiary
-                                      : Colors.white,
+                                  weight: FontWeight.w600,
+                                  color: widget.isBookHover ? dropTint : Colors.white,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -429,7 +430,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                       SizedBox(height: appMetrics.kSpace4),
                       Text(
                         '$folderBookCount 本',
-                        style: TextStyle(
+                        style: AppTextStyles.role(
+                          context,
                           fontSize: appMetrics.fontSize9,
                           color: Colors.white.withAlpha(220),
                         ),
@@ -454,11 +456,12 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                     child: Container(
                       padding: EdgeInsets.all(appMetrics.kSpace4),
                       decoration: BoxDecoration(
-                        color: Colors.black.withAlpha(60),
+                        color: s.scrim.withAlpha(60),
                         shape: BoxShape.circle,
                       ),
                       child: DrawIcon(StrokeIcons.moreVert,
-                        size: appMetrics.fontSize13,
+                        // 圆盒是宽度族固定尺寸，符号也跟着走宽度族，否则字号滑杆一拉就顶出去
+                        size: scaleW(13),
                         color: Colors.white,
                       ),
                     ),
@@ -474,12 +477,13 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                     width: scaleW(22),
                     height: scaleW(22),
                     decoration: BoxDecoration(
-                      color: widget.isSelected ? accent : Colors.black.withAlpha(60),
+                      color: widget.isSelected ? accent : s.scrim.withAlpha(60),
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: scaleW(2)),
                     ),
                     child: widget.isSelected
-                        ? DrawIcon(StrokeIcons.check, size: appMetrics.fontSize13, color: Colors.white)
+                        // 勾压在强调底上，明暗两档要跟着反相
+                        ? DrawIcon(StrokeIcons.check, size: scaleW(13), color: s.accentOn)
                         : null,
                   ),
                 ),
@@ -491,7 +495,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
               // 拖放入文件夹时的半透明高亮遮罩
               if (widget.isBookHover)
                 Container(
-                  decoration: BoxDecoration(color: theme.colorScheme.tertiary.withAlpha(20)),
+                  decoration: BoxDecoration(color: dropTint.withAlpha(20)),
                 ),
             ],
           ),

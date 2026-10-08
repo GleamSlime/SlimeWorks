@@ -406,7 +406,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
               // 危险项整行染色：混在一列普通操作里最容易被顺手点到。
               ListTile(
                 leading: DrawIcon(StrokeIcons.deleteOutline, color: s.danger.color),
-                title: Text('删除播放列表', style: TextStyle(color: s.danger.color)),
+                title: Text('删除播放列表', style: AppTextStyles.rowTitle(ctx).copyWith(color: s.danger.color)),
                 onTap: () => Navigator.pop(ctx),
               ),
             ],

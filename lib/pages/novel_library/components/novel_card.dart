@@ -1,4 +1,6 @@
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -31,6 +33,8 @@ class NovelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Card(
       elevation: 2,
       clipBehavior: Clip.antiAlias,
@@ -45,7 +49,7 @@ class NovelCard extends StatelessWidget {
               aspectRatio: 0.85,
               child: Container(
                 width: double.infinity,
-                decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant),
+                decoration: BoxDecoration(color: s.surfaceSunken),
                 child: Stack(
                   children: [
                     // 封面图片或默认背景
@@ -61,15 +65,18 @@ class NovelCard extends StatelessWidget {
                           vertical: AppTheme.metrics.kSpace4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.7),
+                          // 压在封面图上的暗色标签底，语义就是模态遮罩那一档
+                          color: s.scrim,
                           borderRadius: AppTheme.metrics.radius12,
                         ),
                         child: Text(
                           format,
-                          style: TextStyle(
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: m.fontSize10,
+                            // 封面上的固定浅字：语义层没有“暗遮罩上的白字”这一档，先按原样保留
                             color: Colors.white,
-                            fontSize: AppTheme.metrics.fontSize10,
-                            fontWeight: FontWeight.bold,
+                            weight: FontWeight.bold,
                           ),
                         ),
                       ),
@@ -86,9 +93,7 @@ class NovelCard extends StatelessWidget {
                           child: LinearProgressIndicator(
                             value: progress,
                             backgroundColor: Colors.white.withValues(alpha: 0.3),
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Theme.of(context).primaryColor,
-                            ),
+                            valueColor: AlwaysStoppedAnimation<Color>(s.accent),
                           ),
                         ),
                       ),
@@ -101,7 +106,7 @@ class NovelCard extends StatelessWidget {
             Flexible(
               fit: FlexFit.loose,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 110),
+                constraints: BoxConstraints(maxHeight: scaleW(110)),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     // 记录卡片信息区在不同布局下的尺寸，便于调试溢出问题
@@ -122,9 +127,11 @@ class NovelCard extends StatelessWidget {
                           title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: AppTheme.metrics.fontSize13,
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: m.fontSize13,
+                            color: s.textPrimary,
+                            weight: FontWeight.bold,
                           ),
                         ),
                       );
@@ -141,9 +148,11 @@ class NovelCard extends StatelessWidget {
                             title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: AppTheme.metrics.fontSize13,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: m.fontSize13,
+                              color: s.textPrimary,
+                              weight: FontWeight.bold,
                             ),
                           ),
                           SizedBox(height: AppTheme.metrics.kSpace6),
@@ -151,7 +160,7 @@ class NovelCard extends StatelessWidget {
                             children: [
                               DrawIcon(StrokeIcons.personOutline,
                                 size: AppTheme.metrics.iconSize12,
-                                color: Theme.of(context).hintColor,
+                                color: s.textTertiary,
                               ),
                               SizedBox(width: AppTheme.metrics.kSpace4),
                               Expanded(
@@ -159,10 +168,7 @@ class NovelCard extends StatelessWidget {
                                   author,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: AppTheme.metrics.fontSize11,
-                                    color: Theme.of(context).hintColor,
-                                  ),
+                                  style: AppTextStyles.caption(context),
                                 ),
                               ),
                             ],
@@ -171,10 +177,11 @@ class NovelCard extends StatelessWidget {
                             SizedBox(height: AppTheme.metrics.kSpace4),
                             Text(
                               '阅读记录  已读 ${(progress * 100).toInt()}%',
-                              style: TextStyle(
-                                fontSize: AppTheme.metrics.fontSize10,
-                                color: Theme.of(context).primaryColor,
-                                fontWeight: FontWeight.w500,
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: m.fontSize10,
+                                color: s.accent,
+                                weight: FontWeight.w500,
                               ),
                             ),
                           ],
@@ -191,16 +198,14 @@ class NovelCard extends StatelessWidget {
               height: AppTheme.metrics.kSpace40,
               child: Container(
                 decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.3)),
-                  ),
+                  border: Border(top: BorderSide(color: s.hairline)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     IconButton(
                       icon: DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize20),
-                      color: Colors.red[400],
+                      color: s.danger.color,
                       tooltip: '删除',
                       onPressed: () => _showDeleteDialog(),
                     ),
@@ -241,11 +246,12 @@ class NovelCard extends StatelessWidget {
 
   void _showDeleteDialog() {
     final context = Get.context!;
+    final s = AppSemantic.of(context);
     Get.dialog(
       AlertDialog(
         title: Row(
           children: [
-            DrawIcon(StrokeIcons.warningAmber, color: Colors.orange),
+            DrawIcon(StrokeIcons.warningAmber, color: s.warning.color),
             SizedBox(width: AppTheme.metrics.kSpace8),
             const Text('确认删除'),
           ],
@@ -259,8 +265,8 @@ class NovelCard extends StatelessWidget {
               onDelete();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Colors.white,
+              backgroundColor: s.danger.color,
+              foregroundColor: s.accentOn,
             ),
             child: const Text('删除'),
           ),

@@ -74,8 +74,8 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
     return Dialog(
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
-        width: 960,
-        height: 680,
+        width: scaleW(960),
+        height: scaleH(680),
         child: Column(
           children: [
             Container(
@@ -83,13 +83,18 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                 horizontal: appMetrics.kSpace12,
                 vertical: appMetrics.kSpace10,
               ),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              color: AppSemantic.of(context).surfaceRaised,
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       '${widget.metadata.title}  ·  ${widget.nodeName}',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: appMetrics.fontSize14,
+                        weight: FontWeight.w500,
+                        color: AppSemantic.of(context).textPrimary,
+                      ),
                     ),
                   ),
                   IconButton(
@@ -107,7 +112,7 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                   : Row(
                       children: [
                         SizedBox(
-                          width: 280,
+                          width: scaleW(280),
                           child: ListView.separated(
                             itemCount: _chapters.length,
                             separatorBuilder: (_, _) => const Divider(height: 1),
@@ -283,18 +288,17 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
           builder: (context, setModalState) {
             return SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                padding: EdgeInsets.fromLTRB(
+                  AppTheme.metrics.kSpace16,
+                  AppTheme.metrics.kSpace16,
+                  AppTheme.metrics.kSpace16,
+                  AppTheme.metrics.kSpace24,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '阅读设置',
-                      style: TextStyle(
-                        fontSize: AppTheme.metrics.fontSize15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text('阅读设置', style: AppTextStyles.sectionTitle(context)),
                     SizedBox(height: AppTheme.metrics.kSpace12),
                     Row(
                       children: [
@@ -336,7 +340,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                     const Text('背景色'),
                     SizedBox(height: AppTheme.metrics.kSpace8),
                     Wrap(
-                      spacing: 10,
+                      spacing: AppTheme.metrics.kSpace10,
                       children:
                           [
                                 const Color(0xFFF6F0E7),
@@ -352,15 +356,16 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                                     setModalState(() {});
                                   },
                                   child: Container(
-                                    width: 30,
-                                    height: 30,
+                                    width: scaleW(30),
+                                    height: scaleW(30),
                                     decoration: BoxDecoration(
                                       color: color,
                                       shape: BoxShape.circle,
                                       border: Border.all(
+                                        // 未选中的纸色样品只靠描边分层，选中才升到强调底
                                         color: _readerBgColor == color
-                                            ? Theme.of(context).colorScheme.primary
-                                            : Colors.grey.shade400,
+                                            ? AppSemantic.of(context).accent
+                                            : AppSemantic.of(context).borderStrong,
                                         width: _readerBgColor == color ? 2 : 1,
                                       ),
                                     ),
@@ -486,14 +491,23 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                     children: [
                       Text(
                         widget.metadata.title,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: appMetrics.fontSize14,
+                          weight: FontWeight.w500,
+                          color: AppSemantic.of(context).textPrimary,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       SizedBox(height: appMetrics.kSpace4),
                       Text(
                         widget.nodeName,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: appMetrics.fontSize12,
+                          color: AppSemantic.of(context).textTertiary,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -575,9 +589,11 @@ Widget _buildChapterContent(
       padding: contentPadding,
       child: HtmlWidget(
         trimmed,
-        textStyle: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(fontSize: fontSize, height: lineHeight),
+        // 字号/行距由阅读设置面板的用户取值覆盖，字族仍要从角色层拿
+        textStyle: AppTextStyles.body(context).copyWith(
+          fontSize: fontSize,
+          height: lineHeight,
+        ),
         customStylesBuilder: (element) {
           switch (element.localName) {
             case 'p':
@@ -598,9 +614,7 @@ Widget _buildChapterContent(
     padding: contentPadding,
     child: SelectableText(
       trimmed,
-      style: Theme.of(
-        context,
-      ).textTheme.bodyMedium?.copyWith(fontSize: fontSize, height: lineHeight),
+      style: AppTextStyles.body(context).copyWith(fontSize: fontSize, height: lineHeight),
     ),
   );
 }
@@ -626,10 +640,10 @@ class _RemoteReaderBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+    final s = AppSemantic.of(context);
 
     return Material(
-      color: theme.colorScheme.surface.withAlpha(245),
+      color: s.surface.withAlpha(245),
       elevation: 8,
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8),
@@ -646,7 +660,19 @@ class _RemoteReaderBottomBar extends StatelessWidget {
               icon: DrawIcon(StrokeIcons.chevronLeft),
             ),
             Expanded(
-              child: Center(child: Text('章节', style: theme.textTheme.labelLarge)),
+              child: Center(
+                child: Text(
+                  '章节',
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: appMetrics.fontSize13,
+                    weight: FontWeight.w500,
+                    color: AppSemantic.of(context).textPrimary,
+                    height: 1.2,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
             ),
             IconButton(
               tooltip: '下一章',

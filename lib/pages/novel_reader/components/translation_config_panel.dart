@@ -136,7 +136,7 @@ class _TranslationConfigPanelState extends State<TranslationConfigPanel> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('翻译配置', style: Theme.of(context).textTheme.titleLarge),
+              Text('翻译配置', style: AppTextStyles.sectionTitle(context)),
               IconButton(icon: DrawIcon(StrokeIcons.close), onPressed: () => Navigator.pop(context)),
             ],
           ),
@@ -145,7 +145,7 @@ class _TranslationConfigPanelState extends State<TranslationConfigPanel> {
           // 说明文字
           Text(
             '配置完成后，点击确定开启自动翻译。翻译将自动应用到当前及后续章节。',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+            style: AppTextStyles.body(context),
           ),
           SizedBox(height: appMetrics.spacingLarge),
 
@@ -194,7 +194,7 @@ class _TranslationConfigPanelState extends State<TranslationConfigPanel> {
               Expanded(
                 child: Text(
                   '翻译超时时间：$_timeoutSeconds秒',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: AppTextStyles.body(context),
                 ),
               ),
             ],
@@ -213,7 +213,7 @@ class _TranslationConfigPanelState extends State<TranslationConfigPanel> {
           ),
           Text(
             '建议：30-120秒。太短可能导致翻译失败，太长会影响体验。',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+            style: AppTextStyles.caption(context),
           ),
           SizedBox(height: appMetrics.spacingMedium),
 

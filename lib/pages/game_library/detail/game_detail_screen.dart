@@ -120,6 +120,7 @@ class _GameDetailScreenState
 
   @override
   Widget buildContent(BuildContext context) {
+    final s = AppSemantic.of(context);
     return Focus(
       autofocus: true,
       onKeyEvent: (FocusNode node, KeyEvent event) {
@@ -145,17 +146,15 @@ class _GameDetailScreenState
               Container(
                 decoration: BoxDecoration(
                   border: Border(
-                    bottom: BorderSide(color: Theme.of(context).dividerColor),
+                    bottom: BorderSide(color: s.hairline),
                   ),
                 ),
                 child: TabBar(
                   controller: _tabController,
                   isScrollable: false,
-                  labelColor: Theme.of(context).colorScheme.primary,
-                  unselectedLabelColor: Theme.of(
-                    context,
-                  ).colorScheme.onSurfaceVariant,
-                  indicatorColor: Theme.of(context).colorScheme.primary,
+                  labelColor: s.accent,
+                  unselectedLabelColor: s.textSecondary,
+                  indicatorColor: s.accent,
                   indicatorWeight: 2,
                   tabs: _tabLabels
                       .map((String l) => Tab(text: l))
@@ -186,8 +185,14 @@ class _GameDetailScreenState
   // ──────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context, GameItem game) {
+    final s = AppSemantic.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+      padding: EdgeInsets.fromLTRB(
+        AppTheme.metrics.kSpace24,
+        AppTheme.metrics.kSpace16,
+        AppTheme.metrics.kSpace24,
+        AppTheme.metrics.kSpace12,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -200,8 +205,12 @@ class _GameDetailScreenState
                 // 标题
                 Text(
                   game.name,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize18,
+                    weight: FontWeight.w700,
+                    color: s.textPrimary,
+                    height: 1.45,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -228,19 +237,15 @@ class _GameDetailScreenState
   }
 
   Widget _buildCoverCard(BuildContext context, GameItem game) {
+    final s = AppSemantic.of(context);
     return Container(
-      width: 180,
-      height: 250,
+      width: scaleW(180),
+      height: scaleW(250),
       decoration: BoxDecoration(
         borderRadius: AppTheme.metrics.radius12,
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Theme.of(context).shadowColor.withAlpha(60),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        // 封面投影收进语义档位（原手搓 shadowColor@60/blur16/y6 ≈ floating）
+        boxShadow: s.elevation(Elevation.floating),
+        color: s.surfaceSunken,
       ),
       child: ClipRRect(
         borderRadius: AppTheme.metrics.radius12,
@@ -269,13 +274,15 @@ class _GameDetailScreenState
   }
 
   Widget _coverPlaceholder(BuildContext context) {
+    final s = AppSemantic.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            Theme.of(context).colorScheme.primaryContainer,
+            s.accentContainer,
+            // secondaryContainer 在语义层没有对等角色，暂保留字阶色
             Theme.of(context).colorScheme.secondaryContainer,
           ],
         ),
@@ -283,16 +290,17 @@ class _GameDetailScreenState
       child: Center(
         child: DrawIcon(StrokeIcons.sportsEsports,
           size: AppTheme.metrics.iconSize48,
-          color: Theme.of(context).colorScheme.primary.withAlpha(160),
+          color: s.accent.withAlpha(160),
         ),
       ),
     );
   }
 
   Widget _buildActionRow(BuildContext context, GameItem game) {
+    final s = AppSemantic.of(context);
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: AppTheme.metrics.kSpace8,
+      runSpacing: AppTheme.metrics.kSpace8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
         // 启动按钮（含运行中状态 + 多 exe 下拉选择）
@@ -306,17 +314,15 @@ class _GameDetailScreenState
                   vertical: AppTheme.metrics.kSpace10,
                 ),
                 backgroundColor:
-                    (Theme.of(context).brightness == Brightness.dark)
-                    ? DarkColors.success
-                    : LightColors.success,
+                    s.success.color,
               ),
               onPressed: null,
               icon: SizedBox(
                 width: AppTheme.metrics.kSpace16,
                 height: AppTheme.metrics.kSpace16,
-                child: const CircularProgressIndicator(
+                child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.white,
+                  color: s.success.onContainer,
                 ),
               ),
               label: const Text('游戏运行中...'),
@@ -341,7 +347,6 @@ class _GameDetailScreenState
           }
 
           // 多 exe：分割按钮（左：启动默认，右：下拉选择其他 exe）
-          final ColorScheme cs = Theme.of(context).colorScheme;
           return Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -351,9 +356,9 @@ class _GameDetailScreenState
                     horizontal: AppTheme.metrics.kSpace16,
                     vertical: AppTheme.metrics.kSpace10,
                   ),
-                  shape: const RoundedRectangleBorder(
+                  shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.horizontal(
-                      left: Radius.circular(20),
+                      left: Radius.circular(scaleW(20)),
                     ),
                   ),
                 ),
@@ -363,12 +368,12 @@ class _GameDetailScreenState
               ),
               Container(
                 width: 1,
-                height: 36,
-                color: cs.onPrimary.withAlpha(60),
+                height: scaleW(36),
+                color: s.accentOn.withAlpha(60),
               ),
               PopupMenuButton<String>(
                 tooltip: '选择其他可执行文件启动',
-                offset: const Offset(0, 44),
+                offset: Offset(0, AppTheme.metrics.kSpace44),
                 onSelected: (String p) => _launchWithExe(game, p),
                 shadowColor: Colors.transparent,
                 itemBuilder: (_) => exePaths.map((String p) {
@@ -383,7 +388,7 @@ class _GameDetailScreenState
                               ? StrokeIcons.star
                               : StrokeIcons.playArrow,
                           size: AppTheme.metrics.iconSize16,
-                          color: isDefault ? Colors.amber : null,
+                          color: isDefault ? s.warning.color : null,
                         ),
                         SizedBox(width: AppTheme.metrics.kSpace8),
                         Flexible(
@@ -394,15 +399,20 @@ class _GameDetailScreenState
                   );
                 }).toList(),
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(8, 6, 12, 6),
+                  padding: EdgeInsets.fromLTRB(
+                    AppTheme.metrics.kSpace8,
+                    AppTheme.metrics.kSpace6,
+                    AppTheme.metrics.kSpace12,
+                    AppTheme.metrics.kSpace6,
+                  ),
                   decoration: BoxDecoration(
-                    color: cs.primary,
-                    borderRadius: const BorderRadius.horizontal(
-                      right: Radius.circular(20),
+                    color: s.accent,
+                    borderRadius: BorderRadius.horizontal(
+                      right: Radius.circular(scaleW(20)),
                     ),
                   ),
                   child: DrawIcon(StrokeIcons.arrowDropDown,
-                    color: cs.onPrimary,
+                    color: s.accentOn,
                     size: AppTheme.metrics.iconSize20,
                   ),
                 ),
@@ -413,7 +423,7 @@ class _GameDetailScreenState
         Container(
           width: 1,
           height: AppTheme.metrics.kSpace24,
-          color: Theme.of(context).dividerColor,
+          color: s.hairline,
         ),
 
         // 状态 Pills
@@ -428,7 +438,7 @@ class _GameDetailScreenState
         Container(
           width: 1,
           height: AppTheme.metrics.kSpace24,
-          color: Theme.of(context).dividerColor,
+          color: s.hairline,
         ),
 
         // 收藏 Pill
@@ -436,7 +446,8 @@ class _GameDetailScreenState
           label: viewModel.isFavorite ? '已收藏' : '收藏',
           icon: viewModel.isFavorite ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
           active: viewModel.isFavorite,
-          activeColor: Colors.pink,
+          // 收藏属于『选中』状态，按规范用 accent 而非红/粉
+          activeColor: s.accent,
           onTap: () => viewModel.toggleFavorite(!viewModel.isFavorite),
         ),
       ],
@@ -459,6 +470,7 @@ class _GameDetailScreenState
   }
 
   Widget _buildMetaGrid(BuildContext context, GameItem game) {
+    final s = AppSemantic.of(context);
     final List<_MetaItem> items = <_MetaItem>[
       _MetaItem(
         label: '开发商',
@@ -481,26 +493,37 @@ class _GameDetailScreenState
     ];
 
     return Wrap(
-      spacing: 24,
-      runSpacing: 12,
+      spacing: AppTheme.metrics.kSpace24,
+      runSpacing: AppTheme.metrics.kSpace12,
       children: items
           .map(
             (_MetaItem item) => SizedBox(
-              width: 140,
+              width: scaleW(140),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
                     item.label,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: AppTheme.metrics.fontSize11,
+                      weight: FontWeight.w600,
+                      color: s.textSecondary,
+                      height: 1.5,
+                      letterSpacing: 0.6,
                     ),
                   ),
                   SizedBox(height: AppTheme.metrics.kSpace2),
                   Text(
                     item.value,
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: AppTheme.metrics.fontSize13,
+                      color: s.textSecondary,
+                      height: 1.65,
+                    ),
+                    // 固定宽度格里的值会随界面字号变长：宁可截断，不许顶破
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
@@ -512,14 +535,19 @@ class _GameDetailScreenState
   }
 
   Widget _buildSummary(BuildContext context, GameItem game) {
+    final s = AppSemantic.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           '简介',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
+          style: AppTextStyles.role(
+            context,
+            fontSize: AppTheme.metrics.fontSize11,
+            weight: FontWeight.w600,
+            color: s.textSecondary,
+            height: 1.5,
+            letterSpacing: 0.6,
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace4),
@@ -527,8 +555,10 @@ class _GameDetailScreenState
           game.summary,
           maxLines: 4,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          style: AppTextStyles.role(
+            context,
+            fontSize: AppTheme.metrics.fontSize12,
+            color: s.textSecondary,
             height: 1.5,
           ),
         ),
@@ -541,6 +571,7 @@ class _GameDetailScreenState
   // ──────────────────────────────────────────────────────
 
   Widget _buildStatsTab(GameItem game) {
+    final s = AppSemantic.of(context);
     return ListView(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
       children: <Widget>[
@@ -548,7 +579,8 @@ class _GameDetailScreenState
           builder: (BuildContext context, BoxConstraints constraints) {
             final int cols = (constraints.maxWidth / 180).floor().clamp(2, 6);
             final double itemW =
-                (constraints.maxWidth - (cols - 1) * 12) / cols;
+                (constraints.maxWidth - (cols - 1) * AppTheme.metrics.kSpace12) /
+                cols;
             final List<_MetaItem> stats = <_MetaItem>[
               _MetaItem(
                 label: '累计游玩',
@@ -558,23 +590,19 @@ class _GameDetailScreenState
               _MetaItem(label: '当前状态', value: game.status.label),
             ];
             return Wrap(
-              spacing: 12,
-              runSpacing: 12,
+              spacing: AppTheme.metrics.kSpace12,
+              runSpacing: AppTheme.metrics.kSpace12,
               children: stats
                   .map(
-                    (_MetaItem s) => SizedBox(
+                    (_MetaItem stat) => SizedBox(
                       width: itemW,
                       child: Card(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surface.withValues(alpha: 0.72),
+                        color: s.surface.withValues(alpha: 0.72),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: AppTheme.metrics.radius12,
                           side: BorderSide(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.outline.withValues(alpha: 0.12),
+                            color: s.border.withValues(alpha: 0.12),
                           ),
                         ),
                         child: Padding(
@@ -583,19 +611,24 @@ class _GameDetailScreenState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Text(
-                                s.label,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
+                                stat.label,
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: AppTheme.metrics.fontSize12,
+                                  color: s.textSecondary,
+                                  height: 1.6,
+                                ),
                               ),
                               SizedBox(height: AppTheme.metrics.kSpace4),
                               Text(
-                                s.value,
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.w700),
+                                stat.value,
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: AppTheme.metrics.fontSize15,
+                                  weight: FontWeight.w700,
+                                  color: s.textPrimary,
+                                  height: 1.5,
+                                ),
                               ),
                             ],
                           ),
@@ -612,9 +645,13 @@ class _GameDetailScreenState
           children: <Widget>[
             Text(
               '游玩记录',
-              style: Theme.of(
+              style: AppTextStyles.role(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                fontSize: AppTheme.metrics.fontSize14,
+                weight: FontWeight.w600,
+                color: s.textPrimary,
+                height: 1.55,
+              ),
             ),
             const Spacer(),
             OutlinedButton.icon(
@@ -635,8 +672,10 @@ class _GameDetailScreenState
             child: Center(
               child: Text(
                 '还没有游玩记录',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: AppTheme.metrics.fontSize13,
+                  color: s.textSecondary,
                 ),
               ),
             ),
@@ -644,16 +683,12 @@ class _GameDetailScreenState
         else
           ...viewModel.sessions.map(
             (PlaySession session) => Card(
-              color: Theme.of(
-                context,
-              ).colorScheme.surface.withValues(alpha: 0.72),
+              color: s.surface.withValues(alpha: 0.72),
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: AppTheme.metrics.radius12,
                 side: BorderSide(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.outline.withValues(alpha: 0.12),
+                  color: s.border.withValues(alpha: 0.12),
                 ),
               ),
               child: ListTile(
@@ -672,20 +707,19 @@ class _GameDetailScreenState
   }
 
   Widget _buildMoegirlSection() {
+    final s = AppSemantic.of(context);
     return Obx(() {
       final bool loading = viewModel.moegirlLoading.value;
       final String html = viewModel.moegirlHtml.value;
       final String error = viewModel.moegirlError.value;
       if (loading) {
         return Card(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+          color: s.surface.withValues(alpha: 0.72),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: AppTheme.metrics.radius12,
             side: BorderSide(
-              color: Theme.of(
-                context,
-              ).colorScheme.outline.withValues(alpha: 0.12),
+              color: s.border.withValues(alpha: 0.12),
             ),
           ),
           child: Padding(
@@ -706,20 +740,26 @@ class _GameDetailScreenState
       }
       if (error.isNotEmpty) {
         return Card(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+          color: s.surface.withValues(alpha: 0.72),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: AppTheme.metrics.radius12,
             side: BorderSide(
-              color: Theme.of(
-                context,
-              ).colorScheme.outline.withValues(alpha: 0.12),
+              color: s.border.withValues(alpha: 0.12),
             ),
           ),
           child: ListTile(
             leading: DrawIcon(StrokeIcons.warningAmber),
             title: const Text('萌娘百科加载失败'),
-            subtitle: Text(error, style: Theme.of(context).textTheme.bodySmall),
+            subtitle: Text(
+              error,
+              style: AppTextStyles.role(
+                context,
+                fontSize: AppTheme.metrics.fontSize12,
+                color: s.textTertiary,
+                height: 1.6,
+              ),
+            ),
             trailing: IconButton(
               icon: DrawIcon(StrokeIcons.refresh),
               tooltip: '重试',
@@ -730,19 +770,22 @@ class _GameDetailScreenState
       }
       if (html.isEmpty) return const SizedBox.shrink();
       return Card(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+        color: s.surface.withValues(alpha: 0.72),
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: AppTheme.metrics.radius12,
           side: BorderSide(
-            color: Theme.of(
-              context,
-            ).colorScheme.outline.withValues(alpha: 0.12),
+            color: s.border.withValues(alpha: 0.12),
           ),
         ),
         clipBehavior: Clip.antiAlias,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          padding: EdgeInsets.fromLTRB(
+            AppTheme.metrics.kSpace16,
+            AppTheme.metrics.kSpace12,
+            AppTheme.metrics.kSpace16,
+            AppTheme.metrics.kSpace16,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -752,7 +795,16 @@ class _GameDetailScreenState
                     size: AppTheme.metrics.iconSize18,
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace8),
-                  Text('萌娘百科', style: Theme.of(context).textTheme.titleSmall),
+                  Text(
+                    '萌娘百科',
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: AppTheme.metrics.fontSize13,
+                      weight: FontWeight.w600,
+                      color: s.textSecondary,
+                      height: 1.5,
+                    ),
+                  ),
                   const Spacer(),
                   InkWell(
                     borderRadius: AppTheme.metrics.radius4,
@@ -775,15 +827,19 @@ class _GameDetailScreenState
                         children: <Widget>[
                           DrawIcon(StrokeIcons.openInNew,
                             size: AppTheme.metrics.iconSize14,
-                            color: Theme.of(context).colorScheme.primary,
+                            color: s.accent,
                           ),
                           SizedBox(width: AppTheme.metrics.kSpace2),
                           Text(
                             '原文',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: AppTheme.metrics.fontSize11,
+                              weight: FontWeight.w600,
+                              color: s.accent,
+                              height: 1.5,
+                              letterSpacing: 0.6,
+                            ),
                           ),
                         ],
                       ),
@@ -801,7 +857,12 @@ class _GameDetailScreenState
                     html,
                     buildAsync: true,
                     baseUrl: Uri.parse('https://zh.moegirl.org.cn'),
-                    textStyle: Theme.of(context).textTheme.bodySmall,
+                    textStyle: AppTextStyles.role(
+                      context,
+                      fontSize: AppTheme.metrics.fontSize12,
+                      color: s.textTertiary,
+                      height: 1.6,
+                    ),
                     onTapUrl: (url) async {
                       try {
                         await Process.run('open', [url]);
@@ -857,6 +918,7 @@ class _GameDetailScreenState
   // ──────────────────────────────────────────────────────
 
   Widget _buildEditTab(GameItem game) {
+    final s = AppSemantic.of(context);
     return ListView(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
       children: <Widget>[
@@ -869,9 +931,7 @@ class _GameDetailScreenState
                   labelText: '游戏名',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(
-                    context,
-                  ).colorScheme.surface.withValues(alpha: 0.6),
+                  fillColor: s.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -883,9 +943,7 @@ class _GameDetailScreenState
                   labelText: '开发商',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(
-                    context,
-                  ).colorScheme.surface.withValues(alpha: 0.6),
+                  fillColor: s.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -902,9 +960,7 @@ class _GameDetailScreenState
                   labelText: '评分 (0-10)',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(
-                    context,
-                  ).colorScheme.surface.withValues(alpha: 0.6),
+                  fillColor: s.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -917,9 +973,7 @@ class _GameDetailScreenState
                   hintText: 'YYYY-MM-DD',
                   border: const OutlineInputBorder(),
                   filled: true,
-                  fillColor: Theme.of(
-                    context,
-                  ).colorScheme.surface.withValues(alpha: 0.6),
+                  fillColor: s.surface.withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -933,9 +987,7 @@ class _GameDetailScreenState
             border: const OutlineInputBorder(),
             prefixIcon: DrawIcon(StrokeIcons.folder),
             filled: true,
-            fillColor: Theme.of(
-              context,
-            ).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: s.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -945,9 +997,7 @@ class _GameDetailScreenState
             labelText: '状态',
             border: const OutlineInputBorder(),
             filled: true,
-            fillColor: Theme.of(
-              context,
-            ).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: s.surface.withValues(alpha: 0.6),
           ),
           items: GameStatus.values
               .map(
@@ -974,9 +1024,7 @@ class _GameDetailScreenState
             labelText: '简介',
             border: const OutlineInputBorder(),
             filled: true,
-            fillColor: Theme.of(
-              context,
-            ).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: s.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace20),
@@ -1031,6 +1079,7 @@ class _GameDetailScreenState
   // ──────────────────────────────────────────────────────
 
   Widget _buildLaunchTab(GameItem game) {
+    final s = AppSemantic.of(context);
     return Obx(() {
       // 读取最新游戏数据（响应 setDefaultExe / removeExePath 后的更新）
       final GameItem g = viewModel.game.value ?? game;
@@ -1043,7 +1092,7 @@ class _GameDetailScreenState
           // 运行状态提示卡
           if (running)
             Card(
-              color: Colors.green.shade50,
+              color: s.success.container,
               margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace16),
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -1057,16 +1106,14 @@ class _GameDetailScreenState
                       height: AppTheme.metrics.kSpace20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: (Theme.of(context).brightness == Brightness.dark)
-                            ? DarkColors.success
-                            : LightColors.success,
+                        color: s.success.color,
                       ),
                     ),
                     SizedBox(width: AppTheme.metrics.kSpace12),
                     Text(
                       '游戏运行中... 退出后将自动记录游玩时间',
-                      style: TextStyle(
-                        color: Colors.green.shade800,
+                      style: AppTextStyles.body(context).copyWith(
+                        color: s.success.onContainer,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1077,16 +1124,12 @@ class _GameDetailScreenState
 
           // 启动配置卡
           Card(
-            color: Theme.of(
-              context,
-            ).colorScheme.surface.withValues(alpha: 0.72),
+            color: s.surface.withValues(alpha: 0.72),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: AppTheme.metrics.radius12,
               side: BorderSide(
-                color: Theme.of(
-                  context,
-                ).colorScheme.outline.withValues(alpha: 0.12),
+                color: s.border.withValues(alpha: 0.12),
               ),
             ),
             child: Padding(
@@ -1096,8 +1139,12 @@ class _GameDetailScreenState
                 children: <Widget>[
                   Text(
                     '启动配置',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: AppTheme.metrics.fontSize14,
+                      weight: FontWeight.w600,
+                      color: s.textPrimary,
+                      height: 1.55,
                     ),
                   ),
                   SizedBox(height: AppTheme.metrics.kSpace16),
@@ -1114,12 +1161,12 @@ class _GameDetailScreenState
                         Expanded(
                           child: Text(
                             '游戏目录: ${g.gameDir}',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: AppTheme.metrics.fontSize12,
+                              color: s.textSecondary,
+                              height: 1.6,
+                            ),
                           ),
                         ),
                       ],
@@ -1135,9 +1182,7 @@ class _GameDetailScreenState
                         title: const Text('使用 open 命令启动'),
                         subtitle: Text(
                           '适用于 Wine/Crossover 包装或需要 macOS 关联打开的程序',
-                          style: TextStyle(
-                            fontSize: AppTheme.metrics.fontSize11,
-                          ),
+                          style: AppTextStyles.caption(context),
                         ),
                         value: viewModel.useOpenOnMacos.value,
                         onChanged: (bool v) async {
@@ -1177,9 +1222,9 @@ class _GameDetailScreenState
                               ? SizedBox(
                                   width: AppTheme.metrics.kSpace18,
                                   height: AppTheme.metrics.kSpace18,
-                                  child: const CircularProgressIndicator(
+                                  child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.white,
+                                    color: s.accentOn,
                                   ),
                                 )
                               : DrawIcon(StrokeIcons.playArrow),
@@ -1218,7 +1263,8 @@ class _GameDetailScreenState
                           ),
                           icon: AnimatedRotation(
                             turns: _exeListExpanded ? 0.5 : 0,
-                            duration: const Duration(milliseconds: 200),
+                            // 展开/收起的即时反馈
+                            duration: AppMotion.fast,
                             child: DrawIcon(StrokeIcons.expandMore),
                           ),
                         ),
@@ -1239,7 +1285,7 @@ class _GameDetailScreenState
                       child: Container(
                         decoration: BoxDecoration(
                           border: Border.all(
-                            color: Theme.of(context).dividerColor,
+                            color: s.hairline,
                           ),
                           borderRadius: AppTheme.metrics.radius8,
                         ),
@@ -1264,25 +1310,25 @@ class _GameDetailScreenState
                                   leading: Radio<String>(value: p),
                                   title: Text(
                                     _exeName(p),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          fontWeight: isDefault
-                                              ? FontWeight.w600
-                                              : FontWeight.normal,
-                                        ),
+                                    style: AppTextStyles.role(
+                                      context,
+                                      fontSize: AppTheme.metrics.fontSize13,
+                                      weight: isDefault
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                      color: s.textSecondary,
+                                    ),
                                   ),
                                   subtitle: Text(
                                     p,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                        ),
+                                    style: AppTextStyles.role(
+                                      context,
+                                      fontSize: AppTheme.metrics.fontSize12,
+                                      color: s.textSecondary,
+                                      height: 1.6,
+                                    ),
                                   ),
                                   // X 按钮：移除该 exe
                                   trailing: Row(
@@ -1300,9 +1346,7 @@ class _GameDetailScreenState
                                         tooltip: '移除此启动项',
                                         icon: DrawIcon(StrokeIcons.close,
                                           size: AppTheme.metrics.iconSize18,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.error,
+                                          color: s.danger.color,
                                         ),
                                         onPressed: exePaths.length > 1
                                             ? () async {
@@ -1318,9 +1362,9 @@ class _GameDetailScreenState
                                 if (!isLast)
                                   Divider(
                                     height: 1,
-                                    indent: 8,
-                                    endIndent: 8,
-                                    color: Theme.of(context).dividerColor,
+                                    indent: AppTheme.metrics.kSpace8,
+                                    endIndent: AppTheme.metrics.kSpace8,
+                                    color: s.hairline,
                                   ),
                               ],
                             );
@@ -1347,12 +1391,12 @@ class _GameDetailScreenState
                             Expanded(
                               child: Text(
                                 '存档目录: $savePath',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: AppTheme.metrics.fontSize12,
+                                  color: s.textSecondary,
+                                  height: 1.6,
+                                ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1395,16 +1439,12 @@ class _GameDetailScreenState
           // 万物皆可萌
           SizedBox(height: AppTheme.metrics.kSpace16),
           Card(
-            color: Theme.of(
-              context,
-            ).colorScheme.surface.withValues(alpha: 0.72),
+            color: s.surface.withValues(alpha: 0.72),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: AppTheme.metrics.radius12,
               side: BorderSide(
-                color: Theme.of(
-                  context,
-                ).colorScheme.outline.withValues(alpha: 0.12),
+                color: s.border.withValues(alpha: 0.12),
               ),
             ),
             child: Padding(
@@ -1414,8 +1454,12 @@ class _GameDetailScreenState
                 children: <Widget>[
                   Text(
                     '万物皆可萌',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: AppTheme.metrics.fontSize14,
+                      weight: FontWeight.w600,
+                      color: s.textPrimary,
+                      height: 1.55,
                     ),
                   ),
                   SizedBox(height: AppTheme.metrics.kSpace16),
@@ -1442,13 +1486,14 @@ class _GameDetailScreenState
   }
 
   Widget _buildTwodfanCard(GameItem g) {
+    final s = AppSemantic.of(context);
     return Card(
-      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+      color: s.surface.withValues(alpha: 0.72),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: AppTheme.metrics.radius12,
         side: BorderSide(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12),
+          color: s.border.withValues(alpha: 0.12),
         ),
       ),
       child: Padding(
@@ -1458,9 +1503,13 @@ class _GameDetailScreenState
           children: <Widget>[
             Text(
               '2DFan',
-              style: Theme.of(
+              style: AppTextStyles.role(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                fontSize: AppTheme.metrics.fontSize14,
+                weight: FontWeight.w600,
+                color: s.textPrimary,
+                height: 1.55,
+              ),
             ),
             SizedBox(height: AppTheme.metrics.kSpace16),
 
@@ -1493,9 +1542,9 @@ class _GameDetailScreenState
                             ? SizedBox(
                                 width: AppTheme.metrics.kSpace16,
                                 height: AppTheme.metrics.kSpace16,
-                                child: const CircularProgressIndicator(
+                                child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white,
+                                  color: s.accentOn,
                                 ),
                               )
                             : DrawIcon(StrokeIcons.download),
@@ -1505,8 +1554,8 @@ class _GameDetailScreenState
                       Tooltip(
                         message: '选择存档版本',
                         child: SizedBox(
-                          width: 36,
-                          height: 36,
+                          width: scaleW(36),
+                          height: scaleW(36),
                           child: OutlinedButton(
                             key: _twodfanPickerKey,
                             onPressed:
@@ -1516,17 +1565,15 @@ class _GameDetailScreenState
                                 : () => _showTwodfanMenu(g),
                             style: OutlinedButton.styleFrom(
                               padding: EdgeInsets.zero,
-                              shape: const RoundedRectangleBorder(
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(8),
-                                ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: AppTheme.metrics.radius8,
                               ),
                             ),
                             child: _twodfanPickerLoading
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
+                                ? SizedBox(
+                                    width: AppTheme.metrics.kSpace14,
+                                    height: AppTheme.metrics.kSpace14,
+                                    child: const CircularProgressIndicator(
                                       strokeWidth: 1.5,
                                     ),
                                   )
@@ -1542,13 +1589,16 @@ class _GameDetailScreenState
                     SizedBox(height: AppTheme.metrics.kSpace8),
                     Text(
                       status,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: AppTheme.metrics.fontSize12,
+                        height: 1.6,
                         color: status.startsWith('下载完成')
-                            ? Colors.green
+                            ? s.success.color
                             : (status.startsWith('下载失败') ||
                                   status.startsWith('未'))
-                            ? Theme.of(context).colorScheme.error
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                            ? s.danger.color
+                            : s.textSecondary,
                       ),
                     ),
                   ],
@@ -1568,8 +1618,12 @@ class _GameDetailScreenState
                   SizedBox(height: AppTheme.metrics.kSpace8),
                   Text(
                     '存档说明',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: AppTheme.metrics.fontSize12,
+                      weight: FontWeight.w600,
+                      color: s.textSecondary,
+                      height: 1.4,
                     ),
                   ),
                   SizedBox(height: AppTheme.metrics.kSpace8),
@@ -1651,6 +1705,7 @@ class _GameDetailScreenState
 
   /// 渲染 2DFan 存档简介，将 Windows 路径高亮为可点击/可复制链接，替换用户名占位符。
   Widget _buildTwodfanDescWidget(String rawDesc) {
+    final s = AppSemantic.of(context);
     final String username =
         Platform.environment['USER'] ??
         Platform.environment['USERNAME'] ??
@@ -1694,12 +1749,10 @@ class _GameDetailScreenState
                 ),
                 child: Text(
                   path,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    decoration: TextDecoration.underline,
-                    fontFamily: 'monospace',
-                    fontSize: AppTheme.metrics.fontSize11,
-                  ),
+                  style: AppTextStyles.mono(
+                    context,
+                    size: AppTheme.metrics.fontSize11,
+                  ).copyWith(color: s.accent, decoration: TextDecoration.underline),
                 ),
               ),
             ),
@@ -1715,7 +1768,12 @@ class _GameDetailScreenState
     return SelectionArea(
       child: Text.rich(
         TextSpan(
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.7),
+          style: AppTextStyles.role(
+            context,
+            fontSize: AppTheme.metrics.fontSize12,
+            color: s.textTertiary,
+            height: 1.7,
+          ),
           children: spans,
         ),
       ),
@@ -1764,15 +1822,20 @@ class _GameDetailScreenState
   // ──────────────────────────────────────────────────────
 
   Widget _buildCategoriesTab() {
+    final s = AppSemantic.of(context);
     return Obx(() {
       return ListView(
         padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
         children: <Widget>[
           Text(
             '分类管理',
-            style: Theme.of(
+            style: AppTextStyles.role(
               context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              fontSize: AppTheme.metrics.fontSize14,
+              weight: FontWeight.w600,
+              color: s.textPrimary,
+              height: 1.55,
+            ),
           ),
           SizedBox(height: AppTheme.metrics.kSpace8),
           if (viewModel.categories.isEmpty)
@@ -1783,8 +1846,10 @@ class _GameDetailScreenState
               child: Center(
                 child: Text(
                   '还没有分类，点击右上角「分类管理」创建',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize13,
+                    color: s.textSecondary,
                   ),
                 ),
               ),
@@ -1813,14 +1878,19 @@ class _GameDetailScreenState
   // ──────────────────────────────────────────────────────
 
   Widget _buildProgressTab() {
+    final s = AppSemantic.of(context);
     return ListView(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
       children: <Widget>[
         Text(
           '游玩进度',
-          style: Theme.of(
+          style: AppTextStyles.role(
             context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            fontSize: AppTheme.metrics.fontSize14,
+            weight: FontWeight.w600,
+            color: s.textPrimary,
+            height: 1.55,
+          ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace16),
         AppTextField(
@@ -1830,9 +1900,7 @@ class _GameDetailScreenState
             border: const OutlineInputBorder(),
             prefixIcon: DrawIcon(StrokeIcons.book),
             filled: true,
-            fillColor: Theme.of(
-              context,
-            ).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: s.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -1843,9 +1911,7 @@ class _GameDetailScreenState
             border: const OutlineInputBorder(),
             prefixIcon: DrawIcon(StrokeIcons.altRoute),
             filled: true,
-            fillColor: Theme.of(
-              context,
-            ).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: s.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace12),
@@ -1858,9 +1924,7 @@ class _GameDetailScreenState
             border: const OutlineInputBorder(),
             alignLabelWithHint: true,
             filled: true,
-            fillColor: Theme.of(
-              context,
-            ).colorScheme.surface.withValues(alpha: 0.6),
+            fillColor: s.surface.withValues(alpha: 0.6),
           ),
         ),
         SizedBox(height: AppTheme.metrics.kSpace20),
@@ -1887,7 +1951,7 @@ class _GameDetailScreenState
   @override
   void dispose() {
     // 离开详情页时，等路由反向过渡动画结束后再清除全局背景（避免淡出动画中途背景消失）
-    Future<void>.delayed(const Duration(milliseconds: 400), () {
+    Future<void>.delayed(AppMotion.emphasis, () {
       getIt<DesktopScreenProvider>().globalBackgroundPath.value = '';
     });
     _nameController.dispose();
@@ -1924,30 +1988,32 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final Color resolvedColor =
-        activeColor ?? Theme.of(context).colorScheme.primary;
+        activeColor ?? s.accent;
     final Color bg = active
         ? resolvedColor.withAlpha(28)
-        : Theme.of(context).colorScheme.surfaceContainerHighest;
+        : s.surfaceSunken;
     final Color fg = active
         ? resolvedColor
-        : Theme.of(context).colorScheme.onSurfaceVariant;
+        : s.textSecondary;
     final BorderSide border = active
         ? BorderSide(color: resolvedColor, width: 1.5)
-        : BorderSide(color: Theme.of(context).dividerColor);
+        : BorderSide(color: s.hairline);
 
     return InkWell(
-      borderRadius: AppTheme.metrics.radius100,
+      borderRadius: AppTheme.metrics.radiusPill,
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        // 点击即时的状态反馈，归入 fast 档（反馈类 ≤160ms）
+        duration: AppMotion.fast,
         padding: EdgeInsets.symmetric(
           horizontal: AppTheme.metrics.kSpace12,
           vertical: AppTheme.metrics.kSpace6,
         ),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: AppTheme.metrics.radius100,
+          borderRadius: AppTheme.metrics.radiusPill,
           border: Border.fromBorderSide(border),
         ),
         child: Row(
@@ -1958,9 +2024,10 @@ class _StatusPill extends StatelessWidget {
               SizedBox(width: AppTheme.metrics.kSpace4),
               Text(
                 label,
-                style: TextStyle(
+                style: AppTextStyles.role(
+                  context,
                   fontSize: AppTheme.metrics.fontSize11,
-                  fontWeight: FontWeight.w600,
+                  weight: FontWeight.w600,
                   color: fg,
                 ),
               ),

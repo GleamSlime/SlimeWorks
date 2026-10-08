@@ -50,9 +50,10 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
   }
 
   ScreenChromeData _buildScreenChromeData(BuildContext context) {
-    final isDark = Get.isDarkMode;
+    // 取色只走语义层：isDark 三元分支与裸 Colors.* 一律收敛到 AppSemantic
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+    final primaryColor = s.accent;
 
     return ScreenChromeData(
       title: '互传',
@@ -68,7 +69,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             return GestureDetector(
               onTap: isRunning ? viewModel.stopService : viewModel.startService,
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
+                duration: AppMotion.base,
                 curve: Curves.easeOutCubic,
                 padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace6),
                 decoration: BoxDecoration(
@@ -76,18 +77,16 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                       ? null
                       : LinearGradient(
                           colors: [
-                            Colors.green.withValues(alpha: 0.25),
-                            Colors.green.withValues(alpha: 0.1),
+                            s.success.color.withValues(alpha: 0.25),
+                            s.success.color.withValues(alpha: 0.1),
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                  color: isRunning ? Theme.of(context).colorScheme.error.withValues(alpha: 0.12) : null,
+                  color: isRunning ? s.danger.container : null,
                   borderRadius: m.radius8,
                   border: Border.all(
-                    color: isRunning
-                        ? Theme.of(context).colorScheme.error.withValues(alpha: 0.2)
-                        : Colors.green.withValues(alpha: 0.3),
+                    color: isRunning ? s.danger.containerBorder : s.success.containerBorder,
                     width: 1,
                   ),
                 ),
@@ -99,10 +98,10 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                       height: m.kSpace6,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isRunning ? Colors.red : Colors.green,
+                        color: isRunning ? s.danger.color : s.success.color,
                         boxShadow: [
                           BoxShadow(
-                            color: (isRunning ? Colors.red : Colors.green).withValues(alpha: 0.4),
+                            color: (isRunning ? s.danger.color : s.success.color).withValues(alpha: 0.4),
                             blurRadius: scaleW(4),
                           ),
                         ],
@@ -111,11 +110,12 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                     SizedBox(width: m.kSpace6),
                     Text(
                       isRunning ? '停止服务' : '启动服务',
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: m.fontSize11,
                         height: 1.4,
-                        fontWeight: FontWeight.w600,
-                        color: isRunning ? Colors.red : Colors.green,
+                        weight: FontWeight.w600,
+                        color: isRunning ? s.danger.onContainer : s.success.onContainer,
                       ),
                     ),
                   ],
@@ -132,7 +132,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace6),
             decoration: BoxDecoration(
-              color: isDark ? DarkColors.background2 : LightColors.background2,
+              color: s.surfaceSunken,
               borderRadius: m.radius8,
               border: Border.all(
                 color: primaryColor.withValues(alpha: 0.15),
@@ -146,13 +146,14 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                   size: m.iconSize14,
                   color: primaryColor.withValues(alpha: 0.8),
                 ),
-                const SizedBox(width: 4),
+                SizedBox(width: m.kSpace4),
                 Text(
                   '授权码',
-                  style: TextStyle(
+                  style: AppTextStyles.role(
+                    context,
                     fontSize: m.fontSize11,
                     height: 1.4,
-                    color: isDark ? DarkColors.white80 : LightColors.black80,
+                    color: s.textSecondary,
                   ),
                 ),
               ],
@@ -193,17 +194,18 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                   SizedBox(width: m.kSpace6),
                   Text(
                     deviceCount > 0 ? '$deviceCount 台设备' : '附近设备',
-                    style: TextStyle(
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: m.fontSize11,
                       height: 1.4,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? DarkColors.white80 : LightColors.black80,
+                      weight: FontWeight.w500,
+                      color: s.textSecondary,
                     ),
                   ),
                   SizedBox(width: m.kSpace4),
                   DrawIcon(StrokeIcons.expandMore,
                     size: m.iconSize14,
-                    color: isDark ? DarkColors.white40 : LightColors.black40,
+                    color: s.textTertiary,
                   ),
                 ],
               ),
@@ -219,9 +221,9 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
           padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace6),
           margin: EdgeInsets.only(bottom: m.kSpace4),
           decoration: BoxDecoration(
-            color: isDark ? DarkColors.background2 : LightColors.background2,
+            color: s.surfaceSunken,
             borderRadius: m.radius8,
-            border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 1),
+            border: Border.all(color: s.border, width: 1),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -231,11 +233,11 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                 height: m.kSpace8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isRunning ? Colors.green : Colors.grey,
+                  color: isRunning ? s.success.color : s.neutral.color,
                   boxShadow: isRunning
                       ? [
                           BoxShadow(
-                            color: Colors.green.withValues(alpha: 0.4),
+                            color: s.success.color.withValues(alpha: 0.4),
                             blurRadius: scaleW(4),
                           ),
                         ]
@@ -245,10 +247,11 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
               SizedBox(width: m.kSpace6),
               Text(
                 local != null ? local.ipAddress : '未连接',
-                style: TextStyle(
+                style: AppTextStyles.role(
+                  context,
                   fontSize: m.fontSize11,
                   height: 1.4,
-                  color: isDark ? DarkColors.white80 : LightColors.black80,
+                  color: s.textSecondary,
                 ),
               ),
             ],
@@ -269,10 +272,10 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
     final String? result = await showDialog<String>(
       context: context,
       builder: (ctx) {
-        final isDark = Get.isDarkMode;
+        final s = AppSemantic.of(ctx);
         final m = AppTheme.metrics;
         return AlertDialog(
-          backgroundColor: isDark ? DarkColors.background2 : LightColors.white100,
+          backgroundColor: s.surface,
           shape: RoundedRectangleBorder(borderRadius: m.radius16),
           title: const Text('接入授权码'),
           content: Column(
@@ -281,10 +284,11 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             children: [
               Text(
                 '其他设备需输入与本机相同的授权码才能向你发起传输；信任设备不受限制。',
-                style: TextStyle(
+                style: AppTextStyles.role(
+                  ctx,
                   fontSize: m.fontSize12,
                   height: 1.5,
-                  color: isDark ? DarkColors.white60 : LightColors.black60,
+                  color: s.textSecondary,
                 ),
               ),
               SizedBox(height: m.kSpace16),
@@ -353,9 +357,9 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Get.isDarkMode ? DarkColors.background1 : LightColors.white100,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: AppSemantic.of(context).surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: AppTheme.metrics.radius20.topLeft),
       ),
       builder: (ctx) => DraggableScrollableSheet(
         expand: false,
@@ -395,7 +399,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
     required bool isPinned,
     Offset? tapPosition,
   }) {
-    final isDark = Get.isDarkMode;
+    final s = AppSemantic.of(context);
     // 桌面端（或提供了坐标时）使用弹出式菜单，移动端使用 BottomSheet
     final isDesktopLike =
         tapPosition != null ||
@@ -418,7 +422,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                 DrawIcon(
                   isPinned ? StrokeIcons.pushPin : StrokeIcons.pushPin,
                   size: AppTheme.metrics.iconSize16,
-                  color: isDark ? DarkColors.primary : LightColors.primary,
+                  color: s.accent,
                 ),
                 SizedBox(width: AppTheme.metrics.kSpace8),
                 Text(isPinned ? '取消置顶' : '置顶会话'),
@@ -429,9 +433,9 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             value: 'delete_history',
             child: Row(
               children: [
-                DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize16, color: Colors.orange),
+                DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize16, color: s.warning.color),
                 SizedBox(width: AppTheme.metrics.kSpace8),
-                const Text('删除历史', style: TextStyle(color: Colors.orange)),
+                Text('删除历史', style: AppTextStyles.rowTitle(context).copyWith(color: s.warning.onContainer)),
               ],
             ),
           ),
@@ -441,10 +445,10 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
               children: [
                 DrawIcon(StrokeIcons.deleteSweep,
                   size: AppTheme.metrics.iconSize16,
-                  color: Theme.of(context).colorScheme.error,
+                  color: s.danger.color,
                 ),
                 SizedBox(width: AppTheme.metrics.kSpace8),
-                Text('删除会话及文件', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                Text('删除会话及文件', style: AppTextStyles.rowTitle(context).copyWith(color: s.danger.onContainer)),
               ],
             ),
           ),
@@ -468,20 +472,20 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
     // 移动端 BottomSheet
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: isDark ? DarkColors.background2 : LightColors.white100,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: s.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: AppTheme.metrics.radius20.topLeft),
       ),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 36,
+              width: scaleW(36),
               height: AppTheme.metrics.kSpace4,
               margin: EdgeInsets.only(top: AppTheme.metrics.kSpace12),
               decoration: BoxDecoration(
-                color: isDark ? DarkColors.white20 : LightColors.black20,
+                color: s.textDisabled,
                 borderRadius: AppTheme.metrics.radius2,
               ),
             ),
@@ -490,25 +494,18 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                 horizontal: AppTheme.metrics.kSpace16,
                 vertical: AppTheme.metrics.kSpace12,
               ),
-              child: Text(
-                deviceName,
-                style: TextStyle(
-                  fontSize: AppTheme.metrics.fontSize13,
-                  height: 1.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              child: Text(deviceName, style: AppTextStyles.cardTitle(context)),
             ),
-            Divider(height: 1, color: isDark ? DarkColors.white10 : LightColors.black10),
+            Divider(height: 1, color: s.hairline),
             // 置顶 / 取消置顶
             ListTile(
               leading: DrawIcon(
                 isPinned ? StrokeIcons.pushPin : StrokeIcons.pushPin,
-                color: isDark ? DarkColors.primary : LightColors.primary,
+                color: s.accent,
               ),
               title: Text(
                 isPinned ? '取消置顶' : '置顶会话',
-                style: TextStyle(color: isDark ? DarkColors.white80 : LightColors.black80),
+                style: AppTextStyles.rowTitle(context).copyWith(color: s.textSecondary),
               ),
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -521,8 +518,8 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             ),
             // 删除历史
             ListTile(
-              leading: DrawIcon(StrokeIcons.deleteOutline, color: Colors.orange),
-              title: const Text('删除历史', style: TextStyle(color: Colors.orange)),
+              leading: DrawIcon(StrokeIcons.deleteOutline, color: s.warning.color),
+              title: Text('删除历史', style: AppTextStyles.rowTitle(context).copyWith(color: s.warning.onContainer)),
               onTap: () {
                 Navigator.of(ctx).pop();
                 viewModel.deleteHistoryForPeer(deviceId);
@@ -531,9 +528,9 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
             // 删除会话及文件
             ListTile(
               leading: DrawIcon(StrokeIcons.deleteSweep,
-                color: Theme.of(context).colorScheme.error,
+                color: s.danger.color,
               ),
-              title: Text('删除会话及文件', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              title: Text('删除会话及文件', style: AppTextStyles.rowTitle(context).copyWith(color: s.danger.onContainer)),
               onTap: () {
                 Navigator.of(ctx).pop();
                 viewModel.deleteConversationForPeer(deviceId);
@@ -579,9 +576,9 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Get.isDarkMode ? DarkColors.background1 : LightColors.white100,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: AppSemantic.of(context).surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: AppTheme.metrics.radius20.topLeft),
       ),
       builder: (ctx) => PendingRequests(
         requests: viewModel.pendingRequests.toList(),
@@ -613,7 +610,7 @@ class _LanTransferToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
+    final s = AppSemantic.of(context);
 
     return Obx(() {
       final isRunning = viewModel.isServiceRunning.value;
@@ -631,7 +628,7 @@ class _LanTransferToolbar extends StatelessWidget {
               vertical: AppTheme.metrics.kSpace4,
             ),
             decoration: BoxDecoration(
-              color: isDark ? DarkColors.background2 : LightColors.background2,
+              color: s.surfaceSunken,
               borderRadius: AppTheme.metrics.radius8,
             ),
             child: Row(
@@ -642,16 +639,17 @@ class _LanTransferToolbar extends StatelessWidget {
                   height: AppTheme.metrics.kSpace8,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isRunning ? Colors.green : Colors.grey,
+                    color: isRunning ? s.success.color : s.neutral.color,
                   ),
                 ),
                 SizedBox(width: AppTheme.metrics.kSpace4),
                 Text(
                   local != null ? local.ipAddress : '未连接',
-                  style: TextStyle(
+                  style: AppTextStyles.role(
+                    context,
                     fontSize: AppTheme.metrics.fontSize11,
                     height: 1.4,
-                    color: isDark ? DarkColors.white80 : LightColors.black80,
+                    color: s.textSecondary,
                   ),
                 ),
               ],
@@ -669,7 +667,7 @@ class _LanTransferToolbar extends StatelessWidget {
                 vertical: AppTheme.metrics.kSpace4,
               ),
               decoration: BoxDecoration(
-                color: isDark ? DarkColors.background2 : LightColors.background2,
+                color: s.surfaceSunken,
                 borderRadius: AppTheme.metrics.radius8,
               ),
               child: Row(
@@ -681,27 +679,28 @@ class _LanTransferToolbar extends StatelessWidget {
                       height: AppTheme.metrics.kSpace10,
                       child: CircularProgressIndicator(
                         strokeWidth: 1.5,
-                        color: isDark ? DarkColors.primary : LightColors.primary,
+                        color: s.accent,
                       ),
                     )
                   else
                     DrawIcon(StrokeIcons.devices,
                       size: AppTheme.metrics.iconSize14,
-                      color: isDark ? DarkColors.white80 : LightColors.black80,
+                      color: s.textSecondary,
                     ),
                   SizedBox(width: AppTheme.metrics.kSpace4),
                   Text(
                     deviceCount > 0 ? '$deviceCount 台设备' : '附近设备',
-                    style: TextStyle(
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: AppTheme.metrics.fontSize11,
                       height: 1.4,
-                      color: isDark ? DarkColors.white80 : LightColors.black80,
+                      color: s.textSecondary,
                     ),
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace4),
                   DrawIcon(StrokeIcons.expandMore,
                     size: AppTheme.metrics.iconSize14,
-                    color: isDark ? DarkColors.white40 : LightColors.black40,
+                    color: s.textTertiary,
                   ),
                 ],
               ),
@@ -719,17 +718,16 @@ class _LanTransferToolbar extends StatelessWidget {
                 vertical: AppTheme.metrics.kSpace4,
               ),
               decoration: BoxDecoration(
-                color: isRunning
-                    ? Theme.of(context).colorScheme.error.withValues(alpha: 0.1)
-                    : Colors.green.withValues(alpha: 0.1),
+                color: isRunning ? s.danger.container : s.success.container,
                 borderRadius: AppTheme.metrics.radius8,
               ),
               child: Text(
                 isRunning ? '停止' : '启动',
-                style: TextStyle(
+                style: AppTextStyles.role(
+                  context,
                   fontSize: AppTheme.metrics.fontSize11,
                   height: 1.4,
-                  color: isRunning ? Colors.red : Colors.green,
+                  color: isRunning ? s.danger.onContainer : s.success.onContainer,
                 ),
               ),
             ),
@@ -757,7 +755,7 @@ class _DeviceSheetContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
+    final s = AppSemantic.of(context);
 
     return Obx(() {
       final isScanning = viewModel.isScanning.value;
@@ -770,11 +768,11 @@ class _DeviceSheetContent extends StatelessWidget {
           // 拖拽手柄
           Center(
             child: Container(
-              width: 36,
+              width: scaleW(36),
               height: AppTheme.metrics.kSpace4,
               margin: EdgeInsets.only(top: AppTheme.metrics.kSpace12),
               decoration: BoxDecoration(
-                color: isDark ? DarkColors.white20 : LightColors.black20,
+                color: s.textDisabled,
                 borderRadius: AppTheme.metrics.radius2,
               ),
             ),
@@ -790,14 +788,7 @@ class _DeviceSheetContent extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Text(
-                  '附近设备',
-                  style: TextStyle(
-                    fontSize: AppTheme.metrics.fontSize15,
-                    height: 1.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                Text('附近设备', style: AppTextStyles.sectionTitle(context)),
                 if (devices.isNotEmpty) ...[
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   Container(
@@ -806,12 +797,17 @@ class _DeviceSheetContent extends StatelessWidget {
                       vertical: AppTheme.metrics.kSpace2,
                     ),
                     decoration: BoxDecoration(
-                      color: isDark ? DarkColors.white10 : LightColors.black10,
+                      color: s.surfaceSunken,
                       borderRadius: AppTheme.metrics.radius10,
                     ),
                     child: Text(
                       '${devices.length}',
-                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4),
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: AppTheme.metrics.fontSize11,
+                        height: 1.4,
+                        color: s.textPrimary,
+                      ),
                     ),
                   ),
                 ],
@@ -825,11 +821,7 @@ class _DeviceSheetContent extends StatelessWidget {
                       vertical: AppTheme.metrics.kSpace8,
                     ),
                     decoration: BoxDecoration(
-                      color: isScanning
-                          ? Colors.orange.withValues(alpha: 0.1)
-                          : (isDark ? DarkColors.primary : LightColors.primary).withValues(
-                              alpha: 0.1,
-                            ),
+                      color: isScanning ? s.warning.container : s.accentContainer,
                       borderRadius: AppTheme.metrics.radius8,
                     ),
                     child: Row(
@@ -839,25 +831,24 @@ class _DeviceSheetContent extends StatelessWidget {
                           SizedBox(
                             width: scaleW(12),
                             height: scaleW(12),
-                            child: const CircularProgressIndicator(
+                            child: CircularProgressIndicator(
                               strokeWidth: 1.5,
-                              color: Colors.orange,
+                              color: s.warning.color,
                             ),
                           )
                         else
                           DrawIcon(StrokeIcons.radar,
                             size: scaleW(14),
-                            color: isDark ? DarkColors.primary : LightColors.primary,
+                            color: s.accent,
                           ),
                         SizedBox(width: AppTheme.metrics.kSpace4),
                         Text(
                           isScanning ? '搜索中' : '搜索',
-                          style: TextStyle(
+                          style: AppTextStyles.role(
+                            context,
                             fontSize: AppTheme.metrics.fontSize11,
                             height: 1.4,
-                            color: isScanning
-                                ? Colors.orange
-                                : (isDark ? DarkColors.primary : LightColors.primary),
+                            color: isScanning ? s.warning.onContainer : s.accent,
                           ),
                         ),
                       ],
@@ -868,7 +859,7 @@ class _DeviceSheetContent extends StatelessWidget {
             ),
           ),
 
-          Divider(height: 1, color: isDark ? DarkColors.white10 : LightColors.black10),
+          Divider(height: 1, color: s.hairline),
 
           // 内容区
           Expanded(
@@ -915,9 +906,9 @@ class _EmptyDevicesPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+    final primaryColor = s.accent;
 
     return Padding(
       padding: EdgeInsets.symmetric(vertical: m.kSpace32),
@@ -947,16 +938,17 @@ class _EmptyDevicesPlaceholder extends StatelessWidget {
           Text(
             '发现附近设备',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: m.fontSize15, height: 1.5, fontWeight: FontWeight.w600),
+            style: AppTextStyles.sectionTitle(context),
           ),
           SizedBox(height: m.kSpace4),
           Text(
             '搜索同一局域网下的设备，快速互传文件',
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: m.fontSize13,
               height: 1.5,
-              color: isDark ? DarkColors.white80 : LightColors.black80,
+              color: s.textSecondary,
             ),
           ),
           SizedBox(height: m.kSpace20),
@@ -990,10 +982,11 @@ class _EmptyDevicesPlaceholder extends StatelessWidget {
                   SizedBox(width: m.kSpace8),
                   Text(
                     '开始搜索',
-                    style: TextStyle(
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: m.fontSize13,
                       height: 1.4,
-                      fontWeight: FontWeight.w600,
+                      weight: FontWeight.w600,
                       color: primaryColor,
                     ),
                   ),
@@ -1031,14 +1024,13 @@ class _PeerListSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
     final m = AppTheme.metrics;
 
     return Obx(() {
       final peers = viewModel.transferHistoryPeers;
 
       if (peers.isEmpty) {
-        return _buildEmptyState(isDark, m);
+        return _buildEmptyState(context, m);
       }
 
       return ListView.builder(
@@ -1053,7 +1045,6 @@ class _PeerListSection extends StatelessWidget {
               deviceName: peer.deviceName,
               lastItem: peer.lastItem,
               isPinned: peer.isPinned,
-              isDark: isDark,
               onTap: () => onNavigateToChat(peer.deviceId, peer.deviceName),
               onContextMenu: ({Offset? tapPosition}) => onContextMenu(
                 ctx,
@@ -1069,8 +1060,9 @@ class _PeerListSection extends StatelessWidget {
     });
   }
 
-  Widget _buildEmptyState(bool isDark, ThemeMetrics m) {
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+  Widget _buildEmptyState(BuildContext context, ThemeMetrics m) {
+    final s = AppSemantic.of(context);
+    final primaryColor = s.accent;
 
     return Center(
       child: Column(
@@ -1105,20 +1097,23 @@ class _PeerListSection extends StatelessWidget {
           SizedBox(height: m.kSpace20),
           Text(
             '暂无会话',
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: m.fontSize15,
               height: 1.5,
-              fontWeight: FontWeight.w700,
+              weight: FontWeight.w600,
               letterSpacing: 0.5,
+              color: s.textPrimary,
             ),
           ),
           SizedBox(height: m.kSpace6),
           Text(
             '点击「附近设备」开始互传',
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: m.fontSize13,
               height: 1.5,
-              color: isDark ? DarkColors.white80 : LightColors.black80,
+              color: s.textSecondary,
             ),
           ),
         ],
@@ -1133,7 +1128,6 @@ class _PeerListItem extends StatefulWidget {
   final String deviceName;
   final dynamic lastItem; // TransferItem
   final bool isPinned;
-  final bool isDark;
   final VoidCallback onTap;
   final void Function({Offset? tapPosition}) onContextMenu;
 
@@ -1142,7 +1136,6 @@ class _PeerListItem extends StatefulWidget {
     required this.deviceName,
     required this.lastItem,
     required this.isPinned,
-    required this.isDark,
     required this.onTap,
     required this.onContextMenu,
   });
@@ -1156,9 +1149,10 @@ class _PeerListItemState extends State<_PeerListItem> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = widget.isDark;
+    // 取色只走语义层；悬停底是"状态层"，用水洗而不是实心表面（§2.2）
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+    final primaryColor = s.accent;
     final String preview = _buildPreview();
     final String timeStr = _formatTime(widget.lastItem.createdAt as String);
     final deviceIcon = _deviceIcon(widget.deviceName);
@@ -1173,26 +1167,16 @@ class _PeerListItemState extends State<_PeerListItem> {
         onSecondaryTapUp: (details) => widget.onContextMenu(tapPosition: details.globalPosition),
         onLongPress: () => widget.onContextMenu(),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: AppMotion.fast,
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.symmetric(horizontal: m.kSpace14, vertical: m.kSpace12),
           decoration: BoxDecoration(
-            color: _isHovered
-                ? (isDark ? DarkColors.background2 : LightColors.background2)
-                : Colors.transparent,
+            color: _isHovered ? s.surfaceHover : Colors.transparent,
             borderRadius: m.radius14,
             border: _isHovered
                 ? Border.all(color: primaryColor.withValues(alpha: 0.08), width: 1)
                 : null,
-            boxShadow: _isHovered
-                ? [
-                    BoxShadow(
-                      color: primaryColor.withValues(alpha: 0.04),
-                      blurRadius: scaleW(12),
-                      offset: Offset(0, scaleW(2)),
-                    ),
-                  ]
-                : null,
+            boxShadow: _isHovered ? s.elevation(Elevation.raised) : null,
           ),
           child: Row(
             children: [
@@ -1214,10 +1198,9 @@ class _PeerListItemState extends State<_PeerListItem> {
                     ),
                   ],
                 ),
-                child: DrawIcon(deviceIcon,
-                  size: scaleW(22),
-                  color: Colors.white.withValues(alpha: 0.9),
-                ),
+                // 身份色头像底深浅两档都是中低亮度，图标固定用不透明的 on-dark 白，
+                // 换成 accentOn 会在暗色档变成深墨、在头像上消失
+                child: DrawIcon(deviceIcon, size: scaleW(22), color: Colors.white.withValues(alpha: 0.9)),
               ),
               SizedBox(width: m.kSpace14),
               Expanded(
@@ -1236,11 +1219,7 @@ class _PeerListItemState extends State<_PeerListItem> {
                         Expanded(
                           child: Text(
                             widget.deviceName,
-                            style: TextStyle(
-                              fontSize: m.fontSize13,
-                              height: 1.5,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: AppTextStyles.cardTitle(context),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1248,10 +1227,11 @@ class _PeerListItemState extends State<_PeerListItem> {
                         SizedBox(width: m.kSpace8),
                         Text(
                           timeStr,
-                          style: TextStyle(
+                          style: AppTextStyles.role(
+                            context,
                             fontSize: m.fontSize11,
                             height: 1.4,
-                            color: isDark ? DarkColors.white40 : LightColors.black40,
+                            color: s.textTertiary,
                           ),
                         ),
                       ],
@@ -1259,10 +1239,11 @@ class _PeerListItemState extends State<_PeerListItem> {
                     SizedBox(height: m.kSpace4),
                     Text(
                       preview,
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: m.fontSize11,
                         height: 1.4,
-                        color: isDark ? DarkColors.white40 : LightColors.black40,
+                        color: s.textTertiary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1272,11 +1253,11 @@ class _PeerListItemState extends State<_PeerListItem> {
               ),
               SizedBox(width: m.kSpace8),
               AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
+                duration: AppMotion.fast,
                 opacity: _isHovered ? 1.0 : 0.3,
                 child: DrawIcon(StrokeIcons.chevronRight,
                   size: scaleW(18),
-                  color: isDark ? DarkColors.white20 : LightColors.black20,
+                  color: s.textDisabled,
                 ),
               ),
             ],

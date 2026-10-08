@@ -23,8 +23,9 @@ class _MiniPipWindow extends StatelessWidget {
       child: ClipRRect(
         borderRadius: AppTheme.metrics.radius12,
         child: Container(
-          width: 200,
-          height: 112,
+          // 迷你画中画是固定尺寸窄容器：内部尺寸一律走宽度族
+          width: scaleW(200),
+          height: scaleW(112),
           decoration: BoxDecoration(
             color: Colors.black,
             border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
@@ -93,13 +94,13 @@ class _MiniPipBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.all(6),
-      padding: const EdgeInsets.all(3),
+      margin: EdgeInsets.all(AppTheme.metrics.kSpace6),
+      padding: EdgeInsets.all(AppTheme.metrics.kSpace3),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.5),
         borderRadius: AppTheme.metrics.radius8,
       ),
-      child: Icon(icon, color: Colors.white70, size: 14),
+      child: Icon(icon, color: Colors.white70, size: scaleW(14)),
     );
   }
 }
@@ -131,16 +132,18 @@ class _SeekIndicator extends StatelessWidget {
         children: [
           Text(
             '$sign${deltaSec.abs()}s',
-            style: TextStyle(
-              color: LightColors.primary,
-              fontWeight: FontWeight.bold,
+            // 深色小窗遮罩上的强调色走语义 info 紫
+            style: AppTextStyles.role(
+              context,
+              color: AppSemantic.of(context).info.color,
+              weight: FontWeight.bold,
               fontSize: AppTheme.metrics.fontSize17,
             ),
           ),
           SizedBox(height: AppTheme.metrics.kSpace4),
           Text(
             _fmt(t),
-            style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
+            style: AppTextStyles.role(context, color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
           ),
         ],
       ),
@@ -187,9 +190,10 @@ class _GlassPulseLoader extends StatefulWidget {
 /// 脉冲加载指示器画笔：通过 repaint 直接监听动画，
 /// 每帧只重绘合成层，不触发 element rebuild（避免查看器大树上每帧 markNeedsBuild）。
 class _GlassPulsePainter extends CustomPainter {
-  _GlassPulsePainter(this.animation) : super(repaint: animation);
+  _GlassPulsePainter(this.animation, {required this.color}) : super(repaint: animation);
 
   final Animation<double> animation;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -200,13 +204,13 @@ class _GlassPulsePainter extends CustomPainter {
     final center = size.center(Offset.zero);
     final radius = diameter / 2;
     // 半透明填充
-    final fill = Paint()..color = LightColors.primary.withValues(alpha: opacity * 0.15);
+    final fill = Paint()..color = color.withValues(alpha: opacity * 0.15);
     canvas.drawCircle(center, radius, fill);
     // 边框
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
-      ..color = LightColors.primary.withValues(alpha: opacity * 0.5);
+      ..color = color.withValues(alpha: opacity * 0.5);
     canvas.drawCircle(center, radius, stroke);
   }
 
@@ -234,12 +238,12 @@ class _GlassPulseLoaderState extends State<_GlassPulseLoader> with SingleTickerP
     // RepaintBoundary 限定重绘范围；播放图标保持静态，不随动画重建
     return RepaintBoundary(
       child: SizedBox(
-        width: 68,
-        height: 68,
+        width: scaleW(68),
+        height: scaleW(68),
         child: CustomPaint(
-          painter: _GlassPulsePainter(_ctrl),
-          child: const Center(
-            child: Icon(Icons.play_arrow_rounded, color: Colors.white60, size: 24),
+          painter: _GlassPulsePainter(_ctrl, color: AppSemantic.of(context).info.color),
+          child: Center(
+            child: Icon(Icons.play_arrow_rounded, color: Colors.white60, size: scaleW(24)),
           ),
         ),
       ),

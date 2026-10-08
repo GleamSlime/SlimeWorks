@@ -433,13 +433,13 @@ class _CutoutTag extends StatelessWidget {
                   text,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: AppTextStyles.role(
+                    context,
                     fontSize: appMetrics.fontSize11,
-                    fontWeight: FontWeight.w600,
+                    weight: FontWeight.w600,
                     height: 1.4,
                     color: s.accentOn,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
+                  ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
                 ),
               ],
             ),

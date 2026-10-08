@@ -11,6 +11,8 @@ import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -64,9 +66,9 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
     // 入场动画：淡入 + 上滑
     _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: AppMotion.entrance,
     );
-    _entranceAnimation = CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic);
+    _entranceAnimation = CurvedAnimation(parent: _entranceController, curve: AppMotion.decelerate);
 
     _nodeListSub = _nodeService!.remoteNodes.listen((_) {
       if (mounted) setState(() {});
@@ -104,17 +106,17 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final theme = Theme.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
 
     return ScreenChrome(
       data: ScreenChromeData(
         title: _showAppLogs ? '应用日志' : '日志中心',
         actions: [
           if (!_showAppLogs) ...[
-            _buildNodeSwitcher(context, theme, m, isDark),
+            _buildNodeSwitcher(context, theme, m, s),
             SizedBox(width: m.kSpace8),
           ],
-          _buildAppLogToggle(context, theme, m, isDark),
+          _buildAppLogToggle(context, theme, m, s),
           SizedBox(width: m.kSpace4),
           if (!_showAppLogs) ...[
             _buildActionButton(
@@ -122,14 +124,12 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
               icon: StrokeIcons.refresh,
               tooltip: '刷新',
               onPressed: () => _viewModel.reloadData(),
-              isDark: isDark,
             ),
             _buildActionButton(
               context: context,
               icon: StrokeIcons.download,
               tooltip: '导出',
               onPressed: () => _exportLogs(context),
-              isDark: isDark,
             ),
           ],
         ],
@@ -143,7 +143,8 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
             return Opacity(
               opacity: _entranceAnimation.value.clamp(0.0, 1.0),
               child: Transform.translate(
-                offset: Offset(0, 16 * (1 - _entranceAnimation.value)),
+                // 位移走宽度族：窗口拖大时上浮距离要跟着长
+                offset: Offset(0, scaleW(16) * (1 - _entranceAnimation.value)),
                 child: _showAppLogs
                     ? AppLogTerminal(viewModel: _appLogViewModel)
                     : Column(
@@ -152,7 +153,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
                             viewModel: _viewModel,
                             onFilterChanged: () => _viewModel.applyFilter(),
                           ),
-                          _buildTabBar(context, theme, m, isDark),
+                          _buildTabBar(context, theme, m, s),
                           SizedBox(height: m.kSpace12),
                           Expanded(
                             child: TabBarView(
@@ -174,33 +175,22 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
   }
 
   /// 构建毛玻璃风格 TabBar
-  Widget _buildTabBar(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildTabBar(BuildContext context, ThemeData theme, ThemeMetrics m, AppSemantic s) {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: m.kSpace16),
       child: ClipRRect(
         borderRadius: m.radius12,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
           child: Container(
             decoration: BoxDecoration(
-              color: isDark
-                  ? DarkColors.background1.withAlpha(200)
-                  : LightColors.background1.withAlpha(220),
+              color: s.glassTint,
               borderRadius: m.radius12,
-              border: Border.all(
-                color: isDark
-                    ? DarkColors.white10.withAlpha(40)
-                    : LightColors.black10.withAlpha(30),
-                width: 0.5,
-              ),
+              border: Border.all(color: s.glassBorder, width: 0.5),
               boxShadow: [
+                m.boxShadow10,
                 BoxShadow(
-                  color: isDark ? DarkColors.black10 : LightColors.black10,
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-                BoxShadow(
-                  color: (isDark ? DarkColors.primary : LightColors.primary).withAlpha(6),
+                  color: s.accent.withAlpha(6),
                   blurRadius: scaleW(20),
                   offset: Offset(0, scaleW(4)),
                 ),
@@ -210,11 +200,11 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
               controller: _tabController,
               indicatorSize: TabBarIndicatorSize.label,
               indicator: UnderlineTabIndicator(
-                borderSide: BorderSide(color: theme.colorScheme.primary, width: 3),
+                borderSide: BorderSide(color: s.accent, width: 3),
                 insets: EdgeInsets.symmetric(horizontal: -m.kSpace8),
               ),
-              labelColor: theme.colorScheme.primary,
-              unselectedLabelColor: theme.hintColor,
+              labelColor: s.accent,
+              unselectedLabelColor: s.textTertiary,
               labelStyle: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               unselectedLabelStyle: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w400,
@@ -252,9 +242,9 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildAppLogToggle(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
-    final activeColor = const Color(0xFF22C55E);
+  Widget _buildAppLogToggle(BuildContext context, ThemeData theme, ThemeMetrics m, AppSemantic s) {
+    final activeRole = s.success;
+    final activeColor = activeRole.color;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _appLogToggleHovered = true),
@@ -267,29 +257,25 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
           }
         },
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
+          duration: AppMotion.base,
+          curve: AppMotion.standard,
           padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace6),
           decoration: BoxDecoration(
             gradient: _showAppLogs
                 ? LinearGradient(
-                    colors: [activeColor.withAlpha(30), primaryColor.withAlpha(15)],
+                    colors: [activeColor.withAlpha(30), s.accent.withAlpha(15)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   )
                 : null,
-            color: _showAppLogs
-                ? null
-                : (isDark
-                      ? DarkColors.background2.withAlpha(180)
-                      : LightColors.background2.withAlpha(200)),
-            borderRadius: m.radius8,
+            color: _showAppLogs ? null : s.surfaceSunken.withAlpha(200),
+            borderRadius: m.radiusControl,
             border: Border.all(
               color: _showAppLogs
-                  ? activeColor.withAlpha(60)
+                  ? activeRole.containerBorder
                   : (_appLogToggleHovered
-                        ? primaryColor.withAlpha(40)
-                        : (isDark ? DarkColors.white10 : LightColors.black10)),
+                        ? s.accent.withAlpha(40)
+                        : s.border),
               width: _showAppLogs ? 1 : 0.5,
             ),
             boxShadow: _showAppLogs
@@ -302,7 +288,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
                   ]
                 : [
                     BoxShadow(
-                      color: primaryColor.withAlpha(6),
+                      color: s.accent.withAlpha(6),
                       blurRadius: scaleW(8),
                       offset: Offset(0, scaleW(2)),
                     ),
@@ -312,23 +298,19 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
             mainAxisSize: MainAxisSize.min,
             children: [
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
+                duration: AppMotion.base,
                 child: DrawIcon(
                   _showAppLogs ? StrokeIcons.terminal : StrokeIcons.smartToy,
                   key: ValueKey(_showAppLogs),
                   size: m.iconSize16,
-                  color: _showAppLogs
-                      ? activeColor
-                      : (isDark ? DarkColors.white80 : LightColors.black80),
+                  color: _showAppLogs ? activeColor : s.textPrimary,
                 ),
               ),
               SizedBox(width: m.kSpace6),
               AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 250),
+                duration: AppMotion.base,
                 style: theme.textTheme.bodySmall!.copyWith(
-                  color: _showAppLogs
-                      ? activeColor
-                      : (isDark ? DarkColors.white80 : LightColors.black80),
+                  color: _showAppLogs ? activeColor : s.textPrimary,
                   fontWeight: _showAppLogs ? FontWeight.w600 : FontWeight.w400,
                 ),
                 child: const Text('应用日志'),
@@ -355,7 +337,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
   bool _appLogToggleHovered = false;
 
   /// 构建节点切换器
-  Widget _buildNodeSwitcher(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildNodeSwitcher(BuildContext context, ThemeData theme, ThemeMetrics m, AppSemantic s) {
     if (_sentrySettings == null || _nodeService == null) return const SizedBox.shrink();
 
     return Obx(
@@ -373,9 +355,8 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
     required StrokeIcon icon,
     required String tooltip,
     required VoidCallback onPressed,
-    required bool isDark,
   }) {
-    return _ActionButtonWidget(icon: icon, tooltip: tooltip, onPressed: onPressed, isDark: isDark);
+    return _ActionButtonWidget(icon: icon, tooltip: tooltip, onPressed: onPressed);
   }
 
   /// 导出日志到本地文件
@@ -435,13 +416,11 @@ class _ActionButtonWidget extends StatefulWidget {
   final StrokeIcon icon;
   final String tooltip;
   final VoidCallback onPressed;
-  final bool isDark;
 
   const _ActionButtonWidget({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
-    required this.isDark,
   });
 
   @override
@@ -454,29 +433,25 @@ class _ActionButtonWidgetState extends State<_ActionButtonWidget> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onPressed,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
+          duration: AppMotion.base,
+          curve: AppMotion.standard,
           margin: EdgeInsets.only(right: m.kSpace4),
           padding: EdgeInsets.all(m.kSpace8),
           decoration: BoxDecoration(
-            color: _hovered
-                ? (widget.isDark ? DarkColors.white10 : LightColors.black10).withAlpha(
-                    widget.isDark ? 40 : 30,
-                  )
-                : Colors.transparent,
-            borderRadius: m.radius8,
+            // 悬停用水洗层，方向由语义角色决定，不再自己判明暗
+            color: _hovered ? s.surfaceHover : Colors.transparent,
+            borderRadius: m.radiusControl,
             boxShadow: _hovered
                 ? [
                     BoxShadow(
-                      color: (widget.isDark ? DarkColors.primary : LightColors.primary).withAlpha(
-                        15,
-                      ),
+                      color: s.accent.withAlpha(15),
                       blurRadius: scaleW(12),
                       offset: Offset(0, scaleW(2)),
                     ),
@@ -485,13 +460,9 @@ class _ActionButtonWidgetState extends State<_ActionButtonWidget> {
           ),
           child: AnimatedScale(
             scale: _hovered ? 1.08 : 1.0,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            child: DrawIcon(
-              widget.icon,
-              size: m.iconSize18,
-              color: widget.isDark ? DarkColors.white80 : LightColors.black80,
-            ),
+            duration: AppMotion.fast,
+            curve: AppMotion.standard,
+            child: DrawIcon(widget.icon, size: m.iconSize18, color: s.textPrimary),
           ),
         ),
       ),

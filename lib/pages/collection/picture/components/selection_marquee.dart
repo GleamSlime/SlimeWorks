@@ -118,8 +118,8 @@ class _SelectionMarqueeState extends State<SelectionMarquee> {
                     painter: _MarqueePainter(
                       start: start,
                       end: end,
-                      color: Theme.of(context).colorScheme.primary.withAlpha(48),
-                      borderColor: Theme.of(context).colorScheme.primary,
+                      color: AppSemantic.of(context).accent.withAlpha(48),
+                      borderColor: AppSemantic.of(context).accent,
                     ),
                   ),
                 ),

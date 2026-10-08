@@ -5,6 +5,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/widgets/glass_surface.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -47,7 +48,7 @@ class FloatingTaskProgress extends StatelessWidget {
         // 卡片把底下的内容整个糊住，和窗口磨砂毫无关系。换成 GlassFloat 后就有了
         // 局部模糊、玻璃描边和统一的投影档位。宽度仍在最外层给，保证卡片尺寸不变。
         child: SizedBox(
-          width: 280,
+          width: scaleW(280),
           child: GlassFloat(
             borderRadius: AppTheme.metrics.radiusCard,
             padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
@@ -59,33 +60,29 @@ class FloatingTaskProgress extends StatelessWidget {
                 Row(
                   children: [
                     DrawIcon(StrokeIcons.recordVoiceOver,
-                      size: 16,
+                      size: AppTheme.metrics.iconSize16,
                       color: s.accent,
                     ),
                     SizedBox(width: AppTheme.metrics.kSpace6),
                     Expanded(
                       child: Text(
                         hasActive ? '语音识别中...' : '识别完成',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: AppTextStyles.cardTitle(context),
                       ),
                     ),
                     Text(
                       '$completed/$total',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: s.textTertiary,
-                          ),
+                      style: AppTextStyles.caption(context),
                     ),
                   ],
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace8),
                 // 进度条
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace2),
+                  borderRadius: AppTheme.metrics.radius2,
                   child: LinearProgressIndicator(
                     value: hasActive ? progress : 1.0,
-                    minHeight: 4,
+                    minHeight: AppTheme.metrics.kSpace4,
                     backgroundColor: s.surfaceSunken,
                     valueColor: AlwaysStoppedAnimation<Color>(
                       hasActive ? s.accent : s.success.color,
@@ -100,9 +97,7 @@ class FloatingTaskProgress extends StatelessWidget {
                       Expanded(
                         child: Text(
                           current.displayName,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: s.textTertiary,
-                              ),
+                          style: AppTextStyles.caption(context),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -115,9 +110,7 @@ class FloatingTaskProgress extends StatelessWidget {
                         }
                         return Text(
                           '${(p * 100).toStringAsFixed(0)}%',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: s.accent,
-                              ),
+                          style: AppTextStyles.caption(context).copyWith(color: s.accent),
                         );
                       }),
                     ],
@@ -132,11 +125,11 @@ class FloatingTaskProgress extends StatelessWidget {
                     return Padding(
                       padding: EdgeInsets.only(top: AppTheme.metrics.kSpace4),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace2),
+                        borderRadius: AppTheme.metrics.radius2,
                         child: LinearProgressIndicator(
                           // value 为 null 时是跑马灯，用于远程服务处理中
                           value: unknown ? null : p,
-                          minHeight: 2,
+                          minHeight: AppTheme.metrics.kSpace2,
                           backgroundColor: s.surfaceSunken,
                           valueColor: AlwaysStoppedAnimation<Color>(
                             s.accent.withValues(alpha: 0.6),
@@ -169,18 +162,14 @@ class FloatingTaskProgress extends StatelessWidget {
         if (completed > 0)
           Text(
             '成功 $completed 个',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: s.success.color,
-                ),
+            style: AppTextStyles.caption(context).copyWith(color: s.success.color),
           ),
         if (completed > 0 && failed > 0)
           SizedBox(width: AppTheme.metrics.kSpace8),
         if (failed > 0)
           Text(
             '失败 $failed 个',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: s.danger.color,
-                ),
+            style: AppTextStyles.caption(context).copyWith(color: s.danger.color),
           ),
       ],
     );

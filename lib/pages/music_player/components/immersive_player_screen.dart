@@ -580,8 +580,8 @@ class _LyricsPanelState extends State<_LyricsPanel> {
     final clamped = targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent);
     _scrollController.animateTo(
       clamped,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
+      duration: AppMotion.slow,
+      curve: AppMotion.decelerate,
     );
   }
 
@@ -639,9 +639,13 @@ class _LyricsPanelState extends State<_LyricsPanel> {
                   ),
                   label: Text(
                     hasTranslation ? '显示原文' : '翻译为中文',
-                    style: TextStyle(
-                      color: hasTranslation ? _OnArt.primary : _OnArt.muted,
+                    // 走 role 而不是裸 TextStyle：裸构造会丢掉 fontFamily，
+                    // 中西文混排时这行会跳回系统字体。
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: m.fontSize12,
+                      height: 1.2,
+                      color: hasTranslation ? _OnArt.primary : _OnArt.muted,
                     ),
                   ),
                   style: TextButton.styleFrom(

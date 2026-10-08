@@ -68,7 +68,8 @@ import 'package:slime_works/pages/ledger/ledger_templates_screen.dart';
 import 'package:slime_works/pages/ledger/ledger_data_screen.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 import 'package:slime_works/core/services/power_stats_service.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 
 part 'app_routes.g.dart';
 
@@ -351,7 +352,7 @@ class AppRoutes {
       return CupertinoPage(
         key: state.pageKey,
         child: ColoredBox(
-          color: Theme.of(context).scaffoldBackgroundColor,
+          color: AppSemantic.of(context).canvas,
           child: BindingWidget(child: child),
         ),
       );
@@ -370,7 +371,7 @@ class AppRoutes {
       return CupertinoPage(
         key: state.pageKey,
         child: ColoredBox(
-          color: Theme.of(context).scaffoldBackgroundColor,
+          color: AppSemantic.of(context).canvas,
           child: BindingWidget(child: child),
         ),
       );
@@ -382,7 +383,7 @@ class AppRoutes {
       child: BindingWidget(child: child),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return ColoredBox(
-          color: Theme.of(context).scaffoldBackgroundColor,
+          color: AppSemantic.of(context).canvas,
           child: FadeTransition(
             opacity: CurvedAnimation(
               parent: animation,
@@ -417,7 +418,16 @@ class AppRoutes {
   static Widget buildPlaceholder(String title) {
     return Scaffold(
       body: Center(
-        child: Text('$title 页面开发中...', style: TextStyle(fontSize: AppTheme.metrics.fontSize22)),
+        child: Builder(
+          builder: (context) => Text(
+            '$title 页面开发中...',
+            style: AppTextStyles.role(
+              context,
+              fontSize: AppTheme.metrics.fontSize22,
+              color: AppSemantic.of(context).textPrimary,
+            ),
+          ),
+        ),
       ),
     );
   }

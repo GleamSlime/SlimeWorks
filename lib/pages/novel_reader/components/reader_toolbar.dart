@@ -1,4 +1,6 @@
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -16,17 +18,20 @@ class ReaderToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     final isNarrow = MediaQuery.of(context).size.width < 600;
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 16, vertical: AppTheme.metrics.kSpace8),
+      padding: EdgeInsets.symmetric(horizontal: isNarrow ? m.kSpace8 : m.kSpace16, vertical: m.kSpace8),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+        color: s.surface,
         boxShadow: [
+          // 工具栏是停靠条，只朝内容侧压一道影，elevation 档位表达不了这个方向
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+            color: s.shadowKey,
+            blurRadius: m.kSpace4,
+            offset: Offset(0, m.kSpace2),
           ),
         ],
       ),
@@ -36,6 +41,8 @@ class ReaderToolbar extends StatelessWidget {
 
   /// 宽屏工具栏
   Widget _buildWideToolbar(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Row(
       children: [
         // 章节列表切换
@@ -44,7 +51,7 @@ class ReaderToolbar extends StatelessWidget {
           tooltip: '章节列表',
           onPressed: controller.toggleChapterList,
         ),
-        SizedBox(width: AppTheme.metrics.kSpace8),
+        SizedBox(width: m.kSpace8),
 
         // 上一章
         Obx(
@@ -58,16 +65,21 @@ class ReaderToolbar extends StatelessWidget {
         // 章节信息
         Obx(
           () => Container(
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace12, vertical: AppTheme.metrics.kSpace4),
+            padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace4),
             decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-              borderRadius: AppTheme.metrics.radius12,
+              color: s.accentContainer,
+              borderRadius: m.radius12,
             ),
             child: Text(
               controller.chapters.isEmpty
                   ? '0/0'
                   : '${controller.currentChapterIndex.value + 1}/${controller.chapters.length}',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor),
+              style: AppTextStyles.role(
+                context,
+                fontSize: m.fontSize13,
+                color: s.accent,
+                weight: FontWeight.bold,
+              ),
             ),
           ),
         ),
@@ -91,48 +103,49 @@ class ReaderToolbar extends StatelessWidget {
               children: [
                 // 搜索匹配信息
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
+                  padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: AppTheme.metrics.radius12,
+                    color: s.warning.container,
+                    borderRadius: m.radius12,
                   ),
                   child: Text(
                     '${controller.selectedSearchIndex.value + 1}/${controller.searchMatches.length}',
-                    style: TextStyle(
-                      fontSize: AppTheme.metrics.fontSize11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange,
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize11,
+                      color: s.warning.color,
+                      weight: FontWeight.bold,
                     ),
                   ),
                 ),
-                SizedBox(width: AppTheme.metrics.kSpace4),
+                SizedBox(width: m.kSpace4),
                 IconButton(
-                  icon: DrawIcon(StrokeIcons.arrowUpward, size: AppTheme.metrics.iconSize20),
+                  icon: DrawIcon(StrokeIcons.arrowUpward, size: scaleW(20)),
                   tooltip: '上一个结果',
                   onPressed: controller.previousSearchResult,
                 ),
                 IconButton(
-                  icon: DrawIcon(StrokeIcons.list, size: AppTheme.metrics.iconSize20),
+                  icon: DrawIcon(StrokeIcons.list, size: scaleW(20)),
                   tooltip: '结果列表',
                   onPressed: controller.openSearchResultsList,
                 ),
                 IconButton(
-                  icon: DrawIcon(StrokeIcons.arrowDownward, size: AppTheme.metrics.iconSize20),
+                  icon: DrawIcon(StrokeIcons.arrowDownward, size: scaleW(20)),
                   tooltip: '下一个结果',
                   onPressed: controller.nextSearchResult,
                 ),
                 IconButton(
-                  icon: DrawIcon(StrokeIcons.close, size: AppTheme.metrics.iconSize20),
+                  icon: DrawIcon(StrokeIcons.close, size: scaleW(20)),
                   tooltip: '清除搜索',
                   onPressed: controller.clearSearch,
                 ),
-                SizedBox(width: AppTheme.metrics.kSpace4),
+                SizedBox(width: m.kSpace4),
                 IconButton(
-                  icon: DrawIcon(StrokeIcons.folderOpen, size: AppTheme.metrics.iconSize20),
+                  icon: DrawIcon(StrokeIcons.folderOpen, size: scaleW(20)),
                   tooltip: '在文件管理器中显示',
                   onPressed: controller.revealFileInFolder,
                 ),
-                SizedBox(width: AppTheme.metrics.kSpace8),
+                SizedBox(width: m.kSpace8),
               ],
             );
           }
@@ -154,21 +167,25 @@ class ReaderToolbar extends StatelessWidget {
                     IconButton(
                       icon: DrawIcon(
                         isEnabled ? StrokeIcons.translate : StrokeIcons.translate,
-                        color: isEnabled ? Colors.blue : null,
+                        color: isEnabled ? s.info.color : null,
                       ),
                       tooltip: isEnabled ? '关闭自动翻译' : '开启翻译',
                       onPressed: () => _handleTranslateButton(context),
                     ),
                     if (isTranslating && total > 0) ...[
                       SizedBox(
-                        width: AppTheme.metrics.kSpace16,
-                        height: AppTheme.metrics.kSpace16,
+                        width: scaleW(16),
+                        height: scaleW(16),
                         child: const CircularProgressIndicator(strokeWidth: 2),
                       ),
-                      SizedBox(width: AppTheme.metrics.kSpace4),
+                      SizedBox(width: m.kSpace4),
                       Text(
                         '$progress/$total',
-                        style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Colors.blue),
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize11,
+                          color: s.info.color,
+                        ),
                       ),
                     ],
                   ],
@@ -182,7 +199,7 @@ class ReaderToolbar extends StatelessWidget {
                 return IconButton(
                   icon: Badge(
                     label: Text('${controller.failedTranslations.length}'),
-                    child: DrawIcon(StrokeIcons.refresh, color: Colors.orange),
+                    child: DrawIcon(StrokeIcons.refresh, color: s.warning.color),
                   ),
                   tooltip: '重试失败的翻译 (${controller.failedTranslations.length}个)',
                   onPressed: controller.retryAllFailedTranslations,
@@ -191,7 +208,7 @@ class ReaderToolbar extends StatelessWidget {
               // Debug: 复制原始HTML按钮（仅在Debug模式显示）
               if (kDebugMode)
                 IconButton(
-                  icon: DrawIcon(StrokeIcons.code, color: Colors.orange),
+                  icon: DrawIcon(StrokeIcons.code, color: s.warning.color),
                   tooltip: 'Debug: 复制原始HTML',
                   onPressed: controller.copyOriginalHtmlToClipboard,
                 ),
@@ -217,14 +234,19 @@ class ReaderToolbar extends StatelessWidget {
         ),
         Obx(
           () => Container(
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
+            padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
             decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-              borderRadius: AppTheme.metrics.radius12,
+              color: s.accentContainer,
+              borderRadius: m.radius12,
             ),
             child: Text(
               '${controller.fontSize.value.toInt()}',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor),
+              style: AppTextStyles.role(
+                context,
+                fontSize: m.fontSize13,
+                color: s.accent,
+                weight: FontWeight.bold,
+              ),
             ),
           ),
         ),
@@ -234,7 +256,7 @@ class ReaderToolbar extends StatelessWidget {
           onPressed: controller.increaseFontSize,
         ),
 
-        SizedBox(width: AppTheme.metrics.kSpace8),
+        SizedBox(width: m.kSpace8),
         // 更多选项菜单
         PopupMenuButton<String>(
           icon: DrawIcon(StrokeIcons.moreVert),
@@ -259,6 +281,8 @@ class ReaderToolbar extends StatelessWidget {
 
   /// 窄屏工具栏
   Widget _buildNarrowToolbar(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Column(
       children: [
         // 第一行：导航控制
@@ -268,33 +292,34 @@ class ReaderToolbar extends StatelessWidget {
               icon: DrawIcon(StrokeIcons.menuBook),
               tooltip: '章节列表',
               onPressed: controller.toggleChapterList,
-              iconSize: 20,
+              iconSize: scaleW(20),
             ),
             Obx(
               () => IconButton(
                 icon: DrawIcon(StrokeIcons.chevronLeft),
                 tooltip: '上一章',
                 onPressed: controller.hasPreviousChapter() ? controller.previousChapter : null,
-                iconSize: 20,
+                iconSize: scaleW(20),
               ),
             ),
             Obx(
               () => Expanded(
                 child: Center(
                   child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
+                    padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                      borderRadius: AppTheme.metrics.radius12,
+                      color: s.accentContainer,
+                      borderRadius: m.radius12,
                     ),
                     child: Text(
                       controller.chapters.isEmpty
                           ? '0/0'
                           : '${controller.currentChapterIndex.value + 1}/${controller.chapters.length}',
-                      style: TextStyle(
-                        fontSize: AppTheme.metrics.fontSize11,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).primaryColor,
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: m.fontSize11,
+                        color: s.accent,
+                        weight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -306,14 +331,14 @@ class ReaderToolbar extends StatelessWidget {
                 icon: DrawIcon(StrokeIcons.chevronRight),
                 tooltip: '下一章',
                 onPressed: controller.hasNextChapter() ? controller.nextChapter : null,
-                iconSize: 20,
+                iconSize: scaleW(20),
               ),
             ),
             IconButton(
               icon: DrawIcon(StrokeIcons.search),
               tooltip: '搜索',
               onPressed: controller.showSearchDialog,
-              iconSize: 20,
+              iconSize: scaleW(20),
             ),
             // 翻译按钮
             Obx(() {
@@ -328,22 +353,26 @@ class ReaderToolbar extends StatelessWidget {
                   IconButton(
                     icon: DrawIcon(
                       isEnabled ? StrokeIcons.translate : StrokeIcons.translate,
-                      color: isEnabled ? Colors.blue : null,
+                      color: isEnabled ? s.info.color : null,
                     ),
                     tooltip: isEnabled ? '关闭自动翻译' : '开启翻译',
                     onPressed: () => _handleTranslateButton(context),
-                    iconSize: 20,
+                    iconSize: scaleW(20),
                   ),
                   if (isTranslating && total > 0) ...[
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    SizedBox(
+                      width: scaleW(14),
+                      height: scaleW(14),
+                      child: const CircularProgressIndicator(strokeWidth: 2),
                     ),
-                    SizedBox(width: AppTheme.metrics.kSpace4),
+                    SizedBox(width: m.kSpace4),
                     Text(
                       '$progress/$total',
-                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Colors.blue),
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: m.fontSize11,
+                        color: s.info.color,
+                      ),
                     ),
                   ],
                 ],
@@ -357,26 +386,26 @@ class ReaderToolbar extends StatelessWidget {
               return IconButton(
                 icon: Badge(
                   label: Text('${controller.failedTranslations.length}'),
-                  child: DrawIcon(StrokeIcons.refresh, color: Colors.orange),
+                  child: DrawIcon(StrokeIcons.refresh, color: s.warning.color),
                 ),
                 tooltip: '重试失败的翻译',
                 onPressed: controller.retryAllFailedTranslations,
-                iconSize: 20,
+                iconSize: scaleW(20),
               );
             }),
             // Debug: 复制原始HTML按钮（仅在Debug模式显示）
             if (kDebugMode)
               IconButton(
-                icon: DrawIcon(StrokeIcons.code, color: Colors.orange),
+                icon: DrawIcon(StrokeIcons.code, color: s.warning.color),
                 tooltip: 'Debug: 复制原始HTML',
                 onPressed: controller.copyOriginalHtmlToClipboard,
-                iconSize: 20,
+                iconSize: scaleW(20),
               ),
             IconButton(
               icon: DrawIcon(StrokeIcons.folderOpen),
               tooltip: '在文件管理器中显示',
               onPressed: controller.revealFileInFolder,
-              iconSize: 20,
+              iconSize: scaleW(20),
             ),
           ],
         ),
@@ -385,52 +414,53 @@ class ReaderToolbar extends StatelessWidget {
         Obx(() {
           if (controller.searchMatches.isNotEmpty) {
             return Container(
-              padding: EdgeInsets.only(top: AppTheme.metrics.kSpace4),
+              padding: EdgeInsets.only(top: m.kSpace4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8, vertical: AppTheme.metrics.kSpace4),
+                    padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.1),
-                      borderRadius: AppTheme.metrics.radius12,
+                      color: s.warning.container,
+                      borderRadius: m.radius12,
                     ),
                     child: Text(
                       '${controller.selectedSearchIndex.value + 1}/${controller.searchMatches.length}',
-                      style: TextStyle(
-                        fontSize: AppTheme.metrics.fontSize11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange,
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: m.fontSize11,
+                        color: s.warning.color,
+                        weight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  SizedBox(width: AppTheme.metrics.kSpace4),
+                  SizedBox(width: m.kSpace4),
                   IconButton(
                     icon: DrawIcon(StrokeIcons.arrowUpward),
                     onPressed: controller.previousSearchResult,
-                    iconSize: 16,
-                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+                    iconSize: scaleW(16),
+                    padding: EdgeInsets.all(m.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                   IconButton(
                     icon: DrawIcon(StrokeIcons.list),
                     onPressed: controller.openSearchResultsList,
-                    iconSize: 16,
-                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+                    iconSize: scaleW(16),
+                    padding: EdgeInsets.all(m.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                   IconButton(
                     icon: DrawIcon(StrokeIcons.arrowDownward),
                     onPressed: controller.nextSearchResult,
-                    iconSize: 16,
-                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+                    iconSize: scaleW(16),
+                    padding: EdgeInsets.all(m.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                   IconButton(
                     icon: DrawIcon(StrokeIcons.close),
                     onPressed: controller.clearSearch,
-                    iconSize: 16,
-                    padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
+                    iconSize: scaleW(16),
+                    padding: EdgeInsets.all(m.kSpace4),
                     constraints: const BoxConstraints(),
                   ),
                 ],

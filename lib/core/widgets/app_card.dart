@@ -241,9 +241,10 @@ class StatCard extends StatelessWidget {
               children: [
                 Text(
                   value,
-                  style: TextStyle(
+                  style: AppTextStyles.role(
+                    context,
                     fontSize: m.fontSize18,
-                    fontWeight: FontWeight.w600,
+                    weight: FontWeight.w600,
                     color: s.textPrimary,
                     height: 1.2,
                     letterSpacing: -0.2,

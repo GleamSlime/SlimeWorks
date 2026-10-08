@@ -243,11 +243,11 @@ class _BreadcrumbChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: AppTheme.metrics.radius4,
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: AppTheme.metrics.kSpace4,
-          vertical: scaleW(2),
+          vertical: AppTheme.metrics.kSpace2,
         ),
         child: Text(
           label,
@@ -534,7 +534,7 @@ class _PathMappingTileState extends State<_PathMappingTile> {
                   Container(
                     padding: EdgeInsets.symmetric(
                       horizontal: AppTheme.metrics.kSpace4,
-                      vertical: scaleW(1),
+                      vertical: AppTheme.metrics.kSpace1,
                     ),
                     decoration: BoxDecoration(
                       color: s.accentContainer,

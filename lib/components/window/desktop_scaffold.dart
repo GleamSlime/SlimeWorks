@@ -70,7 +70,9 @@ class DesktopScaffold extends StatefulWidget {
       backgroundColor: (WindowGlass.sidebar || liveFrostOn)
           ? Colors.transparent
           : AppSemantic.light.surface,
-      windowButtonVisibility: false,
+      // macOS 直接用系统原生红黄绿：伪装按钮在新系统的玻璃材质上怎么调都不像。
+      // Windows 仍是自绘的 WindowsWindowButtons，这里保持隐藏。
+      windowButtonVisibility: Platform.isMacOS,
       title: desktopScreen.title.value,
     );
 
@@ -267,11 +269,9 @@ class DesktopTopBar extends StatelessWidget {
                     leafLabel: chrome.title,
                   ));
 
-      // 侧栏收进隐藏态后，原来住在栏顶的 macOS 三颗灯没了落脚点，
-      // 借顶栏左端这一格。往右让开一截是给内容区左缘的指示条留命中区，
-      // 否则红灯被那 22 宽的把手吃掉半截。
-      // 跟手拖出途中侧栏顶的灯已经画出来了，顶栏这一盏要熄，否则一处两套灯；
-      // 这时候栏比灯还窄，硬塞进顶栏 Row 就是那条 RenderFlex overflowed。
+      // 侧栏隐藏后栏顶那三颗灯没落脚点了，借顶栏左端这一格占位。
+      // 原生灯常驻整窗左上角，这里只让出等大空白避免内容被压；跟手拖出途中
+      // 栏比灯还窄，硬塞进顶栏 Row 就是那条 RenderFlex overflowed，故沿用同一判据。
       final sidebar = Get.find<SidebarController>();
       final lightsHere =
           Platform.isMacOS && sidebar.isHidden.value && !sidebar.following.value;
@@ -286,11 +286,7 @@ class DesktopTopBar extends StatelessWidget {
         child: Row(
           spacing: appMetrics.kSpace12,
           children: [
-            if (lightsHere)
-              Padding(
-                padding: EdgeInsets.only(left: scaleW(16)),
-                child: const MacWindowButtons(),
-              ),
+            if (lightsHere) const MacWindowButtonsReserve(withLeadingGap: true),
             if (chrome.hasLeading) chrome.leading!,
             Expanded(
               child: Align(
@@ -299,7 +295,19 @@ class DesktopTopBar extends StatelessWidget {
                     ? Breadcrumb(entries: trail)
                     : (chrome.titleWidget ??
                           (chrome.title != null
-                              ? Text(chrome.title!, style: Theme.of(context).textTheme.titleMedium)
+                              ? Text(
+                                  chrome.title!,
+                                  // 标题字号跟着用户字体比例走，长标题只截断不换行：
+                                  // 这一栏高度是定值，换行就是把整条顶破
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.role(
+                                    context,
+                                    fontSize: AppTheme.metrics.fontSize14,
+                                    weight: FontWeight.w500,
+                                    color: AppSemantic.of(context).textPrimary,
+                                  ),
+                                )
                               : const SizedBox.shrink())),
               ),
             ),

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 
 /// Debug 模式下显示在封面右下角的**解码尺寸**徽标（像素宽×高）。
@@ -65,18 +66,20 @@ class _DebugImageSizeBadgeState extends State<DebugImageSizeBadge> {
   Widget build(BuildContext context) {
     final image = _info?.image;
     if (!kDebugMode || image == null) return const SizedBox.shrink();
+    final s = AppSemantic.of(context);
     return Container(
       padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace5, vertical: AppTheme.metrics.kSpace2),
       decoration: BoxDecoration(
-        color: Colors.deepPurple.withAlpha(210),
+        color: s.info.color.withAlpha(210),
         borderRadius: AppTheme.metrics.radius4,
       ),
       child: Text(
         '${image.width}×${image.height}',
-        style: TextStyle(
-          color: Colors.white,
+        // debug 徽标：实心状态色底上的白字不随明暗翻转
+        style: AppTextStyles.role(context,
           fontSize: AppTheme.metrics.fontSize9,
-          fontWeight: FontWeight.w700,
+          color: Colors.white,
+          weight: FontWeight.w700,
           letterSpacing: 0.2,
         ),
       ),

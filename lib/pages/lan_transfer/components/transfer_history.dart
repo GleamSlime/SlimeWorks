@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
@@ -26,8 +25,6 @@ class TransferHistory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
-
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -37,7 +34,6 @@ class TransferHistory extends StatelessWidget {
         final item = items[index];
         return _TransferHistoryCard(
           item: item,
-          isDark: isDark,
           onCancel: () => onCancel(item.transferId),
           onDelete: onDelete != null ? () => onDelete!(item.transferId) : null,
           onDeleteWithFile: onDeleteWithFile != null
@@ -52,14 +48,12 @@ class TransferHistory extends StatelessWidget {
 /// 传输历史卡片
 class _TransferHistoryCard extends StatelessWidget {
   final TransferItem item;
-  final bool isDark;
   final VoidCallback onCancel;
   final VoidCallback? onDelete;
   final VoidCallback? onDeleteWithFile;
 
   const _TransferHistoryCard({
     required this.item,
-    required this.isDark,
     required this.onCancel,
     this.onDelete,
     this.onDeleteWithFile,
@@ -67,14 +61,17 @@ class _TransferHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 取色只走语义层：isDark 三元分支与裸 Colors.* 一律收敛到 AppSemantic
+    final s = AppSemantic.of(context);
+    final status = _getStatusRole(s);
     final isReceived =
         item.receiverDeviceId.isNotEmpty && item.senderDeviceId != item.receiverDeviceId;
 
     return Container(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
       decoration: BoxDecoration(
-        color: isDark ? DarkColors.background1 : LightColors.background1,
-        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10),
+        color: s.surface,
+        border: Border.all(color: s.border),
         borderRadius: AppTheme.metrics.radius14,
       ),
       child: Column(
@@ -89,13 +86,13 @@ class _TransferHistoryCard extends StatelessWidget {
                 width: scaleW(38),
                 height: scaleW(38),
                 decoration: BoxDecoration(
-                  color: _getStatusColor().withValues(alpha: 0.12),
+                  color: status.container,
                   borderRadius: AppTheme.metrics.radius10,
                 ),
                 child: DrawIcon(
                   _getTypeIcon(item.transferType),
                   size: scaleW(18),
-                  color: _getStatusColor(),
+                  color: status.color,
                 ),
               ),
 
@@ -108,11 +105,7 @@ class _TransferHistoryCard extends StatelessWidget {
                   children: [
                     Text(
                       item.fileName ?? item.textContent ?? '未知',
-                      style: TextStyle(
-                        fontSize: AppTheme.metrics.fontSize13,
-                        fontWeight: FontWeight.w600,
-                        height: 1.5,
-                      ),
+                      style: AppTextStyles.cardTitle(context),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -126,17 +119,16 @@ class _TransferHistoryCard extends StatelessWidget {
                             vertical: AppTheme.metrics.kSpace2,
                           ),
                           decoration: BoxDecoration(
-                            color: isReceived
-                                ? Colors.blue.withValues(alpha: 0.12)
-                                : Colors.orange.withValues(alpha: 0.12),
+                            color: (isReceived ? s.info : s.warning).container,
                             borderRadius: AppTheme.metrics.radius4,
                           ),
                           child: Text(
                             isReceived ? '接收' : '发送',
-                            style: TextStyle(
+                            style: AppTextStyles.role(
+                              context,
                               fontSize: AppTheme.metrics.fontSize11,
                               height: 1.4,
-                              color: isReceived ? Colors.blue : Colors.orange,
+                              color: (isReceived ? s.info : s.warning).onContainer,
                             ),
                           ),
                         ),
@@ -144,10 +136,11 @@ class _TransferHistoryCard extends StatelessWidget {
                         Flexible(
                           child: Text(
                             isReceived ? item.senderDeviceName : '→ ${item.receiverDeviceId}',
-                            style: TextStyle(
+                            style: AppTextStyles.role(
+                              context,
                               fontSize: AppTheme.metrics.fontSize11,
                               height: 1.4,
-                              color: isDark ? DarkColors.white80 : LightColors.black80,
+                              color: s.textSecondary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -170,10 +163,11 @@ class _TransferHistoryCard extends StatelessWidget {
             SizedBox(height: AppTheme.metrics.kSpace8),
             Text(
               _formatFileSize(item.fileSize!),
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: AppTheme.metrics.fontSize11,
                 height: 1.4,
-                color: isDark ? DarkColors.white80 : LightColors.black80,
+                color: s.textSecondary,
               ),
             ),
           ],
@@ -186,17 +180,18 @@ class _TransferHistoryCard extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: item.progress / 100,
                 minHeight: scaleW(4),
-                backgroundColor: isDark ? DarkColors.white10 : LightColors.black10,
-                color: isDark ? DarkColors.primary : LightColors.primary,
+                backgroundColor: s.surfaceSunken,
+                color: s.accent,
               ),
             ),
             SizedBox(height: AppTheme.metrics.kSpace4),
             Text(
               '${item.progress.toStringAsFixed(1)}%',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: AppTheme.metrics.fontSize11,
                 height: 1.4,
-                color: isDark ? DarkColors.white80 : LightColors.black80,
+                color: s.textSecondary,
               ),
             ),
           ],
@@ -206,10 +201,11 @@ class _TransferHistoryCard extends StatelessWidget {
             SizedBox(height: AppTheme.metrics.kSpace8),
             Text(
               item.errorMessage!,
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: AppTheme.metrics.fontSize11,
                 height: 1.4,
-                color: Theme.of(context).colorScheme.error,
+                color: s.danger.onContainer,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -258,6 +254,7 @@ class _TransferHistoryCard extends StatelessWidget {
   }
 
   Widget _buildDeleteButton(BuildContext context) {
+    final s = AppSemantic.of(context);
     final hasFile =
         item.filePath != null &&
         (item.status == TransferStatus.completed || item.status == TransferStatus.failed);
@@ -277,7 +274,7 @@ class _TransferHistoryCard extends StatelessWidget {
                   onPressed: () => Navigator.of(ctx).pop(true),
                   child: Text(
                     '删除记录和文件',
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: AppTextStyles.rowTitle(ctx).copyWith(color: s.danger.onContainer),
                   ),
                 ),
               ],
@@ -298,7 +295,7 @@ class _TransferHistoryCard extends StatelessWidget {
           vertical: AppTheme.metrics.kSpace8,
         ),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
+          color: s.danger.container,
           borderRadius: AppTheme.metrics.radius8,
         ),
         child: Row(
@@ -306,15 +303,16 @@ class _TransferHistoryCard extends StatelessWidget {
           children: [
             DrawIcon(StrokeIcons.deleteOutline,
               size: scaleW(14),
-              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7),
+              color: s.danger.color,
             ),
             SizedBox(width: AppTheme.metrics.kSpace4),
             Text(
               '删除',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: AppTheme.metrics.fontSize11,
                 height: 1.4,
-                color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7),
+                color: s.danger.onContainer,
               ),
             ),
           ],
@@ -324,6 +322,7 @@ class _TransferHistoryCard extends StatelessWidget {
   }
 
   Widget _buildOpenButton(BuildContext context) {
+    final s = AppSemantic.of(context);
     return GestureDetector(
       onTap: () {
         final path = item.filePath;
@@ -354,9 +353,7 @@ class _TransferHistoryCard extends StatelessWidget {
           vertical: AppTheme.metrics.kSpace8,
         ),
         decoration: BoxDecoration(
-          color: (Get.isDarkMode ? DarkColors.primary : LightColors.primary).withValues(
-            alpha: 0.12,
-          ),
+          color: s.accentContainer,
           borderRadius: AppTheme.metrics.radius8,
         ),
         child: Row(
@@ -364,15 +361,16 @@ class _TransferHistoryCard extends StatelessWidget {
           children: [
             DrawIcon(StrokeIcons.iosShare,
               size: scaleW(14),
-              color: Get.isDarkMode ? DarkColors.primary : LightColors.primary,
+              color: s.accent,
             ),
             SizedBox(width: AppTheme.metrics.kSpace4),
             Text(
               '用其他应用打开',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: AppTheme.metrics.fontSize11,
                 height: 1.4,
-                color: Get.isDarkMode ? DarkColors.primary : LightColors.primary,
+                color: s.accent,
               ),
             ),
           ],
@@ -382,6 +380,7 @@ class _TransferHistoryCard extends StatelessWidget {
   }
 
   Widget _buildCopyButton(BuildContext context) {
+    final s = AppSemantic.of(context);
     return GestureDetector(
       onTap: () {
         Clipboard.setData(ClipboardData(text: item.textContent ?? ''));
@@ -395,7 +394,7 @@ class _TransferHistoryCard extends StatelessWidget {
           vertical: AppTheme.metrics.kSpace8,
         ),
         decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: 0.12),
+          color: s.success.container,
           borderRadius: AppTheme.metrics.radius8,
         ),
         child: Row(
@@ -403,15 +402,16 @@ class _TransferHistoryCard extends StatelessWidget {
           children: [
             DrawIcon(StrokeIcons.copy,
               size: scaleW(14),
-              color: isDark ? DarkColors.success : LightColors.success,
+              color: s.success.color,
             ),
             SizedBox(width: AppTheme.metrics.kSpace4),
             Text(
               '复制文本',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: AppTheme.metrics.fontSize11,
                 height: 1.4,
-                color: isDark ? DarkColors.success : LightColors.success,
+                color: s.success.onContainer,
               ),
             ),
           ],
@@ -421,6 +421,7 @@ class _TransferHistoryCard extends StatelessWidget {
   }
 
   Widget _buildCancelButton(BuildContext context) {
+    final s = AppSemantic.of(context);
     return GestureDetector(
       onTap: onCancel,
       child: Container(
@@ -429,7 +430,7 @@ class _TransferHistoryCard extends StatelessWidget {
           vertical: AppTheme.metrics.kSpace8,
         ),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
+          color: s.danger.container,
           borderRadius: AppTheme.metrics.radius8,
         ),
         child: Row(
@@ -437,15 +438,16 @@ class _TransferHistoryCard extends StatelessWidget {
           children: [
             DrawIcon(StrokeIcons.cancel,
               size: scaleW(14),
-              color: Theme.of(context).colorScheme.error,
+              color: s.danger.color,
             ),
             SizedBox(width: AppTheme.metrics.kSpace4),
             Text(
               '取消',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: AppTheme.metrics.fontSize11,
                 height: 1.4,
-                color: Theme.of(context).colorScheme.error,
+                color: s.danger.onContainer,
               ),
             ),
           ],
@@ -454,20 +456,21 @@ class _TransferHistoryCard extends StatelessWidget {
     );
   }
 
-  Color _getStatusColor() {
+  /// 状态语义色：走状态角色令牌（容器底 / 图上色 / 文字色三档一体）
+  AppStatusRole _getStatusRole(AppSemantic s) {
     switch (item.status) {
       case TransferStatus.completed:
-        return Colors.green;
+        return s.success;
       case TransferStatus.failed:
-        return Colors.red;
+        return s.danger;
       case TransferStatus.rejected:
-        return Colors.red;
+        return s.danger;
       case TransferStatus.cancelled:
-        return Colors.grey;
+        return s.neutral;
       case TransferStatus.transferring:
-        return Colors.blue;
+        return s.info;
       default:
-        return Colors.orange;
+        return s.warning;
     }
   }
 
@@ -502,15 +505,16 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (color, text) = switch (status) {
-      TransferStatus.pending => (Colors.orange, '等待'),
-      TransferStatus.accepted => (Colors.blue, '已接受'),
-      TransferStatus.rejected => (Colors.red, '已拒绝'),
-      TransferStatus.transferring => (Colors.blue, '传输中'),
-      TransferStatus.completed => (Colors.green, '完成'),
-      TransferStatus.failed => (Colors.red, '失败'),
-      TransferStatus.cancelled => (Colors.grey, '已取消'),
-      TransferStatus.queued => (Colors.orange, '排队中'),
+    final s = AppSemantic.of(context);
+    final (role, text) = switch (status) {
+      TransferStatus.pending => (s.warning, '等待'),
+      TransferStatus.accepted => (s.info, '已接受'),
+      TransferStatus.rejected => (s.danger, '已拒绝'),
+      TransferStatus.transferring => (s.info, '传输中'),
+      TransferStatus.completed => (s.success, '完成'),
+      TransferStatus.failed => (s.danger, '失败'),
+      TransferStatus.cancelled => (s.neutral, '已取消'),
+      TransferStatus.queued => (s.warning, '排队中'),
     };
 
     return Container(
@@ -519,12 +523,17 @@ class _StatusBadge extends StatelessWidget {
         vertical: AppTheme.metrics.kSpace4,
       ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
+        color: role.container,
         borderRadius: AppTheme.metrics.radius6,
       ),
       child: Text(
         text,
-        style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4, color: color),
+        style: AppTextStyles.role(
+          context,
+          fontSize: AppTheme.metrics.fontSize11,
+          height: 1.4,
+          color: role.onContainer,
+        ),
       ),
     );
   }

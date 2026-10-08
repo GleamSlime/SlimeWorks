@@ -62,6 +62,21 @@ class AppTheme {
     'sans-serif',
   ];
 
+  /// 等宽字族（日志/路径/代码）。
+  ///
+  /// 项目没打包等宽字体，只能按平台各自的内置名点：主点是 macOS 的 Menlo，Windows
+  /// 走 Consolas、Linux 常见 DejaVu Sans Mono——主点在这些平台上不存在，由回退清单
+  /// 顶上；写死单值就等于让另两个平台落到引擎兜底字上。末尾再接一份中文字族：
+  /// 日志里混着中文，等宽字没有 CJK 字形，不接就变豆腐块。
+  static const String _monoFontFamily = 'Menlo';
+  static const List<String> _monoFontFamilyFallback = [
+    'Consolas',
+    'DejaVu Sans Mono',
+    'Liberation Mono',
+    'monospace',
+    ..._fontFamilyFallback,
+  ];
+
   /// 启动时从持久化存储加载主题配置（仅加载输入参数，不触发 ScreenUtil）。
   static Future<void> loadSavedTheme() async {
     try {
@@ -302,7 +317,7 @@ class AppTheme {
   static ButtonStyle _outlinedButton(Color accentText, Color borderColor) =>
       OutlinedButton.styleFrom(
         foregroundColor: accentText,
-        side: BorderSide(color: borderColor, width: scaleW(1)),
+        side: BorderSide(color: borderColor, width: metrics.strokeHairline),
         padding: EdgeInsets.symmetric(
           horizontal: metrics.kSpace18,
           vertical: metrics.kSpace10,
@@ -424,7 +439,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: m.radiusCard,
-          side: BorderSide(color: s.hairline, width: scaleW(1)),
+          side: BorderSide(color: s.hairline, width: m.strokeHairline),
         ),
       ),
 
@@ -462,11 +477,11 @@ class AppTheme {
         ),
         border: OutlineInputBorder(
           borderRadius: m.radiusField,
-          borderSide: BorderSide(color: s.border, width: scaleW(1)),
+          borderSide: BorderSide(color: s.border, width: m.strokeHairline),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: m.radiusField,
-          borderSide: BorderSide(color: s.hairline, width: scaleW(1)),
+          borderSide: BorderSide(color: s.hairline, width: m.strokeHairline),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: m.radiusField,
@@ -474,7 +489,7 @@ class AppTheme {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: m.radiusField,
-          borderSide: BorderSide(color: s.danger.color, width: scaleW(1)),
+          borderSide: BorderSide(color: s.danger.color, width: m.strokeHairline),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: m.radiusField,
@@ -512,7 +527,7 @@ class AppTheme {
         shadowColor: s.shadowKey,
         shape: RoundedRectangleBorder(
           borderRadius: m.radiusOverlay,
-          side: BorderSide(color: s.glassBorder, width: scaleW(1)),
+          side: BorderSide(color: s.glassBorder, width: m.strokeHairline),
         ),
         titleTextStyle: _font(TextStyle(
           fontSize: scaleS(16),
@@ -534,7 +549,7 @@ class AppTheme {
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(m.radiusOverlay.topLeft.x),
           ),
-          side: BorderSide(color: s.glassBorder, width: scaleW(1)),
+          side: BorderSide(color: s.glassBorder, width: m.strokeHairline),
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
@@ -546,7 +561,7 @@ class AppTheme {
         shadowColor: s.shadowKey,
         shape: RoundedRectangleBorder(
           borderRadius: m.radiusPanel,
-          side: BorderSide(color: s.glassBorder, width: scaleW(1)),
+          side: BorderSide(color: s.glassBorder, width: m.strokeHairline),
         ),
         // M3 下菜单项文字走 labelTextStyle，textStyle 只参与旧渲染路径；两处都写，
         // 免得一改 useMaterial3 就发现菜单字号又飘回 SDK 默认值。
@@ -631,7 +646,7 @@ class AppTheme {
         indicator: BoxDecoration(
           color: s.accentContainer,
           borderRadius: m.radiusControl,
-          border: Border.all(color: s.accentContainerBorder, width: scaleW(1)),
+          border: Border.all(color: s.accentContainerBorder, width: m.strokeHairline),
         ),
       ),
 
@@ -685,7 +700,7 @@ class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: s.surfaceSunken,
         selectedColor: s.accentContainer,
-        side: BorderSide(color: s.hairline, width: scaleW(1)),
+        side: BorderSide(color: s.hairline, width: m.strokeHairline),
         shape: RoundedRectangleBorder(borderRadius: m.radiusPill),
         labelStyle: _font(TextStyle(
           fontSize: scaleS(12),
@@ -727,7 +742,7 @@ class AppTheme {
           foregroundColor: WidgetStateColor.resolveWith(
             (states) => states.contains(WidgetState.selected) ? s.accentText : s.textSecondary,
           ),
-          side: WidgetStatePropertyAll(BorderSide(color: s.hairline, width: scaleW(1))),
+          side: WidgetStatePropertyAll(BorderSide(color: s.hairline, width: m.strokeHairline)),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(borderRadius: m.radiusControl),
           ),
@@ -887,12 +902,39 @@ class AppTextStyles {
     FontWeight weight = FontWeight.w400,
     double? height,
     double? letterSpacing,
+    TextDecoration? decoration,
   }) => Theme.of(context).textTheme.bodyMedium!.copyWith(
     fontSize: fontSize,
     fontWeight: weight,
     color: color,
     height: height,
     letterSpacing: letterSpacing,
+    decoration: decoration,
+  );
+
+  /// 页面里"不属于那 9 个固定角色"的手写样式出口。
+  ///
+  /// 和 [_role] 一样从字阶派生，因此一定带上 fontFamily 与中文回退清单；
+  /// 字号一律传 `AppTheme.metrics.fontSizeN`，颜色传 `AppSemantic.of(context)` 的角色。
+  ///
+  /// `decoration` 是给"划掉/下划线"这类只改修饰的调用点留的：以前只能
+  /// `role(...).copyWith(decoration: ...)`，多写一次 copyWith 就多一个能跑偏的地方。
+  static TextStyle role(
+    BuildContext context, {
+    required double fontSize,
+    required Color color,
+    FontWeight weight = FontWeight.w400,
+    double? height,
+    double? letterSpacing,
+    TextDecoration? decoration,
+  }) => _role(
+    context,
+    fontSize: fontSize,
+    color: color,
+    weight: weight,
+    height: height,
+    letterSpacing: letterSpacing,
+    decoration: decoration,
   );
 
   /// 小节标题（原 12 种变体统一到此）
@@ -963,14 +1005,16 @@ class AppTextStyles {
   );
 
   /// 等宽（日志/路径/代码）
-  static TextStyle mono(BuildContext context, {double? size}) {
-    final s = AppSemantic.of(context);
+  ///
+  /// 字族走 [AppTheme] 那套平台等宽清单，颜色默认次要字，控制台这类
+  /// 需要自带配色的地方传 `color`。
+  static TextStyle mono(BuildContext context, {double? size, Color? color}) {
     return TextStyle(
-      fontFamily: 'Menlo',
-      fontFamilyFallback: const [' monospace ', 'Courier'],
+      fontFamily: AppTheme._monoFontFamily,
+      fontFamilyFallback: AppTheme._monoFontFamilyFallback,
       fontSize: size ?? AppTheme.metrics.fontSize12,
       fontWeight: FontWeight.w400,
-      color: s.textSecondary,
+      color: color ?? AppSemantic.of(context).textSecondary,
       height: 1.55,
     );
   }
@@ -1086,6 +1130,22 @@ class ThemeMetrics {
   final double iconSize64;
   final double iconSize96;
 
+  // ── 描边宽度：一律固定值，不吃窗口缩放（DESIGN.md §3.3）──
+  /// 发丝线：缩放后不足 1 物理像素就会被抗锯齿冲淡成灰边，所以钉死 1
+  final double strokeHairline;
+
+  /// 半根发丝：Retina 上正好 1 物理像素，用于 Divider 这类极细分隔
+  final double strokeUltraThin;
+
+  /// 细描边：小尺寸进度环、图标底板描边
+  final double strokeThin;
+
+  /// 常规描边：进度环、选中环
+  final double strokeRegular;
+
+  /// 粗描边：需要压住画面的环形/条形指示
+  final double strokeBold;
+
   final BoxShadow boxShadow10;
 
   ThemeMetrics()
@@ -1175,6 +1235,14 @@ class ThemeMetrics {
       kSpace56 = scaleW(56),
       kSpace64 = scaleW(64),
       kSpace80 = scaleW(80),
+
+      // 描边宽度钉死为常量：这组值一旦走 scaleW，窗口拉大时 1 逻辑像素会被
+      // 折算成不足 1 物理像素，发丝线直接糊成灰边（§3.3）。
+      strokeHairline = 1.0,
+      strokeUltraThin = 0.5,
+      strokeThin = 1.5,
+      strokeRegular = 2.0,
+      strokeBold = 3.0,
 
       boxShadow10 = (() {
         final ctx = navigatorKey.currentContext;

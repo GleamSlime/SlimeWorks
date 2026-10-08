@@ -4,6 +4,7 @@ import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_zone.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -101,9 +102,10 @@ class StatusChip extends StatelessWidget {
             ],
             Text(
               label,
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: dense ? m.fontSize11 : m.fontSize12,
-                fontWeight: FontWeight.w500,
+                weight: FontWeight.w500,
                 color: fg,
                 height: 1.35,
               ),
@@ -138,8 +140,8 @@ class TagChip extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOut,
+        duration: AppMotion.defaultDuration,
+        curve: AppMotion.defaultCurve,
         padding: EdgeInsets.symmetric(
           horizontal: m.kSpace10,
           vertical: m.kSpace4,
@@ -157,9 +159,10 @@ class TagChip extends StatelessWidget {
           children: [
             Text(
               label,
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: m.fontSize12,
-                fontWeight: FontWeight.w500,
+                weight: FontWeight.w500,
                 color: selected ? s.accentText : s.textSecondary,
                 height: 1.35,
               ),
@@ -203,8 +206,10 @@ class CountBadge extends StatelessWidget {
     final role = resolveToneRole(s, tone);
     final text = count > max ? '$max+' : '$count';
     return Container(
-      constraints: BoxConstraints(minWidth: scaleW(17)),
-      height: scaleW(17),
+      // 高度只给下限不给定值：徽章里的数字走字号族，用户把界面字号调到 2.0
+      // 时定高会把文字顶出去；minHeight 在默认档下和原来的 17 完全一致。
+      // 配套的 heightFactor 让高度只由内容决定，不被行高拉伸成一条横杠。
+      constraints: BoxConstraints(minWidth: scaleW(17), minHeight: scaleW(17)),
       padding: EdgeInsets.symmetric(horizontal: m.kSpace5),
       decoration: BoxDecoration(
         color: role?.container ?? s.accentContainer,
@@ -219,12 +224,14 @@ class CountBadge extends StatelessWidget {
       child: Align(
         alignment: Alignment.center,
         widthFactor: 1,
+        heightFactor: 1,
         child: Text(
           text,
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: AppTextStyles.role(
+            context,
             fontSize: m.fontSize10,
-            fontWeight: FontWeight.w600,
+            weight: FontWeight.w600,
             color: resolveToneColor(s, tone),
             height: 1.1,
           ),
@@ -351,9 +358,10 @@ class KeyValueRow extends StatelessWidget {
           Expanded(
             child: SelectableText(
               value,
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: m.fontSize12,
-                fontWeight: FontWeight.w500,
+                weight: FontWeight.w500,
                 color: valueColor ?? s.textPrimary,
                 height: 1.6,
               ),

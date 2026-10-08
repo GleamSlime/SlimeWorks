@@ -1,3 +1,5 @@
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -219,8 +221,52 @@ class _ReaderContentState extends State<ReaderContent> {
   }
 
   EdgeInsets _resolvedContentPadding(bool isNarrow) {
-    return widget.contentPadding ?? EdgeInsets.all(isNarrow ? 16 : 48);
+    final m = AppTheme.metrics;
+    return widget.contentPadding ?? EdgeInsets.all(isNarrow ? m.kSpace16 : m.kSpace48);
   }
+
+  /// 正文样式：字号与行高由用户的阅读设置驱动，颜色和字体族仍来自主题
+  TextStyle _bodyStyle(BuildContext context, double fontSize, double lineHeight) =>
+      AppTextStyles.role(
+        context,
+        fontSize: fontSize,
+        color: AppSemantic.of(context).textPrimary,
+        height: lineHeight,
+        letterSpacing: 0.5,
+      );
+
+  /// 搜索命中词的标注色板：选中态压得更实，未选中态只铺一层淡底
+  Color _markBg(Color base, {required bool selected}) =>
+      base.withAlpha(selected ? 128 : 77);
+
+  /// 纯文本模式下命中词的样式，与 [_markCss] 同源，切换渲染模式不会变色
+  TextStyle _markStyle(
+    BuildContext context,
+    double fontSize,
+    double lineHeight, {
+    required bool selected,
+  }) {
+    final s = AppSemantic.of(context);
+    return AppTextStyles.role(
+      context,
+      fontSize: fontSize,
+      color: s.warning.onContainer,
+      weight: selected ? FontWeight.bold : FontWeight.w600,
+      height: lineHeight,
+      letterSpacing: 0.5,
+    ).copyWith(backgroundColor: _markBg(s.warning.color, selected: selected));
+  }
+
+  /// HTML 渲染模式下的 mark 样式：与 [_markBg] 同源，保证切到纯文本模式高亮不变色
+  Map<String, String> _markCss(AppSemantic s, {required bool selected}) => {
+    'background-color': _cssColor(_markBg(s.warning.color, selected: selected)),
+    'color': _cssColor(s.warning.onContainer),
+    'font-weight': 'bold',
+  };
+
+  /// 语义色转 CSS 颜色字面量
+  String _cssColor(Color c) =>
+      'rgba(${c.r.round()}, ${c.g.round()}, ${c.b.round()}, ${c.a.toStringAsFixed(2)})';
 
   void _resetChapterSwipe() {
     _leadingOverscroll = 0;
@@ -292,8 +338,8 @@ class _ReaderContentState extends State<ReaderContent> {
         if (context != null) {
           Scrollable.ensureVisible(
             context,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
+            duration: AppMotion.slow,
+            curve: AppMotion.decelerate,
             alignment: 0.25, // 将目标显示在屏幕上方25%的位置
           );
           _logger.info('[Reader] Scrolled to search target using ensureVisible');
@@ -326,8 +372,8 @@ class _ReaderContentState extends State<ReaderContent> {
 
     _scrollController.animateTo(
       targetOffset,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+      duration: AppMotion.slow,
+      curve: AppMotion.standard,
     );
   }
 
@@ -348,6 +394,8 @@ class _ReaderContentState extends State<ReaderContent> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     final isNarrow = MediaQuery.of(context).size.width < 600;
     final contentPadding = _resolvedContentPadding(isNarrow);
 
@@ -357,7 +405,10 @@ class _ReaderContentState extends State<ReaderContent> {
 
       if (currentContent.isEmpty) {
         return Center(
-          child: Text('暂无内容', style: TextStyle(color: Theme.of(context).colorScheme.outline)),
+          child: Text(
+            '暂无内容',
+            style: AppTextStyles.role(context, fontSize: m.fontSize13, color: s.textTertiary),
+          ),
         );
       }
 
@@ -434,7 +485,7 @@ class _ReaderContentState extends State<ReaderContent> {
       }
 
       return Container(
-        color: Theme.of(context).scaffoldBackgroundColor,
+        color: s.canvas,
         child: NotificationListener<ScrollNotification>(
           onNotification: _handleChapterSwipeNotification,
           child: SingleChildScrollView(
@@ -446,49 +497,39 @@ class _ReaderContentState extends State<ReaderContent> {
                 // 章节标题
                 if (controller.chapters.isNotEmpty && !isNarrow)
                   Container(
-                    padding: EdgeInsets.only(bottom: AppTheme.metrics.kSpace24),
+                    padding: EdgeInsets.only(bottom: m.kSpace24),
                     decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
-                        ),
-                      ),
+                      border: Border(bottom: BorderSide(color: s.hairline)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           controller.chapters[controller.currentChapterIndex.value].title,
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).primaryColor,
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: m.fontSize16,
+                            color: s.accent,
+                            weight: FontWeight.bold,
+                            height: 1.5,
                           ),
                         ),
-                        SizedBox(height: AppTheme.metrics.kSpace8),
+                        SizedBox(height: m.kSpace8),
                         Row(
                           children: [
                             Text(
                               '第 ${controller.currentChapterIndex.value + 1} / ${controller.chapters.length} 章',
-                              style: TextStyle(
-                                fontSize: AppTheme.metrics.fontSize11,
-                                color: Theme.of(context).hintColor,
-                              ),
+                              style: AppTextStyles.caption(context),
                             ),
-                            SizedBox(width: AppTheme.metrics.kSpace16),
+                            SizedBox(width: m.kSpace16),
                             Text(
                               '本章 ${currentContent.length} 字',
-                              style: TextStyle(
-                                fontSize: AppTheme.metrics.fontSize11,
-                                color: Theme.of(context).hintColor,
-                              ),
+                              style: AppTextStyles.caption(context),
                             ),
-                            SizedBox(width: AppTheme.metrics.kSpace16),
+                            SizedBox(width: m.kSpace16),
                             Text(
                               '进度 ${((controller.currentChapterIndex.value + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
-                              style: TextStyle(
-                                fontSize: AppTheme.metrics.fontSize11,
-                                color: Theme.of(context).hintColor,
-                              ),
+                              style: AppTextStyles.caption(context),
                             ),
                           ],
                         ),
@@ -496,7 +537,7 @@ class _ReaderContentState extends State<ReaderContent> {
                     ),
                   ),
 
-                SizedBox(height: isNarrow ? 0 : 24),
+                SizedBox(height: isNarrow ? 0 : m.kSpace24),
 
                 // 如果内容包含 HTML 图片，允许切换为纯文本模式以便选择复制文本
                 if (hasImages)
@@ -757,10 +798,10 @@ class _ReaderContentState extends State<ReaderContent> {
                             }
                             return true;
                           },
-                          textStyle: TextStyle(
-                            fontSize: controller.fontSize.value,
-                            height: resolvedLineHeight,
-                            color: Theme.of(context).textTheme.bodyLarge?.color,
+                          textStyle: _bodyStyle(
+                            context,
+                            controller.fontSize.value,
+                            resolvedLineHeight,
                           ),
                           customStylesBuilder: (element) {
                             final tag = element.localName;
@@ -778,17 +819,9 @@ class _ReaderContentState extends State<ReaderContent> {
                                   'margin-bottom': '16px',
                                 };
                               case 'mark':
-                                return {
-                                  'background-color': 'rgba(255, 255, 0, 0.5)',
-                                  'color': '#E65100',
-                                  'font-weight': 'bold',
-                                };
+                                return _markCss(s, selected: false);
                               case 'mark_selected':
-                                return {
-                                  'background-color': 'rgba(255, 152, 0, 0.5)',
-                                  'color': '#E65100',
-                                  'font-weight': 'bold',
-                                };
+                                return _markCss(s, selected: true);
                             }
                             return null;
                           },
@@ -814,16 +847,17 @@ class _ReaderContentState extends State<ReaderContent> {
                               return Container(
                                 key: _searchTargetKey,
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.withValues(alpha: 0.5),
-                                  borderRadius: AppTheme.metrics.radius2,
+                                  color: _markBg(s.warning.color, selected: true),
+                                  borderRadius: m.radius2,
                                 ),
-                                padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace2),
+                                padding: EdgeInsets.symmetric(horizontal: m.kSpace2),
                                 child: Text(
                                   element.text,
-                                  style: TextStyle(
-                                    color: Colors.orange.shade900,
-                                    fontWeight: FontWeight.bold,
+                                  style: AppTextStyles.role(
+                                    context,
                                     fontSize: controller.fontSize.value,
+                                    color: s.warning.onContainer,
+                                    weight: FontWeight.bold,
                                   ),
                                 ),
                               );
@@ -852,12 +886,7 @@ class _ReaderContentState extends State<ReaderContent> {
                     // 默认使用可选择文本
                     return SelectableText(
                       currentContent,
-                      style: TextStyle(
-                        fontSize: controller.fontSize.value,
-                        height: resolvedLineHeight,
-                        letterSpacing: 0.5,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
-                      ),
+                      style: _bodyStyle(context, controller.fontSize.value, resolvedLineHeight),
                     );
                   },
                 ),
@@ -907,10 +936,12 @@ class _ReaderContentState extends State<ReaderContent> {
   ) {
     final currentChapterIndex = controller.currentChapterIndex.value;
     final hasSearch = controller.searchMatches.isNotEmpty;
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
+      color: s.canvas,
       child: NotificationListener<ScrollNotification>(
         onNotification: _handleChapterSwipeNotification,
         child: CustomScrollView(
@@ -929,56 +960,46 @@ class _ReaderContentState extends State<ReaderContent> {
                   // 章节标题
                   if (controller.chapters.isNotEmpty && !isMobile)
                     Container(
-                      padding: EdgeInsets.only(bottom: AppTheme.metrics.kSpace24),
+                      padding: EdgeInsets.only(bottom: m.kSpace24),
                       decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
-                          ),
-                        ),
+                        border: Border(bottom: BorderSide(color: s.hairline)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             controller.chapters[currentChapterIndex].title,
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).primaryColor,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: m.fontSize16,
+                              color: s.accent,
+                              weight: FontWeight.bold,
+                              height: 1.5,
                             ),
                           ),
-                          SizedBox(height: AppTheme.metrics.kSpace8),
+                          SizedBox(height: m.kSpace8),
                           Row(
                             children: [
                               Text(
                                 '第 ${currentChapterIndex + 1} / ${controller.chapters.length} 章',
-                                style: TextStyle(
-                                  fontSize: AppTheme.metrics.fontSize11,
-                                  color: Theme.of(context).hintColor,
-                                ),
+                                style: AppTextStyles.caption(context),
                               ),
-                              SizedBox(width: AppTheme.metrics.kSpace16),
+                              SizedBox(width: m.kSpace16),
                               Text(
                                 '本章 ${currentContent.length} 字',
-                                style: TextStyle(
-                                  fontSize: AppTheme.metrics.fontSize11,
-                                  color: Theme.of(context).hintColor,
-                                ),
+                                style: AppTextStyles.caption(context),
                               ),
-                              SizedBox(width: AppTheme.metrics.kSpace16),
+                              SizedBox(width: m.kSpace16),
                               Text(
                                 '进度 ${((currentChapterIndex + 1) * 100 / controller.chapters.length).toStringAsFixed(1)}%',
-                                style: TextStyle(
-                                  fontSize: AppTheme.metrics.fontSize11,
-                                  color: Theme.of(context).hintColor,
-                                ),
+                                style: AppTextStyles.caption(context),
                               ),
                             ],
                           ),
                         ],
                       ),
                     ),
-                  SizedBox(height: isMobile ? 0 : 24),
+                  SizedBox(height: isMobile ? 0 : m.kSpace24),
 
                   // 如果内容包含 HTML 图片，允许切换为纯文本模式
                   if (hasImages)
@@ -1031,7 +1052,7 @@ class _ReaderContentState extends State<ReaderContent> {
             SliverPadding(
               padding: EdgeInsets.fromLTRB(
                 contentPadding.left,
-                24,
+                AppTheme.metrics.kSpace24,
                 contentPadding.right,
                 contentPadding.bottom,
               ),
@@ -1099,12 +1120,9 @@ class _ReaderContentState extends State<ReaderContent> {
           }
           return true;
         },
-        textStyle: TextStyle(
-          fontSize: controller.fontSize.value,
-          height: lineHeight,
-          color: Theme.of(context).textTheme.bodyLarge?.color,
-        ),
+        textStyle: _bodyStyle(context, controller.fontSize.value, lineHeight),
         customStylesBuilder: (element) {
+          final s = AppSemantic.of(context);
           final tag = element.localName;
           switch (tag) {
             case 'p':
@@ -1120,36 +1138,31 @@ class _ReaderContentState extends State<ReaderContent> {
                 'margin-bottom': '16px',
               };
             case 'mark':
-              return {
-                'background-color': 'rgba(255, 255, 0, 0.5)',
-                'color': '#E65100',
-                'font-weight': 'bold',
-              };
+              return _markCss(s, selected: false);
             case 'mark_selected':
-              return {
-                'background-color': 'rgba(255, 152, 0, 0.5)',
-                'color': '#E65100',
-                'font-weight': 'bold',
-              };
+              return _markCss(s, selected: true);
           }
           return null;
         },
         customWidgetBuilder: (element) {
+          final s = AppSemantic.of(context);
+          final m = AppTheme.metrics;
           // 处理选中的搜索结果高亮
           if (element.localName == 'mark_selected') {
             return Container(
               key: _searchTargetKey,
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.5),
-                borderRadius: AppTheme.metrics.radius2,
+                color: _markBg(s.warning.color, selected: true),
+                borderRadius: m.radius2,
               ),
-              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace2),
+              padding: EdgeInsets.symmetric(horizontal: m.kSpace2),
               child: Text(
                 element.text,
-                style: TextStyle(
-                  color: Colors.orange.shade900,
-                  fontWeight: FontWeight.bold,
+                style: AppTextStyles.role(
+                  context,
                   fontSize: controller.fontSize.value,
+                  color: s.warning.onContainer,
+                  weight: FontWeight.bold,
                 ),
               ),
             );
@@ -1214,12 +1227,7 @@ class _ReaderContentState extends State<ReaderContent> {
     // 否则使用普通的可选择文本
     return SelectableText(
       textChunk,
-      style: TextStyle(
-        fontSize: controller.fontSize.value,
-        height: lineHeight,
-        letterSpacing: 0.5,
-        color: Theme.of(context).textTheme.bodyLarge?.color,
-      ),
+      style: _bodyStyle(context, controller.fontSize.value, lineHeight),
     );
   }
 
@@ -1279,12 +1287,7 @@ class _ReaderContentState extends State<ReaderContent> {
         spans.add(
           TextSpan(
             text: chunkContent.substring(lastEnd, matchStart),
-            style: TextStyle(
-              fontSize: controller.fontSize.value,
-              height: lineHeight,
-              letterSpacing: 0.5,
-              color: Theme.of(context).textTheme.bodyLarge?.color,
-            ),
+            style: _bodyStyle(context, controller.fontSize.value, lineHeight),
           ),
         );
       }
@@ -1299,16 +1302,7 @@ class _ReaderContentState extends State<ReaderContent> {
       spans.add(
         TextSpan(
           text: chunkContent.substring(matchStart, matchEnd),
-          style: TextStyle(
-            fontSize: controller.fontSize.value,
-            height: lineHeight,
-            letterSpacing: 0.5,
-            backgroundColor: isSelected
-                ? Colors.orange.withValues(alpha: 0.5)
-                : Colors.yellow.withValues(alpha: 0.3),
-            color: isSelected ? Colors.orange.shade900 : Colors.yellow.shade900,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-          ),
+          style: _markStyle(context, controller.fontSize.value, lineHeight, selected: isSelected),
         ),
       );
 
@@ -1320,12 +1314,7 @@ class _ReaderContentState extends State<ReaderContent> {
       spans.add(
         TextSpan(
           text: chunkContent.substring(lastEnd),
-          style: TextStyle(
-            fontSize: controller.fontSize.value,
-            height: lineHeight,
-            letterSpacing: 0.5,
-            color: Theme.of(context).textTheme.bodyLarge?.color,
-          ),
+          style: _bodyStyle(context, controller.fontSize.value, lineHeight),
         ),
       );
     }
@@ -1395,12 +1384,7 @@ class _ReaderContentState extends State<ReaderContent> {
     if (chapterMatches.isEmpty) {
       return SelectableText(
         content,
-        style: TextStyle(
-          fontSize: controller.fontSize.value,
-          height: controller.lineHeight.value,
-          letterSpacing: 0.5,
-          color: Theme.of(context).textTheme.bodyLarge?.color,
-        ),
+        style: _bodyStyle(context, controller.fontSize.value, controller.lineHeight.value),
       );
     }
 
@@ -1496,12 +1480,7 @@ class _ReaderContentState extends State<ReaderContent> {
         spans.add(
           TextSpan(
             text: content.substring(lastEnd, matchStart),
-            style: TextStyle(
-              fontSize: controller.fontSize.value,
-              height: controller.lineHeight.value,
-              letterSpacing: 0.5,
-              color: Theme.of(context).textTheme.bodyLarge?.color,
-            ),
+            style: _bodyStyle(context, controller.fontSize.value, controller.lineHeight.value),
           ),
         );
       }
@@ -1514,15 +1493,11 @@ class _ReaderContentState extends State<ReaderContent> {
       spans.add(
         TextSpan(
           text: content.substring(matchStart, matchEnd),
-          style: TextStyle(
-            fontSize: controller.fontSize.value,
-            height: controller.lineHeight.value,
-            letterSpacing: 0.5,
-            backgroundColor: isSelected
-                ? Colors.orange.withValues(alpha: 0.5)
-                : Colors.yellow.withValues(alpha: 0.3),
-            color: isSelected ? Colors.orange.shade900 : Colors.yellow.shade900,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+          style: _markStyle(
+            context,
+            controller.fontSize.value,
+            controller.lineHeight.value,
+            selected: isSelected,
           ),
         ),
       );
@@ -1535,12 +1510,7 @@ class _ReaderContentState extends State<ReaderContent> {
       spans.add(
         TextSpan(
           text: content.substring(lastEnd),
-          style: TextStyle(
-            fontSize: controller.fontSize.value,
-            height: controller.lineHeight.value,
-            letterSpacing: 0.5,
-            color: Theme.of(context).textTheme.bodyLarge?.color,
-          ),
+          style: _bodyStyle(context, controller.fontSize.value, controller.lineHeight.value),
         ),
       );
     }
@@ -1829,6 +1799,7 @@ class _TranslatedParagraphWidgetState extends State<_TranslatedParagraphWidget> 
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
@@ -1838,7 +1809,7 @@ class _TranslatedParagraphWidgetState extends State<_TranslatedParagraphWidget> 
           // 重试图标（hover时显示）
           AnimatedOpacity(
             opacity: _isHovering ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 200),
+            duration: AppMotion.fast,
             child: GestureDetector(
               onTap: widget.onRetry,
               child: Padding(
@@ -1846,9 +1817,10 @@ class _TranslatedParagraphWidgetState extends State<_TranslatedParagraphWidget> 
                   right: AppTheme.metrics.kSpace4,
                   top: AppTheme.metrics.kSpace2,
                 ),
-                child: DrawIcon(StrokeIcons.refresh,
+                child: DrawIcon(
+                  StrokeIcons.refresh,
                   size: widget.fontSize * 0.9,
-                  color: _isHovering ? const Color(0xFF007AFF) : Colors.grey,
+                  color: _isHovering ? s.accent : s.textTertiary,
                 ),
               ),
             ),
@@ -1857,10 +1829,11 @@ class _TranslatedParagraphWidgetState extends State<_TranslatedParagraphWidget> 
           Expanded(
             child: SelectableText(
               widget.element.text,
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: widget.fontSize,
+                color: s.textPrimary,
                 height: widget.lineHeight,
-                color: Theme.of(context).textTheme.bodyLarge?.color,
               ),
             ),
           ),

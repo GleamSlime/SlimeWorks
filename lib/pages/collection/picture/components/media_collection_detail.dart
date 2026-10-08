@@ -45,6 +45,7 @@ class MediaCollectionDetailView extends StatelessWidget {
   Widget build(BuildContext context) {
     // 独立 Obx：加载 / 条目变化时仅内部重建，不触发外层 AnimatedSwitcher 闪烁
     return Obx(() {
+      final s = AppSemantic.of(context);
       final isLoading = viewModel.isLoadingItems.value;
       final sortedItems = viewModel.sortedCurrentItems;
       final collectionId = viewModel.currentCollectionId.value ?? '';
@@ -60,19 +61,28 @@ class MediaCollectionDetailView extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
-                  width: 72,
-                  height: 72,
+                  width: scaleW(72),
+                  height: scaleW(72),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       CircularProgressIndicator(value: progress, strokeWidth: 5),
                       if (percent != null)
-                        Text(percent, style: Theme.of(context).textTheme.labelMedium),
+                        Text(percent, style: AppTextStyles.role(
+                          context,
+                          fontSize: AppTheme.metrics.fontSize12,
+                          color: s.textSecondary,
+                          weight: FontWeight.w500,
+                        )),
                     ],
                   ),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace12),
-                Text('正在加载远程资源…', style: Theme.of(context).textTheme.bodySmall),
+                Text('正在加载远程资源…', style: AppTextStyles.role(
+                  context,
+                  fontSize: AppTheme.metrics.fontSize12,
+                  color: s.textTertiary,
+                )),
               ],
             ),
           );
@@ -82,19 +92,18 @@ class MediaCollectionDetailView extends StatelessWidget {
 
       // ── 空集合 ────────────────────────────────────────────────────────────
       if (sortedItems.isEmpty) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Center(
           child: Container(
             padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
             margin: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24),
             decoration: BoxDecoration(
-              color: isDark ? DarkColors.background2 : LightColors.background1,
+              color: s.surface,
               borderRadius: AppTheme.metrics.radius16,
               boxShadow: [
                 BoxShadow(
-                  color: Theme.of(context).shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
+                  color: s.shadowKey,
+                  blurRadius: scaleW(16),
+                  offset: Offset(0, scaleW(6)),
                 ),
               ],
             ),
@@ -105,27 +114,31 @@ class MediaCollectionDetailView extends StatelessWidget {
                   width: scaleW(72),
                   height: scaleW(72),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                    color: s.accent.withValues(alpha: 0.12),
                     borderRadius: AppTheme.metrics.radius16,
                   ),
                   child: DrawIcon(StrokeIcons.collections,
                     size: scaleW(36),
-                    color: Theme.of(context).colorScheme.primary,
+                    color: s.accent,
                   ),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace20),
                 Text(
                   '该集合暂无可预览媒体',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                    fontWeight: FontWeight.w600,
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize14,
+                    color: s.textPrimary.withValues(alpha: 0.7),
+                    weight: FontWeight.w600,
                   ),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace8),
                 Text(
                   '导入文件后即可在此浏览',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize12,
+                    color: s.textPrimary.withValues(alpha: 0.4),
                   ),
                 ),
               ],
@@ -153,15 +166,15 @@ class MediaCollectionDetailView extends StatelessWidget {
                 final isMobile = Platform.isAndroid || Platform.isIOS;
                 final route = PageRouteBuilder<void>(
                   opaque: true,
-                  barrierColor: Colors.black,
+                  barrierColor: s.scrim,
                   pageBuilder: (_, _, _) => MediaViewerPage(
                     items: sortedItems,
                     initialIndex: index,
                     collectionId: collectionId,
                     viewModel: viewModel,
                   ),
-                  transitionDuration: const Duration(milliseconds: 280),
-                  reverseTransitionDuration: const Duration(milliseconds: 240),
+                  transitionDuration: AppMotion.slow,
+                  reverseTransitionDuration: AppMotion.base,
                   transitionsBuilder: (_, animation, _, child) => FadeTransition(
                     opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
                     child: ScaleTransition(
@@ -241,15 +254,15 @@ class MediaCollectionDetailView extends StatelessWidget {
                     final isMobile = Platform.isAndroid || Platform.isIOS;
                     final route = PageRouteBuilder<void>(
                       opaque: true,
-                      barrierColor: Colors.black,
+                      barrierColor: s.scrim,
                       pageBuilder: (_, _, _) => MediaViewerPage(
                         items: sortedItems,
                         initialIndex: index,
                         collectionId: collectionId,
                         viewModel: viewModel,
                       ),
-                      transitionDuration: const Duration(milliseconds: 280),
-                      reverseTransitionDuration: const Duration(milliseconds: 240),
+                      transitionDuration: AppMotion.slow,
+                      reverseTransitionDuration: AppMotion.base,
                       transitionsBuilder: (_, animation, _, child) => FadeTransition(
                         opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
                         child: ScaleTransition(

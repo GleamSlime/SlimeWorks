@@ -24,7 +24,7 @@ class MediaSelectionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     return ClipRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
@@ -34,10 +34,10 @@ class MediaSelectionBar extends StatelessWidget {
             vertical: appMetrics.kSpace12,
           ),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withValues(alpha: 0.85),
+            color: s.surface.withValues(alpha: 0.85),
             border: Border(
               top: BorderSide(
-                color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                color: s.accent.withValues(alpha: 0.2),
               ),
             ),
           ),
@@ -49,7 +49,7 @@ class MediaSelectionBar extends StatelessWidget {
                   vertical: appMetrics.kSpace4,
                 ),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  color: s.accent.withValues(alpha: 0.12),
                   borderRadius: appMetrics.radius999,
                 ),
                 child: Row(
@@ -57,14 +57,15 @@ class MediaSelectionBar extends StatelessWidget {
                   children: [
                     DrawIcon(StrokeIcons.checkCircleOutline,
                       size: scaleW(16),
-                      color: theme.colorScheme.primary,
+                      color: s.accent,
                     ),
                     SizedBox(width: appMetrics.kSpace4),
                     Text(
                       '已选择 $selectedCount 个项目',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w600,
+                      style: AppTextStyles.role(context,
+                        fontSize: appMetrics.fontSize13,
+                        color: s.accent,
+                        weight: FontWeight.w600,
                       ),
                     ),
                   ],

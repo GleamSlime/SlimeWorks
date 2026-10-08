@@ -47,7 +47,7 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
 
     _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: AppMotion.entrance,
     );
     _entranceAnimation = CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic);
 
@@ -72,22 +72,23 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
 
     return ScreenChrome(
       data: ScreenChromeData(title: '游戏', toolbarHeight: 0),
       child: Container(
-        color: isDark ? DarkColors.background3 : LightColors.background3,
+        color: s.canvas,
         child: AnimatedBuilder(
           animation: _entranceAnimation,
           builder: (context, _) {
             return Opacity(
               opacity: _entranceAnimation.value.clamp(0.0, 1.0),
               child: Transform.translate(
-                offset: Offset(0, 12 * (1 - _entranceAnimation.value)),
+                // 入场位移走宽度族档位，跟窗口缩放而不是写死 12
+                offset: Offset(0, AppMotion.travelMedium * (1 - _entranceAnimation.value)),
                 child: Column(
                   children: [
-                    _buildTabBar(context, theme, m, isDark),
+                    _buildTabBar(context, theme, m),
                     SizedBox(height: m.kSpace12),
                     Expanded(
                       child: TabBarView(
@@ -109,7 +110,8 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildTabBar(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildTabBar(BuildContext context, ThemeData theme, ThemeMetrics m) {
+    final s = AppSemantic.of(context);
     return Container(
       margin: EdgeInsets.symmetric(horizontal: m.kSpace16),
       child: ClipRRect(
@@ -118,38 +120,24 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(
             decoration: BoxDecoration(
-              color: isDark
-                  ? DarkColors.background1.withAlpha(200)
-                  : LightColors.background1.withAlpha(220),
+              // 磨砂页签条：着色/描边/投影统一走语义玻璃与投影档
+              color: s.glassTint,
               borderRadius: m.radius12,
               border: Border.all(
-                color: isDark
-                    ? DarkColors.white10.withAlpha(40)
-                    : LightColors.black10.withAlpha(30),
+                color: s.glassBorder,
                 width: 0.5,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: isDark ? DarkColors.black10 : LightColors.black10,
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-                BoxShadow(
-                  color: (isDark ? DarkColors.primary : LightColors.primary).withAlpha(6),
-                  blurRadius: scaleW(20),
-                  offset: Offset(0, scaleW(4)),
-                ),
-              ],
+              boxShadow: s.elevation(Elevation.card),
             ),
             child: TabBar(
               controller: _tabController,
               indicatorSize: TabBarIndicatorSize.label,
               indicator: UnderlineTabIndicator(
-                borderSide: BorderSide(color: theme.colorScheme.primary, width: 3),
+                borderSide: BorderSide(color: s.accent, width: 3),
                 insets: EdgeInsets.symmetric(horizontal: -m.kSpace8),
               ),
-              labelColor: theme.colorScheme.primary,
-              unselectedLabelColor: theme.hintColor,
+              labelColor: s.accent,
+              unselectedLabelColor: s.textTertiary,
               labelStyle: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               unselectedLabelStyle: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w400,
@@ -207,7 +195,7 @@ class _HomeTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
 
     return Obx(() {
       final GameLibraryHomeData? data = homeVm.homeData.value;
@@ -228,9 +216,10 @@ class _HomeTab extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
+                  // 无封面时的兜底底：下沉表面 + 低浓度 info 容器，替代手挑调色板色
                   colors: <Color>[
-                    isDark ? DarkColors.background4 : LightColors.background5,
-                    isDark ? DarkColors.primary.withAlpha(40) : LightColors.primary.withAlpha(30),
+                    s.surfaceSunken,
+                    s.info.container,
                   ],
                 ),
               ),
@@ -307,7 +296,7 @@ class _HomeTab extends StatelessWidget {
 
                 // 统计概览卡片
                 Positioned(
-                  top: 80,
+                  top: m.kSpace80,
                   right: 0,
                   child: _GlassCard(
                     child: Column(
@@ -351,17 +340,12 @@ class _HomeTab extends StatelessWidget {
                         GestureDetector(
                           onTap: () => GameDetailRoute(gameId: lastGame.id).push<void>(context),
                           child: Container(
-                            width: 180,
-                            height: 250,
+                            width: scaleW(180),
+                            height: scaleW(250),
                             decoration: BoxDecoration(
                               borderRadius: m.radius14,
-                              boxShadow: const <BoxShadow>[
-                                BoxShadow(
-                                  color: Colors.black38,
-                                  blurRadius: 20,
-                                  offset: Offset(0, 8),
-                                ),
-                              ],
+                              // 封面投影收进语义档位（原 black38/blur20/y8 ≈ floating）
+                              boxShadow: s.elevation(Elevation.floating),
                             ),
                             child: ClipRRect(
                               borderRadius: m.radius14,
@@ -407,10 +391,7 @@ class _HomeTab extends StatelessWidget {
                                   await homeVm.launchGame(lastGame);
                                 },
                                 icon: DrawIcon(StrokeIcons.playArrow),
-                                label: const Text(
-                                  '继续游玩',
-                                  style: TextStyle(fontWeight: FontWeight.w700),
-                                ),
+                                label: const Text('继续游玩'),
                               ),
                             ],
                           ),
@@ -513,8 +494,7 @@ class _CategoriesTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+    final s = AppSemantic.of(context);
 
     return Column(
       children: [
@@ -523,7 +503,7 @@ class _CategoriesTab extends StatelessWidget {
           child: Row(
             children: [
               SizedBox(
-                width: 220,
+                width: scaleW(220),
                 child: AppTextField(
                   decoration: const InputDecoration(
                     hintText: '搜索分类',
@@ -552,13 +532,13 @@ class _CategoriesTab extends StatelessWidget {
                   children: [
                     DrawIcon(StrokeIcons.folderOff,
                       size: m.iconSize48,
-                      color: isDark ? DarkColors.white20 : LightColors.black20,
+                      color: s.textDisabled,
                     ),
                     SizedBox(height: m.kSpace12),
                     Text(
                       '暂无分类，先创建一个吧',
                       style: theme.textTheme.bodyLarge?.copyWith(
-                        color: isDark ? DarkColors.white40 : LightColors.black40,
+                        color: s.textTertiary,
                       ),
                     ),
                   ],
@@ -579,8 +559,6 @@ class _CategoriesTab extends StatelessWidget {
                 final GameCategory category = list[index];
                 return _CategoryCard(
                   category: category,
-                  isDark: isDark,
-                  primaryColor: primaryColor,
                   onTap: () => GameCategoryDetailRoute(categoryId: category.id).push<void>(context),
                   onEdit: () => _showEditDialog(context, catVm, category),
                   onDelete: () => _confirmDelete(context, catVm, category),
@@ -602,8 +580,9 @@ class _StatsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+    final s = AppSemantic.of(context);
+    // 品牌淡紫退出主色位后，统计页的点缀色相归入 info 角色
+    final primaryColor = s.info.color;
 
     return Obx(() {
       final GameStatsData? data = statsVm.statsData.value;
@@ -622,8 +601,6 @@ class _StatsTab extends StatelessWidget {
                   icon: StrokeIcons.timer,
                   title: '总时长',
                   value: statsVm.formatDuration(data.totalPlayTimeSec),
-                  isDark: isDark,
-                  primaryColor: primaryColor,
                 ),
               ),
               SizedBox(width: m.kSpace12),
@@ -632,13 +609,11 @@ class _StatsTab extends StatelessWidget {
                   icon: StrokeIcons.eventRepeat,
                   title: '会话次数',
                   value: '${data.sessionCount} 次',
-                  isDark: isDark,
-                  primaryColor: primaryColor,
                 ),
               ),
               SizedBox(width: m.kSpace12),
               Expanded(
-                child: _DateRangeCard(statsVm: statsVm, isDark: isDark, primaryColor: primaryColor),
+                child: _DateRangeCard(statsVm: statsVm),
               ),
             ],
           ),
@@ -653,13 +628,13 @@ class _StatsTab extends StatelessWidget {
                   children: [
                     DrawIcon(StrokeIcons.showChart,
                       size: m.iconSize48,
-                      color: isDark ? DarkColors.white20 : LightColors.black20,
+                      color: s.textDisabled,
                     ),
                     SizedBox(height: m.kSpace12),
                     Text(
                       '当前时间范围没有数据',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: isDark ? DarkColors.white40 : LightColors.black40,
+                        color: s.textTertiary,
                       ),
                     ),
                   ],
@@ -678,10 +653,10 @@ class _StatsTab extends StatelessWidget {
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace14),
                   decoration: BoxDecoration(
-                    color: isDark ? DarkColors.background2 : LightColors.background1,
+                    color: s.surfaceRaised,
                     borderRadius: m.radius12,
                     border: Border.all(
-                      color: isDark ? DarkColors.white10 : LightColors.black10,
+                      color: s.border,
                       width: 0.5,
                     ),
                   ),
@@ -710,16 +685,16 @@ class _StatsTab extends StatelessWidget {
                         child: Stack(
                           children: [
                             Container(
-                              height: 6,
+                              height: m.kSpace6,
                               decoration: BoxDecoration(
-                                color: isDark ? DarkColors.white10 : LightColors.black10,
+                                color: s.surfaceSunken,
                                 borderRadius: m.radius6,
                               ),
                             ),
                             FractionallySizedBox(
                               widthFactor: progress.clamp(0.02, 1.0),
                               child: Container(
-                                height: 6,
+                                height: m.kSpace6,
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [primaryColor.withAlpha(180), primaryColor],
@@ -794,18 +769,24 @@ class _GlassStatItem extends StatelessWidget {
             SizedBox(width: m.kSpace4),
             Text(
               label,
-              style: TextStyle(fontSize: m.fontSize11, height: 1.4, color: Colors.white60),
+              style: AppTextStyles.role(
+                context,
+                fontSize: m.fontSize11,
+                height: 1.4,
+                color: Colors.white60,
+              ),
             ),
           ],
         ),
         SizedBox(height: m.kSpace2),
         Text(
           value,
-          style: TextStyle(
+          style: AppTextStyles.role(
+            context,
             fontSize: m.fontSize13,
             height: 1.4,
+            weight: FontWeight.w700,
             color: Colors.white,
-            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -852,16 +833,12 @@ class _BlurredCoverBackground extends StatelessWidget {
 
 class _CategoryCard extends StatefulWidget {
   final GameCategory category;
-  final bool isDark;
-  final Color primaryColor;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _CategoryCard({
     required this.category,
-    required this.isDark,
-    required this.primaryColor,
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
@@ -877,35 +854,25 @@ class _CategoryCardState extends State<_CategoryCard> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: AppMotion.base,
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.all(m.kSpace16),
           decoration: BoxDecoration(
-            color: _hovered
-                ? widget.primaryColor.withAlpha(widget.isDark ? 30 : 20)
-                : (widget.isDark ? DarkColors.background2 : LightColors.background1),
+            // 悬停走中性水洗层，静止态是浮起卡片
+            color: _hovered ? s.surfaceHover : s.surfaceRaised,
             borderRadius: m.radius14,
             border: Border.all(
-              color: _hovered
-                  ? widget.primaryColor.withAlpha(80)
-                  : (widget.isDark ? DarkColors.white10 : LightColors.black10),
+              color: _hovered ? s.borderStrong : s.border,
               width: _hovered ? 1.5 : 0.5,
             ),
-            boxShadow: _hovered
-                ? [
-                    BoxShadow(
-                      color: widget.primaryColor.withAlpha(15),
-                      blurRadius: scaleW(16),
-                      offset: Offset(0, scaleW(4)),
-                    ),
-                  ]
-                : null,
+            boxShadow: _hovered ? s.elevation(Elevation.card) : null,
           ),
           child: Row(
             children: [
@@ -913,11 +880,18 @@ class _CategoryCardState extends State<_CategoryCard> {
                 width: scaleW(40),
                 height: scaleW(40),
                 decoration: BoxDecoration(
-                  color: widget.primaryColor.withAlpha(15),
+                  color: s.info.container,
                   borderRadius: m.radius10,
                 ),
                 child: Center(
-                  child: Text(widget.category.emoji, style: TextStyle(fontSize: m.fontSize20)),
+                  child: Text(
+                    widget.category.emoji,
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize20,
+                      color: s.textPrimary,
+                    ),
+                  ),
                 ),
               ),
               SizedBox(width: m.kSpace12),
@@ -928,10 +902,8 @@ class _CategoryCardState extends State<_CategoryCard> {
                   children: [
                     Text(
                       widget.category.name,
-                      style: TextStyle(
-                        fontSize: m.fontSize13,
+                      style: AppTextStyles.cardTitle(context).copyWith(
                         height: 1.4,
-                        fontWeight: FontWeight.w600,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -939,10 +911,11 @@ class _CategoryCardState extends State<_CategoryCard> {
                     SizedBox(height: m.kSpace2),
                     Text(
                       '${widget.category.gameCount} 个游戏${widget.category.isSystem ? ' · 系统分类' : ''}',
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: m.fontSize11,
                         height: 1.4,
-                        color: widget.isDark ? DarkColors.white80 : LightColors.black80,
+                        color: s.textSecondary,
                       ),
                     ),
                   ],
@@ -951,7 +924,7 @@ class _CategoryCardState extends State<_CategoryCard> {
               if (widget.category.isSystem)
                 DrawIcon(StrokeIcons.lockOutline,
                   size: m.iconSize16,
-                  color: widget.isDark ? DarkColors.white40 : LightColors.black40,
+                  color: s.textTertiary,
                 )
               else
                 PopupMenuButton<String>(
@@ -985,26 +958,24 @@ class _StatsOverviewCard extends StatelessWidget {
   final StrokeIcon icon;
   final String title;
   final String value;
-  final bool isDark;
-  final Color primaryColor;
 
   const _StatsOverviewCard({
     required this.icon,
     required this.title,
     required this.value,
-    required this.isDark,
-    required this.primaryColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
+    final primaryColor = s.info.color;
     return Container(
       padding: EdgeInsets.all(m.kSpace16),
       decoration: BoxDecoration(
-        color: isDark ? DarkColors.background2 : LightColors.background1,
+        color: s.surfaceRaised,
         borderRadius: m.radius14,
-        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
+        border: Border.all(color: s.border, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1015,7 +986,7 @@ class _StatsOverviewCard extends StatelessWidget {
                 width: m.kSpace32,
                 height: m.kSpace32,
                 decoration: BoxDecoration(
-                  color: primaryColor.withAlpha(15),
+                  color: s.info.container,
                   borderRadius: m.radius8,
                 ),
                 child: DrawIcon(icon, size: m.iconSize16, color: primaryColor),
@@ -1023,10 +994,11 @@ class _StatsOverviewCard extends StatelessWidget {
               SizedBox(width: m.kSpace8),
               Text(
                 title,
-                style: TextStyle(
+                style: AppTextStyles.role(
+                  context,
                   fontSize: m.fontSize11,
                   height: 1.4,
-                  color: isDark ? DarkColors.white80 : LightColors.black80,
+                  color: s.textSecondary,
                 ),
               ),
             ],
@@ -1034,7 +1006,13 @@ class _StatsOverviewCard extends StatelessWidget {
           SizedBox(height: m.kSpace10),
           Text(
             value,
-            style: TextStyle(fontSize: m.fontSize18, height: 1.3, fontWeight: FontWeight.w700),
+            style: AppTextStyles.role(
+              context,
+              fontSize: m.fontSize18,
+              height: 1.3,
+              weight: FontWeight.w600,
+              color: s.textPrimary,
+            ),
           ),
         ],
       ),
@@ -1044,14 +1022,14 @@ class _StatsOverviewCard extends StatelessWidget {
 
 class _DateRangeCard extends StatelessWidget {
   final GameLibraryStatsViewModel statsVm;
-  final bool isDark;
-  final Color primaryColor;
 
-  const _DateRangeCard({required this.statsVm, required this.isDark, required this.primaryColor});
+  const _DateRangeCard({required this.statsVm});
 
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
+    final primaryColor = s.info.color;
     return GestureDetector(
       onTap: () async {
         final DateTime now = DateTime.now();
@@ -1071,9 +1049,9 @@ class _DateRangeCard extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(m.kSpace16),
         decoration: BoxDecoration(
-          color: isDark ? DarkColors.background2 : LightColors.background1,
+          color: s.surfaceRaised,
           borderRadius: m.radius14,
-          border: Border.all(color: primaryColor.withAlpha(40), width: 0.5),
+          border: Border.all(color: s.info.containerBorder, width: 0.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1084,7 +1062,7 @@ class _DateRangeCard extends StatelessWidget {
                   width: m.kSpace32,
                   height: m.kSpace32,
                   decoration: BoxDecoration(
-                    color: primaryColor.withAlpha(15),
+                    color: s.info.container,
                     borderRadius: m.radius8,
                   ),
                   child: DrawIcon(StrokeIcons.dateRange, size: m.iconSize16, color: primaryColor),
@@ -1092,10 +1070,11 @@ class _DateRangeCard extends StatelessWidget {
                 SizedBox(width: m.kSpace8),
                 Text(
                   '时间范围',
-                  style: TextStyle(
+                  style: AppTextStyles.role(
+                    context,
                     fontSize: m.fontSize11,
                     height: 1.4,
-                    color: isDark ? DarkColors.white80 : LightColors.black80,
+                    color: s.textSecondary,
                   ),
                 ),
               ],
@@ -1103,7 +1082,13 @@ class _DateRangeCard extends StatelessWidget {
             SizedBox(height: m.kSpace10),
             Text(
               '${statsVm.startDate.value.toLocal().toString().split(' ').first} ~ ${statsVm.endDate.value.toLocal().toString().split(' ').first}',
-              style: TextStyle(fontSize: m.fontSize13, height: 1.3, fontWeight: FontWeight.w600),
+              style: AppTextStyles.role(
+                context,
+                fontSize: m.fontSize13,
+                height: 1.3,
+                weight: FontWeight.w600,
+                color: s.textPrimary,
+              ),
             ),
           ],
         ),

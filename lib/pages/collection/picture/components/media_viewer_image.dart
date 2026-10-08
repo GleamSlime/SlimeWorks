@@ -270,7 +270,9 @@ class _ImageViewerState extends State<_ImageViewer> {
                             SizedBox(height: AppTheme.metrics.kSpace12),
                             Text(
                               label,
-                              style: TextStyle(
+                              // 深色查看器画面上的加载文字：白字固定不随明暗翻转
+                              style: AppTextStyles.role(
+                                context,
                                 color: Colors.white70,
                                 fontSize: AppTheme.metrics.fontSize11,
                               ),

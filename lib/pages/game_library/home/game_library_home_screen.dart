@@ -43,6 +43,7 @@ class _GameLibraryHomeScreenState
 
   @override
   Widget buildContent(BuildContext context) {
+    final s = AppSemantic.of(context);
     return ScreenChrome(
       data: _buildChromeData(),
       child: Obx(() {
@@ -66,7 +67,8 @@ class _GameLibraryHomeScreenState
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: <Color>[
-                      Theme.of(context).colorScheme.primaryContainer,
+                      s.accentContainer,
+                      // secondaryContainer 在语义层没有对等角色，暂保留字阶色
                       Theme.of(context).colorScheme.secondaryContainer,
                     ],
                   ),
@@ -163,17 +165,12 @@ class _GameLibraryHomeScreenState
                           GestureDetector(
                             onTap: () => GameDetailRoute(gameId: lastGame.id).push<void>(context),
                             child: Container(
-                              width: 200,
-                              height: 280,
+                              width: scaleW(200),
+                              height: scaleW(280),
                               decoration: BoxDecoration(
                                 borderRadius: AppTheme.metrics.radius14,
-                                boxShadow: const <BoxShadow>[
-                                  BoxShadow(
-                                    color: Colors.black38,
-                                    blurRadius: 20,
-                                    offset: Offset(0, 8),
-                                  ),
-                                ],
+                                // 封面投影收进语义档位（原 black38/blur20/y8 ≈ floating）
+                                boxShadow: s.elevation(Elevation.floating),
                               ),
                               child: ClipRRect(
                                 borderRadius: AppTheme.metrics.radius14,
@@ -277,7 +274,7 @@ class _GameLibraryHomeScreenState
                           await viewModel.launchGame(lastGame);
                         },
                         icon: DrawIcon(StrokeIcons.playArrow),
-                        label: const Text('继续游玩', style: TextStyle(fontWeight: FontWeight.w700)),
+                        label: const Text('继续游玩'),
                       ),
                     ),
                 ],

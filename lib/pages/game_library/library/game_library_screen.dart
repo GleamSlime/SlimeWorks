@@ -73,7 +73,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
         return Row(
           children: <Widget>[
             SizedBox(
-              width: 220,
+              width: scaleW(220),
               child: AppTextField(
                 decoration: const InputDecoration(
                   hintText: '搜索游戏 / 公司 / 标签',
@@ -119,11 +119,20 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
 
   @override
   Widget buildContent(BuildContext context) {
+    final s = AppSemantic.of(context);
     final Widget body = Obx(() {
       final List<GameItem> items = viewModel.filteredGames;
       if (items.isEmpty) {
         return Center(
-          child: Text('暂无游戏，点击右上角「添加游戏」开始迁移。', style: Theme.of(context).textTheme.bodyLarge),
+          child: Text(
+            '暂无游戏，点击右上角「添加游戏」开始迁移。',
+            style: AppTextStyles.role(
+              context,
+              fontSize: AppTheme.metrics.fontSize14,
+              color: s.textPrimary,
+              height: 1.7,
+            ),
+          ),
         );
       }
 
@@ -136,7 +145,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
               return const SizedBox.shrink();
             }
             return Material(
-              color: Theme.of(context).colorScheme.primaryContainer,
+              color: s.accentContainer,
               child: Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: AppTheme.metrics.kSpace16,
@@ -146,9 +155,12 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                   children: <Widget>[
                     Text(
                       '已选 $count 个游戏',
-                      style: Theme.of(
+                      style: AppTextStyles.role(
                         context,
-                      ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                        fontSize: AppTheme.metrics.fontSize13,
+                        weight: FontWeight.w600,
+                        color: s.textSecondary,
+                      ),
                     ),
                     const Spacer(),
                     TextButton.icon(
@@ -169,7 +181,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.error,
+                        backgroundColor: s.danger.color,
                       ),
                       onPressed: () => _confirmBatchDelete(),
                       icon: DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize18),
@@ -288,7 +300,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                               painter: _BoxSelectPainter(
                                 start: _boxStart!,
                                 end: _boxEnd!,
-                                color: Theme.of(context).colorScheme.primary,
+                                color: s.accent,
                               ),
                             ),
                           ),
@@ -330,9 +342,9 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                     child: IgnorePointer(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withAlpha(36),
+                          color: s.accent.withAlpha(36),
                           border: Border.all(
-                            color: Theme.of(context).colorScheme.primary,
+                            color: s.accent,
                             width: 2,
                           ),
                         ),
@@ -342,14 +354,17 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                             children: <Widget>[
                               DrawIcon(StrokeIcons.inventory2,
                                 size: AppTheme.metrics.iconSize64,
-                                color: Theme.of(context).colorScheme.primary,
+                                color: s.accent,
                               ),
                               SizedBox(height: AppTheme.metrics.kSpace12),
                               Text(
                                 '松开以导入游戏文件夹',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.w700,
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: AppTheme.metrics.fontSize14,
+                                  weight: FontWeight.w700,
+                                  color: s.accent,
+                                  height: 1.55,
                                 ),
                               ),
                             ],
@@ -444,7 +459,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
             return AlertDialog(
               title: const Text('添加游戏'),
               content: SizedBox(
-                width: 560,
+                width: scaleW(560),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -569,7 +584,9 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
         actions: <Widget>[
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppSemantic.of(ctx).danger.color,
+            ),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('删除'),
           ),
@@ -647,7 +664,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
         return AlertDialog(
           title: const Text('选择启动文件'),
           content: SizedBox(
-            width: 400,
+            width: scaleW(400),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: exePaths
@@ -659,7 +676,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                       subtitle: Text(
                         p,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: AppTheme.metrics.fontSize11),
+                        style: AppTextStyles.caption(ctx),
                       ),
                       onTap: () => Navigator.of(ctx).pop(p),
                     );
@@ -876,6 +893,7 @@ class _GameCardState extends State<_GameCard> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final bool isSelected = widget.isSelected;
     return GestureDetector(
       onSecondaryTapUp: (TapUpDetails details) => _showContextMenu(context, details.globalPosition),
@@ -884,11 +902,11 @@ class _GameCardState extends State<_GameCard> {
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+          duration: AppMotion.fast,
           decoration: BoxDecoration(
             borderRadius: AppTheme.metrics.radius12,
             border: isSelected
-                ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2.5)
+                ? Border.all(color: s.accent, width: 2.5)
                 : null,
           ),
           child: Card(
@@ -907,7 +925,7 @@ class _GameCardState extends State<_GameCard> {
                       children: <Widget>[
                         AnimatedScale(
                           scale: _hover ? 1.06 : 1.0,
-                          duration: const Duration(milliseconds: 160),
+                          duration: AppMotion.fast,
                           child: _buildCover(context),
                         ),
                         // 多选时左上角勾选标记
@@ -917,10 +935,10 @@ class _GameCardState extends State<_GameCard> {
                             left: AppTheme.metrics.kSpace4,
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary,
+                                color: s.accent,
                                 shape: BoxShape.circle,
                               ),
-                              child: DrawIcon(StrokeIcons.check, color: Colors.white, size: AppTheme.metrics.iconSize16),
+                              child: DrawIcon(StrokeIcons.check, color: s.accentOn, size: AppTheme.metrics.iconSize16),
                             ),
                           ),
                         // 右上角收藏/菜单
@@ -990,7 +1008,13 @@ class _GameCardState extends State<_GameCard> {
                             ),
                             child: Text(
                               widget.game.status.label,
-                              style: TextStyle(color: Colors.white, fontSize: AppTheme.metrics.fontSize10),
+                              // 封面上的徽章是恒定浅色（不随主题翻转），走 onMedia 白
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: AppTheme.metrics.fontSize10,
+                                color: Colors.white,
+                                height: 1.2,
+                              ),
                             ),
                           ),
                         ),
@@ -1013,10 +1037,13 @@ class _GameCardState extends State<_GameCard> {
                                   SizedBox(height: AppTheme.metrics.kSpace6),
                                   Text(
                                     '游戏运行中',
-                                    style: TextStyle(
-                                      color: Colors.white,
+                                    // 封面上的提示是恒定浅色（不随主题翻转）
+                                    style: AppTextStyles.role(
+                                      context,
                                       fontSize: AppTheme.metrics.fontSize11,
-                                      fontWeight: FontWeight.w600,
+                                      weight: FontWeight.w600,
+                                      color: Colors.white,
+                                      height: 1.2,
                                     ),
                                   ),
                                 ],
@@ -1030,7 +1057,10 @@ class _GameCardState extends State<_GameCard> {
                   Expanded(
                     flex: 35,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppTheme.metrics.kSpace8,
+                        vertical: AppTheme.metrics.kSpace6,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
@@ -1038,9 +1068,12 @@ class _GameCardState extends State<_GameCard> {
                             widget.game.name,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(
+                            style: AppTextStyles.role(
                               context,
-                            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                              fontSize: AppTheme.metrics.fontSize13,
+                              weight: FontWeight.w600,
+                              color: s.textSecondary,
+                            ),
                           ),
                           SizedBox(height: AppTheme.metrics.kSpace2),
                           if (widget.game.company.isNotEmpty && widget.game.company != '未知')
@@ -1048,33 +1081,49 @@ class _GameCardState extends State<_GameCard> {
                               widget.game.company,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: AppTheme.metrics.fontSize12,
+                                color: s.textSecondary,
+                                height: 1.6,
                               ),
                             ),
                           const Spacer(),
                           Row(
                             children: <Widget>[
                               if (widget.game.rating > 0) ...<Widget>[
-                                DrawIcon(StrokeIcons.star, size: AppTheme.metrics.iconSize12, color: Colors.amber),
+                                DrawIcon(StrokeIcons.star, size: AppTheme.metrics.iconSize12, color: s.warning.color),
                                 SizedBox(width: AppTheme.metrics.kSpace2),
                                 Text(
                                   widget.game.rating.toStringAsFixed(1),
-                                  style: Theme.of(context).textTheme.labelSmall,
+                                  style: AppTextStyles.role(
+                                    context,
+                                    fontSize: AppTheme.metrics.fontSize11,
+                                    weight: FontWeight.w600,
+                                    color: s.textTertiary,
+                                    height: 1.5,
+                                    letterSpacing: 0.6,
+                                  ),
                                 ),
                                 SizedBox(width: AppTheme.metrics.kSpace8),
                               ],
                               Expanded(
                                 child: Text(
                                   widget.formatDuration(widget.game.totalPlayTimeSec),
-                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  style: AppTextStyles.role(
+                                    context,
+                                    fontSize: AppTheme.metrics.fontSize11,
+                                    weight: FontWeight.w600,
+                                    color: s.textSecondary,
+                                    height: 1.5,
+                                    letterSpacing: 0.6,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
+                              // 收藏属于"选中"状态，按规范用 accent 而非红/粉
                               if (widget.isFavorite)
-                                DrawIcon(StrokeIcons.favorite, size: AppTheme.metrics.iconSize12, color: Colors.pink),
+                                DrawIcon(StrokeIcons.favorite, size: AppTheme.metrics.iconSize12, color: s.accent),
                             ],
                           ),
                         ],
@@ -1111,13 +1160,15 @@ class _GameCardState extends State<_GameCard> {
   }
 
   Widget _placeholder(BuildContext context) {
+    final s = AppSemantic.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            Theme.of(context).colorScheme.primaryContainer,
+            s.accentContainer,
+            // secondaryContainer 在语义层没有对等角色，暂保留字阶色
             Theme.of(context).colorScheme.secondaryContainer,
           ],
         ),
@@ -1128,15 +1179,16 @@ class _GameCardState extends State<_GameCard> {
           children: <Widget>[
             DrawIcon(StrokeIcons.sportsEsports,
               size: AppTheme.metrics.iconSize32,
-              color: Theme.of(context).colorScheme.primary,
+              color: s.accent,
             ),
             SizedBox(height: AppTheme.metrics.kSpace4),
             Text(
               widget.game.name.isNotEmpty ? widget.game.name[0].toUpperCase() : '?',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: AppTheme.metrics.fontSize20,
-                fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.primary,
+                weight: FontWeight.w700,
+                color: s.accent,
               ),
             ),
           ],

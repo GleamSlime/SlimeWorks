@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/logger.dart';
 
@@ -104,8 +105,8 @@ class AppLogViewModel extends GetxController {
           if (scrollController!.hasClients) {
             scrollController!.animateTo(
               scrollController!.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
+              duration: AppMotion.slow,
+              curve: AppMotion.decelerate,
             );
           }
         });
@@ -209,6 +210,10 @@ class AppLogViewModel extends GetxController {
     entries.value = _applyFilter(_allEntries);
   }
 
+  /// 级别 → 固定色值查表：脱离主题上下文也能拿到同一个颜色（导出、离屏渲染）
+  ///
+  /// 界面上的等级着色由 `AppSemantic` 的状态角色负责，这里只保留一份与明暗无关
+  /// 的基准映射。
   Color getLevelColor(String level) {
     switch (level) {
       case 'ERROR':

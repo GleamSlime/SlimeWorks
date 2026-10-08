@@ -1,6 +1,7 @@
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use chrono::TimeZone;
 use slime_logger::{sw_error, sw_info, sw_warn};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::task::JoinHandle;
@@ -326,7 +327,43 @@ pub fn power_stats_get_status() -> Result<String, String> {
     let manager = get_manager()?;
     let mut status = manager.status.read().map_err(|e| format!("{}", e))?.clone();
     status.sample_count = manager.sample_count();
+    // current_kwh/current_yuan/price 只在 fetch_once_inner 里被赋值，是纯内存态：
+    // 节点进程一重启（或轮询根本没跑起来），读到的永远是默认 0，而 summary/aggregated
+    // 走 SQLite 依然有值——这正是"切到远程节点后剩余电量/剩余金额一直是 0.000，
+    // 下面图表却有数据"的根因。库里有采样且内存态还是空的时候，用最新采样回填。
+    if status.sample_count > 0 && status.current_kwh <= 0.0 && status.current_yuan <= 0.0 {
+        hydrate_status_from_latest_sample(&manager, &mut status);
+    }
     serde_json::to_string(&status).map_err(|e| format!("序列化状态失败: {}", e))
+}
+
+/// 用数据库里最新一条采样回填运行时状态（仅在持久化模式下有意义）
+fn hydrate_status_from_latest_sample(manager: &Arc<PowerStatsManager>, status: &mut PowerStatsStatus) {
+    let (persist, config_meter) = match manager.config.read() {
+        Ok(c) => (c.persist, c.meter_id.clone()),
+        Err(_) => return,
+    };
+    if !persist || !storage::is_ready() {
+        return;
+    }
+    let meter_id = if config_meter.is_empty() { status.meter_id.clone() } else { config_meter };
+    if meter_id.is_empty() {
+        return;
+    }
+    let Ok(Some(sample)) = storage::get_latest_sample(&meter_id) else {
+        return;
+    };
+    status.meter_id = meter_id;
+    status.current_kwh = sample.remaining_kwh;
+    status.current_yuan = sample.remaining_yuan;
+    if sample.price > 0.0 {
+        status.price = sample.price;
+    }
+    status.last_fetch = chrono::Local
+        .timestamp_opt(sample.timestamp, 0)
+        .single()
+        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_default();
 }
 
 /// 获取图表聚合数据

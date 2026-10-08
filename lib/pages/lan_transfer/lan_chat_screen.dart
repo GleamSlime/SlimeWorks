@@ -46,8 +46,7 @@ class _LanChatScreenState extends State<LanChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
-    final bg = isDark ? DarkColors.background5 : LightColors.background5;
+    final s = AppSemantic.of(context);
     return ScreenChrome(
       data: ScreenChromeData(
         titleWidget: _buildChatTitleWidget(context),
@@ -58,14 +57,14 @@ class _LanChatScreenState extends State<LanChatScreen> {
           constraints: BoxConstraints(minWidth: scaleW(32), minHeight: scaleW(32)),
           icon: DrawIcon(StrokeIcons.arrowBackIosNew,
             size: scaleW(18),
-            color: isDark ? DarkColors.white80 : LightColors.black80,
+            color: s.textSecondary,
           ),
           // GoRouter 返回，支持 iOS 左滑还原
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
       child: Container(
-        color: bg,
+        color: s.canvas,
         child: Column(
           children: [
             Expanded(
@@ -98,6 +97,7 @@ class _LanChatScreenState extends State<LanChatScreen> {
   }
 
   Widget _buildChatTitleWidget(BuildContext context) {
+    final s = AppSemantic.of(context);
     return Obx(() {
       final isOnline = _vm.discoveredDevices.any((d) => d.deviceId == widget.peerDeviceId);
       return Row(
@@ -105,18 +105,18 @@ class _LanChatScreenState extends State<LanChatScreen> {
         children: [
           Text(
             widget.peerDeviceName,
-            style: TextStyle(fontSize: AppTheme.metrics.fontSize15, height: 1.5, fontWeight: FontWeight.w600),
+            style: AppTextStyles.sectionTitle(context),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           SizedBox(width: AppTheme.metrics.kSpace8),
           // 在线状态指示点
           Container(
-            width: 7,
-            height: 7,
+            width: scaleW(7),
+            height: scaleW(7),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isOnline ? Colors.green : Colors.grey,
+              color: isOnline ? s.success.color : s.neutral.color,
             ),
           ),
         ],

@@ -7,7 +7,7 @@ import 'package:slime_works/core/widgets/glass_menu.dart';
 
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
@@ -115,9 +115,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
       if (mounted) {
         _showSnack(
           '模块 $moduleName 安装成功',
-          backgroundColor: (Theme.of(context).brightness == Brightness.dark)
-              ? DarkColors.success
-              : LightColors.success,
+          backgroundColor: AppSemantic.of(context).success.color,
         );
       }
     } catch (e) {
@@ -141,9 +139,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
       if (mounted) {
         _showSnack(
           '模块 $moduleName 卸载成功',
-          backgroundColor: (Theme.of(context).brightness == Brightness.dark)
-              ? DarkColors.success
-              : LightColors.success,
+          backgroundColor: AppSemantic.of(context).success.color,
         );
       }
     } catch (e) {
@@ -174,25 +170,27 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Column(
       children: [
         // 顶部操作栏
         Container(
-          padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+          padding: EdgeInsets.all(m.kSpace16),
           decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor, width: 1)),
+            color: s.surface,
+            border: Border(bottom: BorderSide(color: s.hairline, width: 1)),
           ),
           child: Row(
             children: [
-              Text('已安装模块: ${_modules.length}', style: Theme.of(context).textTheme.titleMedium),
+              Text('已安装模块: ${_modules.length}', style: AppTextStyles.cardTitle(context)),
               const Spacer(),
               ElevatedButton.icon(
                 onPressed: _isLoading ? null : _refreshModules,
                 icon: DrawIcon(StrokeIcons.refresh),
                 label: const Text('刷新'),
               ),
-              SizedBox(width: AppTheme.metrics.kSpace8),
+              SizedBox(width: m.kSpace8),
               ElevatedButton.icon(
                 onPressed: _isLoading ? null : () => _showInstallDialog(),
                 icon: DrawIcon(StrokeIcons.add),
@@ -205,16 +203,20 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
         // 错误提示
         if (_error != null)
           Container(
-            padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-            color: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
+            padding: EdgeInsets.all(m.kSpace16),
+            color: s.danger.container,
             child: Row(
               children: [
-                DrawIcon(StrokeIcons.error, color: Theme.of(context).colorScheme.error),
-                SizedBox(width: AppTheme.metrics.kSpace8),
+                DrawIcon(StrokeIcons.error, color: s.danger.color),
+                SizedBox(width: m.kSpace8),
                 Expanded(
                   child: Text(
                     _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize13,
+                      color: s.danger.onContainer,
+                    ),
                   ),
                 ),
                 IconButton(icon: DrawIcon(StrokeIcons.close), onPressed: () => setState(() => _error = null)),
@@ -231,10 +233,10 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      DrawIcon(StrokeIcons.inbox, size: AppTheme.metrics.iconSize64, color: Theme.of(context).disabledColor),
-                      SizedBox(height: AppTheme.metrics.kSpace16),
-                      Text('暂无已安装的模块', style: Theme.of(context).textTheme.bodyLarge),
-                      SizedBox(height: AppTheme.metrics.kSpace8),
+                      DrawIcon(StrokeIcons.inbox, size: m.iconSize64, color: s.textDisabled),
+                      SizedBox(height: m.kSpace16),
+                      Text('暂无已安装的模块', style: AppTextStyles.body(context)),
+                      SizedBox(height: m.kSpace8),
                       ElevatedButton.icon(
                         onPressed: () => _showInstallDialog(),
                         icon: DrawIcon(StrokeIcons.add),
@@ -244,7 +246,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                   ),
                 )
               : ListView.builder(
-                  padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+                  padding: EdgeInsets.all(m.kSpace16),
                   itemCount: _modules.length,
                   itemBuilder: (context, index) {
                     final module = _modules[index];
@@ -257,13 +259,15 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
   }
 
   Widget _buildModuleCard(InstalledModule module) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     final isLoaded =
         _loader != null && moduleIsLoaded(loader: _loader!, moduleName: module.moduleName);
 
     return Card(
-      margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace12),
+      margin: EdgeInsets.only(bottom: m.kSpace12),
       child: Padding(
-        padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+        padding: EdgeInsets.all(m.kSpace16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -272,41 +276,55 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
               children: [
                 DrawIcon(
                   _getModuleIcon(module.moduleType),
-                  size: AppTheme.metrics.iconSize32,
-                  color: Theme.of(context).primaryColor,
+                  size: m.iconSize32,
+                  color: s.accent,
                 ),
-                SizedBox(width: AppTheme.metrics.kSpace12),
+                SizedBox(width: m.kSpace12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Text(
-                            module.moduleName,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(width: AppTheme.metrics.kSpace8),
+                          Text(module.moduleName, style: AppTextStyles.cardTitle(context)),
+                          SizedBox(width: m.kSpace8),
                           if (module.isLocked)
                             Chip(
-                              label: Text('已锁定', style: TextStyle(fontSize: AppTheme.metrics.fontSize10)),
+                              label: Text(
+                                '已锁定',
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: AppTheme.metrics.fontSize10,
+                                  color: s.textPrimary,
+                                ),
+                              ),
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4),
                             ),
                           if (isLoaded)
                             Chip(
-                              label: Text('已加载', style: TextStyle(fontSize: AppTheme.metrics.fontSize10)),
+                              label: Text(
+                                '已加载',
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: AppTheme.metrics.fontSize10,
+                                  color: AppSemantic.of(context).success.onContainer,
+                                ),
+                              ),
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4),
-                              backgroundColor: (Theme.of(context).brightness == Brightness.dark)
-                                  ? DarkColors.success
-                                  : LightColors.success,
+                              backgroundColor: AppSemantic.of(context).success.container,
                             ),
                         ],
                       ),
-                      Text('版本: ${module.version}', style: Theme.of(context).textTheme.bodySmall),
+                      Text(
+                        '版本: ${module.version}',
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize12,
+                          color: s.textTertiary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -360,9 +378,11 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
             // 文件路径
             Text(
               '路径: ${module.filePath}',
-              style: Theme.of(
+              style: AppTextStyles.role(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+                fontSize: AppTheme.metrics.fontSize12,
+                color: AppSemantic.of(context).textTertiary,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -373,16 +393,16 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
   }
 
   Widget _buildInfoItem(String label, String value) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+          style: AppTextStyles.role(context, fontSize: m.fontSize12, color: s.textTertiary),
         ),
-        Text(value, style: Theme.of(context).textTheme.bodyMedium),
+        Text(value, style: AppTextStyles.body(context)),
       ],
     );
   }
@@ -463,15 +483,9 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(module.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(module.name, style: AppTextStyles.cardTitle(context)),
                         if (module.description.isNotEmpty)
-                          Text(
-                            module.description,
-                            style: TextStyle(
-                              fontSize: AppTheme.metrics.fontSize11,
-                              color: Theme.of(context).colorScheme.outline,
-                            ),
-                          ),
+                          Text(module.description, style: AppTextStyles.caption(context)),
                       ],
                     ),
                   );
@@ -482,17 +496,15 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
               if (selectedModuleName != null) ...[
                 Text(
                   '版本: ${availableModules.firstWhere((m) => m.name == selectedModuleName).version}',
-                  style: TextStyle(fontSize: AppTheme.metrics.fontSize11),
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize11,
+                    color: AppSemantic.of(context).textSecondary,
+                  ),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace4),
               ],
-              Text(
-                '将安装最新版本的模块',
-                style: TextStyle(
-                  fontSize: AppTheme.metrics.fontSize11,
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-              ),
+              Text('将安装最新版本的模块', style: AppTextStyles.caption(context)),
             ],
           ),
         ),
@@ -526,8 +538,8 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
               _uninstallModule(module.moduleName, module.version);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Colors.white,
+              backgroundColor: AppSemantic.of(context).danger.color,
+              foregroundColor: AppSemantic.of(context).accentOn,
             ),
             child: const Text('卸载'),
           ),
@@ -561,9 +573,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
                   if (!context.mounted) return;
                   _showSnack(
                     '模块 ${module.moduleName} 重新安装成功',
-                    backgroundColor: (Theme.of(context).brightness == Brightness.dark)
-                        ? DarkColors.success
-                        : LightColors.success,
+                    backgroundColor: AppSemantic.of(context).success.color,
                   );
                 } catch (e) {
                   setState(() {

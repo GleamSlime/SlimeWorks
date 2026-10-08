@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
 import 'package:slime_works/pages/sentry_log/components/sentry_log_event_detail.dart';
@@ -20,7 +22,7 @@ class SentryLogList extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final theme = Theme.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
 
     return Obx(() {
       if (viewModel.isLoading.value && viewModel.events.isEmpty) {
@@ -31,17 +33,17 @@ class SentryLogList extends StatelessWidget {
               SizedBox(
                 width: m.iconSize32,
                 height: m.iconSize32,
-                child: CircularProgressIndicator(strokeWidth: 2, color: theme.colorScheme.primary),
+                child: CircularProgressIndicator(strokeWidth: m.kSpace2, color: s.accent),
               ),
               SizedBox(height: m.kSpace12),
-              Text('加载中...', style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor)),
+              Text('加载中...', style: theme.textTheme.bodySmall?.copyWith(color: s.textTertiary)),
             ],
           ),
         );
       }
 
       if (viewModel.events.isEmpty) {
-        return _buildEmptyState(theme, m, isDark);
+        return _buildEmptyState(context, theme, m, s);
       }
 
       return Column(
@@ -53,13 +55,13 @@ class SentryLogList extends StatelessWidget {
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace2),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withAlpha(15),
+                    color: s.accentContainer,
                     borderRadius: m.radius4,
                   ),
                   child: Text(
                     '${viewModel.totalEvents.value} 条日志',
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary,
+                      color: s.accent,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -84,7 +86,7 @@ class SentryLogList extends StatelessWidget {
                 final event = viewModel.events[index];
                 return _EventCardAnimation(
                   index: index,
-                  child: _buildEventCard(context, theme, m, event, isDark),
+                  child: _buildEventCard(context, theme, m, event, s),
                 );
               },
             ),
@@ -95,7 +97,12 @@ class SentryLogList extends StatelessWidget {
   }
 
   /// 构建空状态提示
-  Widget _buildEmptyState(ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildEmptyState(
+    BuildContext context,
+    ThemeData theme,
+    ThemeMetrics m,
+    AppSemantic s,
+  ) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -108,43 +115,37 @@ class SentryLogList extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  theme.colorScheme.primary.withAlpha(30),
-                  theme.colorScheme.primary.withAlpha(10),
+                  s.accent.withAlpha(30),
+                  s.accent.withAlpha(10),
                 ],
               ),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: theme.colorScheme.primary.withAlpha(15),
+                  color: s.accent.withAlpha(15),
                   blurRadius: scaleW(20),
                   offset: Offset(0, scaleW(4)),
                 ),
               ],
             ),
-            child: DrawIcon(StrokeIcons.radar,
-              size: m.iconSize32,
-              color: theme.colorScheme.primary.withAlpha(120),
-            ),
+            child: DrawIcon(StrokeIcons.radar, size: m.iconSize32, color: s.accent.withAlpha(120)),
           ),
           SizedBox(height: m.kSpace16),
           Text(
             '等待日志接入',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: isDark ? DarkColors.white80 : LightColors.black80,
-            ),
+            style: theme.textTheme.titleMedium?.copyWith(color: s.textPrimary),
           ),
           SizedBox(height: m.kSpace8),
           Text(
             '配置 Sentry DSN 为 http://<IP>:17888/<project_id>',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.hintColor,
-              fontFamily: 'monospace',
+            style: AppTextStyles.mono(context, size: m.fontSize12).copyWith(
+              color: s.textTertiary,
             ),
           ),
           SizedBox(height: m.kSpace4),
           Text(
             '其他项目发送的日志将实时显示在这里',
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+            style: theme.textTheme.bodySmall?.copyWith(color: s.textTertiary),
           ),
         ],
       ),
@@ -157,7 +158,7 @@ class SentryLogList extends StatelessWidget {
     ThemeData theme,
     ThemeMetrics m,
     Map<String, dynamic> event,
-    bool isDark,
+    AppSemantic s,
   ) {
     final level = event['level']?.toString() ?? 'info';
     final eventId = event['event_id']?.toString() ?? '';
@@ -166,13 +167,13 @@ class SentryLogList extends StatelessWidget {
     final culprit = event['culprit']?.toString() ?? event['transaction']?.toString() ?? '';
     final environment = event['environment']?.toString() ?? '';
     final platform = event['platform']?.toString() ?? '';
-    final levelColor = viewModel.getLevelColor(level);
+    final levelRole = _levelRole(s, level);
+    final levelColor = levelRole.color;
 
     return Padding(
       padding: EdgeInsets.only(bottom: m.kSpace6),
       child: _EventCardHover(
-        levelColor: levelColor,
-        isDark: isDark,
+        levelRole: levelRole,
         onTap: () => _showEventDetail(context, event),
         child: IntrinsicHeight(
           child: Row(
@@ -187,8 +188,8 @@ class SentryLogList extends StatelessWidget {
                     colors: [levelColor, levelColor.withAlpha(120)],
                   ),
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(scaleW(2)),
-                    bottomLeft: Radius.circular(scaleW(2)),
+                    topLeft: m.radius2.topLeft,
+                    bottomLeft: m.radius2.bottomLeft,
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -207,29 +208,29 @@ class SentryLogList extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          _buildLevelBadge(theme, m, level, levelColor),
+                          _buildLevelBadge(context, theme, m, level, levelRole),
                           if (environment.isNotEmpty) ...[
                             SizedBox(width: m.kSpace6),
-                            _buildEnvBadge(theme, m, environment, isDark),
+                            _buildEnvBadge(theme, m, environment, s),
                           ],
                           if (platform.isNotEmpty) ...[
                             SizedBox(width: m.kSpace6),
                             DrawIcon(
                               _getPlatformIcon(platform),
                               size: m.iconSize12,
-                              color: theme.hintColor,
+                              color: s.textTertiary,
                             ),
                             SizedBox(width: m.kSpace2),
                             Text(
                               platform,
-                              style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+                              style: theme.textTheme.labelSmall?.copyWith(color: s.textTertiary),
                             ),
                           ],
                           const Spacer(),
                           Text(
                             timestamp,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.hintColor,
+                              color: s.textTertiary,
                               fontFeatures: [const FontFeature.tabularFigures()],
                             ),
                           ),
@@ -249,14 +250,13 @@ class SentryLogList extends StatelessWidget {
                         SizedBox(height: m.kSpace2),
                         Row(
                           children: [
-                            DrawIcon(StrokeIcons.source, size: m.iconSize12, color: theme.hintColor),
+                            DrawIcon(StrokeIcons.source, size: m.iconSize12, color: s.textTertiary),
                             SizedBox(width: m.kSpace4),
                             Expanded(
                               child: Text(
                                 culprit,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.hintColor,
-                                  fontFamily: 'monospace',
+                                style: AppTextStyles.mono(context, size: m.fontSize12).copyWith(
+                                  color: s.textTertiary,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -272,7 +272,7 @@ class SentryLogList extends StatelessWidget {
               Padding(
                 padding: EdgeInsets.only(right: m.kSpace4),
                 child: IconButton(
-                  icon: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: theme.hintColor),
+                  icon: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: s.textTertiary),
                   onPressed: () => _confirmDelete(context, eventId),
                   tooltip: '删除',
                   visualDensity: VisualDensity.compact,
@@ -288,13 +288,21 @@ class SentryLogList extends StatelessWidget {
   }
 
   /// 构建日志级别标签
-  Widget _buildLevelBadge(ThemeData theme, ThemeMetrics m, String level, Color color) {
+  Widget _buildLevelBadge(
+    BuildContext context,
+    ThemeData theme,
+    ThemeMetrics m,
+    String level,
+    AppStatusRole role,
+  ) {
+    final color = role.color;
     return Container(
       padding: EdgeInsets.symmetric(horizontal: m.kSpace6, vertical: m.kSpace1),
       decoration: BoxDecoration(
-        color: color.withAlpha(25),
+        // 容器底与描边由角色派生，不手写 withAlpha
+        color: role.container,
         borderRadius: m.radius4,
-        border: Border.all(color: color.withAlpha(50), width: 0.5),
+        border: Border.all(color: role.containerBorder, width: 0.5),
         boxShadow: [
           BoxShadow(
             color: color.withAlpha(20),
@@ -307,8 +315,8 @@ class SentryLogList extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6,
-            height: 6,
+            width: m.kSpace6,
+            height: m.kSpace6,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
@@ -316,7 +324,7 @@ class SentryLogList extends StatelessWidget {
                 BoxShadow(
                   color: color.withAlpha(60),
                   blurRadius: scaleW(4),
-                  offset: const Offset(0, 1),
+                  offset: Offset(0, m.kSpace1),
                 ),
               ],
             ),
@@ -324,8 +332,9 @@ class SentryLogList extends StatelessWidget {
           SizedBox(width: m.kSpace4),
           Text(
             level.toUpperCase(),
+            // 容器上的文字走 onContainer：状态主色是给"点"用的，直接当小字会糊
             style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
+              color: role.onContainer,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
             ),
@@ -336,21 +345,36 @@ class SentryLogList extends StatelessWidget {
   }
 
   /// 构建环境标签
-  Widget _buildEnvBadge(ThemeData theme, ThemeMetrics m, String env, bool isDark) {
+  Widget _buildEnvBadge(ThemeData theme, ThemeMetrics m, String env, AppSemantic s) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: m.kSpace6, vertical: m.kSpace1),
       decoration: BoxDecoration(
-        color: isDark ? DarkColors.white10 : LightColors.background5,
+        color: s.neutral.container,
         borderRadius: m.radius4,
       ),
       child: Text(
         env,
         style: theme.textTheme.labelSmall?.copyWith(
-          color: isDark ? DarkColors.white80 : LightColors.primary,
+          color: s.neutral.onContainer,
           fontWeight: FontWeight.w500,
         ),
       ),
     );
+  }
+
+  /// 级别 → 状态角色：语义层没有"致命"这一档，fatal 与 error 同归 danger
+  AppStatusRole _levelRole(AppSemantic s, String level) {
+    switch (level) {
+      case 'fatal':
+      case 'error':
+        return s.danger;
+      case 'warning':
+        return s.warning;
+      case 'info':
+        return s.info;
+      default:
+        return s.neutral;
+    }
   }
 
   /// 获取平台对应图标
@@ -411,6 +435,7 @@ class SentryLogList extends StatelessWidget {
   /// 确认删除弹窗
   void _confirmDelete(BuildContext context, String eventId) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     final navigator = Navigator.of(context);
     showDialog(
       context: context,
@@ -418,7 +443,7 @@ class SentryLogList extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: m.radius12),
         title: Row(
           children: [
-            DrawIcon(StrokeIcons.warningAmber, color: Colors.orange.shade700, size: m.iconSize20),
+            DrawIcon(StrokeIcons.warningAmber, color: s.warning.color, size: m.iconSize20),
             SizedBox(width: m.kSpace8),
             const Text('确认删除'),
           ],
@@ -432,9 +457,9 @@ class SentryLogList extends StatelessWidget {
               await viewModel.deleteEvent(eventId);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: m.radius8),
+              backgroundColor: s.danger.color,
+              foregroundColor: s.accentOn,
+              shape: RoundedRectangleBorder(borderRadius: m.radiusControl),
             ),
             child: const Text('删除'),
           ),
@@ -446,14 +471,12 @@ class SentryLogList extends StatelessWidget {
 
 /// 事件卡片悬停效果组件（毛玻璃 + 发光阴影）
 class _EventCardHover extends StatefulWidget {
-  final Color levelColor;
-  final bool isDark;
+  final AppStatusRole levelRole;
   final VoidCallback onTap;
   final Widget child;
 
   const _EventCardHover({
-    required this.levelColor,
-    required this.isDark,
+    required this.levelRole,
     required this.onTap,
     required this.child,
   });
@@ -468,43 +491,36 @@ class _EventCardHoverState extends State<_EventCardHover> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
+          duration: AppMotion.base,
+          curve: AppMotion.standard,
           decoration: BoxDecoration(
-            color: widget.isDark
-                ? DarkColors.background1.withAlpha(_hovered ? 240 : 200)
-                : LightColors.background1.withAlpha(_hovered ? 250 : 230),
-            borderRadius: m.radius10,
+            color: s.surface.withAlpha(_hovered ? 250 : 230),
+            borderRadius: m.radiusCard,
             border: Border.all(
-              color: _hovered
-                  ? widget.levelColor.withAlpha(40)
-                  : (widget.isDark ? DarkColors.white10 : LightColors.black10).withAlpha(30),
+              color: _hovered ? widget.levelRole.containerBorder : s.border,
               width: 0.5,
             ),
             boxShadow: [
-              BoxShadow(
-                color: widget.isDark ? DarkColors.black10 : LightColors.black10,
-                blurRadius: _hovered ? 8 : 4,
-                offset: Offset(0, _hovered ? 3 : 1),
-              ),
+              ...s.elevation(_hovered ? Elevation.card : Elevation.raised),
               if (_hovered)
                 BoxShadow(
-                  color: widget.levelColor.withAlpha(15),
+                  color: widget.levelRole.color.withAlpha(15),
                   blurRadius: scaleW(16),
                   offset: Offset(0, scaleW(4)),
                 ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: m.radius10,
+            borderRadius: m.radiusCard,
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
               child: widget.child,
             ),
           ),
@@ -533,9 +549,9 @@ class _EventCardAnimationState extends State<_EventCardAnimation>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
-    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
-    Future.delayed(Duration(milliseconds: 60 * (widget.index % 15)), () {
+    _controller = AnimationController(vsync: this, duration: AppMotion.slow);
+    _animation = CurvedAnimation(parent: _controller, curve: AppMotion.decelerate);
+    Future.delayed(AppMotion.stagger * (widget.index % 15), () {
       if (mounted) _controller.forward();
     });
   }
@@ -554,7 +570,7 @@ class _EventCardAnimationState extends State<_EventCardAnimation>
         return Opacity(
           opacity: _animation.value.clamp(0.0, 1.0),
           child: Transform.translate(
-            offset: Offset(0, 8 * (1 - _animation.value)),
+            offset: Offset(0, AppMotion.travelBase * (1 - _animation.value)),
             child: widget.child,
           ),
         );

@@ -10,7 +10,6 @@ import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_zone.dart';
-import 'package:slime_works/components/window/screen_top_bar.dart';
 
 import 'fixtures/stroke_icons_all.dart';
 import 'helpers/page_golden.dart';
@@ -171,43 +170,6 @@ void main() {
       await tester.pump();
       expect(_progress(tester), 1);
       controller.dispose();
-      await unmountPage(tester);
-    });
-
-    testWidgets('macOS 窗口灯：闲置只是纯色圆，悬停才把符号描出来、移开擦回', (tester) async {
-      await pumpAppPage(
-        tester,
-        const Center(child: MacWindowButtons()),
-        size: const Size(200, 80),
-      );
-      await advance(tester, steps: 6, ms: 40);
-      expect(_progress(tester), 0, reason: '闲置就画出符号等于改了平台约定');
-
-      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      await gesture.addPointer(location: Offset.zero);
-      addTearDown(gesture.removePointer);
-      final light = tester.getCenter(
-        find
-            .descendant(
-              of: find.byType(DrawIcon),
-              matching: find.byType(CustomPaint),
-            )
-            .first,
-      );
-      await gesture.moveTo(light);
-      // onEnter 是在这一帧的 hitTest 里派发、下一帧才建出来的，少一泵就读到 0
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 80));
-      expect(_progress(tester), greaterThan(0), reason: '悬停没起播就是没接上');
-      await advance(tester, steps: 4, ms: 40);
-      expect(_progress(tester), 1);
-
-      await gesture.moveTo(const Offset(190, 70));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 45));
-      expect(_progress(tester), lessThan(1), reason: '移开要往回擦，不是留在原地');
-      await advance(tester, steps: 4, ms: 40);
-      expect(_progress(tester), 0, reason: '擦完要回到纯色圆');
       await unmountPage(tester);
     });
 

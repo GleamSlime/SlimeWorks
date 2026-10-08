@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:get/get.dart';
 import 'package:dio/dio.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -465,21 +467,20 @@ class NovelReaderViewModel extends GetxController {
           return AlertDialog(
             title: Text('找到 ${matches.length} 个结果'),
             content: SizedBox(
-              width: 500,
-              height: 400,
+              width: scaleW(500),
+              height: scaleH(400),
               child: ListView.builder(
                 controller: scrollCtrl,
                 itemCount: matches.length,
                 itemBuilder: (_, index) {
                   final match = matches[index];
                   final isSelected = selectedSearchIndex.value == index;
+                  final semantics = AppSemantic.of(dlgCtx);
                   return Material(
-                    color: isSelected
-                        ? Theme.of(dlgCtx).colorScheme.primaryContainer
-                        : Colors.transparent,
+                    color: isSelected ? semantics.accentContainer : Colors.transparent,
                     child: ListTile(
                       selected: isSelected,
-                      selectedColor: Theme.of(dlgCtx).colorScheme.onPrimaryContainer,
+                      selectedColor: semantics.accentText,
                       title: Text(match.chapterTitle.replaceAll(RegExp(r'<[^>]+>'), '').trim()),
                       subtitle: Text(match.snippet, maxLines: 2, overflow: TextOverflow.ellipsis),
                       onTap: () {
@@ -612,7 +613,9 @@ class NovelReaderViewModel extends GetxController {
               Navigator.of(dlgCtx).pop();
               _deleteNovel(true);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppSemantic.of(ctx).danger.color,
+            ),
             child: const Text('删除记录和文件'),
           ),
         ],

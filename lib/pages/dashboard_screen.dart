@@ -118,7 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   return _buildFeatureItem(context, index);
                 }, childCount: 6),
                 gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 320,
+                  maxCrossAxisExtent: scaleW(320),
                   mainAxisSpacing: AppTheme.metrics.kSpace16,
                   crossAxisSpacing: AppTheme.metrics.kSpace16,
                   mainAxisExtent: scaleW(200).clamp(160.0, 260.0),
@@ -150,20 +150,18 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 // 一层无意义的蒙版开销，直接落到主文字色。
                 Text(
                   '工坊系统',
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize32,
+                    weight: FontWeight.w600,
                     color: s.textPrimary,
-                    fontSize: scaleS(32),
+                    height: 1.25,
+                    letterSpacing: -0.5,
                   ),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace6),
                 // 中文不做正向字距：拉丁字母拉开是排版惯例，CJK 拉开只会散。
-                Text(
-                  '实时监控 · 模块管理 · 一站式工具',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: s.textSecondary,
-                  ),
-                ),
+                Text('实时监控 · 模块管理 · 一站式工具', style: AppTextStyles.body(context)),
               ],
             ),
           ),
@@ -187,12 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             ),
           ),
           SizedBox(width: AppTheme.metrics.kSpace8),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
+          Text(label, style: AppTextStyles.sectionTitle(context)),
         ],
       ),
     );
@@ -486,16 +479,18 @@ class _MetricCardWidgetState extends State<_MetricCardWidget> {
           children: [
             Row(
               children: [
+                // 图标盒整体走宽度族：卡片宽是被 clamp 死的宽度族量，图标若吃字号族
+                // 就会在用户字号 >1 时把这一行顶破（历史上侧栏图标条的同一条坑）。
                 Container(
-                  width: m.iconSize28,
-                  height: m.iconSize28,
+                  width: scaleW(28),
+                  height: scaleW(28),
                   decoration: BoxDecoration(
                     // 水洗底 + 同色图标，替代整块渐变实底：渐变是旧语言的招牌
                     color: viz.base.withValues(alpha: s.isDark ? 0.18 : 0.12),
                     borderRadius: m.radiusControl,
                   ),
                   child: Center(
-                    child: DrawIcon(widget.data.icon, size: m.iconSize16, color: viz.base),
+                    child: DrawIcon(widget.data.icon, size: scaleW(16), color: viz.base),
                   ),
                 ),
                 SizedBox(width: m.kSpace10),
@@ -505,18 +500,22 @@ class _MetricCardWidgetState extends State<_MetricCardWidget> {
                     children: [
                       Text(
                         widget.data.title,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize12,
+                          weight: FontWeight.w500,
                           color: s.textSecondary,
-                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       SizedBox(height: m.kSpace2),
                       Text(
                         widget.data.value,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize13,
+                          weight: FontWeight.w600,
+                          color: s.textSecondary,
+                        ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -525,16 +524,21 @@ class _MetricCardWidgetState extends State<_MetricCardWidget> {
                 if (widget.data.peak != null ||
                     widget.data.valley != null ||
                     widget.data.average != null)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (widget.data.peak != null) _statLine(context, '↑ ${widget.data.peak}'),
-                      if (widget.data.valley != null) _statLine(context, '↓ ${widget.data.valley}'),
-                      if (widget.data.average != null) _statLine(
-                        context,
-                        '≈ ${widget.data.average}',
-                      ),
-                    ],
+                  ConstrainedBox(
+                    // 行尾这簇附属内容必须封顶：字号比例拉满时它自己就能吃掉整行，
+                    // 上限取宽度族，跟行宽同比。
+                    constraints: BoxConstraints(maxWidth: m.kSpace80),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (widget.data.peak != null) _statLine(context, '↑ ${widget.data.peak}'),
+                        if (widget.data.valley != null) _statLine(context, '↓ ${widget.data.valley}'),
+                        if (widget.data.average != null) _statLine(
+                          context,
+                          '≈ ${widget.data.average}',
+                        ),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -553,11 +557,15 @@ class _MetricCardWidgetState extends State<_MetricCardWidget> {
   Widget _statLine(BuildContext context, String text) {
     return Text(
       text,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTextStyles.role(
+        context,
+        fontSize: AppTheme.metrics.fontSize9,
+        weight: FontWeight.w600,
         color: AppSemantic.of(context).textTertiary,
-        fontFeatures: const [FontFeature.tabularFigures()],
-        fontSize: scaleS(9),
-      ),
+        letterSpacing: 0.6,
+      ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
     );
   }
 }
@@ -600,22 +608,21 @@ class _FeatureCardWidgetState extends State<_FeatureCardWidget> {
               AnimatedContainer(
                 duration: AppMotion.base,
                 curve: AppMotion.standard,
-                width: m.iconSize44,
-                height: m.iconSize44,
+                // 同指标卡：图标盒是宽度族，不能跟用户的字号比例一起长
+                width: scaleW(44),
+                height: scaleW(44),
                 decoration: BoxDecoration(
                   color: viz.base.withValues(alpha: s.isDark ? 0.18 : 0.12),
                   borderRadius: m.radiusControl,
                 ),
                 child: Center(
-                  child: DrawIcon(widget.feature.icon, size: m.iconSize24, color: viz.base),
+                  child: DrawIcon(widget.feature.icon, size: scaleW(24), color: viz.base),
                 ),
               ),
               SizedBox(height: m.kSpace16),
               Text(
                 widget.feature.title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+                style: AppTextStyles.sectionTitle(context),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -624,7 +631,9 @@ class _FeatureCardWidgetState extends State<_FeatureCardWidget> {
               Flexible(
                 child: Text(
                   widget.feature.description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize13,
                     color: s.textSecondary,
                     height: 1.4,
                   ),
@@ -639,9 +648,11 @@ class _FeatureCardWidgetState extends State<_FeatureCardWidget> {
                 children: [
                   Text(
                     '进入',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize12,
+                      weight: FontWeight.w600,
                       color: s.accent,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   SizedBox(width: m.kSpace4),

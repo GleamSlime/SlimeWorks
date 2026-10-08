@@ -7,7 +7,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/services/websocket_manager.dart';
 import 'package:slime_works/src/rust/api/websocket.dart';
 import 'dart:async';
@@ -334,7 +336,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace8),
                   SizedBox(
-                    width: 100,
+                    width: scaleW(100),
                     child: AppTextField(
                       controller: _portController,
                       decoration: const InputDecoration(
@@ -356,10 +358,18 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text('服务器控制', style: Theme.of(context).textTheme.titleMedium),
+                        Text(
+                          '服务器控制',
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: AppTheme.metrics.fontSize14,
+                            weight: FontWeight.w500,
+                            color: AppSemantic.of(context).textPrimary,
+                          ),
+                        ),
                         SizedBox(height: AppTheme.metrics.kSpace8),
                         Wrap(
-                          spacing: 8,
+                          spacing: AppTheme.metrics.kSpace8,
                           children: [
                             ElevatedButton(
                               onPressed: _server == null ? _createServer : null,
@@ -382,7 +392,7 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                               children: [
                                 Text(
                                   '在线客户端: $_clientCount',
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  style: AppTextStyles.body(context),
                                 ),
                                 SizedBox(width: AppTheme.metrics.kSpace8),
                                 IconButton(
@@ -394,21 +404,22 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                             ),
                           ),
                           SizedBox(height: AppTheme.metrics.kSpace8),
-                          const Text('客户端列表:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('客户端列表:', style: AppTextStyles.cardTitle(context)),
                           SizedBox(height: AppTheme.metrics.kSpace4),
                           Container(
-                            height: 150,
+                            height: scaleW(150),
                             decoration: BoxDecoration(
-                              border: Border.all(color: Theme.of(context).colorScheme.outline),
+                              border: Border.all(color: AppSemantic.of(context).border),
                               borderRadius: AppTheme.metrics.radius4,
                             ),
                             child: _clients.isEmpty
                                 ? Center(
                                     child: Text(
                                       '暂无客户端连接',
-                                      style: TextStyle(
+                                      style: AppTextStyles.role(
+                                        context,
                                         fontSize: AppTheme.metrics.fontSize11,
-                                        color: Theme.of(context).colorScheme.outline,
+                                        color: AppSemantic.of(context).textTertiary,
                                       ),
                                     ),
                                   )
@@ -427,11 +438,19 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                                         selected: isSelected,
                                         title: Text(
                                           '${client.address} ${client.authenticated ? "✓" : "✗"}',
-                                          style: TextStyle(fontSize: AppTheme.metrics.fontSize11),
+                                          style: AppTextStyles.role(
+                                            context,
+                                            fontSize: AppTheme.metrics.fontSize11,
+                                            color: AppSemantic.of(context).textPrimary,
+                                          ),
                                         ),
                                         subtitle: Text(
                                           '连接时长: ${duration.inMinutes}分${duration.inSeconds % 60}秒',
-                                          style: TextStyle(fontSize: AppTheme.metrics.fontSize10),
+                                          style: AppTextStyles.role(
+                                            context,
+                                            fontSize: AppTheme.metrics.fontSize10,
+                                            color: AppSemantic.of(context).textTertiary,
+                                          ),
                                         ),
                                         trailing: IconButton(
                                           icon: DrawIcon(StrokeIcons.close,
@@ -464,10 +483,18 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('客户端控制', style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        '客户端控制',
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: AppTheme.metrics.fontSize14,
+                          weight: FontWeight.w500,
+                          color: AppSemantic.of(context).textPrimary,
+                        ),
+                      ),
                       SizedBox(height: AppTheme.metrics.kSpace8),
                       Wrap(
-                        spacing: 8,
+                        spacing: AppTheme.metrics.kSpace8,
                         children: [
                           ElevatedButton(
                             onPressed: _client == null ? _createClient : null,
@@ -522,12 +549,20 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
               SizedBox(height: AppTheme.metrics.kSpace16),
 
               // 日志
-              Text('日志', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                '日志',
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: AppTheme.metrics.fontSize14,
+                  weight: FontWeight.w500,
+                  color: AppSemantic.of(context).textPrimary,
+                ),
+              ),
               SizedBox(height: AppTheme.metrics.kSpace8),
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: Theme.of(context).colorScheme.outline),
+                    border: Border.all(color: AppSemantic.of(context).border),
                     borderRadius: AppTheme.metrics.radius4,
                   ),
                   child: ListView.builder(
@@ -541,9 +576,9 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
                         ),
                         child: Text(
                           _logs[index],
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: AppTheme.metrics.fontSize11,
+                          style: AppTextStyles.mono(
+                            context,
+                            size: AppTheme.metrics.fontSize11,
                           ),
                         ),
                       );

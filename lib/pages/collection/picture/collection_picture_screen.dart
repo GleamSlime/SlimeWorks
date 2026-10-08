@@ -334,7 +334,7 @@ class _CollectionPictureScreenState
   /// 返回 null 表示相似查找未激活，无需渲染。
   Widget? _similarClearOverlay(BuildContext context) {
     if (viewModel.similarSearchQuery.value.trim().isEmpty) return null;
-    final scheme = Theme.of(context).colorScheme;
+    final s = AppSemantic.of(context);
     return Positioned(
       left: 0,
       right: 0,
@@ -351,13 +351,13 @@ class _CollectionPictureScreenState
                 vertical: AppTheme.metrics.kSpace8,
               ),
               decoration: BoxDecoration(
-                color: scheme.primaryContainer.withAlpha(235),
+                color: s.accentContainer.withAlpha(235),
                 borderRadius: AppTheme.metrics.radius999,
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context).shadowColor.withValues(alpha: 0.22),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    color: s.shadowKey,
+                    blurRadius: scaleW(12),
+                    offset: Offset(0, scaleW(4)),
                   ),
                 ],
               ),
@@ -367,15 +367,16 @@ class _CollectionPictureScreenState
                   DrawIcon(
                     StrokeIcons.close,
                     size: AppTheme.metrics.iconSize18,
-                    color: scheme.onPrimaryContainer,
+                    color: s.textPrimary,
                   ),
                   SizedBox(width: AppTheme.metrics.kSpace6),
                   Text(
                     '清除搜索结果',
-                    style: TextStyle(
-                      color: scheme.onPrimaryContainer,
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: AppTheme.metrics.fontSize13,
-                      fontWeight: FontWeight.w600,
+                      color: s.textPrimary,
+                      weight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -449,6 +450,7 @@ class _CollectionPictureScreenState
               return KeyEventResult.ignored;
             },
             child: Obx(() {
+              final s = AppSemantic.of(context);
               final pageKey = _pageContentKey;
               final pageContent = !viewModel.isInDetail
                   ? _buildBrowseGridWidget(context)
@@ -457,7 +459,7 @@ class _CollectionPictureScreenState
                 children: [
                   Expanded(
                     child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
+                      duration: AppMotion.base,
                       layoutBuilder: (currentChild, previousChildren) => Stack(
                         alignment: Alignment.topLeft,
                         children: [...previousChildren, ?currentChild],
@@ -539,9 +541,9 @@ class _CollectionPictureScreenState
                         child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withAlpha(40),
+                              color: s.accent.withAlpha(40),
                               border: Border.all(
-                                color: Theme.of(context).colorScheme.primary,
+                                color: s.accent,
                                 width: 2,
                               ),
                             ),
@@ -552,14 +554,16 @@ class _CollectionPictureScreenState
                                   DrawIcon(
                                     StrokeIcons.folderOpen,
                                     size: AppTheme.metrics.iconSize64,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: s.accent,
                                   ),
                                   SizedBox(height: AppTheme.metrics.kSpace12),
                                   Text(
                                     '松开以导入媒体',
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      color: Theme.of(context).colorScheme.primary,
-                                      fontWeight: FontWeight.bold,
+                                    style: AppTextStyles.role(
+                                      context,
+                                      fontSize: AppTheme.metrics.fontSize14,
+                                      color: s.accent,
+                                      weight: FontWeight.bold,
                                     ),
                                   ),
                                 ],

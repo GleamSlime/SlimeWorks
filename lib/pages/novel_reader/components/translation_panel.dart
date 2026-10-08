@@ -4,6 +4,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/utils/logger.dart';
@@ -154,6 +155,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
   }
 
   Widget _buildContent(BuildContext context) {
+    final s = AppSemantic.of(context);
     return Container(
       padding: EdgeInsets.all(appMetrics.paddingLarge),
       constraints: BoxConstraints(
@@ -168,7 +170,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('文本翻译', style: Theme.of(context).textTheme.titleLarge),
+              Text('文本翻译', style: AppTextStyles.sectionTitle(context)),
               IconButton(icon: DrawIcon(StrokeIcons.close), onPressed: () => Navigator.pop(context)),
             ],
           ),
@@ -242,13 +244,13 @@ class _TranslationPanelState extends State<TranslationPanel> {
             child: Container(
               padding: EdgeInsets.all(appMetrics.paddingMedium),
               decoration: BoxDecoration(
-                border: Border.all(color: Theme.of(context).colorScheme.outline),
+                border: Border.all(color: s.border),
                 borderRadius: AppTheme.metrics.radius8,
               ),
               child: SingleChildScrollView(
                 child: SelectableText(
                   widget.selectedText,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: AppTextStyles.body(context),
                 ),
               ),
             ),
@@ -277,12 +279,12 @@ class _TranslationPanelState extends State<TranslationPanel> {
               return Container(
                 padding: EdgeInsets.all(appMetrics.paddingLarge),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).colorScheme.outline),
+                  border: Border.all(color: s.border),
                   borderRadius: AppTheme.metrics.radius8,
-                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  color: s.surfaceSunken,
                 ),
                 child: Center(
-                  child: Text('翻译结果将显示在这里', style: TextStyle(color: Theme.of(context).hintColor)),
+                  child: Text('翻译结果将显示在这里', style: AppTextStyles.caption(context)),
                 ),
               );
             }
@@ -291,14 +293,14 @@ class _TranslationPanelState extends State<TranslationPanel> {
               child: Container(
                 padding: EdgeInsets.all(appMetrics.paddingMedium),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).colorScheme.outline),
+                  border: Border.all(color: s.border),
                   borderRadius: AppTheme.metrics.radius8,
-                  color: Theme.of(context).cardColor,
+                  color: s.surface,
                 ),
                 child: SingleChildScrollView(
                   child: SelectableText(
                     _translatedText.value,
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: AppTextStyles.body(context),
                   ),
                 ),
               ),

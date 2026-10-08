@@ -58,6 +58,7 @@ class PictureLibraryToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
+      final s = AppSemantic.of(context);
       final isScanning = viewModel.isScanning.value;
       final statusText = viewModel.scanStatusText.value;
       final inDetail = viewModel.isInDetail;
@@ -81,7 +82,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                 if (statusText.isNotEmpty)
                   AnimatedOpacity(
                     opacity: isScanning ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 150),
+                    duration: AppMotion.fast,
                     child: IgnorePointer(
                       ignoring: !isScanning,
                       child: Row(
@@ -95,7 +96,11 @@ class PictureLibraryToolbar extends StatelessWidget {
                           ),
                           Text(
                             statusText.isNotEmpty ? statusText : ' ',
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: AppTheme.metrics.fontSize12,
+                              color: s.textTertiary,
+                            ),
                           ),
                         ],
                       ),
@@ -180,7 +185,8 @@ class PictureLibraryToolbar extends StatelessWidget {
                             viewModel.showFavoritesOnly.value
                                 ? StrokeIcons.favorite
                                 : StrokeIcons.favoriteBorder,
-                            color: viewModel.showFavoritesOnly.value ? Colors.redAccent : null,
+                            // 收藏是"选中"状态不是危险态，按语义口径走强调色
+                            color: viewModel.showFavoritesOnly.value ? s.accent : null,
                           ),
                           size: AppTheme.metrics.kSpace40,
                           onTap: () => viewModel.showFavoritesOnly.value =
@@ -202,7 +208,11 @@ class PictureLibraryToolbar extends StatelessWidget {
                           constraints: BoxConstraints(maxWidth: scaleW(72)),
                           child: Text(
                             viewModel.collectionSortOrder.value.label,
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: AppTheme.metrics.fontSize12,
+                              color: s.textTertiary,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -228,7 +238,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                             ? StrokeIcons.layers
                             : StrokeIcons.layersClear,
                         color: viewModel.showMediaOverlay.value
-                            ? Theme.of(context).colorScheme.primary
+                            ? s.accent
                             : null,
                       ),
                       size: AppTheme.metrics.kSpace40,
@@ -252,7 +262,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                   DrawIcon(
                     StrokeIcons.gridView,
                     size: scaleW(16),
-                    color: Theme.of(context).hintColor,
+                    color: s.textTertiary,
                   ),
                   IconButton(
                     icon: DrawIcon(StrokeIcons.remove),
@@ -262,7 +272,11 @@ class PictureLibraryToolbar extends StatelessWidget {
                     tooltip: '减少列数',
                     onPressed: (columnCount! > 1) ? onColumnDecrement : null,
                   ),
-                  Text('$columnCount 列', style: Theme.of(context).textTheme.bodySmall),
+                  Text('$columnCount 列', style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize12,
+                    color: s.textTertiary,
+                  )),
                   IconButton(
                     icon: DrawIcon(StrokeIcons.add),
                     iconSize: scaleW(16),
@@ -300,7 +314,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                             ? StrokeIcons.viewComfy
                             : StrokeIcons.gridView,
                         color: viewModel.useMasonryGrid.value
-                            ? Theme.of(context).colorScheme.primary
+                            ? s.accent
                             : null,
                       ),
                       size: AppTheme.metrics.kSpace40,
@@ -458,7 +472,7 @@ class _ThumbProgressIndicatorState extends State<_ThumbProgressIndicator> {
             ),
             Text(
               '$label $completed/$total',
-              style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor),
+              style: AppTextStyles.caption(context),
             ),
             // 悬停时显示取消按钮（仅本地任务）
             if (_hovering && !isRemote)
@@ -472,7 +486,7 @@ class _ThumbProgressIndicatorState extends State<_ThumbProgressIndicator> {
                     child: DrawIcon(
                       StrokeIcons.cancel,
                       size: AppTheme.metrics.iconSize16,
-                      color: Theme.of(context).colorScheme.error,
+                      color: AppSemantic.of(context).danger.color,
                     ),
                   ),
                 ),
@@ -498,7 +512,7 @@ class _ThumbPausedIndicator extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         spacing: AppTheme.metrics.kSpace4,
         children: [
-          Text('封面生成已暂停', style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor)),
+          Text('封面生成已暂停', style: AppTextStyles.caption(context)),
           Tooltip(
             message: '继续生成封面',
             child: InkWell(
@@ -509,7 +523,7 @@ class _ThumbPausedIndicator extends StatelessWidget {
                 child: DrawIcon(
                   StrokeIcons.playCircleOutline,
                   size: AppTheme.metrics.iconSize16,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: AppSemantic.of(context).accent,
                 ),
               ),
             ),

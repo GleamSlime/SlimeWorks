@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../components/window/sidebar_resize_handle.dart';
+import '../core/theme/app_motion.dart';
+import '../core/theme/app_theme.dart';
 import '../core/theme/style_tokens.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -14,26 +16,30 @@ class StyleShowcaseScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final m = AppTheme.metrics;
     return Scaffold(
+      // 展板底：亮暗两版并排时地面必须中性——跟着主题走的话，暗色主题下
+      // darkCanvas(#0A0A0A) 与暗色稿同色，那块面板就直接消失在背景里。
+      // 这一档中性灰和下面 720/1040 的定宽画布同属出图夹具，不随主题解析。
       backgroundColor: const Color(0xFFE9E9E6),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(DesignSpace.u6),
+          padding: EdgeInsets.all(m.kSpace24),
           child: Center(
             child: Column(
               children: [
                 Wrap(
-                  spacing: DesignSpace.u6,
-                  runSpacing: DesignSpace.u6,
+                  spacing: m.kSpace24,
+                  runSpacing: m.kSpace24,
                   children: const [
                     _ShellPanel(palette: DesignPalette.light),
                     _ShellPanel(palette: DesignPalette.dark),
                   ],
                 ),
-                const SizedBox(height: DesignSpace.u6),
+                SizedBox(height: m.kSpace24),
                 Wrap(
-                  spacing: DesignSpace.u6,
-                  runSpacing: DesignSpace.u6,
+                  spacing: m.kSpace24,
+                  runSpacing: m.kSpace24,
                   children: const [
                     _Panel(palette: DesignPalette.light),
                     _Panel(palette: DesignPalette.dark),
@@ -55,6 +61,8 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 画布是定宽夹具：内部一切尺寸都是参考稿的绝对像素，画布一旦跟着窗口收，
+    // 那些不会缩的窄行（_RunDetail 的元信息行等）就会顶穿 —— 排版塌陷由这一句挡住
     return SizedBox(
       width: 720,
       height: 1040,
@@ -1429,6 +1437,9 @@ class _ShellPanel extends StatefulWidget {
 }
 
 class _ShellPanelState extends State<_ShellPanel> {
+  /// 侧栏折叠/展开的动画时长：走全站动效口径，收起态与展开态同一条节奏
+  static const Duration _collapseDuration = AppMotion.slow;
+
   double _navWidth = _ShellPanel._defaultNavWidth;
   bool _collapsed = false;
   bool _resizing = false;
@@ -1493,10 +1504,8 @@ class _ShellPanelState extends State<_ShellPanel> {
                 children: [
                   // 一条侧栏两种状态：图标条是收起态，整块菜单是展开态
                   AnimatedContainer(
-                    duration: _resizing
-                        ? Duration.zero
-                        : const Duration(milliseconds: 260),
-                    curve: Curves.easeInOutCubic,
+                    duration: _resizing ? Duration.zero : _collapseDuration,
+                    curve: AppMotion.standard,
                     width: targetWidth,
                     // 布局按实际宽度决定，不按 _collapsed：动画途中两种状态都会
                     // 经过装不下标签的宽度，标签提前进来就溢出、提前走就跳一下
@@ -1731,7 +1740,7 @@ class _ShellNav extends StatelessWidget {
               ),
             ),
           ),
-          const Divider(height: 1, thickness: 1, color: Color(0x00000000)),
+          const Divider(height: 1, thickness: 1, color: Colors.transparent),
           Padding(
             // 图标态把这层内缩让掉：它叠在条目自己的内缩之上，
             // 64 宽的图标条里再缩 24 就没地方放图标了

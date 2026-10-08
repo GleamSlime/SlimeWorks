@@ -2,7 +2,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/ncm_decrypt_service.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
@@ -22,28 +24,33 @@ class _NcmFolderPickerDialogState extends State<NcmFolderPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
 
     return AlertDialog(
       title: const Text('NCM 解密'),
       content: SizedBox(
-        width: 480,
+        width: scaleW(480),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 选择文件夹
-            Text('选择包含 NCM 文件的文件夹', style: theme.textTheme.bodyMedium),
+            Text('选择包含 NCM 文件的文件夹', style: AppTextStyles.body(context)),
             SizedBox(height: m.kSpace12),
             Row(
               children: [
                 Expanded(
                   child: Text(
                     _selectedDir ?? '未选择文件夹',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: _selectedDir != null ? theme.textTheme.bodySmall?.color : theme.hintColor,
+                    // 路径选定后就是内容，从占位的三档提到二档，和"未选择"区分开
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize12,
+                      height: 1.6,
+                      color: _selectedDir != null ? s.textSecondary : s.textTertiary,
                     ),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -70,15 +77,17 @@ class _NcmFolderPickerDialogState extends State<NcmFolderPickerDialog> {
 
             // 扫描结果
             if (_isScanning)
-              const Center(child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ))
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.all(m.kSpace16),
+                  child: CircularProgressIndicator(strokeWidth: scaleW(2)),
+                ),
+              )
             else if (_scannedFiles.isNotEmpty) ...[
               Container(
                 padding: EdgeInsets.all(m.kSpace12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withAlpha(10),
+                  color: s.accentContainer,
                   borderRadius: m.radius8,
                 ),
                 child: Column(
@@ -86,12 +95,17 @@ class _NcmFolderPickerDialogState extends State<NcmFolderPickerDialog> {
                   children: [
                     Text(
                       '发现 ${_scannedFiles.length} 个 NCM 文件',
-                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                      style: AppTextStyles.cardTitle(context),
                     ),
                     SizedBox(height: m.kSpace4),
                     Text(
                       '总大小: ${_formatFileSize(_totalSize)}',
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: m.fontSize12,
+                        height: 1.6,
+                        color: s.textTertiary,
+                      ),
                     ),
                   ],
                 ),
@@ -103,18 +117,32 @@ class _NcmFolderPickerDialogState extends State<NcmFolderPickerDialog> {
                       padding: EdgeInsets.symmetric(vertical: m.kSpace2),
                       child: Row(
                         children: [
-                          DrawIcon(StrokeIcons.audioFile, size: m.iconSize16, color: theme.hintColor),
+                          DrawIcon(StrokeIcons.audioFile, size: m.iconSize16, color: s.textTertiary),
                           SizedBox(width: m.kSpace8),
                           Expanded(
                             child: Text(
                               f.fileName,
-                              style: theme.textTheme.bodySmall,
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: m.fontSize12,
+                                height: 1.6,
+                                color: s.textTertiary,
+                              ),
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          SizedBox(width: m.kSpace8),
                           Text(
                             _formatFileSize(f.fileSize),
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: m.fontSize12,
+                              height: 1.6,
+                              color: s.textTertiary,
+                            ),
                           ),
                         ],
                       ),
@@ -125,7 +153,12 @@ class _NcmFolderPickerDialogState extends State<NcmFolderPickerDialog> {
                   padding: EdgeInsets.only(top: m.kSpace4),
                   child: Text(
                     '...还有 ${_scannedFiles.length - 5} 个文件',
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize12,
+                      height: 1.6,
+                      color: s.textTertiary,
+                    ),
                   ),
                 ),
             ] else if (_selectedDir != null && !_isScanning)
@@ -133,7 +166,12 @@ class _NcmFolderPickerDialogState extends State<NcmFolderPickerDialog> {
                 padding: EdgeInsets.symmetric(vertical: m.kSpace8),
                 child: Text(
                   '该目录下未发现 NCM 文件',
-                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange),
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize12,
+                    height: 1.6,
+                    color: s.warning.onContainer,
+                  ),
                 ),
               ),
           ],

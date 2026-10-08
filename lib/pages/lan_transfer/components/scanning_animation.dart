@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -30,8 +29,9 @@ class _ScanningAnimationState extends State<ScanningAnimation> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
+    // 取色只走语义层：isDark 三元分支与裸色值一律收敛到 AppSemantic
+    final s = AppSemantic.of(context);
+    final primaryColor = s.accent;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -41,7 +41,6 @@ class _ScanningAnimationState extends State<ScanningAnimation> with SingleTicker
           painter: _RadarPainter(
             progress: _controller.value,
             primaryColor: primaryColor,
-            isDark: isDark,
           ),
           child: child,
         );
@@ -55,17 +54,22 @@ class _ScanningAnimationState extends State<ScanningAnimation> with SingleTicker
               height: scaleW(56),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: (isDark ? DarkColors.primary : LightColors.primary).withValues(alpha: 0.15),
+                color: s.accent.withValues(alpha: 0.15),
               ),
               child: DrawIcon(StrokeIcons.wifiTethering,
                 size: scaleW(28),
-                color: isDark ? DarkColors.primary : LightColors.primary,
+                color: s.accent,
               ),
             ),
             SizedBox(height: AppTheme.metrics.kSpace12),
             Text(
               '正在搜索设备...',
-              style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: isDark ? DarkColors.white80 : LightColors.black80),
+              style: AppTextStyles.role(
+                context,
+                fontSize: AppTheme.metrics.fontSize13,
+                height: 1.5,
+                color: s.textSecondary,
+              ),
             ),
           ],
         ),
@@ -78,9 +82,8 @@ class _ScanningAnimationState extends State<ScanningAnimation> with SingleTicker
 class _RadarPainter extends CustomPainter {
   final double progress;
   final Color primaryColor;
-  final bool isDark;
 
-  _RadarPainter({required this.progress, required this.primaryColor, required this.isDark});
+  _RadarPainter({required this.progress, required this.primaryColor});
 
   @override
   void paint(Canvas canvas, Size size) {

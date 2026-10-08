@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'base_viewmodel.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -127,7 +128,7 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
           children: [
             DrawIcon(StrokeIcons.errorOutline,
               size: AppTheme.metrics.iconSize64,
-              color: Theme.of(context).colorScheme.error,
+              color: AppSemantic.of(context).danger.color,
             ),
             SizedBox(height: AppTheme.metrics.kSpace16),
             Text('页面加载失败', style: Theme.of(context).textTheme.titleLarge),

@@ -150,7 +150,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
     if (key == null) return;
     final ctx = key.currentContext;
     if (ctx == null) return;
-    Scrollable.ensureVisible(ctx, alignment: 0.3, duration: const Duration(milliseconds: 400));
+    Scrollable.ensureVisible(ctx, alignment: 0.3, duration: AppMotion.emphasis);
   }
 
   void _scheduleReveal() {
@@ -299,13 +299,13 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
           child: IgnorePointer(
             child: AnimatedOpacity(
               opacity: isHighlighted ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 400),
+              duration: AppMotion.emphasis,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   // 和卡片自己的圆角同源，否则高亮环会在角上露出缝隙
                   borderRadius: appMetrics.radiusCard,
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.9),
+                    color: AppSemantic.of(context).accent.withValues(alpha: 0.9),
                     width: 3,
                   ),
                 ),
@@ -323,11 +323,11 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
     return TweenAnimationBuilder<double>(
       key: ValueKey('anim_$globalIndex'),
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 480),
+      duration: AppMotion.emphasis,
       curve: Curves.easeOutCubic,
       builder: (context, value, child) => Opacity(
         opacity: value.clamp(0.0, 1.0),
-        child: Transform.translate(offset: Offset(0, 28 * (1 - value)), child: child),
+        child: Transform.translate(offset: Offset(0, scaleH(28) * (1 - value)), child: child),
       ),
       child: _buildTile(item, globalIndex, colWidth),
     );

@@ -1,8 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/app_log_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -37,7 +38,10 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
-    final isDark = Get.isDarkMode;
+    final s = AppSemantic.of(context);
+    // 终端内容区自带一套控制台配色（深色底 + 高饱和语法色），明暗两档由语义层
+    // 判定后各取自己的色板；页面 chrome（工具条/筛选片/空态）一律走语义角色。
+    final isDark = s.isDark;
 
     return Obx(() {
       final vm = widget.viewModel;
@@ -53,17 +57,18 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                 width: m.iconSize32,
                 height: m.iconSize32,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: isDark ? DarkColors.primary : LightColors.primary,
+                  strokeWidth: m.kSpace2,
+                  color: s.accent,
                 ),
               ),
               SizedBox(height: m.kSpace12),
               Text(
                 '加载日志...',
-                style: TextStyle(
+                style: AppTextStyles.role(
+                  context,
                   fontSize: m.fontSize13,
+                  color: s.textSecondary,
                   height: 1.5,
-                  color: isDark ? DarkColors.white80 : LightColors.black80,
                 ),
               ),
             ],
@@ -73,43 +78,36 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
 
       return Column(
         children: [
-          _buildToolbar(context, m, isDark),
+          _buildToolbar(context, s, m),
           SizedBox(height: m.kSpace8),
-          Expanded(child: _buildTerminalView(context, m, isDark)),
+          Expanded(child: _buildTerminalView(context, s, m, isDark)),
         ],
       );
     });
   }
 
-  Widget _buildToolbar(BuildContext context, ThemeMetrics m, bool isDark) {
+  Widget _buildToolbar(BuildContext context, AppSemantic s, ThemeMetrics m) {
     final vm = widget.viewModel;
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
 
     return Container(
       margin: EdgeInsets.symmetric(horizontal: m.kSpace16),
       padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace8),
       decoration: BoxDecoration(
+        // 工具条是页面面板，不是终端的一部分：走语义表面层，留一点透明度让出窗口磨砂。
         gradient: LinearGradient(
           colors: [
-            isDark ? DarkColors.background1.withAlpha(220) : LightColors.background1.withAlpha(240),
-            isDark ? DarkColors.background2.withAlpha(160) : LightColors.background2.withAlpha(200),
+            s.surfaceRaised.withAlpha(235),
+            s.surface.withAlpha(190),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: m.radius10,
-        border: Border.all(
-          color: isDark ? DarkColors.white10.withAlpha(40) : LightColors.black10.withAlpha(30),
-          width: 0.5,
-        ),
+        border: Border.all(color: s.hairline, width: scaleW(0.5)),
         boxShadow: [
+          ...s.elevation(Elevation.raised),
           BoxShadow(
-            color: isDark ? DarkColors.black10 : LightColors.black10,
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-          BoxShadow(
-            color: primaryColor.withAlpha(8),
+            color: s.accent.withAlpha(8),
             blurRadius: scaleW(16),
             offset: Offset(0, scaleW(3)),
           ),
@@ -120,46 +118,44 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
         runSpacing: m.kSpace6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          DrawIcon(StrokeIcons.terminal, size: m.iconSize18, color: primaryColor),
+          DrawIcon(StrokeIcons.terminal, size: m.iconSize18, color: s.accent),
           Container(
             padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace2),
-            decoration: BoxDecoration(color: primaryColor.withAlpha(15), borderRadius: m.radius4),
+            decoration: BoxDecoration(color: s.accentContainer, borderRadius: m.radius4),
             child: Text(
               '${vm.entries.length}',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: m.fontSize11,
+                color: s.accentText,
+                weight: FontWeight.w600,
                 height: 1.4,
-                fontWeight: FontWeight.w600,
-                color: primaryColor,
               ),
             ),
           ),
           SizedBox(
-            width: 160,
+            width: scaleW(160),
             child: Container(
-              height: m.kSpace24,
+              // 原来这里钉了 height: kSpace24，而框内字号走的是吃用户字号滑杆的
+              // fontSize11——字号拉到最大档就会顶出框。改为让输入框按内容自然撑高。
               decoration: BoxDecoration(
-                color: isDark
-                    ? DarkColors.background3.withAlpha(120)
-                    : LightColors.background3.withAlpha(100),
+                color: s.surfaceSunken,
                 borderRadius: m.radius6,
-                border: Border.all(
-                  color: isDark ? DarkColors.white10 : LightColors.black10,
-                  width: 0.5,
-                ),
+                border: Border.all(color: s.border, width: scaleW(0.5)),
               ),
               child: AppTextField(
                 controller: _searchController,
-                style: TextStyle(fontSize: m.fontSize11, height: 1.4, fontFamily: 'monospace'),
+                style: AppTextStyles.mono(context, size: m.fontSize11).copyWith(height: 1.4),
                 decoration: InputDecoration(
                   hintText: '搜索关键词...',
-                  hintStyle: TextStyle(
-                    fontSize: m.fontSize11,
-                    color: isDark ? DarkColors.white40 : LightColors.black40,
+                  hintStyle: AppTextStyles.mono(context, size: m.fontSize11).copyWith(
+                    color: s.textTertiary,
+                    height: 1.4,
                   ),
-                  prefixIcon: DrawIcon(StrokeIcons.search,
+                  prefixIcon: DrawIcon(
+                    StrokeIcons.search,
                     size: m.iconSize14,
-                    color: isDark ? DarkColors.white40 : LightColors.black40,
+                    color: s.textTertiary,
                   ),
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace2),
@@ -169,34 +165,26 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
               ),
             ),
           ),
-          _buildLevelChip('ALL', '', vm, m, isDark),
-          _buildLevelChip('ERR', 'ERROR', vm, m, isDark),
-          _buildLevelChip('WRN', 'WARN', vm, m, isDark),
-          _buildLevelChip('INF', 'INFO', vm, m, isDark),
-          _buildLevelChip('DBG', 'DEBUG', vm, m, isDark),
+          _buildLevelChip(context, s, 'ALL', '', vm, m),
+          _buildLevelChip(context, s, 'ERR', 'ERROR', vm, m),
+          _buildLevelChip(context, s, 'WRN', 'WARN', vm, m),
+          _buildLevelChip(context, s, 'INF', 'INFO', vm, m),
+          _buildLevelChip(context, s, 'DBG', 'DEBUG', vm, m),
           GestureDetector(
             onTap: vm.isWatching.value ? vm.stopWatching : vm.startWatching,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
+              duration: AppMotion.base,
+              curve: AppMotion.standard,
               padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace4),
               decoration: BoxDecoration(
-                gradient: vm.isWatching.value
-                    ? LinearGradient(
-                        colors: [Colors.green.withAlpha(40), Colors.green.withAlpha(15)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                color: vm.isWatching.value
-                    ? null
-                    : (isDark ? DarkColors.background2 : LightColors.background2),
+                // 监听态就是 success 角色：容器底与描边由角色派生，不手写 alpha。
+                // 原先在 gradient 与 color 之间来回切，AnimatedContainer 其实动不了
+                // 这两种装饰，统一成 color 之后切换才真正是连续的。
+                color: vm.isWatching.value ? s.success.container : s.surface,
                 borderRadius: m.radius6,
                 border: Border.all(
-                  color: vm.isWatching.value
-                      ? Colors.green.withAlpha(60)
-                      : (isDark ? DarkColors.white10 : LightColors.black10),
-                  width: 0.5,
+                  color: vm.isWatching.value ? s.success.containerBorder : s.border,
+                  width: scaleW(0.5),
                 ),
               ),
               child: Row(
@@ -207,21 +195,26 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                     height: m.kSpace6,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: vm.isWatching.value
-                          ? Colors.green
-                          : (isDark ? DarkColors.white40 : LightColors.black40),
+                      color: vm.isWatching.value ? s.success.color : s.textTertiary,
                       boxShadow: vm.isWatching.value
-                          ? [BoxShadow(color: Colors.green.withAlpha(40), blurRadius: scaleW(4))]
+                          ? [
+                              BoxShadow(
+                                color: s.success.color.withAlpha(40),
+                                blurRadius: scaleW(4),
+                              )
+                            ]
                           : null,
                     ),
                   ),
                   SizedBox(width: m.kSpace6),
                   Text(
                     vm.isWatching.value ? '实时' : '静态',
-                    style: TextStyle(
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: m.fontSize11,
+                      color: vm.isWatching.value ? s.success.onContainer : s.textSecondary,
+                      weight: FontWeight.w500,
                       height: 1.4,
-                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -231,13 +224,11 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
           _ActionButton(
             icon: StrokeIcons.refresh,
             tooltip: '刷新',
-            isDark: isDark,
             onPressed: () => vm.loadLogs(),
           ),
           _ActionButton(
             icon: StrokeIcons.clearAll,
             tooltip: '清除筛选',
-            isDark: isDark,
             onPressed: () {
               _searchController.clear();
               vm.clearFilters();
@@ -248,54 +239,77 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
     );
   }
 
+  /// 级别 → 状态角色：ALL（空串）与语义层没覆盖到的级别都归 neutral
+  AppStatusRole _levelRole(AppSemantic s, String level) {
+    switch (level) {
+      case 'ERROR':
+        return s.danger;
+      case 'WARN':
+        return s.warning;
+      case 'DEBUG':
+        return s.info;
+      case 'INFO':
+        return s.success;
+      default:
+        return s.neutral;
+    }
+  }
+
   Widget _buildLevelChip(
+    BuildContext context,
+    AppSemantic s,
     String label,
     String level,
     AppLogViewModel vm,
     ThemeMetrics m,
-    bool isDark,
   ) {
     final isActive = vm.selectedLevel.value == level;
-    final color = level.isEmpty
-        ? (isDark ? DarkColors.primary : LightColors.primary)
-        : vm.getLevelColor(level);
+    final role = _levelRole(s, level);
 
     return GestureDetector(
       onTap: () => vm.setLevelFilter(level),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
         padding: EdgeInsets.symmetric(horizontal: m.kSpace6, vertical: m.kSpace2),
         decoration: BoxDecoration(
-          color: isActive ? color.withAlpha(25) : Colors.transparent,
+          color: isActive ? role.container : Colors.transparent,
           borderRadius: m.radius4,
           border: Border.all(
-            color: isActive
-                ? color.withAlpha(80)
-                : (isDark ? DarkColors.white10 : LightColors.black10),
-            width: isActive ? 1 : 0.5,
+            color: isActive ? role.containerBorder : s.border,
+            width: isActive ? scaleW(1) : scaleW(0.5),
           ),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            fontSize: m.fontSize10,
+          // 筛选片是终端工具条上的小字，保留等宽；选中态文字走 onContainer，
+          // 状态主色是给"点"用的，直接当小字号文字会糊。
+          style: AppTextStyles.mono(context, size: m.fontSize10).copyWith(
             height: 1.4,
             fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
-            color: isActive ? color : (isDark ? DarkColors.white40 : LightColors.black40),
-            fontFamily: 'monospace',
+            color: isActive ? role.onContainer : s.textTertiary,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTerminalView(BuildContext context, ThemeMetrics m, bool isDark) {
+  /// 终端内容区
+  ///
+  /// 底色/边框/标题栏与正文语法色保留字面量：这是一套刻意的控制台配色
+  /// （深底 + 高饱和语法色），换成 `textSecondary`/`surface` 会让语法高亮失去
+  /// 层次，也让这块区域不再像终端。等级色已经收敛进 [AppStatusRole]。
+  Widget _buildTerminalView(
+    BuildContext context,
+    AppSemantic s,
+    ThemeMetrics m,
+    bool isDark,
+  ) {
     final vm = widget.viewModel;
     final entries = vm.entries;
 
     if (entries.isEmpty) {
-      return _buildEmptyState(m, isDark);
+      return _buildEmptyState(context, s, m);
     }
 
     return Container(
@@ -305,15 +319,9 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
         borderRadius: m.radius12,
         border: Border.all(
           color: isDark ? const Color(0xFF1A1F29) : const Color(0xFFE0E0E0),
-          width: 1,
+          width: scaleW(1),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? Colors.black : Colors.grey).withAlpha(40),
-            blurRadius: scaleW(12),
-            offset: Offset(0, scaleW(4)),
-          ),
-        ],
+        boxShadow: s.elevation(Elevation.card),
       ),
       child: ClipRRect(
         borderRadius: m.radius12,
@@ -330,6 +338,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
               ),
               child: Row(
                 children: [
+                  // 标题栏的三颗灯是仿终端窗饰，恒为红/黄/绿，不跟主题反相
                   Container(
                     width: scaleW(10),
                     height: scaleW(10),
@@ -360,12 +369,12 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                   Expanded(
                     child: Text(
                       'slime_works — log terminal',
-                      style: TextStyle(
-                        fontSize: m.fontSize11,
+                      style: AppTextStyles.mono(context, size: m.fontSize11).copyWith(
                         height: 1.4,
                         color: isDark ? const Color(0xFF6C7A89) : const Color(0xFF888888),
-                        fontFamily: 'monospace',
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -387,7 +396,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                   itemCount: entries.length,
                   itemBuilder: (ctx, i) {
                     final entry = entries[i];
-                    return _buildLogLine(entry, m, isDark);
+                    return _buildLogLine(context, s, entry, m, isDark);
                   },
                 ),
               ),
@@ -398,8 +407,17 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
     );
   }
 
-  Widget _buildLogLine(AppLogEntry entry, ThemeMetrics m, bool isDark) {
-    final levelColor = _getTerminalLevelColor(entry.level, isDark);
+  Widget _buildLogLine(
+    BuildContext context,
+    AppSemantic s,
+    AppLogEntry entry,
+    ThemeMetrics m,
+    bool isDark,
+  ) {
+    // 等级色走状态角色：danger/warning/info/success 的明暗两档本身就够了压住
+    // 深底和浅底，不需要再手写一套等级色板。
+    final levelColor = _levelRole(s, entry.level).color;
+    // 来源标记与正文/时间戳属于控制台语法色，跟着底色成套，保留字面量。
     final sourceColor = entry.source == 'rust'
         ? (isDark ? const Color(0xFFE06C75) : const Color(0xFFBE5046))
         : (isDark ? const Color(0xFF61AFEF) : const Color(0xFF4078F2));
@@ -410,15 +428,16 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
 
     return Padding(
       padding: EdgeInsets.only(bottom: m.kSpace2),
+      // 日志行不设 maxLines：整行是等宽正文，超长时自动换行而不是被截断，
+      // 行内也没有固定宽度容器，字号滑杆拉大只会让行更高。
       child: RichText(
         text: TextSpan(
-          style: TextStyle(
-            fontSize: m.fontSize11,
+          style: AppTextStyles.mono(context, size: m.fontSize11).copyWith(
             height: 1.6,
-            fontFamily: 'monospace',
             color: messageColor,
           ),
           children: [
+            // 子 span 只写颜色：TextSpan 的样式与父 span 合并，字族仍然继承上面的等宽
             TextSpan(
               text: entry.rawTimestamp.isNotEmpty ? entry.rawTimestamp : '??',
               style: TextStyle(color: timestampColor),
@@ -447,7 +466,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
               text: ' ',
               style: TextStyle(color: timestampColor),
             ),
-            ..._buildMessageSpans(entry.message, keywords, messageColor, isDark, m),
+            ..._buildMessageSpans(entry.message, keywords, messageColor, isDark),
           ],
         ),
       ),
@@ -459,7 +478,6 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
     Set<String> keywords,
     Color baseColor,
     bool isDark,
-    ThemeMetrics m,
   ) {
     if (keywords.isEmpty) {
       return [
@@ -480,6 +498,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
     final matches = pattern.allMatches(message);
     int lastEnd = 0;
 
+    // 关键词/路径/数字三类语法高亮：与终端底色成套，保留字面量
     final kwColor = isDark ? const Color(0xFFE5C07B) : const Color(0xFF986801);
     final pathColor = isDark ? const Color(0xFF98C379) : const Color(0xFF50A14F);
     final numColor = isDark ? const Color(0xFFD19A66) : const Color(0xFFA45200);
@@ -577,55 +596,46 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
     return double.tryParse(text) != null;
   }
 
-  Color _getTerminalLevelColor(String level, bool isDark) {
-    switch (level) {
-      case 'ERROR':
-        return isDark ? const Color(0xFFE06C75) : const Color(0xFFBE5046);
-      case 'WARN':
-        return isDark ? const Color(0xFFE5C07B) : const Color(0xFF986801);
-      case 'DEBUG':
-        return isDark ? const Color(0xFFC678DD) : const Color(0xFFA626A4);
-      case 'INFO':
-        return isDark ? const Color(0xFF98C379) : const Color(0xFF50A14F);
-      default:
-        return isDark ? const Color(0xFF56B6C2) : const Color(0xFF0184BC);
-    }
-  }
-
-  Widget _buildEmptyState(ThemeMetrics m, bool isDark) {
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
-
+  Widget _buildEmptyState(BuildContext context, AppSemantic s, ThemeMetrics m) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: scaleW(80),
-            height: scaleW(80),
+            width: m.kSpace80,
+            height: m.kSpace80,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
-                colors: [primaryColor.withAlpha(15), primaryColor.withAlpha(4), Colors.transparent],
+                colors: [s.accent.withAlpha(15), s.accent.withAlpha(4), Colors.transparent],
                 stops: const [0.0, 0.5, 1.0],
               ),
             ),
-            child: DrawIcon(StrokeIcons.terminal,
+            child: DrawIcon(
+              StrokeIcons.terminal,
               size: scaleW(36),
-              color: primaryColor.withAlpha(60),
+              color: s.accent.withAlpha(60),
             ),
           ),
           SizedBox(height: m.kSpace16),
           Text(
             '暂无应用日志',
-            style: TextStyle(fontSize: m.fontSize15, height: 1.5, fontWeight: FontWeight.w600),
+            style: AppTextStyles.role(
+              context,
+              fontSize: m.fontSize15,
+              color: s.textPrimary,
+              weight: FontWeight.w600,
+              height: 1.5,
+            ),
           ),
           SizedBox(height: m.kSpace4),
           Text(
             '点击「实时」按钮开始收集',
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: m.fontSize13,
+              color: s.textSecondary,
               height: 1.5,
-              color: isDark ? DarkColors.white80 : LightColors.black80,
             ),
           ),
         ],
@@ -637,13 +647,11 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
 class _ActionButton extends StatefulWidget {
   final StrokeIcon icon;
   final String tooltip;
-  final bool isDark;
   final VoidCallback onPressed;
 
   const _ActionButton({
     required this.icon,
     required this.tooltip,
-    required this.isDark,
     required this.onPressed,
   });
 
@@ -657,28 +665,28 @@ class _ActionButtonState extends State<_ActionButton> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onPressed,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
+          duration: AppMotion.fast,
+          curve: AppMotion.standard,
           padding: EdgeInsets.all(m.kSpace6),
           decoration: BoxDecoration(
-            color: _hovered
-                ? (widget.isDark ? DarkColors.white10 : LightColors.black10).withAlpha(40)
-                : Colors.transparent,
+            color: _hovered ? s.surfaceHover : Colors.transparent,
             borderRadius: m.radius6,
           ),
           child: AnimatedScale(
             scale: _hovered ? 1.1 : 1.0,
-            duration: const Duration(milliseconds: 150),
+            duration: AppMotion.fast,
+            curve: AppMotion.standard,
             child: DrawIcon(
               widget.icon,
               size: m.iconSize16,
-              color: widget.isDark ? DarkColors.white80 : LightColors.black80,
+              color: _hovered ? s.textPrimary : s.textSecondary,
             ),
           ),
         ),

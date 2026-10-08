@@ -20,6 +20,8 @@ import 'package:slime_works/core/services/manga_download_service.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
@@ -76,7 +78,9 @@ class _MangaReaderScreenState
 
   static const double _kImmersiveScrollThreshold = 100;
   static const double _kExitImmersiveScrollUp = 60;
-  static const Duration _kOverlayAnim = Duration(milliseconds: 180);
+
+  /// 顶底覆盖层进出场时长：走反馈档，点击后必须跟手
+  static const Duration _kOverlayAnim = AppMotion.fast;
 
   void _handleBack() {
     _isImmersive.value = false;
@@ -188,18 +192,23 @@ class _MangaReaderScreenState
                 ignoring: isImmersive,
                 child: AnimatedSlide(
                   duration: _kOverlayAnim,
-                  curve: Curves.easeOutCubic,
+                  curve: AppMotion.decelerate,
                   offset: isImmersive ? const Offset(0, -1) : Offset.zero,
                   child: ClipRect(
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      filter: ImageFilter.blur(
+                        sigmaX: scaleW(18),
+                        sigmaY: scaleW(18),
+                      ),
                       child: Container(
                         decoration: BoxDecoration(
+                          // 覆盖层压在漫画画面之上：白色磨砂 + 深色字是固定搭配，
+                          // 跟着主题翻转会在浅色档糊成一片，所以这里不取语义色。
                           color: Colors.white.withValues(alpha: 0.62),
                           border: Border(
                             bottom: BorderSide(
                               color: Colors.white.withValues(alpha: 0.4),
-                              width: 0.5,
+                              width: scaleW(0.5),
                             ),
                           ),
                         ),
@@ -225,10 +234,12 @@ class _MangaReaderScreenState
                                 epsTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.black87,
+                                // 标题深色字固定配白色磨砂底，只补字族与字号档
+                                style: AppTextStyles.role(
+                                  context,
                                   fontSize: AppTheme.metrics.fontSize15,
-                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                  weight: FontWeight.w600,
                                 ),
                               ),
                               actions: [
@@ -264,18 +275,23 @@ class _MangaReaderScreenState
                 ignoring: isImmersive,
                 child: AnimatedSlide(
                   duration: _kOverlayAnim,
-                  curve: Curves.easeOutCubic,
+                  curve: AppMotion.decelerate,
                   offset: isImmersive ? const Offset(0, 1) : Offset.zero,
                   child: ClipRect(
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      filter: ImageFilter.blur(
+                        sigmaX: scaleW(18),
+                        sigmaY: scaleW(18),
+                      ),
                       child: Container(
                         decoration: BoxDecoration(
+                          // 覆盖层压在漫画画面之上：白色磨砂 + 深色字是固定搭配，
+                          // 跟着主题翻转会在浅色档糊成一片，所以这里不取语义色。
                           color: Colors.white.withValues(alpha: 0.62),
                           border: Border(
                             top: BorderSide(
                               color: Colors.white.withValues(alpha: 0.4),
-                              width: 0.5,
+                              width: scaleW(0.5),
                             ),
                           ),
                         ),
@@ -309,8 +325,10 @@ class _MangaReaderScreenState
       context: context,
       useRootNavigator: true,
       showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: AppTheme.metrics.radius16.topLeft,
+        ),
       ),
       builder: (ctx) => SafeArea(
         child: Column(
@@ -321,7 +339,7 @@ class _MangaReaderScreenState
               title: const Text('下载'),
               subtitle: Text(
                 '选择章节下载',
-                style: TextStyle(fontSize: AppTheme.metrics.fontSize11),
+                style: AppTextStyles.caption(ctx),
               ),
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -336,7 +354,7 @@ class _MangaReaderScreenState
                 title: const Text('离线保存到媒体库'),
                 subtitle: Text(
                   '保存所有已加载图片',
-                  style: TextStyle(fontSize: AppTheme.metrics.fontSize11),
+                  style: AppTextStyles.caption(ctx),
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
@@ -402,12 +420,16 @@ class _MangaReaderScreenState
         context: ctx,
         useRootNavigator: true,
         isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: AppTheme.metrics.radius16.topLeft,
+          ),
         ),
         builder: (ctx) {
           return StatefulBuilder(
             builder: (ctx2, setSheetState) {
+              final s = AppSemantic.of(ctx2);
+              final m = AppTheme.metrics;
               // 选择节点：列出已启用节点，选中后清空目录选择
               Future<void> pickNode() async {
                 final nodes = getIt<NodeSettingsService>();
@@ -422,13 +444,15 @@ class _MangaReaderScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                          padding: EdgeInsets.fromLTRB(
+                            m.kSpace16,
+                            m.kSpace4,
+                            m.kSpace16,
+                            m.kSpace8,
+                          ),
                           child: Text(
                             '选择节点',
-                            style: TextStyle(
-                              fontSize: AppTheme.metrics.fontSize15,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: AppTextStyles.sectionTitle(sheetCtx),
                           ),
                         ),
                         if (nodes.enabledRemoteNodes.isEmpty)
@@ -455,16 +479,13 @@ class _MangaReaderScreenState
                                       n.effectiveApiBaseUrl,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize:
-                                            AppTheme.metrics.fontSize11,
-                                      ),
+                                      style: AppTextStyles.caption(sheetCtx),
                                     ),
                                     trailing: n.id == pickedNode?.id
-                                        ? Icon(
-                                            Icons.check,
-                                            size:
-                                                AppTheme.metrics.iconSize18,
+                                        ? DrawIcon(
+                                            StrokeIcons.check,
+                                            size: m.iconSize18,
+                                            color: s.accent,
                                           )
                                         : null,
                                     onTap: () =>
@@ -551,15 +572,17 @@ class _MangaReaderScreenState
                   return Column(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        padding: EdgeInsets.fromLTRB(
+                          m.kSpace16,
+                          m.kSpace12,
+                          m.kSpace16,
+                          0,
+                        ),
                         child: Row(
                           children: [
                             Text(
                               '选择下载章节',
-                              style: TextStyle(
-                                fontSize: AppTheme.metrics.fontSize15,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: AppTextStyles.sectionTitle(ctx2),
                             ),
                             const Spacer(),
                             TextButton(
@@ -586,19 +609,23 @@ class _MangaReaderScreenState
                       ),
                       // 下载目标：本机 / 节点
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        padding: EdgeInsets.fromLTRB(
+                          m.kSpace16,
+                          m.kSpace8,
+                          m.kSpace16,
+                          0,
+                        ),
                         child: Row(
                           children: [
                             Text(
                               '下载到',
-                              style: TextStyle(
-                                fontSize: AppTheme.metrics.fontSize12,
-                                color: Theme.of(
-                                  ctx2,
-                                ).colorScheme.onSurfaceVariant,
+                              style: AppTextStyles.role(
+                                ctx2,
+                                fontSize: m.fontSize12,
+                                color: s.textSecondary,
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            SizedBox(width: m.kSpace12),
                             ChoiceChip(
                               label: const Text('本机'),
                               visualDensity: VisualDensity.compact,
@@ -606,7 +633,7 @@ class _MangaReaderScreenState
                               onSelected: (_) =>
                                   setSheetState(() => destMode = 'local'),
                             ),
-                            const SizedBox(width: 8),
+                            SizedBox(width: m.kSpace8),
                             ChoiceChip(
                               label: const Text('节点'),
                               visualDensity: VisualDensity.compact,
@@ -620,50 +647,49 @@ class _MangaReaderScreenState
                       if (destMode == 'node') ...[
                         // 节点选择行
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                          padding: EdgeInsets.fromLTRB(
+                            m.kSpace16,
+                            m.kSpace8,
+                            m.kSpace16,
+                            0,
+                          ),
                           child: InkWell(
-                            borderRadius: AppTheme.metrics.radius8,
+                            borderRadius: m.radius8,
                             onTap: pickNode,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: m.kSpace12,
+                                vertical: m.kSpace8,
                               ),
                               child: Row(
                                 children: [
                                   Text(
                                     '节点',
-                                    style: TextStyle(
-                                      fontSize: AppTheme.metrics.fontSize12,
-                                      color: Theme.of(
-                                        ctx2,
-                                      ).colorScheme.onSurfaceVariant,
+                                    style: AppTextStyles.role(
+                                      ctx2,
+                                      fontSize: m.fontSize12,
+                                      color: s.textSecondary,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  SizedBox(width: m.kSpace12),
                                   Expanded(
                                     child: Text(
                                       pickedNode?.name ?? '选择节点',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: AppTheme.metrics.fontSize13,
+                                      style: AppTextStyles.role(
+                                        ctx2,
+                                        fontSize: m.fontSize13,
                                         color: pickedNode == null
-                                            ? Theme.of(
-                                                ctx2,
-                                              ).colorScheme.primary
-                                            : Theme.of(
-                                                ctx2,
-                                              ).colorScheme.onSurface,
+                                            ? s.accentText
+                                            : s.textPrimary,
                                       ),
                                     ),
                                   ),
                                   DrawIcon(
                                     StrokeIcons.chevronRight,
-                                    size: AppTheme.metrics.iconSize16,
-                                    color: Theme.of(
-                                      ctx2,
-                                    ).colorScheme.outline,
+                                    size: m.iconSize16,
+                                    color: s.textTertiary,
                                   ),
                                 ],
                               ),
@@ -672,50 +698,49 @@ class _MangaReaderScreenState
                         ),
                         // 目标目录行
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                          padding: EdgeInsets.fromLTRB(
+                            m.kSpace16,
+                            m.kSpace4,
+                            m.kSpace16,
+                            0,
+                          ),
                           child: InkWell(
-                            borderRadius: AppTheme.metrics.radius8,
+                            borderRadius: m.radius8,
                             onTap: pickFolder,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: m.kSpace12,
+                                vertical: m.kSpace8,
                               ),
                               child: Row(
                                 children: [
                                   Text(
                                     '目标目录',
-                                    style: TextStyle(
-                                      fontSize: AppTheme.metrics.fontSize12,
-                                      color: Theme.of(
-                                        ctx2,
-                                      ).colorScheme.onSurfaceVariant,
+                                    style: AppTextStyles.role(
+                                      ctx2,
+                                      fontSize: m.fontSize12,
+                                      color: s.textSecondary,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  SizedBox(width: m.kSpace12),
                                   Expanded(
                                     child: Text(
                                       nodeTargetDir ?? '选择目录',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: AppTheme.metrics.fontSize13,
+                                      style: AppTextStyles.role(
+                                        ctx2,
+                                        fontSize: m.fontSize13,
                                         color: nodeTargetDir == null
-                                            ? Theme.of(
-                                                ctx2,
-                                              ).colorScheme.primary
-                                            : Theme.of(
-                                                ctx2,
-                                              ).colorScheme.onSurface,
+                                            ? s.accentText
+                                            : s.textPrimary,
                                       ),
                                     ),
                                   ),
                                   DrawIcon(
                                     StrokeIcons.chevronRight,
-                                    size: AppTheme.metrics.iconSize16,
-                                    color: Theme.of(
-                                      ctx2,
-                                    ).colorScheme.outline,
+                                    size: m.iconSize16,
+                                    color: s.textTertiary,
                                   ),
                                 ],
                               ),
@@ -724,50 +749,49 @@ class _MangaReaderScreenState
                         ),
                         // 归入的媒体库文件夹行（可选）
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                          padding: EdgeInsets.fromLTRB(
+                            m.kSpace16,
+                            m.kSpace4,
+                            m.kSpace16,
+                            0,
+                          ),
                           child: InkWell(
-                            borderRadius: AppTheme.metrics.radius8,
+                            borderRadius: m.radius8,
                             onTap: pickMediaFolder,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: m.kSpace12,
+                                vertical: m.kSpace8,
                               ),
                               child: Row(
                                 children: [
                                   Text(
                                     '归入文件夹',
-                                    style: TextStyle(
-                                      fontSize: AppTheme.metrics.fontSize12,
-                                      color: Theme.of(
-                                        ctx2,
-                                      ).colorScheme.onSurfaceVariant,
+                                    style: AppTextStyles.role(
+                                      ctx2,
+                                      fontSize: m.fontSize12,
+                                      color: s.textSecondary,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  SizedBox(width: m.kSpace12),
                                   Expanded(
                                     child: Text(
                                       nodeFolderLabel ?? '媒体库根目录（可选）',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: AppTheme.metrics.fontSize13,
+                                      style: AppTextStyles.role(
+                                        ctx2,
+                                        fontSize: m.fontSize13,
                                         color: nodeFolderLabel == null
-                                            ? Theme.of(
-                                                ctx2,
-                                              ).colorScheme.primary
-                                            : Theme.of(
-                                                ctx2,
-                                              ).colorScheme.onSurface,
+                                            ? s.accentText
+                                            : s.textPrimary,
                                       ),
                                     ),
                                   ),
                                   DrawIcon(
                                     StrokeIcons.chevronRight,
-                                    size: AppTheme.metrics.iconSize16,
-                                    color: Theme.of(
-                                      ctx2,
-                                    ).colorScheme.outline,
+                                    size: m.iconSize16,
+                                    color: s.textTertiary,
                                   ),
                                 ],
                               ),
@@ -778,12 +802,12 @@ class _MangaReaderScreenState
                       Expanded(
                         child: GridView.builder(
                           controller: controller,
-                          padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
+                          padding: EdgeInsets.all(m.kSpace12),
                           gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
+                              SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 4,
-                                mainAxisSpacing: 8,
-                                crossAxisSpacing: 8,
+                                mainAxisSpacing: m.kSpace8,
+                                crossAxisSpacing: m.kSpace8,
                                 childAspectRatio: 2.5,
                               ),
                           itemCount: viewModel.epsList.length,
@@ -806,30 +830,32 @@ class _MangaReaderScreenState
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   color: isDownloaded
-                                      ? Colors.green.withValues(alpha: 0.3)
+                                      ? s.success.container
                                       : isSelected
-                                      ? Theme.of(ctx2).colorScheme.primary
-                                            .withValues(alpha: 0.3)
-                                      : Theme.of(
-                                          ctx2,
-                                        ).colorScheme.surfaceContainerHighest,
-                                  borderRadius: AppTheme.metrics.radius6,
+                                      ? s.accentContainer
+                                      : s.surfaceSunken,
+                                  borderRadius: m.radius6,
                                   border: isSelected
                                       ? Border.all(
-                                          color: Theme.of(
-                                            ctx2,
-                                          ).colorScheme.primary,
-                                          width: 1.5,
+                                          color: s.accent,
+                                          width: scaleW(1.5),
                                         )
                                       : null,
                                 ),
-                                child: Text(
-                                  '${ep.order}',
-                                  style: TextStyle(
-                                    color: isDownloaded
-                                        ? Colors.green
-                                        : Theme.of(ctx2).colorScheme.onSurface,
-                                    fontSize: AppTheme.metrics.fontSize11,
+                                // 格子高宽比固定，字号滑杆拉高时靠 scaleDown 收进去，
+                                // 不让章节号顶破这一格。
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '${ep.order}',
+                                    maxLines: 1,
+                                    style: AppTextStyles.role(
+                                      ctx2,
+                                      fontSize: m.fontSize11,
+                                      color: isDownloaded
+                                          ? s.success.color
+                                          : s.textPrimary,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -838,7 +864,12 @@ class _MangaReaderScreenState
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        padding: EdgeInsets.fromLTRB(
+                          m.kSpace16,
+                          m.kSpace8,
+                          m.kSpace16,
+                          m.kSpace16,
+                        ),
                         child: SafeArea(
                           top: false,
                           child: SizedBox(
@@ -907,6 +938,8 @@ class _MangaReaderScreenState
       context: screenContext,
       barrierDismissible: false,
       builder: (dialogCtx) => Obx(() {
+        final s = AppSemantic.of(dialogCtx);
+        final m = AppTheme.metrics;
         return AlertDialog(
           title: const Text('下载并推送到节点'),
           content: Column(
@@ -917,9 +950,9 @@ class _MangaReaderScreenState
                 dl.nodePushStage.value.isEmpty
                     ? '准备中...'
                     : dl.nodePushStage.value,
-                style: TextStyle(fontSize: AppTheme.metrics.fontSize13),
+                style: AppTextStyles.body(dialogCtx),
               ),
-              SizedBox(height: AppTheme.metrics.kSpace12),
+              SizedBox(height: m.kSpace12),
               LinearProgressIndicator(
                 value: dl.nodePushTotal.value > 0
                     ? (dl.nodePushDone.value / dl.nodePushTotal.value)
@@ -927,14 +960,13 @@ class _MangaReaderScreenState
                         .toDouble()
                     : null,
               ),
-              SizedBox(height: AppTheme.metrics.kSpace8),
+              SizedBox(height: m.kSpace8),
               Text(
                 '${dl.nodePushDone.value}/${dl.nodePushTotal.value}',
-                style: TextStyle(
-                  fontSize: AppTheme.metrics.fontSize11,
-                  color: Theme.of(
-                    dialogCtx,
-                  ).colorScheme.onSurfaceVariant,
+                style: AppTextStyles.role(
+                  dialogCtx,
+                  fontSize: m.fontSize11,
+                  color: s.textSecondary,
                 ),
               ),
             ],
@@ -968,8 +1000,10 @@ class _MangaReaderScreenState
       useRootNavigator: true,
       isScrollControlled: true,
       showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: AppTheme.metrics.radius16.topLeft,
+        ),
       ),
       builder: (ctx) => _ReaderSettingsSheet(viewModel: viewModel),
     ).whenComplete(() => _isBottomSheetOpen = false);
@@ -982,33 +1016,30 @@ class _MangaReaderScreenState
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: AppTheme.metrics.radius16.topLeft,
+        ),
       ),
       builder: (ctx) {
+        final s = AppSemantic.of(ctx);
+        final m = AppTheme.metrics;
         return SafeArea(
           child: Column(
             children: [
               Padding(
-                padding: EdgeInsets.symmetric(
-                  vertical: AppTheme.metrics.kSpace12,
-                ),
-                child: Text(
-                  '章节列表',
-                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                padding: EdgeInsets.symmetric(vertical: m.kSpace12),
+                child: Text('章节列表', style: AppTextStyles.sectionTitle(ctx)),
               ),
               Expanded(
                 child: Obx(
                   () => GridView.builder(
-                    padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
+                    padding: EdgeInsets.all(m.kSpace12),
                     gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
+                        SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 4,
-                          mainAxisSpacing: 8,
-                          crossAxisSpacing: 8,
+                          mainAxisSpacing: m.kSpace8,
+                          crossAxisSpacing: m.kSpace8,
                           childAspectRatio: 2.5,
                         ),
                     itemCount: viewModel.epsList.length,
@@ -1028,19 +1059,23 @@ class _MangaReaderScreenState
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: isCurrent
-                                ? Theme.of(ctx).colorScheme.primary
-                                : Theme.of(
-                                    ctx,
-                                  ).colorScheme.surfaceContainerHighest,
-                            borderRadius: AppTheme.metrics.radius6,
+                                ? s.accent
+                                : s.surfaceSunken,
+                            borderRadius: m.radius6,
                           ),
-                          child: Text(
-                            '${eps.order}',
-                            style: TextStyle(
-                              color: isCurrent
-                                  ? Theme.of(ctx).colorScheme.onPrimary
-                                  : Theme.of(ctx).colorScheme.onSurface,
-                              fontSize: AppTheme.metrics.fontSize11,
+                          // 同下载弹层：固定格高里用 scaleDown 兜住字号放大
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '${eps.order}',
+                              maxLines: 1,
+                              style: AppTextStyles.role(
+                                ctx,
+                                fontSize: m.fontSize11,
+                                color: isCurrent
+                                    ? s.accentOn
+                                    : s.textPrimary,
+                              ),
                             ),
                           ),
                         ),
@@ -1063,7 +1098,9 @@ class _MangaReaderScreenState
         builder: (context, constraints) => SingleChildScrollView(
           padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight - 48),
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight - AppTheme.metrics.kSpace48,
+            ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1074,7 +1111,12 @@ class _MangaReaderScreenState
                 SizedBox(height: AppTheme.metrics.kSpace16),
                 SelectableText(
                   error,
-                  style: const TextStyle(color: Colors.white),
+                  // 舞台底色固定为黑，报错文字恒用白色；字号沿用原来的正文档
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize13,
+                    color: Colors.white,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace16),
@@ -1165,7 +1207,9 @@ class _ReaderBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 60,
+      // 底栏是固定高度的窄条，尺寸一律宽度族；栏内内容用 FittedBox 收住，
+      // 字号滑杆拉到顶也不会顶破这一条。
+      height: scaleW(60),
       child: Row(
         children: [
           Expanded(
@@ -1176,8 +1220,9 @@ class _ReaderBottomBar extends StatelessWidget {
               onTap: onEpsTap,
             ),
           ),
+          // 分隔线压在白色磨砂底上，深色描边固定不随主题翻转
           Container(
-            width: 0.5,
+            width: scaleW(0.5),
             height: AppTheme.metrics.kSpace32,
             color: Colors.black.withValues(alpha: 0.1),
           ),
@@ -1231,10 +1276,11 @@ class _BarBtn extends StatelessWidget {
               SizedBox(height: AppTheme.metrics.kSpace2),
               Text(
                 label,
-                style: TextStyle(
-                  color: labelColor,
+                style: AppTextStyles.role(
+                  context,
                   fontSize: AppTheme.metrics.fontSize10,
-                  fontWeight: FontWeight.w500,
+                  color: labelColor,
+                  weight: FontWeight.w500,
                   letterSpacing: 0.2,
                 ),
               ),
@@ -1242,10 +1288,11 @@ class _BarBtn extends StatelessWidget {
                 SizedBox(height: AppTheme.metrics.kSpace1),
                 Text(
                   badge!,
-                  style: TextStyle(
-                    color: badgeColor,
+                  maxLines: 1,
+                  style: AppTextStyles.role(
+                    context,
                     fontSize: AppTheme.metrics.fontSize9,
-                    fontWeight: FontWeight.w400,
+                    color: badgeColor,
                   ),
                 ),
               ],
@@ -1331,22 +1378,25 @@ class _ComicPageImageState extends State<_ComicPageImage> {
                 SizedBox(height: AppTheme.metrics.kSpace12),
                 Text(
                   'P${widget.pageIndex} 加载失败',
-                  style: TextStyle(
-                    color: Colors.white54,
+                  // 舞台底色固定为黑，占位文字恒用白色，只补字族与字号档
+                  style: AppTextStyles.role(
+                    context,
                     fontSize: AppTheme.metrics.fontSize11,
+                    color: Colors.white54,
                   ),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace8),
                 TextButton.icon(
                   onPressed: onRetry,
+                  // 黑色舞台上的重试按钮：前景色固定为白，其余仍走主题按钮档
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                  ),
                   icon: DrawIcon(StrokeIcons.refresh,
                     color: Colors.white70,
                     size: AppTheme.metrics.iconSize16,
                   ),
-                  label: const Text(
-                    '重试',
-                    style: TextStyle(color: Colors.white70),
-                  ),
+                  label: const Text('重试'),
                 ),
               ],
             ),
@@ -1394,16 +1444,14 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final labelStyle = TextStyle(
-      color: cs.onSurface.withValues(alpha: 0.6),
-      fontSize: AppTheme.metrics.fontSize13,
-    );
-    final titleStyle = TextStyle(
-      color: cs.onSurface,
-      fontWeight: FontWeight.bold,
+    final s = AppSemantic.of(context);
+    // 设置项标题：小节级（15/600），说明文字：正文级（13/次要色）
+    final labelStyle = AppTextStyles.body(context);
+    final titleStyle = AppTextStyles.role(
+      context,
       fontSize: AppTheme.metrics.fontSize15,
+      color: s.textPrimary,
+      weight: FontWeight.w600,
     );
     return SafeArea(
       child: Padding(
@@ -1415,12 +1463,7 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '阅读设置',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            Text('阅读设置', style: AppTextStyles.sectionTitle(context)),
             SizedBox(height: AppTheme.metrics.kSpace18),
 
             // ── 图片左右间距 ──
@@ -1443,7 +1486,7 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
             Text('预加载图片数量', style: titleStyle),
             SizedBox(height: AppTheme.metrics.kSpace8),
             Wrap(
-              spacing: 8,
+              spacing: AppTheme.metrics.kSpace8,
               children: [1, 3, 5, 10].map((n) {
                 final selected = _preloadCount == n;
                 return ChoiceChip(
@@ -1461,13 +1504,13 @@ class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
             Text('进入阅读器后自动隐藏顶底栏（0 = 关闭）', style: labelStyle),
             SizedBox(height: AppTheme.metrics.kSpace8),
             Wrap(
-              spacing: 8,
-              children: [0, 3, 5, 10, 30].map((s) {
-                final selected = _autoImmersiveSec == s;
+              spacing: AppTheme.metrics.kSpace8,
+              children: [0, 3, 5, 10, 30].map((sec) {
+                final selected = _autoImmersiveSec == sec;
                 return ChoiceChip(
-                  label: Text(s == 0 ? '不自动' : '$s 秒'),
+                  label: Text(sec == 0 ? '不自动' : '$sec 秒'),
                   selected: selected,
-                  onSelected: (_) => setState(() => _autoImmersiveSec = s),
+                  onSelected: (_) => setState(() => _autoImmersiveSec = sec),
                 );
               }).toList(),
             ),
@@ -1514,27 +1557,28 @@ class _NextChapterBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 80),
+      padding: EdgeInsets.fromLTRB(
+        m.kSpace24,
+        m.kSpace24,
+        m.kSpace24,
+        m.kSpace80,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Divider(color: theme.colorScheme.outlineVariant),
-          SizedBox(height: AppTheme.metrics.kSpace16),
-          Text(
-            '本章已读完',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
-          ),
-          SizedBox(height: AppTheme.metrics.kSpace12),
+          Divider(color: s.hairline),
+          SizedBox(height: m.kSpace16),
+          Text('本章已读完', style: AppTextStyles.body(context)),
+          SizedBox(height: m.kSpace12),
           FilledButton.icon(
             onPressed: onTap,
             icon: DrawIcon(StrokeIcons.navigateNext),
             label: Text('下一章：第 ${nextEps.order} 话'),
           ),
-          SizedBox(height: AppTheme.metrics.kSpace8),
+          SizedBox(height: m.kSpace8),
         ],
       ),
     );

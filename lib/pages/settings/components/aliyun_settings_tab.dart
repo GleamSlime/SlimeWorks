@@ -5,7 +5,7 @@ import 'package:slime_works/components/node/node_inline_selector.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/aliyun_ddns_service.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -64,7 +64,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
   }
 
   Widget _buildSectionTitle(String title, StrokeIcon icon) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Row(
       children: [
@@ -72,35 +72,30 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
           width: m.kSpace24,
           height: m.kSpace24,
           decoration: BoxDecoration(
-            color: LightColors.orange.withAlpha(20),
+            color: s.accentContainer,
             borderRadius: m.radius6,
           ),
-          child: DrawIcon(icon, size: m.iconSize12, color: LightColors.orange),
+          child: DrawIcon(icon, size: m.iconSize12, color: s.accent),
         ),
         SizedBox(width: m.kSpace8),
         Text(
           title,
-          style: TextStyle(
-            fontSize: m.fontSize15,
-            height: 1.4,
-            color: theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppTextStyles.sectionTitle(context),
         ),
       ],
     );
   }
 
   Widget _buildSettingsCard({required Widget child}) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+        color: s.surface,
         borderRadius: m.radius12,
-        border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+        border: Border.all(color: s.border),
       ),
       child: child,
     );
@@ -115,7 +110,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
     final service = _service!;
     final nodeService = _nodeService!;
     final m = AppTheme.metrics;
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
 
     return Obx(
       () => SingleChildScrollView(
@@ -135,12 +130,12 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                         width: m.kSpace32,
                         height: m.kSpace32,
                         decoration: BoxDecoration(
-                          color: LightColors.orange.withAlpha(25),
+                          color: s.accentContainer,
                           borderRadius: m.radius8,
                         ),
                         child: DrawIcon(StrokeIcons.swapHoriz,
                           size: m.iconSize16,
-                          color: LightColors.orange,
+                          color: s.accent,
                         ),
                       ),
                       SizedBox(width: m.kSpace10),
@@ -150,18 +145,15 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                           children: [
                             Text(
                               '阿里云数据节点',
-                              style: TextStyle(
-                                fontSize: m.fontSize13,
-                                fontWeight: FontWeight.w600,
-                                color: theme.colorScheme.onSurface,
-                              ),
+                              style: AppTextStyles.cardTitle(context),
                             ),
                             SizedBox(height: m.kSpace2),
                             Text(
                               service.isLocal ? '本机' : '远程节点',
-                              style: TextStyle(
+                              style: AppTextStyles.role(
+                                context,
                                 fontSize: m.fontSize12,
-                                color: theme.colorScheme.onSurface.withAlpha(120),
+                                color: s.textSecondary,
                               ),
                             ),
                           ],
@@ -194,8 +186,10 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                 children: [
                   Text(
                     '配置阿里云 AccessKey 用于域名解析 API 调用',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(150),
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize12,
+                      color: s.textTertiary,
                     ),
                   ),
                   SizedBox(height: m.kSpace16),
@@ -205,23 +199,19 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                         width: m.kSpace32,
                         height: m.kSpace32,
                         decoration: BoxDecoration(
-                          color: LightColors.orange.withAlpha(15),
+                          color: s.accentContainer,
                           borderRadius: m.radius8,
                         ),
                         child: DrawIcon(StrokeIcons.vpnKey,
                           size: m.iconSize16,
-                          color: LightColors.orange,
+                          color: s.accent,
                         ),
                       ),
                       SizedBox(width: m.kSpace10),
                       Expanded(
                         child: Text(
                           'AccessKey ID',
-                          style: TextStyle(
-                            fontSize: m.fontSize13,
-                            fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.onSurface,
-                          ),
+                          style: AppTextStyles.cardTitle(context),
                         ),
                       ),
                     ],
@@ -253,20 +243,16 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                         width: m.kSpace32,
                         height: m.kSpace32,
                         decoration: BoxDecoration(
-                          color: LightColors.red.withAlpha(15),
+                          color: s.accentContainer,
                           borderRadius: m.radius8,
                         ),
-                        child: DrawIcon(StrokeIcons.lock, size: m.iconSize16, color: LightColors.red),
+                        child: DrawIcon(StrokeIcons.lock, size: m.iconSize16, color: s.accent),
                       ),
                       SizedBox(width: m.kSpace10),
                       Expanded(
                         child: Text(
                           'AccessKey Secret',
-                          style: TextStyle(
-                            fontSize: m.fontSize13,
-                            fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.onSurface,
-                          ),
+                          style: AppTextStyles.cardTitle(context),
                         ),
                       ),
                       IconButton(
@@ -274,7 +260,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                         icon: DrawIcon(
                           _obscureSecret ? StrokeIcons.visibilityOff : StrokeIcons.visibility,
                           size: m.iconSize16,
-                          color: theme.colorScheme.onSurface.withAlpha(60),
+                          color: s.textTertiary,
                         ),
                       ),
                     ],
@@ -313,9 +299,7 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                   children: [
                     Text(
                       '设置 DDNS 自动检查的时间间隔',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withAlpha(150),
-                      ),
+                      style: AppTextStyles.caption(context),
                     ),
                     SizedBox(height: m.kSpace12),
                     Row(
@@ -324,23 +308,19 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                           width: m.kSpace32,
                           height: m.kSpace32,
                           decoration: BoxDecoration(
-                            color: LightColors.cyan.withAlpha(15),
+                            color: s.accentContainer,
                             borderRadius: m.radius8,
                           ),
                           child: DrawIcon(StrokeIcons.schedule,
                             size: m.iconSize16,
-                            color: LightColors.cyan,
+                            color: s.accent,
                           ),
                         ),
                         SizedBox(width: m.kSpace10),
                         Expanded(
                           child: Text(
                             '检查间隔',
-                            style: TextStyle(
-                              fontSize: m.fontSize13,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onSurface,
-                            ),
+                            style: AppTextStyles.cardTitle(context),
                           ),
                         ),
                         Container(
@@ -349,14 +329,16 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                             vertical: m.kSpace4,
                           ),
                           decoration: BoxDecoration(
-                            color: LightColors.cyan.withAlpha(15),
+                            color: s.accentContainer,
                             borderRadius: m.radius6,
                           ),
                           child: Text(
                             _formatInterval(service.intervalSecs.value),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: LightColors.cyan,
-                              fontWeight: FontWeight.w600,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: m.fontSize12,
+                              color: s.accentText,
+                              weight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -381,24 +363,23 @@ class _AliyunSettingsTabState extends State<AliyunSettingsTab> {
                             ),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? LightColors.cyan.withAlpha(20)
-                                  : theme.colorScheme.surfaceContainerHighest.withAlpha(60),
+                                  ? s.accentContainer
+                                  : s.surfaceSunken,
                               borderRadius: m.radius8,
                               border: Border.all(
                                 color: isSelected
-                                    ? LightColors.cyan.withAlpha(80)
-                                    : theme.colorScheme.outlineVariant.withAlpha(40),
+                                    ? s.accentContainerBorder
+                                    : s.hairline,
                                 width: 1,
                               ),
                             ),
                             child: Text(
                               _formatInterval(secs),
-                              style: TextStyle(
+                              style: AppTextStyles.role(
+                                context,
                                 fontSize: m.fontSize12,
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                color: isSelected
-                                    ? LightColors.cyan
-                                    : theme.colorScheme.onSurface.withAlpha(120),
+                                color: isSelected ? s.accentText : s.textSecondary,
+                                weight: isSelected ? FontWeight.w600 : FontWeight.w500,
                               ),
                             ),
                           ),

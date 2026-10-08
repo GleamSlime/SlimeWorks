@@ -10,7 +10,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
@@ -63,7 +63,8 @@ class _MangaHistoryScreenState extends BasePageState<MangaHistoryViewModel, Mang
   }
 
   Widget _buildBody(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
+    final metrics = appMetrics;
 
     if (viewModel.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -72,28 +73,21 @@ class _MangaHistoryScreenState extends BasePageState<MangaHistoryViewModel, Mang
       return Center(
         child: Text(
           viewModel.errorMessage!,
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
+          style: AppTextStyles.body(context).copyWith(color: s.danger.color),
         ),
       );
     }
 
     return Obx(() {
       if (viewModel.items.isEmpty) {
-        final isDark = theme.brightness == Brightness.dark;
         return Center(
           child: Container(
-            padding: EdgeInsets.all(appMetrics.kSpace32),
-            margin: EdgeInsets.symmetric(horizontal: appMetrics.kSpace24),
+            padding: EdgeInsets.all(metrics.kSpace32),
+            margin: EdgeInsets.symmetric(horizontal: metrics.kSpace24),
             decoration: BoxDecoration(
-              color: isDark ? DarkColors.background2 : LightColors.background1,
-              borderRadius: appMetrics.radius16,
-              boxShadow: [
-                BoxShadow(
-                  color: theme.shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+              color: s.surface,
+              borderRadius: metrics.radius16,
+              boxShadow: s.elevation(Elevation.floating),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -102,28 +96,23 @@ class _MangaHistoryScreenState extends BasePageState<MangaHistoryViewModel, Mang
                   width: scaleW(72),
                   height: scaleW(72),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                    borderRadius: appMetrics.radius16,
+                    color: s.accentContainer,
+                    borderRadius: metrics.radius16,
                   ),
                   child: DrawIcon(StrokeIcons.history,
                     size: scaleW(36),
-                    color: theme.colorScheme.primary,
+                    color: s.accent,
                   ),
                 ),
-                SizedBox(height: appMetrics.kSpace20),
+                SizedBox(height: metrics.kSpace20),
                 Text(
                   '暂无观看记录',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppTextStyles.sectionTitle(context),
                 ),
-                SizedBox(height: appMetrics.kSpace8),
+                SizedBox(height: metrics.kSpace8),
                 Text(
                   '阅读漫画后会自动记录在这里',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
+                  style: AppTextStyles.caption(context),
                 ),
               ],
             ),
@@ -132,7 +121,7 @@ class _MangaHistoryScreenState extends BasePageState<MangaHistoryViewModel, Mang
       }
 
       return ListView.builder(
-        padding: EdgeInsets.symmetric(vertical: appMetrics.kSpace8),
+        padding: EdgeInsets.symmetric(vertical: metrics.kSpace8),
         itemCount: viewModel.items.length,
         itemBuilder: (ctx, i) {
           final item = viewModel.items[i];
@@ -161,7 +150,10 @@ class _MangaHistoryScreenState extends BasePageState<MangaHistoryViewModel, Mang
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('清空', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+            style: TextButton.styleFrom(
+              foregroundColor: AppSemantic.of(ctx).danger.color,
+            ),
+            child: const Text('清空'),
           ),
         ],
       ),
@@ -182,7 +174,7 @@ class _HistoryListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
 
     return Dismissible(
@@ -191,8 +183,8 @@ class _HistoryListItem extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: EdgeInsets.only(right: metrics.kSpace20),
-        color: theme.colorScheme.error,
-        child: DrawIcon(StrokeIcons.deleteOutline, color: Colors.white),
+        color: s.danger.color,
+        child: DrawIcon(StrokeIcons.deleteOutline, color: s.accentOn),
       ),
       onDismissed: (_) => onDelete(),
       child: InkWell(
@@ -203,16 +195,16 @@ class _HistoryListItem extends StatelessWidget {
             children: [
               /// 封面缩略图
               ClipRRect(
-                borderRadius: AppTheme.metrics.radius6,
+                borderRadius: metrics.radius6,
                 child: item.thumbUrl.isNotEmpty
                     ? _ThumbImage(thumbUrl: item.thumbUrl)
                     : Container(
                         width: scaleW(52),
                         height: scaleW(72),
-                        color: theme.colorScheme.surfaceContainerHighest,
+                        color: s.surfaceSunken,
                         child: DrawIcon(StrokeIcons.imageNotSupported,
                           size: scaleW(24),
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                          color: s.textDisabled,
                         ),
                       ),
               ),
@@ -227,20 +219,21 @@ class _HistoryListItem extends StatelessWidget {
                       item.comicTitle.isNotEmpty ? item.comicTitle : item.comicId,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                      style: AppTextStyles.rowTitle(context),
                     ),
                     SizedBox(height: metrics.kSpace4),
                     Text(
                       item.epsTitle.isNotEmpty ? item.epsTitle : '第${item.epsOrder}话',
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: metrics.fontSize12,
+                        color: s.accentText,
+                      ),
                     ),
                     SizedBox(height: metrics.kSpace4),
                     Text(
                       _formatTime(item.tick),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                        fontSize: AppTheme.metrics.fontSize11,
-                      ),
+                      style: AppTextStyles.caption(context),
                     ),
                   ],
                 ),
@@ -249,8 +242,8 @@ class _HistoryListItem extends StatelessWidget {
               /// 删除按钮
               IconButton(
                 icon: DrawIcon(StrokeIcons.close,
-                  size: scaleW(16),
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                  size: metrics.iconSize16,
+                  color: s.textDisabled,
                 ),
                 onPressed: onDelete,
               ),
@@ -298,15 +291,16 @@ class _ThumbImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final image = _parse(thumbUrl);
     if (image == null) {
       return Container(
         width: scaleW(52),
         height: scaleW(72),
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: s.surfaceSunken,
         child: DrawIcon(StrokeIcons.imageNotSupported,
           size: scaleW(20),
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+          color: s.textDisabled,
         ),
       );
     }
@@ -318,10 +312,10 @@ class _ThumbImage extends StatelessWidget {
       errorBuilder: (_, _, _) => Container(
         width: scaleW(52),
         height: scaleW(72),
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: s.surfaceSunken,
         child: DrawIcon(StrokeIcons.imageNotSupported,
           size: scaleW(20),
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+          color: s.textDisabled,
         ),
       ),
     );

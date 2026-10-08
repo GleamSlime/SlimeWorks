@@ -4,8 +4,11 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/services/extract_service.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/pages/tools/components/extract_card.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -32,13 +35,22 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
 
     return AlertDialog(
-      title: Text('解压参数', style: theme.textTheme.titleLarge),
+      title: Text(
+        '解压参数',
+        style: AppTextStyles.role(
+          context,
+          fontSize: m.fontSize15,
+          height: 1.5,
+          weight: FontWeight.w600,
+          color: s.textPrimary,
+        ),
+      ),
       content: SizedBox(
-        width: 480,
+        width: scaleW(480),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -95,9 +107,12 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
                 SizedBox(height: m.kSpace8),
                 Text(
                   '发现 ${_scannedArchives.length} 个压缩包',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize13,
+                    height: 1.65,
+                    weight: FontWeight.w600,
+                    color: s.accentText,
                   ),
                 ),
               ],
@@ -105,11 +120,11 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
               if (_isScanning)
                 Padding(
                   padding: EdgeInsets.symmetric(vertical: m.kSpace8),
-                  child: const Center(
+                  child: Center(
                     child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      width: m.kSpace16,
+                      height: m.kSpace16,
+                      child: CircularProgressIndicator(strokeWidth: scaleW(2)),
                     ),
                   ),
                 ),
@@ -128,8 +143,7 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
   }
 
   Widget _buildSectionLabel(String label) {
-    final theme = Theme.of(context);
-    return Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600));
+    return Text(label, style: AppTextStyles.cardTitle(context));
   }
 
   Widget _buildDirectoryPicker({
@@ -140,28 +154,23 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
     required ValueChanged<bool> onDraggingChanged,
     required ValueChanged<String> onDropped,
   }) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
 
     Widget child = InkWell(
       onTap: onTap,
       borderRadius: m.radius8,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
         width: double.infinity,
         padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace10),
         decoration: BoxDecoration(
-          color: isDragging
-              ? theme.colorScheme.primary.withAlpha(15)
-              : theme.inputDecorationTheme.fillColor,
+          color: isDragging ? s.accentContainer : s.surfaceSunken,
           borderRadius: m.radius8,
           border: Border.all(
-            color: isDragging
-                ? theme.colorScheme.primary
-                : value.isEmpty
-                ? theme.dividerColor
-                : theme.colorScheme.primary,
-            width: isDragging ? 2 : 1,
+            color: isDragging ? s.accent : value.isEmpty ? s.border : s.accent,
+            width: scaleW(isDragging ? 2 : 1),
           ),
         ),
         child: Row(
@@ -169,18 +178,17 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
             DrawIcon(
               isDragging ? StrokeIcons.folderOpen : StrokeIcons.folder,
               size: m.iconSize18,
-              color: isDragging ? theme.colorScheme.primary : theme.hintColor,
+              color: isDragging ? s.accent : s.textTertiary,
             ),
             SizedBox(width: m.kSpace8),
             Expanded(
               child: Text(
                 isDragging ? '释放以选择此目录' : (value.isEmpty ? hint : value),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isDragging
-                      ? theme.colorScheme.primary
-                      : value.isEmpty
-                      ? theme.hintColor
-                      : null,
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: m.fontSize13,
+                  height: 1.65,
+                  color: isDragging ? s.accent : value.isEmpty ? s.textTertiary : s.textSecondary,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -218,12 +226,12 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
   }
 
   Widget _buildOutputModeSelector() {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.inputDecorationTheme.fillColor,
+        color: s.surfaceSunken,
         borderRadius: m.radius8,
       ),
       child: Row(
@@ -236,8 +244,8 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
   }
 
   Widget _buildModeChip(String label, ExtractOutputMode mode) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     final isSelected = _outputMode == mode;
 
     return Expanded(
@@ -246,15 +254,20 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
         child: Container(
           padding: EdgeInsets.symmetric(vertical: m.kSpace8),
           decoration: BoxDecoration(
-            color: isSelected ? theme.colorScheme.primary.withAlpha(25) : Colors.transparent,
+            color: isSelected ? s.accentContainer : Colors.transparent,
             borderRadius: m.radius8,
           ),
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: isSelected ? theme.colorScheme.primary : theme.hintColor,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.role(
+              context,
+              fontSize: m.fontSize12,
+              height: 1.6,
+              weight: isSelected ? FontWeight.w600 : FontWeight.w400,
+              color: isSelected ? s.accentText : s.textTertiary,
             ),
           ),
         ),
@@ -293,12 +306,12 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
   }
 
   Widget _buildFolderModeSelector() {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.inputDecorationTheme.fillColor,
+        color: s.surfaceSunken,
         borderRadius: m.radius8,
       ),
       child: Column(
@@ -312,8 +325,8 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
   }
 
   Widget _buildFolderModeOption(String label, ExtractOutputMode mode) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     final isSelected = _outputMode == mode;
 
     return InkWell(
@@ -322,7 +335,7 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
         width: double.infinity,
         padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace8),
         decoration: BoxDecoration(
-          color: isSelected ? theme.colorScheme.primary.withAlpha(15) : Colors.transparent,
+          color: isSelected ? s.accentContainer : Colors.transparent,
           borderRadius: m.radius6,
         ),
         child: Row(
@@ -330,13 +343,20 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
             DrawIcon(
               isSelected ? StrokeIcons.radioButtonChecked : StrokeIcons.radioButtonUnchecked,
               size: m.iconSize18,
-              color: isSelected ? theme.colorScheme.primary : theme.hintColor,
+              color: isSelected ? s.accent : s.textTertiary,
             ),
             SizedBox(width: m.kSpace8),
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: isSelected ? theme.colorScheme.primary : null,
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: m.fontSize12,
+                  height: 1.6,
+                  color: isSelected ? s.accentText : s.textSecondary,
+                ),
               ),
             ),
           ],
@@ -346,7 +366,6 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
   }
 
   Widget _buildParallelCountSelector() {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
 
     return Row(
@@ -366,7 +385,7 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
           child: Text(
             _parallelCount.toString(),
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
+            style: AppTextStyles.body(context),
           ),
         ),
       ],

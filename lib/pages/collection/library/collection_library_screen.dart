@@ -89,6 +89,7 @@ class _CollectionLibraryScreenState
   }
 
   ScreenChromeData _buildScreenChromeData(BuildContext context) {
+    final s = AppSemantic.of(context);
     return ScreenChromeData(
       title: '书库',
       toolbarHeight: AppTheme.metrics.kSpace48,
@@ -117,7 +118,8 @@ class _CollectionLibraryScreenState
                 DesktopHeadToolsButton(
                   icon: DrawIcon(
                     isFavoritesOnly ? StrokeIcons.favorite : StrokeIcons.favoriteBorder,
-                    color: isFavoritesOnly ? Colors.red : null,
+                    // 收藏是"选中"状态，按口径走强调色而不是 danger 红（见 DESIGN §2.5）。
+                    color: isFavoritesOnly ? s.accent : null,
                   ),
                   size: AppTheme.metrics.kSpace40,
                   onTap: () {
@@ -130,7 +132,7 @@ class _CollectionLibraryScreenState
                     Builder(
                       builder: (tagBtnCtx) => DesktopHeadToolsButton(
                         icon: DrawIcon(StrokeIcons.labelOutline,
-                          color: activeTagCount > 0 ? Theme.of(context).colorScheme.primary : null,
+                          color: activeTagCount > 0 ? s.accent : null,
                         ),
                         size: AppTheme.metrics.kSpace40,
                         onTap: () => _showTagFilterMenu(tagBtnCtx),
@@ -144,7 +146,7 @@ class _CollectionLibraryScreenState
                           child: Container(
                             padding: EdgeInsets.all(AppTheme.metrics.kSpace3),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary,
+                              color: s.accent,
                               borderRadius: AppTheme.metrics.radius10,
                             ),
                             constraints: BoxConstraints(
@@ -153,10 +155,11 @@ class _CollectionLibraryScreenState
                             ),
                             child: Text(
                               '$activeTagCount',
-                              style: TextStyle(
-                                color: Colors.white,
+                              style: AppTextStyles.role(
+                                context,
                                 fontSize: AppTheme.metrics.fontSize10,
-                                fontWeight: FontWeight.bold,
+                                weight: FontWeight.bold,
+                                color: s.accentOn,
                               ),
                               textAlign: TextAlign.center,
                             ),
@@ -234,8 +237,10 @@ class _CollectionLibraryScreenState
             builder: (menuCtx, setMenuState) {
               final allTags = viewModel.allAvailableTags;
               final tagCounts = viewModel.allTagCounts;
+              final m = AppTheme.metrics;
+              final s = AppSemantic.of(context);
               return DefaultTextStyle(
-                style: Theme.of(context).textTheme.bodyMedium!,
+                style: AppTextStyles.body(context),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -245,7 +250,16 @@ class _CollectionLibraryScreenState
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text('按标签筛选', style: Theme.of(context).textTheme.titleSmall),
+                            child: Text(
+                              '按标签筛选',
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: m.fontSize13,
+                                weight: FontWeight.w600,
+                                height: 1.5,
+                                color: s.textSecondary,
+                              ),
+                            ),
                           ),
                           if (viewModel.selectedFilterTags.isNotEmpty)
                             TextButton(
@@ -256,7 +270,14 @@ class _CollectionLibraryScreenState
                               },
                               child: Text(
                                 '清除',
-                                style: TextStyle(fontSize: AppTheme.metrics.fontSize12),
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: m.fontSize12,
+                                  weight: FontWeight.w500,
+                                  height: 1.2,
+                                  letterSpacing: 0.2,
+                                  color: s.accentText,
+                                ),
                               ),
                             ),
                         ],
@@ -281,7 +302,7 @@ class _CollectionLibraryScreenState
                                 dense: true,
                                 title: Text(
                                   '$tag ($count)',
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  style: AppTextStyles.body(context),
                                 ),
                                 onChanged: (_) {
                                   if (isSelected) {
@@ -350,21 +371,34 @@ class _CollectionLibraryScreenState
           child: Obx(() {
             final currentField = viewModel.sortField.value;
             final currentAscending = viewModel.sortAscending.value;
+            final m = AppTheme.metrics;
+            final s = AppSemantic.of(context);
 
             return DefaultTextStyle(
-              style: Theme.of(context).textTheme.bodyMedium!,
+              style: AppTextStyles.body(context),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-                    child: Text('排序方式', style: Theme.of(context).textTheme.titleSmall),
+                    child: Text(
+                      '排序方式',
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: m.fontSize13,
+                        weight: FontWeight.w600,
+                        height: 1.5,
+                        color: s.textSecondary,
+                      ),
+                    ),
                   ),
                   ...sortOptions.map((option) {
                     final field = option['field']!;
                     final label = option['label']!;
                     final isCurrentField = currentField == field;
+                    final isAscendingActive = isCurrentField && currentAscending;
+                    final isDescendingActive = isCurrentField && !currentAscending;
 
                     return Column(
                       mainAxisSize: MainAxisSize.min,
@@ -374,26 +408,21 @@ class _CollectionLibraryScreenState
                           dense: true,
                           leading: DrawIcon(StrokeIcons.arrowUpward,
                             size: AppTheme.metrics.iconSize18,
-                            color: isCurrentField && currentAscending
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
+                            color: isAscendingActive ? s.accent : null,
                           ),
                           title: Text(
                             '$label升序',
-                            style: TextStyle(
-                              fontSize: AppTheme.metrics.fontSize13,
-                              color: isCurrentField && currentAscending
-                                  ? Theme.of(context).colorScheme.primary
-                                  : null,
-                              fontWeight: isCurrentField && currentAscending
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: m.fontSize13,
+                              weight: isAscendingActive ? FontWeight.w600 : FontWeight.normal,
+                              color: isAscendingActive ? s.accent : s.textPrimary,
                             ),
                           ),
-                          trailing: isCurrentField && currentAscending
+                          trailing: isAscendingActive
                               ? DrawIcon(StrokeIcons.check,
                                   size: AppTheme.metrics.iconSize18,
-                                  color: Theme.of(context).colorScheme.primary,
+                                  color: s.accent,
                                 )
                               : null,
                           onTap: () {
@@ -406,26 +435,21 @@ class _CollectionLibraryScreenState
                           dense: true,
                           leading: DrawIcon(StrokeIcons.arrowDownward,
                             size: AppTheme.metrics.iconSize18,
-                            color: isCurrentField && !currentAscending
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
+                            color: isDescendingActive ? s.accent : null,
                           ),
                           title: Text(
                             '$label降序',
-                            style: TextStyle(
-                              fontSize: AppTheme.metrics.fontSize13,
-                              color: isCurrentField && !currentAscending
-                                  ? Theme.of(context).colorScheme.primary
-                                  : null,
-                              fontWeight: isCurrentField && !currentAscending
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: m.fontSize13,
+                              weight: isDescendingActive ? FontWeight.w600 : FontWeight.normal,
+                              color: isDescendingActive ? s.accent : s.textPrimary,
                             ),
                           ),
-                          trailing: isCurrentField && !currentAscending
+                          trailing: isDescendingActive
                               ? DrawIcon(StrokeIcons.check,
                                   size: AppTheme.metrics.iconSize18,
-                                  color: Theme.of(context).colorScheme.primary,
+                                  color: s.accent,
                                 )
                               : null,
                           onTap: () {
@@ -457,6 +481,8 @@ class _CollectionLibraryScreenState
       builder: (dlgCtx) => StatefulBuilder(
         builder: (_, setModalState) {
           final rules = viewModel.keywordRules.toList();
+          final m = AppTheme.metrics;
+          final s = AppSemantic.of(context);
           return AlertDialog(
             title: const Text('关键词自动打标签'),
             content: SizedBox(
@@ -467,7 +493,7 @@ class _CollectionLibraryScreenState
                 children: [
                   Text(
                     '导入书籍时，若书内包含关键词则自动添加对应标签。',
-                    style: TextStyle(fontSize: AppTheme.metrics.fontSize12),
+                    style: AppTextStyles.role(context, fontSize: m.fontSize12, color: s.textSecondary),
                   ),
                   SizedBox(height: AppTheme.metrics.kSpace12),
                   if (rules.isNotEmpty)
@@ -498,7 +524,11 @@ class _CollectionLibraryScreenState
                       padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
                       child: Text(
                         '暂无规则',
-                        style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize13,
+                          color: s.textTertiary,
+                        ),
                       ),
                     ),
                   const Divider(),
@@ -584,7 +614,15 @@ class _CollectionLibraryScreenState
                 final completed = viewModel.keywordApplyCompleted.value;
                 return Padding(
                   padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4),
-                  child: Text('$completed/$total', style: Theme.of(context).textTheme.bodySmall),
+                  child: Text(
+                    '$completed/$total',
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: AppTheme.metrics.fontSize12,
+                      height: 1.6,
+                      color: AppSemantic.of(context).textTertiary,
+                    ),
+                  ),
                 );
               }),
               FilledButton(
@@ -613,7 +651,7 @@ class _CollectionLibraryScreenState
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            style: FilledButton.styleFrom(backgroundColor: AppSemantic.of(dlgCtx).danger.color),
             onPressed: () {
               Navigator.of(dlgCtx, rootNavigator: true).pop();
               viewModel.clearAllNovelsAction();
@@ -688,6 +726,7 @@ class _CollectionLibraryScreenState
 
   @override
   Widget buildContent(BuildContext context) {
+    final s = AppSemantic.of(context);
     return ScreenChrome(
       data: _buildScreenChromeData(context),
       child: Focus(
@@ -746,7 +785,12 @@ class _CollectionLibraryScreenState
                         alignment: Alignment.centerLeft,
                         child: Text(
                           '当前书籍：$currentBookCount 本',
-                          style: Theme.of(context).textTheme.bodySmall,
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: appMetrics.fontSize12,
+                            height: 1.6,
+                            color: s.textTertiary,
+                          ),
                         ),
                       ),
                     ),
@@ -759,30 +803,32 @@ class _CollectionLibraryScreenState
                 Positioned.fill(
                   child: IgnorePointer(
                     child: Container(
-                      color: Theme.of(context).colorScheme.primary.withAlpha(30),
+                      color: s.accent.withAlpha(30),
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             DrawIcon(StrokeIcons.fileDownload,
                               size: scaleW(64),
-                              color: Theme.of(context).colorScheme.primary,
+                              color: s.accent,
                             ),
                             SizedBox(height: appMetrics.kSpace16),
                             Text(
                               '松开以导入书籍',
-                              style: TextStyle(
+                              style: AppTextStyles.role(
+                                context,
                                 fontSize: appMetrics.fontSize18,
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.primary,
+                                weight: FontWeight.w600,
+                                color: s.accent,
                               ),
                             ),
                             SizedBox(height: appMetrics.kSpace8),
                             Text(
                               '支持 .txt / .epub 格式',
-                              style: TextStyle(
+                              style: AppTextStyles.role(
+                                context,
                                 fontSize: appMetrics.fontSize13,
-                                color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                                color: s.textSecondary,
                               ),
                             ),
                           ],
@@ -812,6 +858,7 @@ class _CollectionLibraryScreenState
 
   Widget _buildGrid(bool isSelecting, bool inFolder) {
     return Obx(() {
+      final s = AppSemantic.of(context);
       // ignore: unused_local_variable
       final selectedCount = viewModel.selectedIds.length;
       final items = viewModel.displayedItems; // 使用分页后的项目
@@ -885,8 +932,8 @@ class _CollectionLibraryScreenState
                   painter: _SelectionBoxPainter(
                     start: _selectionBoxStart!,
                     end: _selectionBoxEnd!,
-                    color: Theme.of(context).colorScheme.primary.withAlpha(50),
-                    borderColor: Theme.of(context).colorScheme.primary,
+                    color: s.accent.withAlpha(50),
+                    borderColor: s.accent,
                   ),
                 ),
               ),
@@ -908,7 +955,7 @@ class _CollectionLibraryScreenState
       if (isReorderTarget) {
         return Container(
           decoration: BoxDecoration(
-            border: Border.all(color: Theme.of(ctx).colorScheme.primary, width: scaleW(2)),
+            border: Border.all(color: AppSemantic.of(ctx).accent, width: scaleW(2)),
             borderRadius: appMetrics.radius8,
           ),
           child: _buildItemCard(ctx, item, isSelected, isSelecting, isBookHover),
@@ -1045,6 +1092,7 @@ class _CollectionLibraryScreenState
   }
 
   Widget _buildDragFeedback(BuildContext context, LibraryItem item) {
+    final s = AppSemantic.of(context);
     // 简化并明确括号/层级，减少语法错误风险
     if (item is LibraryBookItem) {
       final meta = item.metadata;
@@ -1079,8 +1127,9 @@ class _CollectionLibraryScreenState
               )
             : rawCover;
       } else {
+        // 占位封面要压得住它上面那枚白图标，所以底色走实心的 border 档
         cover = Container(
-          color: Theme.of(context).colorScheme.outline,
+          color: s.border,
           child: Center(
             child: DrawIcon(StrokeIcons.book, size: scaleW(28), color: Colors.white70),
           ),
@@ -1093,7 +1142,7 @@ class _CollectionLibraryScreenState
           opacity: 0.85,
           child: Material(
             // canvasColor 现为透明，拖拽浮影需要自己铺底
-            color: Theme.of(context).colorScheme.surface,
+            color: s.surface,
             elevation: 12,
             borderRadius: AppTheme.metrics.radius8,
             clipBehavior: Clip.antiAlias,
@@ -1110,13 +1159,15 @@ class _CollectionLibraryScreenState
                     bottom: 0,
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: scaleW(4), vertical: scaleW(4)),
-                      color: Colors.black.withAlpha(140),
+                      // 封面底图上的压暗层恒为深色，白字不随主题反转
+                      color: s.scrim.withAlpha(140),
                       child: Text(
                         meta.title,
-                        style: TextStyle(
-                          color: Colors.white,
+                        style: AppTextStyles.role(
+                          context,
                           fontSize: AppTheme.metrics.fontSize9,
-                          fontWeight: FontWeight.w600,
+                          weight: FontWeight.w600,
+                          color: Colors.white,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1140,7 +1191,7 @@ class _CollectionLibraryScreenState
           opacity: 0.85,
           child: Material(
             // canvasColor 现为透明，拖拽浮影需要自己铺底
-            color: Theme.of(context).colorScheme.surface,
+            color: s.surface,
             elevation: 12,
             borderRadius: AppTheme.metrics.radius8,
             child: SizedBox(
@@ -1152,21 +1203,24 @@ class _CollectionLibraryScreenState
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Colors.blue.withAlpha(60), Colors.blue.withAlpha(30)],
+                    // 文件夹这一路的身份色统一走 info，浮影与卡片同档
+                    colors: [s.info.color.withAlpha(60), s.info.color.withAlpha(30)],
                   ),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    DrawIcon(StrokeIcons.folder, size: scaleW(36), color: Colors.blue.withAlpha(200)),
+                    DrawIcon(StrokeIcons.folder, size: scaleW(36), color: s.info.color.withAlpha(200)),
                     SizedBox(height: scaleW(3)),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: scaleW(6)),
                       child: Text(
                         item.folder.name,
-                        style: TextStyle(
+                        style: AppTextStyles.role(
+                          context,
                           fontSize: AppTheme.metrics.fontSize9,
-                          fontWeight: FontWeight.w600,
+                          weight: FontWeight.w600,
+                          color: s.textPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1205,6 +1259,7 @@ class _CollectionLibraryScreenState
       builder: (ctx, candidateData, _) {
         final isDragHovering = candidateData.isNotEmpty;
         final parentFolderName = viewModel.currentFolderName;
+        final s = AppSemantic.of(ctx);
         return MouseRegion(
           cursor: SystemMouseCursors.click,
           child: GestureDetector(
@@ -1213,36 +1268,30 @@ class _CollectionLibraryScreenState
               elevation: 0,
               clipBehavior: Clip.antiAlias,
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
+                duration: AppMotion.fast,
                 decoration: BoxDecoration(
-                  color: isDragHovering
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  // 与同排卡片卡面同底，只有拖拽悬停时才抬成强调容器
+                  color: isDragHovering ? s.accentContainer : s.surface,
                   border: isDragHovering
-                      ? Border.all(color: Theme.of(context).colorScheme.primary, width: scaleW(2))
+                      ? Border.all(color: s.accent, width: scaleW(2))
                       : null,
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     DrawIcon(
-                      isDragHovering
-                          ? StrokeIcons.driveFileMoveRtl
-                          : StrokeIcons.arrowBack,
+                      isDragHovering ? StrokeIcons.driveFileMoveRtl : StrokeIcons.arrowBack,
                       size: scaleW(40),
-                      color: isDragHovering
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: isDragHovering ? s.accent : s.textSecondary,
                     ),
                     SizedBox(height: appMetrics.kSpace8),
                     Text(
                       isDragHovering ? '移至上级' : '返回',
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        ctx,
                         fontSize: appMetrics.fontSize11,
-                        color: isDragHovering
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: isDragHovering ? FontWeight.w600 : FontWeight.normal,
+                        weight: isDragHovering ? FontWeight.w600 : FontWeight.normal,
+                        color: isDragHovering ? s.accent : s.textSecondary,
                       ),
                     ),
                     if (parentFolderName.isNotEmpty && !isDragHovering) ...[
@@ -1251,9 +1300,10 @@ class _CollectionLibraryScreenState
                         padding: EdgeInsets.symmetric(horizontal: appMetrics.kSpace8),
                         child: Text(
                           parentFolderName,
-                          style: TextStyle(
+                          style: AppTextStyles.role(
+                            ctx,
                             fontSize: appMetrics.fontSize9,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(180),
+                            color: s.textTertiary,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1272,6 +1322,7 @@ class _CollectionLibraryScreenState
   }
 
   Widget _buildEmptyState(bool inFolder) {
+    final s = AppSemantic.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1279,14 +1330,12 @@ class _CollectionLibraryScreenState
           DrawIcon(
             inFolder ? StrokeIcons.folderOpen : StrokeIcons.libraryBooks,
             size: AppTheme.metrics.iconSize64,
-            color: Theme.of(context).hintColor.withAlpha(80),
+            color: s.textDisabled,
           ),
           SizedBox(height: AppTheme.metrics.kSpace16),
           Text(
             inFolder ? '此文件夹暂无书籍' : '书籍库为空，点击右上角添加书籍',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+            style: AppTextStyles.body(context).copyWith(color: s.textTertiary),
           ),
         ],
       ),

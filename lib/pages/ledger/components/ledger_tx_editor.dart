@@ -388,7 +388,7 @@ class _LedgerTxEditorState extends State<_LedgerTxEditor> {
         side: BorderSide(color: s.hairline),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460),
+        constraints: BoxConstraints(maxWidth: scaleW(460)),
         child: SingleChildScrollView(
           padding: EdgeInsets.all(m.kSpace20),
           child: Column(

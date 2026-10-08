@@ -38,7 +38,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
   }
 
   Widget _buildSectionTitle(String title, StrokeIcon icon) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Row(
       children: [
@@ -46,38 +46,33 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
           width: m.kSpace24,
           height: m.kSpace24,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withAlpha(20),
+            color: s.accentContainer,
             borderRadius: m.radius6,
           ),
           child: DrawIcon(icon,
             size: m.iconSize12,
-            color: theme.colorScheme.primary,
+            color: s.accent,
           ),
         ),
         SizedBox(width: m.kSpace8),
         Text(
           title,
-          style: TextStyle(
-            fontSize: m.fontSize15,
-            height: 1.4,
-            color: theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppTextStyles.sectionTitle(context),
         ),
       ],
     );
   }
 
   Widget _buildSettingsCard({required Widget child}) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+        color: s.surface,
         borderRadius: m.radius12,
-        border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+        border: Border.all(color: s.border),
       ),
       child: child,
     );
@@ -90,7 +85,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
     required ValueChanged<bool> onChanged,
     required StrokeIcon icon,
   }) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Padding(
       padding: EdgeInsets.only(bottom: m.kSpace8),
@@ -100,10 +95,10 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
             width: m.kSpace32,
             height: m.kSpace32,
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withAlpha(15),
+              color: s.accentContainer,
               borderRadius: m.radius8,
             ),
-            child: DrawIcon(icon, size: m.iconSize16, color: theme.colorScheme.primary),
+            child: DrawIcon(icon, size: m.iconSize16, color: s.accent),
           ),
           SizedBox(width: m.kSpace12),
           Expanded(
@@ -112,13 +107,16 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
               children: [
                 Text(
                   title,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                  style: AppTextStyles.rowTitle(context),
                 ),
                 SizedBox(height: m.kSpace2),
                 Text(
                   subtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withAlpha(120),
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize12,
+                    color: s.textTertiary,
+                    height: 1.6,
                   ),
                 ),
               ],
@@ -136,6 +134,7 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
 
     return Obx(() {
@@ -191,19 +190,27 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
                       width: m.kSpace32,
                       height: m.kSpace32,
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withAlpha(15),
+                        color: s.accentContainer,
                         borderRadius: m.radius8,
                       ),
-                      child: DrawIcon(StrokeIcons.sort, size: m.iconSize16, color: Theme.of(context).colorScheme.primary),
+                      child: DrawIcon(StrokeIcons.sort, size: m.iconSize16, color: s.accent),
                     ),
                     SizedBox(width: m.kSpace12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('默认排序', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+                          Text('默认排序', style: AppTextStyles.rowTitle(context)),
                           SizedBox(height: m.kSpace2),
-                          Text(settings.defaultSort, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurface.withAlpha(120))),
+                          Text(
+                            settings.defaultSort,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: m.fontSize12,
+                              color: s.textTertiary,
+                              height: 1.6,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -235,8 +242,11 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
               children: <Widget>[
                 Text(
                   '导出或导入游戏库数据，备份文件为 JSON 格式',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withAlpha(150),
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize12,
+                    color: s.textSecondary,
+                    height: 1.6,
                   ),
                 ),
                 SizedBox(height: m.kSpace12),

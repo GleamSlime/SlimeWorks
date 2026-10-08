@@ -36,7 +36,7 @@ class _GameCategoriesScreenState
         ),
       ],
       toolbar: SizedBox(
-        width: 280,
+        width: scaleW(280),
         child: AppTextField(
           decoration: const InputDecoration(
             hintText: '搜索分类',
@@ -66,9 +66,17 @@ class _GameCategoriesScreenState
           separatorBuilder: (_, _) => SizedBox(height: AppTheme.metrics.kSpace8),
           itemBuilder: (BuildContext context, int index) {
             final GameCategory category = list[index];
+            final s = AppSemantic.of(context);
             return Card(
               child: ListTile(
-                leading: Text(category.emoji, style: TextStyle(fontSize: AppTheme.metrics.fontSize20)),
+                leading: Text(
+                  category.emoji,
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize20,
+                    color: s.textPrimary,
+                  ),
+                ),
                 title: Text(category.name),
                 subtitle: Text('游戏数量 ${category.gameCount}${category.isSystem ? ' · 系统分类' : ''}'),
                 onTap: () {

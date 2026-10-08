@@ -1,3 +1,4 @@
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -35,7 +36,7 @@ class _ChapterListState extends State<ChapterList> {
   void _scrollToCurrentChapter() {
     final idx = widget.controller.currentChapterIndex.value;
     if (!_scrollCtrl.hasClients || idx < 0) return;
-    const itemH = 56.0; // 每行大约高度
+    final itemH = AppTheme.metrics.kSpace56; // 每行大约高度
     // 将选中章节滚动到列表顶部（若已接近末尾则滚动到最大可滚动位置）
     final rawTarget = idx * itemH;
     final maxExtent = _scrollCtrl.position.maxScrollExtent;
@@ -45,21 +46,27 @@ class _ChapterListState extends State<ChapterList> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Obx(() {
       if (widget.controller.chapters.isEmpty) {
         return Center(
-          child: Text('暂无章节', style: TextStyle(color: Theme.of(context).colorScheme.outline)),
+          child: Text(
+            '暂无章节',
+            style: AppTextStyles.role(context, fontSize: m.fontSize13, color: s.textTertiary),
+          ),
         );
       }
 
       return Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
+          color: s.surface,
           boxShadow: [
+            // 侧栏向内容侧投的一道影，方向固定，不走 elevation 档位（那只有垂直偏移）
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(2, 0),
+              color: s.shadowKey,
+              blurRadius: m.kSpace8,
+              offset: Offset(m.kSpace2, 0),
             ),
           ],
         ),
@@ -67,24 +74,21 @@ class _ChapterListState extends State<ChapterList> {
           children: [
             // 章节列表标题
             Container(
-              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
-              ),
+              padding: EdgeInsets.all(m.kSpace16),
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: s.border))),
               child: Row(
                 children: [
-                  DrawIcon(StrokeIcons.list, size: AppTheme.metrics.iconSize20),
-                  SizedBox(width: AppTheme.metrics.kSpace8),
-                  Text(
-                    '章节列表',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  ),
+                  DrawIcon(StrokeIcons.list, size: m.iconSize20),
+                  SizedBox(width: m.kSpace8),
+                  Text('章节列表', style: AppTextStyles.sectionTitle(context)),
                   const Spacer(),
                   Text(
                     '共 ${widget.controller.chapters.length} 章',
-                    style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: Theme.of(context).hintColor),
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize11,
+                      color: s.textTertiary,
+                    ),
                   ),
                 ],
               ),
@@ -102,44 +106,37 @@ class _ChapterListState extends State<ChapterList> {
                     final isCurrent = widget.controller.currentChapterIndex.value == index;
 
                     return Material(
-                      color: isCurrent
-                          ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-                          : Colors.transparent,
+                      color: isCurrent ? s.accentContainer : Colors.transparent,
                       child: InkWell(
                         onTap: () => widget.controller.goToChapter(index),
                         child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace12),
+                          padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace12),
                           decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
-                              ),
-                            ),
+                            border: Border(bottom: BorderSide(color: s.hairline)),
                           ),
                           child: Row(
                             children: [
                               // 章节序号
                               Container(
-                                width: AppTheme.metrics.kSpace32,
-                                height: AppTheme.metrics.kSpace32,
+                                width: m.kSpace32,
+                                height: m.kSpace32,
                                 decoration: BoxDecoration(
-                                  color: isCurrent
-                                      ? Theme.of(context).primaryColor
-                                      : Theme.of(context).colorScheme.outline,
-                                  borderRadius: AppTheme.metrics.radius4,
+                                  color: isCurrent ? s.accent : s.surfaceSunken,
+                                  borderRadius: m.radius4,
                                 ),
                                 child: Center(
                                   child: Text(
                                     '${index + 1}',
-                                    style: TextStyle(
-                                      color: isCurrent ? Colors.white : Colors.black87,
-                                      fontSize: AppTheme.metrics.fontSize11,
-                                      fontWeight: FontWeight.bold,
+                                    style: AppTextStyles.role(
+                                      context,
+                                      fontSize: m.fontSize11,
+                                      color: isCurrent ? s.accentOn : s.textPrimary,
+                                      weight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
                               ),
-                              SizedBox(width: AppTheme.metrics.kSpace12),
+                              SizedBox(width: m.kSpace12),
 
                               // 章节标题（去除 HTML 标签）
                               Expanded(
@@ -147,12 +144,11 @@ class _ChapterListState extends State<ChapterList> {
                                   chapter.title.replaceAll(RegExp(r'<[^>]+>'), '').trim(),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: AppTheme.metrics.fontSize13,
-                                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                                    color: isCurrent
-                                        ? Theme.of(context).primaryColor
-                                        : Theme.of(context).textTheme.bodyLarge?.color,
+                                  style: AppTextStyles.role(
+                                    context,
+                                    fontSize: m.fontSize13,
+                                    color: isCurrent ? s.accent : s.textPrimary,
+                                    weight: isCurrent ? FontWeight.bold : FontWeight.normal,
                                   ),
                                 ),
                               ),
@@ -160,10 +156,10 @@ class _ChapterListState extends State<ChapterList> {
                               // 当前章节标记
                               if (isCurrent)
                                 Container(
-                                  margin: EdgeInsets.only(left: AppTheme.metrics.kSpace8),
+                                  margin: EdgeInsets.only(left: m.kSpace8),
                                   child: DrawIcon(StrokeIcons.playArrow,
-                                    size: AppTheme.metrics.iconSize20,
-                                    color: Theme.of(context).primaryColor,
+                                    size: m.iconSize20,
+                                    color: s.accent,
                                   ),
                                 ),
                             ],

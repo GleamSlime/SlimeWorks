@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -19,27 +21,21 @@ class SentryLogFilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final theme = Theme.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
 
     return Container(
       padding: EdgeInsets.fromLTRB(m.kSpace16, m.kSpace12, m.kSpace16, m.kSpace4),
       child: ClipRRect(
         borderRadius: m.radius12,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          // 常驻玻璃取 AppGlass 档位，语义层的 glassBlur(24) 对这条窄栏偏重
+          filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: m.kSpace10, vertical: m.kSpace6),
             decoration: BoxDecoration(
-              color: isDark
-                  ? DarkColors.background1.withAlpha(120)
-                  : LightColors.background1.withAlpha(160),
+              color: s.glassTint,
               borderRadius: m.radius12,
-              border: Border.all(
-                color: isDark
-                    ? DarkColors.white10.withAlpha(30)
-                    : LightColors.black10.withAlpha(20),
-                width: 0.5,
-              ),
+              border: Border.all(color: s.glassBorder, width: 0.5),
             ),
             child: Wrap(
               spacing: m.kSpace8,
@@ -47,14 +43,14 @@ class SentryLogFilterBar extends StatelessWidget {
               alignment: WrapAlignment.start,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                _buildProjectFilter(context, theme, m, isDark),
-                _buildLevelChips(context, theme, m, isDark),
-                _buildEnvironmentField(context, theme, m, isDark),
+                _buildProjectFilter(context, theme, m, s),
+                _buildLevelChips(context, theme, m, s),
+                _buildEnvironmentField(context, theme, m, s),
                 SizedBox(
-                  width: 160,
-                  child: _buildSearchField(context, theme, m, isDark),
+                  width: scaleW(160),
+                  child: _buildSearchField(context, theme, m, s),
                 ),
-                _buildFilterButton(context, theme, m, isDark),
+                _buildFilterButton(),
               ],
             ),
           ),
@@ -64,7 +60,7 @@ class SentryLogFilterBar extends StatelessWidget {
   }
 
   /// 构建项目筛选下拉框
-  Widget _buildProjectFilter(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildProjectFilter(BuildContext context, ThemeData theme, ThemeMetrics m, AppSemantic s) {
     return Obx(() {
       final items = <DropdownMenuItem<String>>[
         DropdownMenuItem<String>(
@@ -90,23 +86,23 @@ class SentryLogFilterBar extends StatelessWidget {
               : viewModel.selectedProjectId.value,
           hint: Text(
             '全部项目',
-            style: TextStyle(color: theme.hintColor, fontSize: 13),
+            style: AppTextStyles.body(context),
             overflow: TextOverflow.ellipsis,
           ),
           isDense: true,
           isExpanded: true,
           decoration: InputDecoration(
             filled: true,
-            fillColor: isDark ? DarkColors.background2 : LightColors.background2,
+            fillColor: s.surfaceSunken,
             contentPadding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace6),
-            border: OutlineInputBorder(borderRadius: m.radius8, borderSide: BorderSide.none),
-            enabledBorder: OutlineInputBorder(borderRadius: m.radius8, borderSide: BorderSide.none),
+            border: OutlineInputBorder(borderRadius: m.radiusField, borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(borderRadius: m.radiusField, borderSide: BorderSide.none),
             focusedBorder: OutlineInputBorder(
-              borderRadius: m.radius8,
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+              borderRadius: m.radiusField,
+              borderSide: BorderSide(color: s.accent, width: 1.5),
             ),
           ),
-          icon: DrawIcon(StrokeIcons.unfoldMore, size: m.iconSize16, color: theme.hintColor),
+          icon: DrawIcon(StrokeIcons.unfoldMore, size: m.iconSize16, color: s.textTertiary),
           style: theme.textTheme.bodySmall,
           items: items,
           onChanged: (value) {
@@ -119,34 +115,26 @@ class SentryLogFilterBar extends StatelessWidget {
   }
 
   /// 构建日志级别筛选标签组
-  Widget _buildLevelChips(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildLevelChips(BuildContext context, ThemeData theme, ThemeMetrics m, AppSemantic s) {
     const levels = ['', 'fatal', 'error', 'warning', 'info', 'debug'];
     const levelLabels = ['全部', '致命', '错误', '警告', '信息', '调试'];
-    const levelColors = [
-      null,
-      Color(0xFF9C27B0),
-      Color(0xFFE53935),
-      Color(0xFFFB8C00),
-      Color(0xFF1E88E5),
-      Color(0xFF757575),
-    ];
+    // 语义层没有"致命"这一档，fatal 先与 error 同归 danger
+    final levelRoles = <AppStatusRole?>[null, s.danger, s.danger, s.warning, s.info, s.neutral];
 
     return Obx(
       () => Container(
         height: m.kSpace32,
         decoration: BoxDecoration(
-          color: isDark ? DarkColors.background2 : LightColors.background2,
-          borderRadius: m.radius8,
-          border: Border.all(
-            color: isDark ? DarkColors.white10.withAlpha(20) : LightColors.black10.withAlpha(15),
-            width: 0.5,
-          ),
+          color: s.surfaceSunken,
+          borderRadius: m.radiusControl,
+          border: Border.all(color: s.border, width: 0.5),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(levels.length, (i) {
             final isSelected = viewModel.selectedLevel.value == levels[i];
-            final color = levelColors[i];
+            final role = levelRoles[i];
+            final fg = role?.color ?? s.accent;
             return Padding(
               padding: EdgeInsets.only(
                 left: i == 0 ? m.kSpace4 : m.kSpace2,
@@ -158,18 +146,17 @@ class SentryLogFilterBar extends StatelessWidget {
                   onFilterChanged();
                 },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
+                  duration: AppMotion.base,
+                  curve: AppMotion.standard,
                   padding: EdgeInsets.symmetric(horizontal: m.kSpace8),
                   decoration: BoxDecoration(
-                    color: isSelected
-                        ? (color ?? theme.colorScheme.primary).withAlpha(40)
-                        : Colors.transparent,
+                    // 容器底与描边从角色派生，不手写 withAlpha
+                    color: isSelected ? (role?.container ?? s.accentContainer) : Colors.transparent,
                     borderRadius: m.radius6,
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: (color ?? theme.colorScheme.primary).withAlpha(30),
+                              color: fg.withAlpha(30),
                               blurRadius: scaleW(6),
                               offset: Offset(0, scaleW(2)),
                             ),
@@ -180,7 +167,7 @@ class SentryLogFilterBar extends StatelessWidget {
                   child: Text(
                     levelLabels[i],
                     style: theme.textTheme.labelMedium?.copyWith(
-                      color: isSelected ? (color ?? theme.colorScheme.primary) : theme.hintColor,
+                      color: isSelected ? fg : s.textTertiary,
                       fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
@@ -198,25 +185,25 @@ class SentryLogFilterBar extends StatelessWidget {
     BuildContext context,
     ThemeData theme,
     ThemeMetrics m,
-    bool isDark,
+    AppSemantic s,
   ) {
     return Obx(
       () => SizedBox(
-        width: 110,
+        width: scaleW(110),
         height: m.kSpace32,
         child: TextFormField(
           style: AppTheme.fieldTextStyle,
           decoration: InputDecoration(
             hintText: '环境',
-            prefixIcon: DrawIcon(StrokeIcons.language, size: m.iconSize16, color: theme.hintColor),
+            prefixIcon: DrawIcon(StrokeIcons.language, size: m.iconSize16, color: s.textTertiary),
             contentPadding: EdgeInsets.symmetric(vertical: m.kSpace4),
             filled: true,
-            fillColor: isDark ? DarkColors.background2 : LightColors.background2,
-            border: OutlineInputBorder(borderRadius: m.radius8, borderSide: BorderSide.none),
-            enabledBorder: OutlineInputBorder(borderRadius: m.radius8, borderSide: BorderSide.none),
+            fillColor: s.surfaceSunken,
+            border: OutlineInputBorder(borderRadius: m.radiusField, borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(borderRadius: m.radiusField, borderSide: BorderSide.none),
             focusedBorder: OutlineInputBorder(
-              borderRadius: m.radius8,
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+              borderRadius: m.radiusField,
+              borderSide: BorderSide(color: s.accent, width: 1.5),
             ),
             suffixIcon: viewModel.selectedEnvironment.value.isNotEmpty
                 ? GestureDetector(
@@ -224,7 +211,7 @@ class SentryLogFilterBar extends StatelessWidget {
                       viewModel.selectedEnvironment.value = '';
                       onFilterChanged();
                     },
-                    child: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: theme.hintColor),
+                    child: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: s.textTertiary),
                   )
                 : null,
             isDense: true,
@@ -237,7 +224,7 @@ class SentryLogFilterBar extends StatelessWidget {
   }
 
   /// 构建搜索输入框
-  Widget _buildSearchField(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildSearchField(BuildContext context, ThemeData theme, ThemeMetrics m, AppSemantic s) {
     return Obx(
       () => SizedBox(
         height: m.kSpace32,
@@ -247,16 +234,16 @@ class SentryLogFilterBar extends StatelessWidget {
             hintText: '搜索事件...',
             prefixIcon: Padding(
               padding: EdgeInsets.only(left: m.kSpace8, right: m.kSpace4),
-              child: DrawIcon(StrokeIcons.search, size: m.iconSize18, color: theme.hintColor),
+              child: DrawIcon(StrokeIcons.search, size: m.iconSize18, color: s.textTertiary),
             ),
             contentPadding: EdgeInsets.symmetric(vertical: m.kSpace4),
             filled: true,
-            fillColor: isDark ? DarkColors.background2 : LightColors.background2,
-            border: OutlineInputBorder(borderRadius: m.radius8, borderSide: BorderSide.none),
-            enabledBorder: OutlineInputBorder(borderRadius: m.radius8, borderSide: BorderSide.none),
+            fillColor: s.surfaceSunken,
+            border: OutlineInputBorder(borderRadius: m.radiusField, borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(borderRadius: m.radiusField, borderSide: BorderSide.none),
             focusedBorder: OutlineInputBorder(
-              borderRadius: m.radius8,
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+              borderRadius: m.radiusField,
+              borderSide: BorderSide(color: s.accent, width: 1.5),
             ),
             suffixIcon: viewModel.searchQuery.value.isNotEmpty
                 ? GestureDetector(
@@ -266,7 +253,7 @@ class SentryLogFilterBar extends StatelessWidget {
                     },
                     child: Padding(
                       padding: EdgeInsets.only(right: m.kSpace8),
-                      child: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: theme.hintColor),
+                      child: DrawIcon(StrokeIcons.close, size: m.iconSize14, color: s.textTertiary),
                     ),
                   )
                 : null,
@@ -280,22 +267,17 @@ class SentryLogFilterBar extends StatelessWidget {
   }
 
   /// 构建筛选按钮（渐变 + 发光阴影）
-  Widget _buildFilterButton(BuildContext context, ThemeData theme, ThemeMetrics m, bool isDark) {
-    return _FilterButtonWidget(
-      onFilterChanged: onFilterChanged,
-      isDark: isDark,
-    );
+  Widget _buildFilterButton() {
+    return _FilterButtonWidget(onFilterChanged: onFilterChanged);
   }
 }
 
 /// 筛选按钮组件（带悬停发光效果）
 class _FilterButtonWidget extends StatefulWidget {
   final VoidCallback onFilterChanged;
-  final bool isDark;
 
   const _FilterButtonWidget({
     required this.onFilterChanged,
-    required this.isDark,
   });
 
   @override
@@ -309,32 +291,33 @@ class _FilterButtonWidgetState extends State<_FilterButtonWidget> {
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onFilterChanged,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
+          duration: AppMotion.base,
+          curve: AppMotion.standard,
           height: m.kSpace32,
           padding: EdgeInsets.symmetric(horizontal: m.kSpace12),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: _hovered
                   ? [
-                      theme.colorScheme.primary,
-                      theme.colorScheme.primary.withAlpha(200),
+                      s.accent,
+                      s.accent.withAlpha(200),
                     ]
                   : [
-                      theme.colorScheme.primary,
-                      theme.colorScheme.primary.withAlpha(180),
+                      s.accent,
+                      s.accent.withAlpha(180),
                     ],
             ),
-            borderRadius: m.radius8,
+            borderRadius: m.radiusControl,
             boxShadow: [
               BoxShadow(
-                color: theme.colorScheme.primary.withAlpha(_hovered ? 80 : 60),
+                color: s.accent.withAlpha(_hovered ? 80 : 60),
                 blurRadius: _hovered ? scaleW(12) : scaleW(6),
                 offset: Offset(0, _hovered ? scaleW(3) : scaleW(2)),
               ),
@@ -345,15 +328,15 @@ class _FilterButtonWidgetState extends State<_FilterButtonWidget> {
             children: [
               AnimatedScale(
                 scale: _hovered ? 1.1 : 1.0,
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                child: DrawIcon(StrokeIcons.tune, size: m.iconSize16, color: Colors.white),
+                duration: AppMotion.fast,
+                curve: AppMotion.standard,
+                child: DrawIcon(StrokeIcons.tune, size: m.iconSize16, color: s.accentOn),
               ),
               SizedBox(width: m.kSpace4),
               Text(
                 '筛选',
                 style: theme.textTheme.labelMedium?.copyWith(
-                  color: Colors.white,
+                  color: s.accentOn,
                   fontWeight: FontWeight.w600,
                 ),
               ),

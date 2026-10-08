@@ -85,7 +85,7 @@ class _TransferChatViewState extends State<TransferChatView> {
         if (mounted && _scrollController.hasClients) {
           _scrollController.animateTo(
             _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 250),
+            duration: AppMotion.base,
             curve: Curves.easeOut,
           );
         }
@@ -102,6 +102,9 @@ class _TransferChatViewState extends State<TransferChatView> {
 
   @override
   Widget build(BuildContext context) {
+    // 取色只走语义层：isDark 三元分支与裸 Colors.* 一律收敛到 AppSemantic
+    final s = AppSemantic.of(context);
+
     if (widget.items.isEmpty) {
       return _buildEmpty(context);
     }
@@ -149,7 +152,7 @@ class _TransferChatViewState extends State<TransferChatView> {
                 if (_scrollController.hasClients) {
                   _scrollController.animateTo(
                     _scrollController.position.maxScrollExtent,
-                    duration: const Duration(milliseconds: 250),
+                    duration: AppMotion.base,
                     curve: Curves.easeOut,
                   );
                 }
@@ -160,29 +163,22 @@ class _TransferChatViewState extends State<TransferChatView> {
                   vertical: AppTheme.metrics.kSpace8,
                 ),
                 decoration: BoxDecoration(
-                  color: (Get.isDarkMode ? DarkColors.primary : LightColors.primary).withValues(
-                    alpha: 0.9,
-                  ),
+                  color: s.accent,
                   borderRadius: AppTheme.metrics.radius20,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  boxShadow: s.elevation(Elevation.floating),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    DrawIcon(StrokeIcons.keyboardDoubleArrowDown, size: scaleW(16), color: Colors.white),
+                    DrawIcon(StrokeIcons.keyboardDoubleArrowDown, size: scaleW(16), color: s.accentOn),
                     SizedBox(width: AppTheme.metrics.kSpace4),
                     Text(
                       '返回底部',
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: AppTheme.metrics.fontSize11,
                         height: 1.4,
-                        color: Colors.white,
+                        color: s.accentOn,
                       ),
                     ),
                   ],
@@ -205,7 +201,7 @@ class _TransferChatViewState extends State<TransferChatView> {
   }
 
   Widget _buildDateHeader(BuildContext context, String dateStr) {
-    final isDark = Get.isDarkMode;
+    final s = AppSemantic.of(context);
     final dt = DateTime.tryParse(dateStr);
     final label = dt != null ? _formatDateTime(dt) : dateStr;
     return Padding(
@@ -217,15 +213,16 @@ class _TransferChatViewState extends State<TransferChatView> {
             vertical: AppTheme.metrics.kSpace4,
           ),
           decoration: BoxDecoration(
-            color: (isDark ? DarkColors.white10 : LightColors.black10),
+            color: s.surfaceSunken,
             borderRadius: AppTheme.metrics.radius12,
           ),
           child: Text(
             label,
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: AppTheme.metrics.fontSize11,
               height: 1.4,
-              color: isDark ? DarkColors.white40 : LightColors.black40,
+              color: s.textTertiary,
             ),
           ),
         ),
@@ -234,22 +231,23 @@ class _TransferChatViewState extends State<TransferChatView> {
   }
 
   Widget _buildEmpty(BuildContext context) {
-    final isDark = Get.isDarkMode;
+    final s = AppSemantic.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           DrawIcon(StrokeIcons.chatBubbleOutline,
             size: scaleW(48),
-            color: isDark ? DarkColors.white20 : LightColors.black20,
+            color: s.textDisabled,
           ),
           SizedBox(height: AppTheme.metrics.kSpace12),
           Text(
             '暂无传输记录',
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: AppTheme.metrics.fontSize13,
               height: 1.5,
-              color: isDark ? DarkColors.white40 : LightColors.black40,
+              color: s.textTertiary,
             ),
           ),
         ],
@@ -306,7 +304,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+    _animController = AnimationController(vsync: this, duration: AppMotion.slow);
     _scaleAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOutBack);
     _slideAnim = Tween<Offset>(
       begin: Offset(widget.isSelf ? 0.3 : -0.3, 0),
@@ -329,7 +327,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
+    final s = AppSemantic.of(context);
     final isSelf = widget.isSelf;
 
     return SlideTransition(
@@ -344,7 +342,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               if (!isSelf) ...[
-                _buildAvatar(isDark, isSelf),
+                _buildAvatar(isSelf),
                 SizedBox(width: AppTheme.metrics.kSpace8),
               ],
               Flexible(
@@ -360,15 +358,16 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                         ),
                         child: Text(
                           widget.item.senderDeviceName,
-                          style: TextStyle(
+                          style: AppTextStyles.role(
+                            context,
                             fontSize: AppTheme.metrics.fontSize11,
                             height: 1.4,
-                            color: isDark ? DarkColors.white40 : LightColors.black40,
+                            color: s.textTertiary,
                           ),
                         ),
                       ),
                     // 气泡内容
-                    _buildBubble(context, isDark, isSelf),
+                    _buildBubble(context, isSelf),
                     // 时间 + 状态
                     Padding(
                       padding: EdgeInsets.only(
@@ -387,17 +386,18 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                               onTap: widget.onRetry,
                               child: Padding(
                                 padding: EdgeInsets.only(right: AppTheme.metrics.kSpace4),
-                                child: DrawIcon(StrokeIcons.refresh, size: scaleW(14), color: Colors.orange),
+                                child: DrawIcon(StrokeIcons.refresh, size: scaleW(14), color: s.warning.color),
                               ),
                             ),
                           if (isSelf) _buildStatusIcon(),
                           if (isSelf) SizedBox(width: AppTheme.metrics.kSpace4),
                           Text(
                             _formatTime(widget.item.createdAt),
-                            style: TextStyle(
+                            style: AppTextStyles.role(
+                              context,
                               fontSize: AppTheme.metrics.fontSize11,
                               height: 1.4,
-                              color: isDark ? DarkColors.white20 : LightColors.black20,
+                              color: s.textDisabled,
                             ),
                           ),
                         ],
@@ -408,7 +408,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
               ),
               if (isSelf) ...[
                 SizedBox(width: AppTheme.metrics.kSpace8),
-                _buildAvatar(isDark, isSelf),
+                _buildAvatar(isSelf),
               ],
             ],
           ),
@@ -417,47 +417,49 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
     );
   }
 
-  Widget _buildAvatar(bool isDark, bool isSelf) {
+  Widget _buildAvatar(bool isSelf) {
+    final s = AppSemantic.of(context);
     return Container(
       width: scaleW(36),
       height: scaleW(36),
       decoration: BoxDecoration(
-        color: isSelf
-            ? (isDark ? DarkColors.primary : LightColors.primary).withValues(alpha: 0.15)
-            : (isDark ? DarkColors.background3 : LightColors.background3),
+        color: isSelf ? s.accentContainer : s.surfaceSunken,
         shape: BoxShape.circle,
       ),
       child: DrawIcon(
         _deviceIcon(widget.item.senderDeviceName),
         size: scaleW(18),
-        color: isSelf
-            ? (isDark ? DarkColors.primary : LightColors.primary)
-            : (isDark ? DarkColors.white80 : LightColors.black80),
+        color: isSelf ? s.accent : s.textSecondary,
       ),
     );
   }
 
-  Widget _buildBubble(BuildContext context, bool isDark, bool isSelf) {
+  Widget _buildBubble(BuildContext context, bool isSelf) {
+    final s = AppSemantic.of(context);
     final item = widget.item;
-    final bubbleColor = isSelf
-        ? (isDark ? DarkColors.primary : LightColors.primary).withValues(alpha: 0.85)
-        : (isDark ? DarkColors.background2 : LightColors.background2);
-    final textColor = isSelf ? Colors.white : (isDark ? DarkColors.white100 : LightColors.black100);
+    // 我方气泡走唯一的实心强调底（accent + accentOn），
+    // 对方气泡走半透明表面洗色，层次靠透明度而非第二种灰
+    final bubbleColor = isSelf ? s.accent : s.surfaceHover;
+    final textColor = isSelf ? s.accentOn : s.textPrimary;
     final radius = BorderRadius.only(
-      topLeft: const Radius.circular(16),
-      topRight: const Radius.circular(16),
-      bottomLeft: Radius.circular(isSelf ? 16 : 4),
-      bottomRight: Radius.circular(isSelf ? 4 : 16),
+      topLeft: AppTheme.metrics.radius16.topLeft,
+      topRight: AppTheme.metrics.radius16.topRight,
+      bottomLeft: isSelf
+          ? AppTheme.metrics.radius16.bottomLeft
+          : AppTheme.metrics.radius4.bottomLeft,
+      bottomRight: isSelf
+          ? AppTheme.metrics.radius4.bottomRight
+          : AppTheme.metrics.radius16.bottomRight,
     );
 
     return GestureDetector(
-      onLongPress: () => _showContextMenu(context, isDark),
+      onLongPress: () => _showContextMenu(context),
       child: Container(
         constraints: BoxConstraints(maxWidth: scaleW(260)),
         decoration: BoxDecoration(color: bubbleColor, borderRadius: radius),
         child: item.transferType == TransferType.text
             ? _buildTextBubble(item, textColor)
-            : _buildFileBubble(item, textColor, isDark, isSelf),
+            : _buildFileBubble(item, textColor, isSelf),
       ),
     );
   }
@@ -470,12 +472,17 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
       ),
       child: SelectableText(
         item.textContent ?? '',
-        style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, color: textColor),
+        style: AppTextStyles.role(
+          context,
+          fontSize: AppTheme.metrics.fontSize13,
+          height: 1.5,
+          color: textColor,
+        ),
       ),
     );
   }
 
-  Widget _buildFileBubble(TransferItem item, Color textColor, bool isDark, bool isSelf) {
+  Widget _buildFileBubble(TransferItem item, Color textColor, bool isSelf) {
     final iconData = _typeIcon(item.transferType);
     final name = item.fileName ?? '未知文件';
     final size = item.fileSize != null ? _formatFileSize(item.fileSize!) : '';
@@ -579,11 +586,12 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                 children: [
                   Text(
                     name,
-                    style: TextStyle(
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: AppTheme.metrics.fontSize13,
                       height: 1.5,
                       color: textColor,
-                      fontWeight: FontWeight.w600,
+                      weight: FontWeight.w600,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -591,7 +599,8 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                   if (size.isNotEmpty)
                     Text(
                       size,
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: AppTheme.metrics.fontSize11,
                         height: 1.4,
                         color: textColor.withValues(alpha: 0.65),
@@ -626,7 +635,8 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             SizedBox(height: AppTheme.metrics.kSpace4),
             Text(
               '${item.progress.toStringAsFixed(1)}%',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: AppTheme.metrics.fontSize11,
                 height: 1.4,
                 color: textColor.withValues(alpha: 0.65),
@@ -652,7 +662,8 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
           SizedBox(width: AppTheme.metrics.kSpace8),
           Text(
             '文件已移除',
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: AppTheme.metrics.fontSize11,
               height: 1.4,
               color: textColor.withValues(alpha: 0.6),
@@ -664,9 +675,10 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
   }
 
   Widget _buildStatusIcon() {
+    final s = AppSemantic.of(context);
     final item = widget.item;
     return switch (item.status) {
-      TransferStatus.completed => DrawIcon(StrokeIcons.doneAll, size: scaleW(14), color: Colors.lightBlue),
+      TransferStatus.completed => DrawIcon(StrokeIcons.doneAll, size: scaleW(14), color: s.info.color),
       TransferStatus.failed => GestureDetector(
         onTap: () {
           final errMsg = (item.errorMessage != null && item.errorMessage!.isNotEmpty)
@@ -677,38 +689,39 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             errMsg,
             duration: const Duration(seconds: 5),
             snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Theme.of(context).colorScheme.error.withValues(alpha: 0.85),
+            backgroundColor: s.danger.color.withValues(alpha: 0.85),
             colorText: Colors.white,
           );
         },
         child: DrawIcon(StrokeIcons.errorOutline,
           size: scaleW(14),
-          color: Theme.of(context).colorScheme.error,
+          color: s.danger.color,
         ),
       ),
       TransferStatus.rejected => DrawIcon(StrokeIcons.block,
         size: scaleW(14),
-        color: Theme.of(context).colorScheme.error,
+        color: s.danger.color,
       ),
       TransferStatus.cancelled => DrawIcon(StrokeIcons.cancel,
         size: scaleW(14),
-        color: Theme.of(context).colorScheme.outline,
+        color: s.border,
       ),
       TransferStatus.transferring => SizedBox(
         width: scaleW(14),
         height: scaleW(14),
-        child: const CircularProgressIndicator(strokeWidth: 1.5, color: Colors.lightBlue),
+        child: CircularProgressIndicator(strokeWidth: 1.5, color: s.info.color),
       ),
       TransferStatus.queued => SizedBox(
         width: scaleW(14),
         height: scaleW(14),
-        child: const CircularProgressIndicator(strokeWidth: 1.5, color: Colors.orange),
+        child: CircularProgressIndicator(strokeWidth: 1.5, color: s.warning.color),
       ),
-      _ => DrawIcon(StrokeIcons.schedule, size: scaleW(14), color: Theme.of(context).colorScheme.outline),
+      _ => DrawIcon(StrokeIcons.schedule, size: scaleW(14), color: s.border),
     };
   }
 
-  void _showContextMenu(BuildContext context, bool isDark) {
+  void _showContextMenu(BuildContext context) {
+    final s = AppSemantic.of(context);
     final item = widget.item;
     final canCopy =
         item.status == TransferStatus.completed && item.transferType == TransferType.text;
@@ -738,20 +751,20 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
 
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: isDark ? DarkColors.background2 : LightColors.white100,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: s.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: AppTheme.metrics.radius20.topLeft),
       ),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 36,
+              width: scaleW(36),
               height: AppTheme.metrics.kSpace4,
               margin: EdgeInsets.only(top: AppTheme.metrics.kSpace12),
               decoration: BoxDecoration(
-                color: isDark ? DarkColors.white20 : LightColors.black20,
+                color: s.textDisabled,
                 borderRadius: AppTheme.metrics.radius2,
               ),
             ),
@@ -761,7 +774,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                 ctx,
                 icon: StrokeIcons.copy,
                 label: '复制文本',
-                color: isDark ? DarkColors.white80 : LightColors.black80,
+                color: s.textSecondary,
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: item.textContent ?? ''));
                   Navigator.of(ctx).pop();
@@ -775,7 +788,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                 ctx,
                 icon: StrokeIcons.iosShare,
                 label: '用其他应用打开',
-                color: isDark ? DarkColors.white80 : LightColors.black80,
+                color: s.textSecondary,
                 onTap: () {
                   Navigator.of(ctx).pop();
                   SharePlus.instance.share(
@@ -792,7 +805,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                 ctx,
                 icon: StrokeIcons.cancel,
                 label: '取消传输',
-                color: Colors.orange,
+                color: s.warning.color,
                 onTap: () {
                   Navigator.of(ctx).pop();
                   widget.onCancel();
@@ -803,7 +816,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                 ctx,
                 icon: StrokeIcons.deleteSweep,
                 label: '删除记录和文件',
-                color: Theme.of(context).colorScheme.error,
+                color: s.danger.color,
                 onTap: () {
                   Navigator.of(ctx).pop();
                   widget.onDeleteWithFile();
@@ -813,7 +826,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
               ctx,
               icon: StrokeIcons.deleteOutline,
               label: '删除记录',
-              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.5),
+              color: s.danger.onContainer,
               onTap: () {
                 Navigator.of(ctx).pop();
                 widget.onDelete();
@@ -835,7 +848,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
   }) {
     return ListTile(
       leading: DrawIcon(icon, color: color),
-      title: Text(label, style: TextStyle(color: color)),
+      title: Text(label, style: AppTextStyles.rowTitle(ctx).copyWith(color: color)),
       onTap: onTap,
     );
   }
@@ -914,6 +927,9 @@ class _ImagePreviewPageState extends State<_ImagePreviewPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 媒体预览页沿用系统级"黑底看图"惯例：Scaffold 黑底与图标白色属平台约定，
+    // 弹层与其余色一律回到语义令牌
+    final s = AppSemantic.of(context);
     final topPadding = MediaQuery.of(context).padding.top;
     return Scaffold(
       backgroundColor: Colors.black,
@@ -940,9 +956,9 @@ class _ImagePreviewPageState extends State<_ImagePreviewPage> {
                   onPressed: () {
                     showModalBottomSheet<void>(
                       context: context,
-                      backgroundColor: Colors.white,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                      backgroundColor: s.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(top: AppTheme.metrics.radius12.topLeft),
                       ),
                       builder: (ctx) => SafeArea(
                         child: Column(
@@ -1042,6 +1058,8 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 同上：视频预览页保留黑底看图惯例，弹层回到语义令牌
+    final s = AppSemantic.of(context);
     final topPadding = MediaQuery.of(context).padding.top;
     return Scaffold(
       backgroundColor: Colors.black,
@@ -1075,9 +1093,9 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
                   onPressed: () {
                     showModalBottomSheet<void>(
                       context: context,
-                      backgroundColor: Colors.white,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                      backgroundColor: s.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(top: AppTheme.metrics.radius12.topLeft),
                       ),
                       builder: (ctx) => SafeArea(
                         child: Column(
@@ -1114,7 +1132,7 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
           // 播放/暂停按钮（右下角）
           if (_initialized)
             Positioned(
-              bottom: 24 + MediaQuery.of(context).padding.bottom,
+              bottom: AppTheme.metrics.kSpace24 + MediaQuery.of(context).padding.bottom,
               right: AppTheme.metrics.kSpace16,
               child: FloatingActionButton(
                 onPressed: () => setState(
@@ -1160,7 +1178,8 @@ class _VideoPlayerWidgetThumbnailState extends State<VideoPlayerWidgetThumbnail>
 
   @override
   Widget build(BuildContext context) {
-    if (!_ready) return Container(color: Colors.black26);
+    // 首帧就绪前的媒体占位底：走下沉表面而非裸黑色
+    if (!_ready) return Container(color: AppSemantic.of(context).surfaceSunken);
     return FittedBox(
       fit: BoxFit.cover,
       child: SizedBox(

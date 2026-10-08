@@ -107,7 +107,15 @@ class _GlassMenuRow extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: foreground),
+                style: foreground == null
+                    ? null
+                    : AppTextStyles.role(
+                        context,
+                        fontSize: m.fontSize13,
+                        weight: FontWeight.w500,
+                        height: 1.25,
+                        color: foreground,
+                      ),
               ),
             ),
           ],

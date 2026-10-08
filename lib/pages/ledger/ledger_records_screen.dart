@@ -176,7 +176,7 @@ class _LedgerRecordsScreenState extends BasePageState<LedgerRecordsViewModel, Le
       padding: EdgeInsets.fromLTRB(m.kSpace12, m.kSpace8, m.kSpace12, m.kSpace32),
       child: ConstrainedBox(
         // 宽屏不铺满：日历拉成 1400 宽的一格一天就没法看了
-        constraints: const BoxConstraints(maxWidth: 560),
+        constraints: BoxConstraints(maxWidth: scaleW(560)),
         child: Center(
           child: LedgerCalendarMonth(
             month: viewModel.calendarMonth.value,

@@ -326,6 +326,9 @@ class AppGlass {
   static const double blurMedium = 24;
   static const double blurStrong = 40;
 
+  /// 封面/ artwork 之上那种"化成一团"的重模糊，超出上面三档的量程
+  static const double blurArtwork = 50;
+
   /// 玻璃上的着色叠加层透明度：亮色下需要更多白，暗色下更多黑
   static const double tintLight = 0.72;
   static const double tintDark = 0.55;
@@ -334,3 +337,74 @@ class AppGlass {
   static const double panelTintLight = 0.55;
   static const double panelTintDark = 0.42;
 }
+
+/// 媒体层 chrome（Media Chrome）
+///
+/// 封面卡、看图器、播放器、朗读页这几层压的是照片/视频/专辑图，底色由内容自己
+/// 决定、跟应用主题无关，所以这套墨字**故意不随明暗切换**：暗色下它是白，亮色
+/// 下它还是白。业务侧一律走 [AppSemantic] 上的 `onMedia*` 角色，别在这里加分支，
+/// 也别拿主题的 textPrimary 去顶封面——白底卡片一压上去就变成白字白底。
+class AppMediaChrome {
+  AppMediaChrome._();
+
+  /// 主字/主图标（恒白）
+  static const Color ink = Color(0xFFFFFFFF);
+
+  /// 次要字（约 70%）
+  static const Color inkSecondary = Color(0xB3FFFFFF);
+
+  /// 弱化字与轨道（约 60%）
+  static const Color inkTertiary = Color(0x99FFFFFF);
+
+  /// 更弱的提示与角标（约 38%）
+  static const Color inkFaint = Color(0x61FFFFFF);
+
+  /// 悬停/选中水洗（约 12%，压在任何画面上都只是"亮一点点"）
+  static const Color inkWash = Color(0x1FFFFFFF);
+
+  /// 恒白输入框上的深色墨字（看图器改名框那类：底是白的，字只能是黑的）
+  static const Color inkOnLight = Color(0xFF0A0A0A);
+
+  /// 看图/播放舞台底：画面之外的 letterbox
+  static const Color stage = Color(0xFF000000);
+
+  /// 封面顶部极弱压暗（渐变起点，只为让白字先有个依托）
+  static const Color scrimTrace = Color(0x18000000);
+
+  /// 弱遮罩
+  static const Color scrimSoft = Color(0x22000000);
+
+  /// 常规遮罩（黑 54% 档）
+  static const Color scrimMedium = Color(0x8A000000);
+
+  /// 强遮罩（黑 87% 档：徽标、浮层按钮底）
+  static const Color scrimStrong = Color(0xDE000000);
+
+  /// 渐变收口的两块实心暗底（封面底部字区 / 全屏控制条）
+  static const Color scrimFoot = Color(0xAA000000);
+  static const Color scrimVeil = Color(0xBB000000);
+
+  /// 沉浸式查看器的黑玻璃面板底
+  static const Color immersivePanel = Color(0x6B000000);
+
+  /// 沉浸式面板描边：白 15%，在黑玻璃上才看得出边界
+  static const Color immersiveBorder = Color(0x26FFFFFF);
+}
+
+/// 品牌紫水洗（Brand Wash）
+///
+/// 品牌紫退出主色位以后只剩"点缀"这一职：头像/图标底板那层紫洗、以及我方消息
+/// 气泡那种要把气泡本身认成"我说的"的量。这类底色必须按主题分档——同一条 12%
+/// 水洗压在白卡上刚好、压在暗色表面上几乎看不见，写死单值必坏一边。
+class AppBrandWash {
+  AppBrandWash._();
+
+  /// 图标/头像底板的紫洗
+  static const Color iconLight = Color(0x1FA89FEE);
+  static const Color iconDark = Color(0x29A89FEE);
+
+  /// 我方聊天气泡：紫底白字，透明度要压得住画面之外的聊天背景
+  static const Color bubbleLight = Color(0xD9A89FEE);
+  static const Color bubbleDark = Color(0xE0A89FEE);
+}
+

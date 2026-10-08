@@ -599,7 +599,7 @@ class _ColorRow extends StatelessWidget {
             key: ValueKey<String>('color:$hex'),
             onTap: () => onPick(hex),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
+              duration: AppMotion.fast,
               width: m.kSpace24,
               height: m.kSpace24,
               decoration: BoxDecoration(

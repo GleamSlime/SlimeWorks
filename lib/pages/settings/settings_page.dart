@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/pages/settings/components/aliyun_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/extract_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/game_settings_tab.dart';
@@ -292,47 +294,31 @@ class _SettingsTabItemState extends State<_SettingsTabItem> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final isDark = theme.brightness == Brightness.dark;
     final selected = _isSelected;
-
-    final primaryColor = isDark ? DarkColors.primary : LightColors.primary;
 
     Color bgColor;
     Color textColor;
     Color? borderColor;
-    double borderWidth = 0;
-    List<BoxShadow>? shadows;
+    List<BoxShadow> shadows = const [];
 
     if (selected) {
-      bgColor = primaryColor.withAlpha(isDark ? 30 : 22);
-      textColor = primaryColor;
-      borderColor = primaryColor.withAlpha(isDark ? 60 : 40);
-      borderWidth = 1.2;
-      shadows = [
-        BoxShadow(
-          color: primaryColor.withAlpha(isDark ? 15 : 10),
-          blurRadius: 8,
-          offset: const Offset(0, 2),
-        ),
-      ];
+      // 选中档走强调容器：底 + 描边 + 极轻抬升同一条时间轴（§6.4 的选中形变）
+      bgColor = s.accentContainer;
+      textColor = s.accentText;
+      borderColor = s.accentContainerBorder;
+      shadows = s.elevation(Elevation.raised);
     } else if (_pressed) {
-      bgColor = theme.colorScheme.onSurface.withAlpha(isDark ? 18 : 12);
-      textColor = theme.colorScheme.onSurface.withAlpha(180);
+      bgColor = s.surfaceActive;
+      textColor = s.textPrimary;
     } else if (_hovered) {
-      bgColor = theme.colorScheme.onSurface.withAlpha(isDark ? 12 : 8);
-      textColor = theme.colorScheme.onSurface.withAlpha(200);
-      shadows = [
-        BoxShadow(
-          color: theme.colorScheme.onSurface.withAlpha(4),
-          blurRadius: 4,
-          offset: const Offset(0, 1),
-        ),
-      ];
+      bgColor = s.surfaceHover;
+      textColor = s.textPrimary;
+      shadows = s.elevation(Elevation.raised);
     } else {
       bgColor = Colors.transparent;
-      textColor = theme.colorScheme.onSurface.withAlpha(140);
+      textColor = s.textSecondary;
     }
 
     return GestureDetector(
@@ -349,8 +335,8 @@ class _SettingsTabItemState extends State<_SettingsTabItem> {
           _pressed = false;
         }),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOutCubic,
+          duration: AppMotion.base,
+          curve: AppMotion.standard,
           margin: EdgeInsets.only(right: m.kSpace6),
           padding: EdgeInsets.symmetric(
             horizontal: m.kSpace14,
@@ -359,20 +345,20 @@ class _SettingsTabItemState extends State<_SettingsTabItem> {
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: m.radius10,
-            border: borderWidth > 0
-                ? Border.all(color: borderColor!, width: borderWidth)
-                : null,
+            border: borderColor == null
+                ? null
+                : Border.all(color: borderColor, width: scaleW(1)),
             boxShadow: shadows,
           ),
           child: Text(
             widget.label,
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: m.fontSize13,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
               color: textColor,
+              weight: selected ? FontWeight.w600 : FontWeight.w500,
               height: 1.3,
-              decoration: TextDecoration.none,
-            ),
+            ).copyWith(decoration: TextDecoration.none),
           ),
         ),
       ),

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -14,7 +15,7 @@ class ExtractSettingsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     final service = getIt.get<ExtractService>();
 
@@ -32,8 +33,11 @@ class ExtractSettingsTab extends StatelessWidget {
               children: [
                 Text(
                   '选择默认的解压后文件夹创建方式',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withAlpha(150),
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize12,
+                    color: s.textTertiary,
+                    height: 1.6,
                   ),
                 ),
                 SizedBox(height: m.kSpace12),
@@ -74,8 +78,11 @@ class ExtractSettingsTab extends StatelessWidget {
               children: [
                 Text(
                   '设置同时解压的压缩包数量',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withAlpha(150),
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize12,
+                    color: s.textTertiary,
+                    height: 1.6,
                   ),
                 ),
                 SizedBox(height: m.kSpace12),
@@ -93,7 +100,7 @@ class ExtractSettingsTab extends StatelessWidget {
                     ),
                     SizedBox(
                       width: m.kSpace40,
-                      child: Text('1', textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
+                      child: Text('1', textAlign: TextAlign.center, style: AppTextStyles.body(context)),
                     ),
                   ],
                 ),
@@ -108,7 +115,7 @@ class ExtractSettingsTab extends StatelessWidget {
   }
 
   Widget _buildSectionTitle(BuildContext context, String title, StrokeIcon icon) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Row(
       children: [
@@ -116,38 +123,33 @@ class ExtractSettingsTab extends StatelessWidget {
           width: m.kSpace24,
           height: m.kSpace24,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withAlpha(20),
+            color: s.accentContainer,
             borderRadius: m.radius6,
           ),
           child: DrawIcon(icon,
             size: m.iconSize12,
-            color: theme.colorScheme.primary,
+            color: s.accent,
           ),
         ),
         SizedBox(width: m.kSpace8),
         Text(
           title,
-          style: TextStyle(
-            fontSize: m.fontSize15,
-            height: 1.4,
-            color: theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppTextStyles.sectionTitle(context),
         ),
       ],
     );
   }
 
   Widget _buildSettingsCard(BuildContext context, {required Widget child}) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+        color: s.surface,
         borderRadius: m.radius12,
-        border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+        border: Border.all(color: s.border),
       ),
       child: child,
     );
@@ -159,7 +161,7 @@ class ExtractSettingsTab extends StatelessWidget {
     ExtractOutputMode mode,
     StrokeIcon icon,
   ) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
 
     return ListTile(
@@ -168,25 +170,23 @@ class ExtractSettingsTab extends StatelessWidget {
         width: m.kSpace32,
         height: m.kSpace32,
         decoration: BoxDecoration(
-          color: theme.colorScheme.primary.withAlpha(15),
+          color: s.accentContainer,
           borderRadius: m.radius8,
         ),
-        child: DrawIcon(icon, size: m.iconSize16, color: theme.colorScheme.primary),
+        child: DrawIcon(icon, size: m.iconSize16, color: s.accent),
       ),
-      title: Text(label, style: theme.textTheme.bodySmall),
+      title: Text(label, style: AppTextStyles.rowTitle(context)),
       trailing: DrawIcon(StrokeIcons.checkCircleOutline,
         size: m.iconSize18,
-        color: theme.colorScheme.primary.withAlpha(80),
+        color: s.accent,
       ),
       contentPadding: EdgeInsets.zero,
     );
   }
 
   Widget _buildPasswordManagement(BuildContext context, ExtractService service) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final isDark = theme.brightness == Brightness.dark;
-    final brandColor = isDark ? DarkColors.primary : LightColors.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,8 +205,11 @@ class ExtractSettingsTab extends StatelessWidget {
         SizedBox(height: m.kSpace4),
         Text(
           '管理解压密码，在解压时可直接选择',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurface.withAlpha(150),
+          style: AppTextStyles.role(
+            context,
+            fontSize: m.fontSize12,
+            color: s.textTertiary,
+            height: 1.6,
           ),
         ),
         SizedBox(height: m.kSpace12),
@@ -217,9 +220,9 @@ class ExtractSettingsTab extends StatelessWidget {
               width: double.infinity,
               padding: EdgeInsets.symmetric(horizontal: m.kSpace24, vertical: m.kSpace32),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withAlpha(60),
+                color: s.surfaceSunken,
                 borderRadius: m.radius12,
-                border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(60)),
+                border: Border.all(color: s.hairline),
               ),
               child: Column(
                 children: [
@@ -227,26 +230,23 @@ class ExtractSettingsTab extends StatelessWidget {
                     width: m.kSpace40,
                     height: m.kSpace40,
                     decoration: BoxDecoration(
-                      color: brandColor.withAlpha(20),
+                      color: s.accentContainer,
                       borderRadius: m.radius10,
                     ),
-                    child: DrawIcon(StrokeIcons.lockOutline, size: m.iconSize20, color: brandColor),
+                    child: DrawIcon(StrokeIcons.lockOutline, size: m.iconSize20, color: s.accent),
                   ),
                   SizedBox(height: m.kSpace12),
                   Text(
                     '暂无保存的密码',
-                    style: TextStyle(
-                      fontSize: m.fontSize13,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface,
-                    ),
+                    style: AppTextStyles.cardTitle(context),
                   ),
                   SizedBox(height: m.kSpace4),
                   Text(
                     '点击右上角 + 添加解压密码',
-                    style: TextStyle(
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: m.fontSize12,
-                      color: theme.colorScheme.onSurface.withAlpha(120),
+                      color: s.textTertiary,
                     ),
                   ),
                 ],
@@ -267,7 +267,7 @@ class ExtractSettingsTab extends StatelessWidget {
   }
 
   Widget _buildPasswordItem(BuildContext context, ExtractService service, PasswordEntry entry) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
 
     return ListTile(
@@ -277,22 +277,23 @@ class ExtractSettingsTab extends StatelessWidget {
         width: m.kSpace32,
         height: m.kSpace32,
         decoration: BoxDecoration(
-          color: theme.colorScheme.primary.withAlpha(15),
+          color: s.accentContainer,
           borderRadius: m.radius8,
         ),
-        child: DrawIcon(StrokeIcons.vpnKey, size: m.iconSize16, color: theme.colorScheme.primary),
+        child: DrawIcon(StrokeIcons.vpnKey, size: m.iconSize16, color: s.accent),
       ),
       title: Text(
         entry.displayName,
-        style: theme.textTheme.bodySmall,
+        style: AppTextStyles.rowTitle(context),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: entry.remark?.isNotEmpty == true
           ? Text(
               '密码: ${_maskPassword(entry.password)}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withAlpha(120),
+              style: AppTextStyles.role(
+                context,
+                color: s.textTertiary,
                 fontSize: m.fontSize10,
               ),
             )
@@ -306,7 +307,7 @@ class ExtractSettingsTab extends StatelessWidget {
             tooltip: '编辑备注',
           ),
           IconButton(
-            icon: DrawIcon(StrokeIcons.deleteOutline, size: m.iconSize16, color: theme.colorScheme.error),
+            icon: DrawIcon(StrokeIcons.deleteOutline, size: m.iconSize16, color: s.danger.color),
             onPressed: () => _confirmDelete(context, service, entry),
             tooltip: '删除',
           ),
@@ -330,7 +331,7 @@ class ExtractSettingsTab extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('添加解压密码'),
         content: SizedBox(
-          width: 360,
+          width: scaleW(360),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -374,7 +375,7 @@ class ExtractSettingsTab extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('编辑备注'),
         content: SizedBox(
-          width: 360,
+          width: scaleW(360),
           child: AppTextField(
             controller: remarkCtrl,
             decoration: const InputDecoration(hintText: '输入备注', labelText: '备注'),

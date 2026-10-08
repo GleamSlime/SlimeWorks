@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -290,7 +291,7 @@ class AppUpdateService {
 
   void _showUpdateDialog(BuildContext context, AppUpdateInfo info) {
     final m = AppTheme.metrics;
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
 
     showDialog(
       context: context,
@@ -301,10 +302,17 @@ class AppUpdateService {
           children: [
             DrawIcon(StrokeIcons.systemUpdate,
               size: m.iconSize24,
-              color: theme.colorScheme.primary,
+              color: s.accent,
             ),
             SizedBox(width: m.kSpace8),
-            Text('发现新版本', style: TextStyle(fontSize: m.fontSize18)),
+            Text(
+              '发现新版本',
+              style: AppTextStyles.role(
+                ctx,
+                fontSize: m.fontSize18,
+                color: s.textPrimary,
+              ),
+            ),
           ],
         ),
         content: Column(
@@ -313,10 +321,11 @@ class AppUpdateService {
           children: [
             Text(
               'v${info.version} (Build ${info.buildNumber})',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                ctx,
                 fontSize: m.fontSize15,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
+                color: s.accent,
+                weight: FontWeight.bold,
               ),
             ),
             if (info.description.isNotEmpty) ...[
@@ -326,7 +335,11 @@ class AppUpdateService {
                 child: SingleChildScrollView(
                   child: Text(
                     info.description,
-                    style: TextStyle(fontSize: m.fontSize13),
+                    style: AppTextStyles.role(
+                      ctx,
+                      fontSize: m.fontSize13,
+                      color: s.textPrimary,
+                    ),
                   ),
                 ),
               ),
@@ -334,9 +347,10 @@ class AppUpdateService {
             SizedBox(height: m.kSpace4),
             Text(
               '当前版本: v${AppInfoService.version} (Build ${AppInfoService.buildNumber})',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                ctx,
                 fontSize: m.fontSize12,
-                color: theme.colorScheme.onSurfaceVariant,
+                color: s.textSecondary,
               ),
             ),
           ],
@@ -344,7 +358,9 @@ class AppUpdateService {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('稍后提醒', style: TextStyle(fontSize: m.fontSize13)),
+            // 按钮文字样式由主题的字阶+字族统一发出，这里再写裸 TextStyle
+            // 会把 fontFamily 整条顶掉，中文会变兜底字
+            child: const Text('稍后提醒'),
           ),
           FilledButton(
             onPressed: () {
@@ -353,7 +369,7 @@ class AppUpdateService {
               autoUpdater.checkForUpdates();
               autoUpdater.setScheduledCheckInterval(3600);
             },
-            child: Text('立即更新', style: TextStyle(fontSize: m.fontSize13)),
+            child: const Text('立即更新'),
           ),
         ],
       ),

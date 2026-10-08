@@ -1121,6 +1121,8 @@ class LanTransferViewModel extends BaseViewModel {
       return;
     }
 
+    final s = AppSemantic.of(context);
+
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -1128,7 +1130,7 @@ class LanTransferViewModel extends BaseViewModel {
           content: Text(message),
           behavior: SnackBarBehavior.floating,
           duration: duration,
-          backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
+          backgroundColor: isError ? s.danger.color : s.success.color,
         ),
       );
   }

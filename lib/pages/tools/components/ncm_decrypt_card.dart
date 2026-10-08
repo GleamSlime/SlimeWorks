@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_viz.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
@@ -17,80 +20,57 @@ class _NcmDecryptCardState extends State<NcmDecryptCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
+    final viz = AppVizSet.of(context).mint;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        transform: _isHovered ? (Matrix4.translationValues(0, -2, 0)) : Matrix4.identity(),
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        transform: _isHovered
+            ? Matrix4.translationValues(0, -AppMotion.travelMicro, 0)
+            : Matrix4.identity(),
         child: Card(
-          elevation: _isHovered ? 4 : 1,
+          // 层次靠描边而不是投影：悬停只把描边提到 strong 档
           shape: RoundedRectangleBorder(
             borderRadius: m.radius12,
             side: BorderSide(
-              color: _isHovered
-                  ? theme.colorScheme.primary.withAlpha(60)
-                  : isDark
-                      ? DarkColors.white10
-                      : LightColors.black10,
-              width: _isHovered ? 1.5 : 0.5,
+              color: _isHovered ? s.borderStrong : s.hairline,
+              width: scaleW(1),
             ),
           ),
           child: InkWell(
             borderRadius: m.radius12,
             onTap: () => context.go('/ncm-decrypt'),
             child: Container(
-              width: 200,
+              width: scaleW(200),
               padding: EdgeInsets.all(m.kSpace16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
+                    duration: AppMotion.fast,
+                    curve: AppMotion.standard,
                     width: m.kSpace48,
                     height: m.kSpace48,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: _isHovered
-                            ? [const Color(0xFF4ECDC4), const Color(0xFF2EAF9B)]
-                            : [
-                                const Color(0xFF4ECDC4).withAlpha(40),
-                                const Color(0xFF2EAF9B).withAlpha(20),
-                              ],
+                      // 身份色只出水洗底，铺渐变和彩色发光都是旧语言的招牌
+                      color: viz.base.withValues(
+                        alpha: s.isDark
+                            ? (_isHovered ? 0.30 : 0.18)
+                            : (_isHovered ? 0.22 : 0.12),
                       ),
                       borderRadius: m.radius12,
-                      boxShadow: _isHovered
-                          ? [
-                              BoxShadow(
-                                color: const Color(0xFF4ECDC4).withAlpha(60),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ]
-                          : null,
                     ),
-                    child: DrawIcon(StrokeIcons.lockOpen,
-                      color: _isHovered ? Colors.white : const Color(0xFF4ECDC4),
-                      size: m.iconSize24,
-                    ),
+                    child: DrawIcon(StrokeIcons.lockOpen, color: viz.base, size: m.iconSize24),
                   ),
                   SizedBox(height: m.kSpace12),
-                  Text(
-                    'NCM解密',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                  ),
+                  Text('NCM解密', style: AppTextStyles.cardTitle(context)),
                   SizedBox(height: m.kSpace4),
-                  Text(
-                    '网易云NCM格式解密',
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-                  ),
+                  Text('网易云NCM格式解密', style: AppTextStyles.caption(context)),
                 ],
               ),
             ),

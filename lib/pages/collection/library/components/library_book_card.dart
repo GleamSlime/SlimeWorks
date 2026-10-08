@@ -224,7 +224,14 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
           if (foldersToShow.where((f) => f.id != currentFolderId).isEmpty &&
               currentFolderId == null)
             SimpleDialogOption(
-              child: Text('暂无文件夹', style: TextStyle(color: Theme.of(context).colorScheme.outline)),
+              child: Text(
+                '暂无文件夹',
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: AppTheme.metrics.fontSize13,
+                  color: AppSemantic.of(context).textTertiary,
+                ),
+              ),
             ),
         ],
       ),
@@ -243,7 +250,9 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx2).pop(), child: const Text('取消')),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+            style: TextButton.styleFrom(
+              foregroundColor: AppSemantic.of(context).danger.color,
+            ),
             onPressed: () {
               Navigator.of(ctx2).pop();
               widget.viewModel.deleteNovel(widget.metadata.id);
@@ -298,10 +307,12 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
   }
 
   void _pushBookOpenRoute(Widget page) {
+    final s = AppSemantic.of(context);
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder<void>(
-        transitionDuration: const Duration(milliseconds: 420),
-        reverseTransitionDuration: const Duration(milliseconds: 260),
+        // 页面转场：进场 slow、退场取相邻的 base 一档
+        transitionDuration: AppMotion.slow,
+        reverseTransitionDuration: AppMotion.base,
         pageBuilder: (_, _, _) => page,
         transitionsBuilder: (_, animation, _, child) {
           final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
@@ -309,7 +320,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
             children: [
               FadeTransition(
                 opacity: Tween<double>(begin: 0, end: 0.22).animate(curved),
-                child: Container(color: Colors.black),
+                child: Container(color: s.scrim),
               ),
               ScaleTransition(
                 scale: Tween<double>(begin: 0.88, end: 1.0).animate(curved),
@@ -326,8 +337,9 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = Theme.of(context).colorScheme.primary;
-    const dur = Duration(milliseconds: 200);
+    final s = AppSemantic.of(context);
+    // 卡片所有动效都由 hover 驱动，属反馈类，只允许取 ≤160ms 那一档
+    const dur = AppMotion.fast;
     const curve = Curves.easeOut;
 
     return AnimatedScale(
@@ -339,7 +351,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: appMetrics.radius8,
-          side: widget.isSelected ? BorderSide(color: accent, width: 2) : BorderSide.none,
+          side: widget.isSelected ? BorderSide(color: s.accent, width: 2) : BorderSide.none,
         ),
         child: InkWell(
           onTap: _onTap,
@@ -352,7 +364,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
             onExit: (_) => setState(() => _hovering = false),
             child: Container(
               width: double.infinity,
-              decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant),
+              decoration: BoxDecoration(color: s.hairline),
               child: Stack(
                 children: [
                   // 封面作为整个卡片背景
@@ -387,14 +399,16 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                       vertical: scaleW(4),
                                     ),
                                     color: _hovering
-                                        ? Colors.black.withAlpha(120)
-                                        : Colors.black.withAlpha(84),
+                                        ? s.scrim.withAlpha(120)
+                                        : s.scrim.withAlpha(84),
                                     child: Text(
                                       formatFileSize(widget.metadata.fileSize),
-                                      style: TextStyle(
-                                        color: Colors.white,
+                                      // 压在封面 art 上的白字，明暗两档都不反转
+                                      style: AppTextStyles.role(
+                                        context,
                                         fontSize: appMetrics.fontSize9,
-                                        fontWeight: FontWeight.bold,
+                                        weight: FontWeight.bold,
+                                        color: Colors.white,
                                       ),
                                     ),
                                   ),
@@ -404,14 +418,15 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                       vertical: scaleW(4),
                                     ),
                                     color: _hovering
-                                        ? Colors.black.withAlpha(120)
-                                        : Colors.black.withAlpha(84),
+                                        ? s.scrim.withAlpha(120)
+                                        : s.scrim.withAlpha(84),
                                     child: Text(
                                       widget.metadata.format.name.toUpperCase(),
-                                      style: TextStyle(
-                                        color: Colors.white,
+                                      style: AppTextStyles.role(
+                                        context,
                                         fontSize: appMetrics.fontSize9,
-                                        fontWeight: FontWeight.bold,
+                                        weight: FontWeight.bold,
+                                        color: Colors.white,
                                       ),
                                     ),
                                   ),
@@ -456,14 +471,14 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                 child: Container(
                                   padding: EdgeInsets.all(scaleW(4)),
                                   color: _hovering
-                                      ? Colors.black.withAlpha(150)
+                                      ? s.scrim.withAlpha(150)
                                       : Colors.transparent,
                                   child: DrawIcon(
                                     widget.metadata.isFavorite
                                         ? StrokeIcons.star
                                         : StrokeIcons.starBorder,
                                     color: widget.metadata.isFavorite
-                                        ? Colors.amber
+                                        ? s.warning.color
                                         : Colors.white70,
                                     size: scaleW(16),
                                   ),
@@ -505,8 +520,8 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                     ),
                                     decoration: BoxDecoration(
                                       color: _hovering
-                                          ? Colors.black.withAlpha(120)
-                                          : Colors.black.withAlpha(89),
+                                          ? s.scrim.withAlpha(120)
+                                          : s.scrim.withAlpha(89),
                                       borderRadius: appMetrics.radius12,
                                     ),
                                     child: Builder(
@@ -540,10 +555,11 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                                     ),
                                                     child: Text(
                                                       tag,
-                                                      style: TextStyle(
-                                                        color: Colors.white,
+                                                      style: AppTextStyles.role(
+                                                        context,
                                                         fontSize: appMetrics.fontSize9,
-                                                        fontWeight: FontWeight.w500,
+                                                        weight: FontWeight.w500,
+                                                        color: Colors.white,
                                                       ),
                                                     ),
                                                   ),
@@ -585,7 +601,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                         duration: dur,
                         curve: curve,
                         height: _hovering ? scaleW(120) : scaleW(70),
-                        color: _hovering ? Colors.black.withAlpha(120) : Colors.black.withAlpha(89),
+                        color: _hovering ? s.scrim.withAlpha(120) : s.scrim.withAlpha(89),
                         child: Stack(
                           clipBehavior: Clip.none,
                           children: [
@@ -599,9 +615,9 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                   height: scaleW(4),
                                   child: LinearProgressIndicator(
                                     value: widget.metadata.progress,
-                                    backgroundColor: Colors.black.withAlpha(38),
+                                    backgroundColor: s.scrim.withAlpha(38),
                                     valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.greenAccent.withAlpha(180),
+                                      s.success.color.withAlpha(180),
                                     ),
                                   ),
                                 ),
@@ -627,10 +643,11 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                     children: [
                                       Text(
                                         widget.metadata.title,
-                                        style: TextStyle(
-                                          color: Colors.white,
+                                        style: AppTextStyles.role(
+                                          context,
                                           fontSize: appMetrics.fontSize13,
-                                          fontWeight: FontWeight.bold,
+                                          weight: FontWeight.bold,
+                                          color: Colors.white,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -638,7 +655,8 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                       SizedBox(height: scaleW(4)),
                                       Text(
                                         widget.metadata.author ?? '',
-                                        style: TextStyle(
+                                        style: AppTextStyles.role(
+                                          context,
                                           fontSize: appMetrics.fontSize11,
                                           color: Colors.white70,
                                         ),
@@ -649,9 +667,11 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                         SizedBox(height: scaleW(4)),
                                         Text(
                                           '节点: ${widget.viewModel.getNovelNodeName(widget.metadata.id) ?? '未知'}',
-                                          style: TextStyle(
+                                          // 远程节点属提示类，走 info 而不是随手挑一个浅蓝
+                                          style: AppTextStyles.role(
+                                            context,
                                             fontSize: appMetrics.fontSize9,
-                                            color: Colors.lightBlueAccent,
+                                            color: s.info.color,
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -694,9 +714,10 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                           ),
                                           child: Text(
                                             widget.metadata.format.toString(),
-                                            style: TextStyle(
-                                              color: Colors.white70,
+                                            style: AppTextStyles.role(
+                                              context,
                                               fontSize: appMetrics.fontSize11,
+                                              color: Colors.white70,
                                             ),
                                           ),
                                         ),
@@ -705,9 +726,10 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                           Flexible(
                                             child: Text(
                                               '${(widget.metadata.progress * 100).toStringAsFixed(0)}% 阅读',
-                                              style: TextStyle(
-                                                color: Colors.white70,
+                                              style: AppTextStyles.role(
+                                                context,
                                                 fontSize: appMetrics.fontSize11,
+                                                color: Colors.white70,
                                               ),
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -729,15 +751,16 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                   height: scaleW(22),
                                   decoration: BoxDecoration(
                                     color: widget.isSelected
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Colors.black.withAlpha(60),
+                                        ? s.accent
+                                        : s.scrim.withAlpha(60),
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2),
+                                    // 选中圆点压在封面 art 上，那圈白环不随主题反转
+                                    border: Border.all(color: Colors.white, width: scaleW(2)),
                                   ),
                                   child: widget.isSelected
                                       ? DrawIcon(StrokeIcons.check,
-                                          size: appMetrics.fontSize13,
-                                          color: Colors.white,
+                                          size: scaleW(13),
+                                          color: s.accentOn,
                                         )
                                       : null,
                                 ),
@@ -803,7 +826,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
           coverWidget = ClipRect(
             child: AnimatedScale(
               scale: _hovering ? 1.08 : 1.0,
-              duration: const Duration(milliseconds: 200),
+              duration: AppMotion.fast,
               curve: Curves.easeOut,
               child: Hero(
                 tag: 'book_cover_${widget.metadata.id}',
@@ -824,7 +847,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
           coverWidget = ClipRect(
             child: AnimatedScale(
               scale: _hovering ? 1.08 : 1.0,
-              duration: const Duration(milliseconds: 200),
+              duration: AppMotion.fast,
               curve: Curves.easeOut,
               child: Hero(
                 tag: 'book_cover_${widget.metadata.id}',
@@ -860,7 +883,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                 child: Container(
                   padding: EdgeInsets.all(AppTheme.metrics.kSpace6),
                   decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(120),
+                    color: AppSemantic.of(context).scrim.withAlpha(120),
                     borderRadius: AppTheme.metrics.radius999,
                   ),
                   child: DrawIcon(StrokeIcons.lockOutline,
@@ -882,8 +905,9 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
     return Hero(
       tag: 'book_cover_${widget.metadata.id}',
       child: Container(
-        color: Theme.of(context).colorScheme.outline,
+        color: AppSemantic.of(context).border,
         child: Center(
+          // 这是占位封面，本身要压得住 art 上的白字，所以图标不走语义色
           child: DrawIcon(StrokeIcons.book, size: scaleW(40), color: Colors.white70),
         ),
       ),

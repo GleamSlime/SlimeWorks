@@ -1,4 +1,4 @@
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -11,19 +11,18 @@ class SettingsTabPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final isDark = theme.brightness == Brightness.dark;
-    final brandColor = isDark ? DarkColors.primary : LightColors.primary;
+    final brandColor = s.accent;
 
     return Center(
       child: Container(
         margin: EdgeInsets.all(m.kSpace32),
         padding: EdgeInsets.symmetric(horizontal: m.kSpace32, vertical: m.kSpace40),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withAlpha(60),
+          color: s.surfaceRaised,
           borderRadius: m.radius16,
-          border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(60)),
+          border: Border.all(color: s.hairline),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -32,7 +31,7 @@ class SettingsTabPlaceholder extends StatelessWidget {
               width: m.kSpace48,
               height: m.kSpace48,
               decoration: BoxDecoration(
-                color: brandColor.withAlpha(25),
+                color: s.accentContainer,
                 borderRadius: m.radius12,
               ),
               child: DrawIcon(StrokeIcons.construction,
@@ -43,20 +42,16 @@ class SettingsTabPlaceholder extends StatelessWidget {
             SizedBox(height: m.kSpace16),
             Text(
               '$title 敬请期待',
-              style: TextStyle(
-                fontSize: m.fontSize15,
-                height: 1.5,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
+              style: AppTextStyles.sectionTitle(context),
             ),
             SizedBox(height: m.kSpace6),
             Text(
               '该功能正在开发中，后续版本将支持',
-              style: TextStyle(
+              style: AppTextStyles.role(
+                context,
                 fontSize: m.fontSize12,
                 height: 1.5,
-                color: theme.colorScheme.onSurface.withAlpha(120),
+                color: s.textTertiary,
               ),
             ),
           ],

@@ -18,8 +18,10 @@ class _GlassIconButton extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
           child: Container(
-            width: 42,
-            height: 42,
+            width: scaleW(42),
+            height: scaleW(42),
+            // 沉浸式查看器的玻璃按钮常驻深底：画面之下没有可依赖的主题表面，
+            // 黑底白字不随明暗翻转，保留字面量
             color: Colors.black.withValues(alpha: 0.42),
             alignment: Alignment.center,
             child: Icon(icon, color: Colors.white, size: AppTheme.metrics.iconSize22),
@@ -75,7 +77,7 @@ class _GlassChipState extends State<_GlassChip> {
             children: [
               // 只有当前数字有滚动动画
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
+                duration: AppMotion.base,
                 transitionBuilder: (child, animation) {
                   final isIncoming = child.key == ValueKey(widget.current);
                   final begin = isIncoming
@@ -92,13 +94,14 @@ class _GlassChipState extends State<_GlassChip> {
                 child: Text(
                   '${widget.current + 1}',
                   key: ValueKey(widget.current),
-                  style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
+                  // 深色玻璃面上的计数文字：白字固定不随明暗翻转，见 _GlassIconButton 同款说明
+                  style: AppTextStyles.role(context, color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
                 ),
               ),
               // 总数静止，无动画
               Text(
                 ' / ${widget.total}',
-                style: TextStyle(color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
+                style: AppTextStyles.role(context, color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
               ),
             ],
           ),
@@ -140,7 +143,7 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
+    _animController = AnimationController(vsync: this, duration: AppMotion.base);
   }
 
   @override

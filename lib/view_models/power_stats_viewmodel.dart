@@ -50,6 +50,32 @@ class PowerStatBucket {
 /// 图表展示维度
 enum PowerChartMetric { consumption, balance, cost }
 
+/// 电量计量单位：卡片与图表统一按它换算显示
+enum PowerUnit {
+  wh('Wh', 1000),
+  kwh('kWh', 1),
+  mwh('MWh', 0.001);
+
+  const PowerUnit(this.label, this.factor);
+
+  final String label;
+
+  /// 1 kWh 折合多少该单位
+  final double factor;
+
+  double fromKwh(double kwh) => kwh * factor;
+
+  /// 自适应有效位：数值越大位数越少，切到 Wh 时才不会出现 "12340.00"
+  String format(double kwh) {
+    final v = fromKwh(kwh);
+    final a = v.abs();
+    if (a >= 1000) return v.toStringAsFixed(0);
+    if (a >= 100) return v.toStringAsFixed(1);
+    if (a >= 1) return v.toStringAsFixed(2);
+    return v.toStringAsFixed(3);
+  }
+}
+
 class PowerStatsViewModel extends GetxController {
   final PowerStatsService _service = GetIt.instance.get<PowerStatsService>();
 
@@ -85,6 +111,7 @@ class PowerStatsViewModel extends GetxController {
   // 页面状态
   final RxString selectedRange = '1day'.obs;
   final Rx<PowerChartMetric> selectedMetric = PowerChartMetric.consumption.obs;
+  final Rx<PowerUnit> selectedUnit = PowerUnit.kwh.obs;
   final RxBool isFetching = false.obs;
   final RxBool isConfigLoaded = false.obs;
 
@@ -184,6 +211,11 @@ class PowerStatsViewModel extends GetxController {
   /// 切换图表维度
   void setMetric(PowerChartMetric metric) {
     selectedMetric.value = metric;
+  }
+
+  /// 切换电量计量单位
+  void setUnit(PowerUnit unit) {
+    selectedUnit.value = unit;
   }
 
   /// 刷新全部数据

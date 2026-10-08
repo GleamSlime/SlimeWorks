@@ -12,11 +12,11 @@ class FolderBreadcrumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     return Container(
       padding: EdgeInsets.symmetric(horizontal: appMetrics.kSpace16, vertical: appMetrics.kSpace8),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: theme.dividerColor.withAlpha(30))),
+        border: Border(bottom: BorderSide(color: s.hairline)),
       ),
       child: Row(
         children: [
@@ -27,27 +27,29 @@ class FolderBreadcrumb extends StatelessWidget {
               children: [
                 DrawIcon(StrokeIcons.chevronLeft,
                   size: appMetrics.fontSize18,
-                  color: theme.colorScheme.primary,
+                  color: s.accent,
                 ),
                 Text(
                   '返回',
-                  style: TextStyle(
+                  style: AppTextStyles.role(
+                    context,
                     fontSize: appMetrics.fontSize13,
-                    color: theme.colorScheme.primary,
+                    color: s.accent,
                   ),
                 ),
               ],
             ),
           ),
           SizedBox(width: appMetrics.kSpace8),
-          DrawIcon(StrokeIcons.chevronRight, size: appMetrics.fontSize13, color: theme.hintColor),
+          DrawIcon(StrokeIcons.chevronRight, size: appMetrics.fontSize13, color: s.textTertiary),
           SizedBox(width: appMetrics.kSpace8),
           Text(
             folderName,
-            style: TextStyle(
+            style: AppTextStyles.role(
+              context,
               fontSize: appMetrics.fontSize13,
-              fontWeight: FontWeight.w600,
-              color: theme.textTheme.bodyMedium?.color,
+              weight: FontWeight.w600,
+              color: s.textSecondary,
             ),
           ),
         ],

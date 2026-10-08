@@ -35,9 +35,10 @@ class AboutRoute extends AppRouteData with $AboutRoute {
   @override
   Widget? sidebarStatusWidget(BuildContext context) => Text(
     AppInfoService.versionWithBuild,
-    style: TextStyle(
+    style: AppTextStyles.role(
+      context,
       fontSize: AppTheme.metrics.fontSize10,
-      color: Theme.of(context).colorScheme.tertiary,
+      color: AppSemantic.of(context).textTertiary,
     ),
     // 侧栏行尾挂的是字号族内容，字号比例拉大后要能省略而不是顶破整行
     maxLines: 1,

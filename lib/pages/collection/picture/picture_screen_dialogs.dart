@@ -398,7 +398,11 @@ mixin PictureScreenDialogs
                       if (snapshotFolders.isEmpty)
                         Text(
                           '（暂无文件夹）',
-                          style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: AppTheme.metrics.fontSize13,
+                            color: AppSemantic.of(context).textTertiary,
+                          ),
                         )
                       else
                         Wrap(
@@ -545,7 +549,11 @@ mixin PictureScreenDialogs
                     if (snapshotFolders.isEmpty)
                       Text(
                         '（暂无文件夹）',
-                        style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: AppTheme.metrics.fontSize13,
+                          color: AppSemantic.of(context).textTertiary,
+                        ),
                       )
                     else
                       Wrap(
@@ -672,7 +680,7 @@ mixin PictureScreenDialogs
         title: const Text('远程路径'),
         content: SelectableText(
           remotePath,
-          style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+          style: AppTextStyles.mono(ctx, size: AppTheme.metrics.fontSize13),
         ),
         actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('关闭'))],
       ),
@@ -712,7 +720,7 @@ mixin PictureScreenDialogs
       title: '删除文件',
       message: '确定要删除「${item.title}」吗？\n此操作不可恢复，文件将从磁盘永久删除。',
       confirmLabel: '删除',
-      confirmColor: Theme.of(context).colorScheme.error,
+      confirmColor: AppSemantic.of(context).danger.color,
     );
     if (confirmed) await viewModel.deleteItemFile(item);
   }
@@ -725,7 +733,7 @@ mixin PictureScreenDialogs
           '确定要删除节点上「${item.title}」的本地文件吗？\n'
           '此操作将从节点磁盘永久删除该文件，集合记录保留。',
       confirmLabel: '删除',
-      confirmColor: Theme.of(context).colorScheme.error,
+      confirmColor: AppSemantic.of(context).danger.color,
     );
     if (confirmed) await viewModel.deleteRemoteItemLocalFile(item);
   }
@@ -841,7 +849,7 @@ mixin PictureScreenDialogs
                           DrawIcon(
                             StrokeIcons.folder,
                             size: scaleW(16),
-                            color: Theme.of(context).hintColor,
+                            color: AppSemantic.of(context).textTertiary,
                           ),
                           SizedBox(width: AppTheme.metrics.kSpace4),
                           ConstrainedBox(
@@ -887,17 +895,17 @@ mixin PictureScreenDialogs
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('将删除所有本地集合和文件夹记录。原始文件不会被删除，但扫描/导入记录全部清除。'),
-                  const SizedBox(height: 12),
-                  const Text('可选清除磁盘上的缩略图缓存：', style: TextStyle(fontSize: 13)),
+                  SizedBox(height: AppTheme.metrics.kSpace12),
+                  Text('可选清除磁盘上的缩略图缓存：', style: AppTextStyles.body(context)),
                   CheckboxListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     value: clearAppCache,
                     onChanged: (v) => setState(() => clearAppCache = v ?? true),
-                    title: const Text('清除应用缓存目录缩略图', style: TextStyle(fontSize: 13)),
-                    subtitle: const Text(
+                    title: Text('清除应用缓存目录缩略图', style: AppTextStyles.body(context)),
+                    subtitle: Text(
                       'library/media/thumbnails/',
-                      style: TextStyle(fontSize: 11),
+                      style: AppTextStyles.caption(context),
                     ),
                   ),
                   CheckboxListTile(
@@ -905,9 +913,9 @@ mixin PictureScreenDialogs
                     contentPadding: EdgeInsets.zero,
                     value: clearResourceCache,
                     onChanged: (v) => setState(() => clearResourceCache = v ?? true),
-                    title: const Text(
+                    title: Text(
                       '清除各资源目录 .SlimeWorks/tmp 缩略图',
-                      style: TextStyle(fontSize: 13),
+                      style: AppTextStyles.body(context),
                     ),
                   ),
                 ],
@@ -916,7 +924,7 @@ mixin PictureScreenDialogs
                 TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
                 FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
+                    backgroundColor: AppSemantic.of(context).danger.color,
                   ),
                   onPressed: () async {
                     Navigator.of(context).pop();
@@ -1038,7 +1046,7 @@ mixin PictureScreenDialogs
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+              style: FilledButton.styleFrom(backgroundColor: AppSemantic.of(context).danger.color),
               onPressed: () async {
                 Navigator.of(context).pop();
                 await _deleteCollectionFolder(collectionId, folderPath);
@@ -1098,7 +1106,7 @@ mixin PictureScreenDialogs
           '同时清理各集合目录内的 .SlimeWorks 缓存目录；被清空的集合目录会一并删除（不波及上级目录），'
           '对应集合记录随之移除。确定继续吗？',
       confirmLabel: '删除文件',
-      confirmColor: Theme.of(context).colorScheme.error,
+      confirmColor: AppSemantic.of(context).danger.color,
     );
     if (confirmed) await viewModel.deleteNodeLocalFilesForFolder(folderId);
   }
@@ -1112,7 +1120,7 @@ mixin PictureScreenDialogs
           '同时清理该集合目录内的 .SlimeWorks 缓存目录；被清空的集合目录会一并删除（不波及上级目录），'
           '对应集合记录随之移除。确定继续吗？',
       confirmLabel: '删除文件',
-      confirmColor: Theme.of(context).colorScheme.error,
+      confirmColor: AppSemantic.of(context).danger.color,
     );
     if (confirmed) {
       await viewModel.deleteNodeLocalFilesForCollection(collectionId);
@@ -1158,7 +1166,11 @@ class _KeywordInputListState extends State<_KeywordInputList> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('关键词列表', style: Theme.of(context).textTheme.bodySmall),
+        Text('关键词列表', style: AppTextStyles.role(
+          context,
+          fontSize: AppTheme.metrics.fontSize12,
+          color: AppSemantic.of(context).textTertiary,
+        )),
         SizedBox(height: appMetrics.kSpace4),
         if (widget.keywords.isNotEmpty)
           Wrap(
@@ -1208,9 +1220,11 @@ class _KeywordInputListState extends State<_KeywordInputList> {
             padding: EdgeInsets.only(top: appMetrics.kSpace4),
             child: Text(
               '等效正则：${widget.keywords.map((k) => RegExp.escape(k)).join('|')}',
-              style: Theme.of(
+              style: AppTextStyles.role(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+                fontSize: AppTheme.metrics.fontSize12,
+                color: AppSemantic.of(context).textTertiary,
+              ),
             ),
           ),
       ],

@@ -1,6 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 
 class GooeyDropdown extends StatefulWidget {
@@ -16,7 +18,7 @@ class GooeyDropdown extends StatefulWidget {
     required this.dropdown,
     required this.dropdownWidth,
     required this.dropdownHeight,
-    this.duration = const Duration(milliseconds: 450),
+    this.duration = AppMotion.emphasis,
   });
 
   @override
@@ -89,6 +91,8 @@ class _GooeyDropdownState extends State<GooeyDropdown> with SingleTickerProvider
                 builder: (context, _) {
                   final width = lerpDouble(_buttonSize.width, widget.dropdownWidth, _expandAnim.value)!;
                   final height = widget.dropdownHeight * _expandAnim.value;
+                  final s = AppSemantic.of(context);
+                  final m = AppTheme.metrics;
 
                   // 屏幕尺寸与按钮全局位置
                   final overlaySize = MediaQuery.of(context).size;
@@ -125,18 +129,33 @@ class _GooeyDropdownState extends State<GooeyDropdown> with SingleTickerProvider
                           width: width,
                           height: height,
                           decoration: BoxDecoration(
-                            color: Theme.of(context).cardColor,
+                            color: s.surface,
                             borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(12 * (1 - _expandAnim.value)),
-                              bottom: const Radius.circular(16),
+                              // 顶角随展开从 0 长到位；底角与下面的裁剪共用同一档令牌，
+                              // 否则缩放后两者会错开一圈
+                              top: Radius.circular(
+                                m.radius12.topLeft.x * (1 - _expandAnim.value),
+                              ),
+                              bottom: m.radius16.bottomLeft,
                             ),
-                            boxShadow: [BoxShadow(blurRadius: 20 * _expandAnim.value, color: Colors.black.withAlpha(38))],
+                            boxShadow: [
+                              BoxShadow(
+                                blurRadius: 20 * _expandAnim.value,
+                                color: s.shadowKey,
+                              ),
+                            ],
                           ),
                           child: ClipRRect(
-                            borderRadius: AppTheme.metrics.radius16,
+                            borderRadius: m.radius16,
                             child: FadeTransition(
                               opacity: _fadeAnim,
-                              child: Transform.translate(offset: Offset(0, 10 * (1 - _fadeAnim.value)), child: widget.dropdown),
+                              child: Transform.translate(
+                                offset: Offset(
+                                  0,
+                                  AppMotion.travelMedium * (1 - _fadeAnim.value),
+                                ),
+                                child: widget.dropdown,
+                              ),
                             ),
                           ),
                         ),

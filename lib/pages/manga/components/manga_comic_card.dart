@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
@@ -30,9 +32,9 @@ class _MangaComicCardState extends State<MangaComicCard> with SingleTickerProvid
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 80),
-      reverseDuration: const Duration(milliseconds: 200),
-      lowerBound: 0.92,
+      duration: AppMotion.fast,
+      reverseDuration: AppMotion.instant,
+      lowerBound: AppMotion.scalePress,
       upperBound: 1.0,
       value: 1.0,
     );
@@ -55,9 +57,8 @@ class _MangaComicCardState extends State<MangaComicCard> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
-    final isDark = theme.brightness == Brightness.dark;
 
     return GestureDetector(
       onTapDown: _onTapDown,
@@ -68,22 +69,16 @@ class _MangaComicCardState extends State<MangaComicCard> with SingleTickerProvid
         builder: (context, child) => Transform.scale(scale: _scaleAnim.value, child: child),
         child: Container(
           decoration: BoxDecoration(
-            color: isDark ? DarkColors.background2 : LightColors.background1,
+            color: s.surface,
             borderRadius: metrics.radius12,
-            boxShadow: [
-              BoxShadow(
-                color: theme.shadowColor.withValues(alpha: isDark ? 0.3 : 0.1),
-                blurRadius: isDark ? 12 : 8,
-                offset: Offset(0, isDark ? 4 : 3),
-              ),
-            ],
+            boxShadow: s.elevation(Elevation.card),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
                 child: ClipRRect(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(metrics.kSpace12)),
+                  borderRadius: BorderRadius.vertical(top: metrics.radius12.topLeft),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -98,27 +93,16 @@ class _MangaComicCardState extends State<MangaComicCard> with SingleTickerProvid
                               vertical: metrics.kSpace2,
                             ),
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  theme.colorScheme.primary,
-                                  theme.colorScheme.primary.withValues(alpha: 0.8),
-                                ],
-                              ),
+                              color: s.accent,
                               borderRadius: metrics.radius4,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
                             ),
                             child: Text(
                               '完结',
-                              style: TextStyle(
-                                color: theme.colorScheme.onPrimary,
+                              style: AppTextStyles.role(
+                                context,
                                 fontSize: metrics.fontSize9,
-                                fontWeight: FontWeight.w700,
+                                color: s.accentOn,
+                                weight: FontWeight.w600,
                                 height: 1.2,
                               ),
                             ),
@@ -135,12 +119,15 @@ class _MangaComicCardState extends State<MangaComicCard> with SingleTickerProvid
                               vertical: metrics.kSpace3,
                             ),
                             decoration: BoxDecoration(
+                              // 封面是任意内容的图片，压字的这层遮罩两端同色（70% 黑），
+                              // 语义层的 scrim 正是这个值；上面的文字因此也必须固定浅色，
+                              // 不能跟着明暗主题翻转。
                               gradient: LinearGradient(
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
                                   Colors.transparent,
-                                  Colors.black.withValues(alpha: 0.6),
+                                  s.scrim,
                                 ],
                               ),
                             ),
@@ -148,10 +135,11 @@ class _MangaComicCardState extends State<MangaComicCard> with SingleTickerProvid
                               widget.comic.categories.first,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.9),
+                              style: AppTextStyles.role(
+                                context,
                                 fontSize: metrics.fontSize9,
-                                fontWeight: FontWeight.w500,
+                                color: AppBrand.inkOn,
+                                weight: FontWeight.w500,
                               ),
                             ),
                           ),
@@ -163,17 +151,15 @@ class _MangaComicCardState extends State<MangaComicCard> with SingleTickerProvid
               Container(
                 padding: EdgeInsets.fromLTRB(metrics.kSpace6, metrics.kSpace6, metrics.kSpace6, metrics.kSpace8),
                 decoration: BoxDecoration(
-                  color: isDark ? DarkColors.background2 : LightColors.background1,
-                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(metrics.kSpace12)),
+                  color: s.surface,
+                  borderRadius: BorderRadius.vertical(bottom: metrics.radius12.bottomRight),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       widget.comic.title,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: AppTextStyles.cardTitle(context),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -181,10 +167,7 @@ class _MangaComicCardState extends State<MangaComicCard> with SingleTickerProvid
                       SizedBox(height: metrics.kSpace2),
                       Text(
                         widget.comic.author!,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
-                          fontSize: metrics.fontSize10,
-                        ),
+                        style: AppTextStyles.caption(context),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -208,27 +191,28 @@ class _ComicCoverImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
+    final metrics = AppTheme.metrics;
     return MangaImageView(
       image: image,
       fit: BoxFit.cover,
       loadingBuilder: (_) {
         return Container(
-          color: isDark ? DarkColors.background3 : LightColors.background2,
+          color: s.surfaceSunken,
           child: Center(
             child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+              strokeWidth: scaleW(2),
+              color: s.accent,
             ),
           ),
         );
       },
       errorBuilder: (_, e, _) => Container(
-        color: isDark ? DarkColors.background3 : LightColors.background2,
+        color: s.surfaceSunken,
         child: Center(
           child: DrawIcon(StrokeIcons.brokenImage,
-            size: AppTheme.metrics.iconSize32,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.25),
+            size: metrics.iconSize32,
+            color: s.textDisabled,
           ),
         ),
       ),
@@ -245,9 +229,8 @@ class MangaComicListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
-    final isDark = theme.brightness == Brightness.dark;
 
     return InkWell(
       onTap: onTap,
@@ -256,14 +239,8 @@ class MangaComicListTile extends StatelessWidget {
         padding: EdgeInsets.symmetric(horizontal: metrics.kSpace8, vertical: metrics.kSpace6),
         decoration: BoxDecoration(
           borderRadius: metrics.radius10,
-          color: isDark ? DarkColors.background2 : LightColors.background1,
-          boxShadow: [
-            BoxShadow(
-              color: theme.shadowColor.withValues(alpha: 0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color: s.surface,
+          boxShadow: s.elevation(Elevation.raised),
         ),
         child: Row(
           children: [
@@ -281,17 +258,21 @@ class MangaComicListTile extends StatelessWidget {
                         top: metrics.kSpace3,
                         right: metrics.kSpace3,
                         child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: metrics.kSpace4, vertical: 1),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: metrics.kSpace4,
+                            vertical: metrics.kSpace1,
+                          ),
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary,
+                            color: s.accent,
                             borderRadius: metrics.radius3,
                           ),
                           child: Text(
                             '完',
-                            style: TextStyle(
-                              color: theme.colorScheme.onPrimary,
+                            style: AppTextStyles.role(
+                              context,
                               fontSize: metrics.fontSize9,
-                              fontWeight: FontWeight.w700,
+                              color: s.accentOn,
+                              weight: FontWeight.w600,
                               height: 1.2,
                             ),
                           ),
@@ -309,7 +290,7 @@ class MangaComicListTile extends StatelessWidget {
                 children: [
                   Text(
                     comic.title,
-                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: AppTextStyles.rowTitle(context),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -318,9 +299,7 @@ class MangaComicListTile extends StatelessWidget {
                       padding: EdgeInsets.only(top: metrics.kSpace2),
                       child: Text(
                         comic.author!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                        ),
+                        style: AppTextStyles.caption(context),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -328,34 +307,45 @@ class MangaComicListTile extends StatelessWidget {
                   SizedBox(height: metrics.kSpace6),
                   Row(
                     children: [
-                      _StatChip(
-                        icon: StrokeIcons.photoLibrary,
-                        label: '${comic.epsCount}章',
-                        theme: theme,
+                      Flexible(
+                        child: _StatChip(
+                          icon: StrokeIcons.photoLibrary,
+                          label: '${comic.epsCount}章',
+                        ),
                       ),
                       SizedBox(width: metrics.kSpace6),
-                      _StatChip(
-                        icon: StrokeIcons.favoriteBorder,
-                        label: '${comic.likesCount}',
-                        theme: theme,
+                      Flexible(
+                        child: _StatChip(
+                          icon: StrokeIcons.favoriteBorder,
+                          label: '${comic.likesCount}',
+                        ),
                       ),
                       if (comic.finished) ...[
                         SizedBox(width: metrics.kSpace6),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: metrics.kSpace5,
-                            vertical: metrics.kSpace2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                            borderRadius: metrics.radius3,
-                          ),
-                          child: Text(
-                            '完结',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.primary,
-                              fontSize: metrics.fontSize10,
-                              fontWeight: FontWeight.w600,
+                        Flexible(
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: metrics.kSpace5,
+                              vertical: metrics.kSpace2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: s.accentContainer,
+                              border: Border.all(
+                                color: s.accentContainerBorder,
+                                width: scaleW(1),
+                              ),
+                              borderRadius: metrics.radius3,
+                            ),
+                            child: Text(
+                              '完结',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: metrics.fontSize10,
+                                color: s.accentText,
+                                weight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
@@ -373,27 +363,32 @@ class MangaComicListTile extends StatelessWidget {
 }
 
 class _StatChip extends StatelessWidget {
-  const _StatChip({required this.icon, required this.label, required this.theme});
+  const _StatChip({required this.icon, required this.label});
 
   final StrokeIcon icon;
   final String label;
-  final ThemeData theme;
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         DrawIcon(icon,
           size: AppTheme.metrics.iconSize12,
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          color: s.textTertiary,
         ),
-        SizedBox(width: scaleW(2)),
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
-            fontSize: AppTheme.metrics.fontSize10,
+        SizedBox(width: AppTheme.metrics.kSpace2),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.role(
+              context,
+              fontSize: AppTheme.metrics.fontSize10,
+              color: s.textTertiary,
+            ),
           ),
         ),
       ],

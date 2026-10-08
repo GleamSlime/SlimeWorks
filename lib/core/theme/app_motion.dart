@@ -39,6 +39,26 @@ class AppMotion {
   /// 比 [entrance] 长是有意的——它不是单次过渡的时长，而是"整页错开播完"的总长。
   static const Duration cascade = Duration(milliseconds: 900);
 
+  // ── 循环动画（一直在播的那种，不是 A→B 的过渡，别拿 base/slow 顶）──
+  /// 快节奏循环：打点、节拍、唱盘纹动
+  static const Duration beat = Duration(milliseconds: 800);
+
+  /// 中速循环：加载脉冲、骨架屏呼吸
+  static const Duration pulse = Duration(milliseconds: 1200);
+
+  /// 慢速循环：常驻环境动效（在线状态点、缓慢呼吸的图标底）
+  static const Duration ambient = Duration(milliseconds: 1600);
+
+  /// 一整圈自转（黑胶那类"要看出在转但不能晕"的动效）
+  static const Duration spin = Duration(seconds: 8);
+
+  // ── 浮层驻留（自己待多久，与过渡时长是两件事）──
+  /// SnackBar / Toast 常规驻留
+  static const Duration dwell = Duration(seconds: 2);
+
+  /// 带操作入口或信息量大的 SnackBar 驻留
+  static const Duration dwellLong = Duration(seconds: 3);
+
   // ── 曲线 ──
   /// 通用：起步快、收尾稳
   static const Cubic standard = Cubic(0.2, 0.0, 0.0, 1.0);

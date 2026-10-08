@@ -2,6 +2,10 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/animations/state_transition_animation.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 
 /// Gooey粘连下拉组件（基于GPU Shader实现）
 ///
@@ -137,13 +141,14 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
   Size? _measuredButtonSize;
 
   // 默认值
-  Size get buttonSize => widget.buttonSize ?? _measuredButtonSize ?? const Size(56, 56);
-  Size get cardSize => widget.cardSize ?? const Size(320, 220);
-  Color get buttonColor => widget.buttonColor ?? Colors.black;
-  Color get cardColor => widget.cardColor ?? Colors.black;
+  Size get buttonSize =>
+      widget.buttonSize ?? _measuredButtonSize ?? Size(AppTheme.metrics.kSpace56, AppTheme.metrics.kSpace56);
+  Size get cardSize => widget.cardSize ?? Size(scaleW(320), scaleH(220));
+  Color get buttonColor => widget.buttonColor ?? AppSemantic.of(context).surfaceRaised;
+  Color get cardColor => widget.cardColor ?? AppSemantic.of(context).surfaceRaised;
   double get buttonRadius => widget.buttonRadius ?? (buttonSize.height / 2);
   Border? get cardBorder => widget.cardBorder;
-  Duration get duration => widget.duration ?? const Duration(milliseconds: 700);
+  Duration get duration => widget.duration ?? AppMotion.entrance;
   double get gap => widget.gap ?? 0.0;
   double get cardOffset => widget.cardOffset ?? 80.0;
   DropdownDirection get direction => widget.direction ?? DropdownDirection.auto;
@@ -193,7 +198,7 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
         buttonColor: buttonColor,
         cardColor: cardColor,
         buttonRadius: widget.buttonRadius ?? (buttonSize.height / 2),
-        cardRadius: widget.cardRadius ?? 18.0,
+        cardRadius: widget.cardRadius ?? AppTheme.metrics.radius18.topLeft.x,
         gap: gap,
         cardOffset: cardOffset,
         cardBoxShadow: widget.cardBoxShadow,
@@ -226,7 +231,7 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
     if (direction != DropdownDirection.auto) return direction;
 
     // 计算8个方向的可用空间
-    const padding = 20.0;
+    final padding = AppTheme.metrics.kSpace20;
     final spaceTop = buttonPos.dy;
     final spaceBottom = screenSize.height - (buttonPos.dy + buttonSize.height);
     final spaceLeft = buttonPos.dx;
@@ -425,7 +430,7 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
                 final clampedProgress = sizeProgress.clamp(0.0, 1.0);
 
                 // 目标卡片宽度优先使用测量到的内容宽度（如果可用），否则回退到传入的 cardSize.width
-                final maxAllowedWidth = MediaQuery.of(context).size.width - 16.0; // 留白
+                final maxAllowedWidth = MediaQuery.of(context).size.width - AppTheme.metrics.kSpace16; // 留白
                 final measuredW = _measuredContentWidth ?? widget.cardSize.width;
                 final targetWidth = measuredW.clamp(widget.buttonSize.width, maxAllowedWidth);
 
@@ -514,7 +519,7 @@ class _DropdownOverlayState extends State<_DropdownOverlay> {
 
                 // 屏幕边缘自适应：防止卡片在水平方向越界
                 final screenSize = MediaQuery.of(context).size;
-                const edgePadding = 8.0;
+                final edgePadding = AppTheme.metrics.kSpace8;
                 final left = cardCenterX - width / 2;
                 final right = cardCenterX + width / 2;
                 if (left < edgePadding) {

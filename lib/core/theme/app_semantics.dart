@@ -214,6 +214,78 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
   final double glassBlur;
   final Color glassPanelTint;
 
+  // ─────────────────────────────────────────────────────────────
+  // 媒体层 chrome：封面 / 看图 / 播放 / 朗读这几层压的是图片或视频，底色由内容
+  // 自己决定，与明暗主题无关，所以这里是 getter 而不是字段——两档主题同值，
+  // 不参与 lerp，也不给"暗色下顺手调暗"留口子。
+  // 取用姿势仍然是 `s.onMedia`，业务侧不需要知道它不随主题走。
+  // ─────────────────────────────────────────────────────────────
+
+  /// 媒体之上的主字/主图标（恒白）
+  Color get onMedia => AppMediaChrome.ink;
+
+  /// 媒体上的次要字（≈70%）
+  Color get onMediaSecondary => AppMediaChrome.inkSecondary;
+
+  /// 媒体上的弱化字与轨道（≈60%）
+  Color get onMediaTertiary => AppMediaChrome.inkTertiary;
+
+  /// 媒体上更弱的提示与角标（≈38%）
+  Color get onMediaFaint => AppMediaChrome.inkFaint;
+
+  /// 媒体上的悬停/选中水洗（≈12%）
+  Color get onMediaWash => AppMediaChrome.inkWash;
+
+  /// 恒白输入框上的深色墨字
+  Color get onMediaInk => AppMediaChrome.inkOnLight;
+
+  /// 看图/播放舞台底（画面之外的 letterbox）
+  Color get mediaStage => AppMediaChrome.stage;
+
+  /// 封面顶部极弱压暗（渐变起点）
+  Color get mediaScrimTrace => AppMediaChrome.scrimTrace;
+
+  /// 弱遮罩
+  Color get mediaScrimSoft => AppMediaChrome.scrimSoft;
+
+  /// 常规遮罩
+  Color get mediaScrimMedium => AppMediaChrome.scrimMedium;
+
+  /// 强遮罩（徽标、浮层按钮底）
+  Color get mediaScrimStrong => AppMediaChrome.scrimStrong;
+
+  /// 封面底部字区渐变收口
+  Color get mediaScrimFoot => AppMediaChrome.scrimFoot;
+
+  /// 全屏控制条渐变收口
+  Color get mediaScrimVeil => AppMediaChrome.scrimVeil;
+
+  /// 沉浸式查看器的黑玻璃面板底
+  Color get immersivePanel => AppMediaChrome.immersivePanel;
+
+  /// 沉浸式面板描边
+  Color get immersiveBorder => AppMediaChrome.immersiveBorder;
+
+  // ─────────────────────────────────────────────────────────────
+  // 品牌紫水洗：这类点缀底必须按主题分档（同一条水洗压白卡刚好、压暗面几乎看不见），
+  // 走 isDark 分支取原始调色板里的两档，调用点仍然只有一行。
+  // ─────────────────────────────────────────────────────────────
+
+  /// 图标/头像底板的紫洗
+  Color get iconWashAccent =>
+      isDark ? AppBrandWash.iconDark : AppBrandWash.iconLight;
+
+  /// 我方聊天气泡底
+  Color get bubbleSelf =>
+      isDark ? AppBrandWash.bubbleDark : AppBrandWash.bubbleLight;
+
+  /// 我方聊天气泡上的字（恒白：底是紫，不随主题反相）
+  Color get bubbleSelfOn => AppMediaChrome.ink;
+
+  /// 状态实心徽标上的字：徽标铺的是状态主色本身，字只能是白的，
+  /// 不能用 `AppStatusRole.onContainer`（那是给半透明容器底配的深色字）。
+  Color get onStatusBadge => AppMediaChrome.ink;
+
   /// 统一的悬浮抬升投影：key + ambient 双层，替代散落的 95 处手写 BoxShadow
   List<BoxShadow> elevation(Elevation level, {Color? tint}) {
     final base = switch (level) {

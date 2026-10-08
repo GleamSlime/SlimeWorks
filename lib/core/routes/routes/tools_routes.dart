@@ -93,9 +93,8 @@ class AliyunDdnsRoute extends AppRouteData with $AliyunDdnsRoute {
       final service = Get.find<AliyunDdnsService>();
       return Obx(() {
         final enabled = service.enabled.value;
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        final activeColor = isDark ? const Color(0xFF4CAF50) : LightColors.success;
-        final color = enabled ? activeColor : Theme.of(context).hintColor.withAlpha(120);
+        final s = AppSemantic.of(context);
+        final color = enabled ? s.success.color : s.textDisabled.withAlpha(120);
         return Tooltip(
           message: enabled ? 'DDNS 运行中' : 'DDNS 已停止',
           child: Container(
@@ -108,8 +107,8 @@ class AliyunDdnsRoute extends AppRouteData with $AliyunDdnsRoute {
                   ? [
                       BoxShadow(
                         color: color.withAlpha(80),
-                        blurRadius: 4,
-                        spreadRadius: 1,
+                        blurRadius: scaleW(4),
+                        spreadRadius: scaleW(1),
                       ),
                     ]
                   : null,
@@ -217,9 +216,8 @@ class PowerStatsRoute extends AppRouteData with $PowerStatsRoute {
       final service = GetIt.instance.get<PowerStatsService>();
       return Obx(() {
         final enabled = service.enabled.value;
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        final activeColor = isDark ? const Color(0xFFF5A569) : LightColors.orange;
-        final color = enabled ? activeColor : Theme.of(context).hintColor.withAlpha(120);
+        final s = AppSemantic.of(context);
+        final color = enabled ? s.warning.color : s.textDisabled.withAlpha(120);
         return Tooltip(
           message: enabled ? '电力统计运行中' : '电力统计已停止',
           child: Container(
@@ -232,8 +230,8 @@ class PowerStatsRoute extends AppRouteData with $PowerStatsRoute {
                   ? [
                       BoxShadow(
                         color: color.withAlpha(80),
-                        blurRadius: 4,
-                        spreadRadius: 1,
+                        blurRadius: scaleW(4),
+                        spreadRadius: scaleW(1),
                       ),
                     ]
                   : null,

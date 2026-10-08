@@ -5,6 +5,7 @@ import 'package:slime_works/components/node/node_inline_selector.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -50,7 +51,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
   }
 
   Widget _buildSectionTitle(String title, StrokeIcon icon) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Row(
       children: [
@@ -58,35 +59,27 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
           width: m.kSpace24,
           height: m.kSpace24,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withAlpha(20),
+            color: s.accentContainer,
             borderRadius: m.radius6,
           ),
-          child: DrawIcon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+          child: DrawIcon(icon, size: m.iconSize12, color: s.accent),
         ),
         SizedBox(width: m.kSpace8),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: m.fontSize15,
-            height: 1.4,
-            color: theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        Text(title, style: AppTextStyles.sectionTitle(context)),
       ],
     );
   }
 
   Widget _buildSettingsCard({required Widget child}) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+        color: s.surface,
         borderRadius: m.radius12,
-        border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+        border: Border.all(color: s.border),
       ),
       child: child,
     );
@@ -101,7 +94,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
     final service = _service!;
     final nodeService = _nodeService!;
     final m = appMetrics;
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
 
     return Obx(
       () => Scaffold(
@@ -122,23 +115,21 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                           width: m.kSpace32,
                           height: m.kSpace32,
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withAlpha(25),
+                            color: s.accentContainer,
                             borderRadius: m.radius8,
                           ),
                           child: DrawIcon(StrokeIcons.radar,
                             size: m.iconSize16,
-                            color: theme.colorScheme.primary,
+                            color: s.accent,
                           ),
                         ),
                         SizedBox(width: m.kSpace10),
                         Expanded(
                           child: Text(
                             'Sentry 日志收集',
-                            style: TextStyle(
-                              fontSize: m.fontSize13,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onSurface,
-                            ),
+                            style: AppTextStyles.cardTitle(context),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Switch(
@@ -153,9 +144,11 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                     SizedBox(height: m.kSpace4),
                     Text(
                       '接收并存储 Sentry SDK 发送的事件日志',
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: m.fontSize12,
-                        color: theme.colorScheme.onSurface.withAlpha(120),
+                        color: s.textTertiary,
+                        height: 1.6,
                       ),
                     ),
                   ],
@@ -174,12 +167,12 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                           width: m.kSpace32,
                           height: m.kSpace32,
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withAlpha(25),
+                            color: s.accentContainer,
                             borderRadius: m.radius8,
                           ),
                           child: DrawIcon(StrokeIcons.swapHoriz,
                             size: m.iconSize16,
-                            color: theme.colorScheme.primary,
+                            color: s.accent,
                           ),
                         ),
                         SizedBox(width: m.kSpace10),
@@ -189,18 +182,18 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                             children: [
                               Text(
                                 '日志来源节点',
-                                style: TextStyle(
-                                  fontSize: m.fontSize13,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface,
-                                ),
+                                style: AppTextStyles.cardTitle(context),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               SizedBox(height: m.kSpace2),
                               Text(
                                 service.isLocal ? '本机' : '远程节点',
-                                style: TextStyle(
+                                style: AppTextStyles.role(
+                                  context,
                                   fontSize: m.fontSize12,
-                                  color: theme.colorScheme.onSurface.withAlpha(120),
+                                  color: s.textTertiary,
+                                  height: 1.6,
                                 ),
                               ),
                             ],
@@ -222,7 +215,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                       ),
                     ),
                     SizedBox(height: m.kSpace12),
-                    _buildDsnInfo(service, theme, m),
+                    _buildDsnInfo(service),
                   ],
                 ),
               ),
@@ -240,17 +233,13 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                           height: m.kSpace32,
                           decoration: BoxDecoration(
                             color:
-                                (service.autoRefresh.value
-                                        ? theme.colorScheme.primary
-                                        : theme.hintColor)
+                                (service.autoRefresh.value ? s.accent : s.textTertiary)
                                     .withAlpha(25),
                             borderRadius: m.radius8,
                           ),
                           child: DrawIcon(StrokeIcons.autorenew,
                             size: m.iconSize16,
-                            color: service.autoRefresh.value
-                                ? theme.colorScheme.primary
-                                : theme.hintColor,
+                            color: service.autoRefresh.value ? s.accent : s.textTertiary,
                           ),
                         ),
                         SizedBox(width: m.kSpace10),
@@ -260,18 +249,18 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                             children: [
                               Text(
                                 '自动刷新',
-                                style: TextStyle(
-                                  fontSize: m.fontSize13,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface,
-                                ),
+                                style: AppTextStyles.cardTitle(context),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               SizedBox(height: m.kSpace2),
                               Text(
                                 '每隔 ${service.refreshIntervalSeconds.value} 秒自动刷新日志',
-                                style: TextStyle(
+                                style: AppTextStyles.role(
+                                  context,
                                   fontSize: m.fontSize12,
-                                  color: theme.colorScheme.onSurface.withAlpha(120),
+                                  color: s.textTertiary,
+                                  height: 1.6,
                                 ),
                               ),
                             ],
@@ -287,7 +276,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                     ),
                     if (service.autoRefresh.value) ...[
                       SizedBox(height: m.kSpace8),
-                      _buildRefreshIntervalSlider(service, theme, m),
+                      _buildRefreshIntervalSlider(service),
                     ],
                   ],
                 ),
@@ -305,12 +294,12 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                           width: m.kSpace32,
                           height: m.kSpace32,
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withAlpha(25),
+                            color: s.accentContainer,
                             borderRadius: m.radius8,
                           ),
                           child: DrawIcon(StrokeIcons.infoOutline,
                             size: m.iconSize16,
-                            color: theme.colorScheme.primary,
+                            color: s.accent,
                           ),
                         ),
                         SizedBox(width: m.kSpace10),
@@ -320,18 +309,18 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                             children: [
                               Text(
                                 'Sentry DSN 配置说明',
-                                style: TextStyle(
-                                  fontSize: m.fontSize13,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface,
-                                ),
+                                style: AppTextStyles.cardTitle(context),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               SizedBox(height: m.kSpace2),
                               Text(
                                 '在其他项目的 Sentry SDK 中配置以下 DSN 地址',
-                                style: TextStyle(
+                                style: AppTextStyles.role(
+                                  context,
                                   fontSize: m.fontSize12,
-                                  color: theme.colorScheme.onSurface.withAlpha(120),
+                                  color: s.textTertiary,
+                                  height: 1.6,
                                 ),
                               ),
                             ],
@@ -344,9 +333,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                       width: double.infinity,
                       padding: EdgeInsets.all(m.kSpace12),
                       decoration: BoxDecoration(
-                        color: theme.brightness == Brightness.dark
-                            ? Colors.white.withAlpha(8)
-                            : Colors.black.withAlpha(4),
+                        color: s.surfaceSunken,
                         borderRadius: m.radius8,
                       ),
                       child: Column(
@@ -354,28 +341,28 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                         children: [
                           Text(
                             'DSN 格式',
-                            style: TextStyle(
+                            style: AppTextStyles.role(
+                              context,
                               fontSize: m.fontSize12,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onSurface.withAlpha(180),
+                              weight: FontWeight.w600,
+                              color: s.textSecondary,
                             ),
                           ),
                           SizedBox(height: m.kSpace4),
                           SelectableText(
                             service.currentDsn,
-                            style: TextStyle(
-                              fontSize: m.fontSize12,
-                              fontFamily: 'monospace',
-                              color: theme.colorScheme.primary,
+                            style: AppTextStyles.mono(context, size: m.fontSize12).copyWith(
+                              color: s.accent,
                             ),
                           ),
                           SizedBox(height: m.kSpace8),
                           Text(
                             'Sentry SDK 初始化示例 (Python)',
-                            style: TextStyle(
+                            style: AppTextStyles.role(
+                              context,
                               fontSize: m.fontSize12,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onSurface.withAlpha(180),
+                              weight: FontWeight.w600,
+                              color: s.textSecondary,
                             ),
                           ),
                           SizedBox(height: m.kSpace4),
@@ -384,11 +371,7 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
                             '  dsn="${service.currentDsn}",\n'
                             '  traces_sample_rate=1.0,\n'
                             ')',
-                            style: TextStyle(
-                              fontSize: m.fontSize12,
-                              fontFamily: 'monospace',
-                              color: theme.colorScheme.onSurface.withAlpha(180),
-                            ),
+                            style: AppTextStyles.mono(context, size: m.fontSize12),
                           ),
                         ],
                       ),
@@ -403,32 +386,30 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
     );
   }
 
-  Widget _buildDsnInfo(SentrySettingsService service, ThemeData theme, ThemeMetrics m) {
+  Widget _buildDsnInfo(SentrySettingsService service) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace10),
       decoration: BoxDecoration(
-        color: theme.brightness == Brightness.dark
-            ? Colors.white.withAlpha(8)
-            : Colors.black.withAlpha(4),
+        color: s.surfaceSunken,
         borderRadius: m.radius8,
       ),
       child: Row(
         children: [
-          DrawIcon(StrokeIcons.link, size: m.iconSize16, color: theme.hintColor),
+          DrawIcon(StrokeIcons.link, size: m.iconSize16, color: s.textTertiary),
           SizedBox(width: m.kSpace8),
           Expanded(
             child: SelectableText(
               service.currentDsn,
-              style: TextStyle(
-                fontSize: m.fontSize12,
-                fontFamily: 'monospace',
-                color: theme.colorScheme.primary,
+              style: AppTextStyles.mono(context, size: m.fontSize12).copyWith(
+                color: s.accent,
               ),
             ),
           ),
           IconButton(
-            icon: DrawIcon(StrokeIcons.copy, size: m.iconSize16, color: theme.hintColor),
+            icon: DrawIcon(StrokeIcons.copy, size: m.iconSize16, color: s.textTertiary),
             tooltip: '复制 DSN',
             onPressed: () {
               Clipboard.setData(ClipboardData(text: service.currentDsn));
@@ -440,16 +421,25 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
     );
   }
 
-  Widget _buildRefreshIntervalSlider(
-    SentrySettingsService service,
-    ThemeData theme,
-    ThemeMetrics m,
-  ) {
+  Widget _buildRefreshIntervalSlider(SentrySettingsService service) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: m.kSpace12),
       child: Row(
         children: [
-          Text('刷新间隔', style: TextStyle(fontSize: m.fontSize12)),
+          Flexible(
+            child: Text(
+              '刷新间隔',
+              style: AppTextStyles.role(
+                context,
+                fontSize: m.fontSize12,
+                color: s.textSecondary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           SizedBox(width: m.kSpace8),
           Expanded(
             child: Slider(
@@ -467,8 +457,14 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
             width: m.kSpace48,
             child: Text(
               '${service.refreshIntervalSeconds.value}秒',
-              style: TextStyle(fontSize: m.fontSize12),
+              style: AppTextStyles.role(
+                context,
+                fontSize: m.fontSize12,
+                color: s.textSecondary,
+              ),
               textAlign: TextAlign.end,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

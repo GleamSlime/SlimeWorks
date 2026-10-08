@@ -72,12 +72,7 @@ class EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: compact
                   ? AppTextStyles.cardTitle(context)
-                  : TextStyle(
-                      fontSize: m.fontSize15,
-                      fontWeight: FontWeight.w600,
-                      color: s.textPrimary,
-                      height: 1.5,
-                    ),
+                  : AppTextStyles.sectionTitle(context),
             ),
             if (description != null) ...[
               SizedBox(height: m.kSpace6),

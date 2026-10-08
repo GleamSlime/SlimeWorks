@@ -3,8 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/theme/app_viz.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
@@ -40,7 +42,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
   void initState() {
     super.initState();
     _scrollController.addListener(() {
-      _showBackToTop.value = _scrollController.offset > 600;
+      _showBackToTop.value = _scrollController.offset > scaleW(600);
     });
   }
 
@@ -82,24 +84,26 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                     ),
                     child: ClipOval(
                       child: SizedBox(
-                        width: 28,
-                        height: 28,
+                        // 头像盒是固定尺寸，走宽度族而不是字号族
+                        width: scaleW(28),
+                        height: scaleW(28),
                         child: avatarImage != null
                             ? MangaImageView(
                                 image: avatarImage,
                                 fit: BoxFit.cover,
-                                loadingBuilder: (_) => const Center(
+                                loadingBuilder: (_) => Center(
                                   child: SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 1.5),
+                                    width: AppTheme.metrics.kSpace14,
+                                    height: AppTheme.metrics.kSpace14,
+                                    child: CircularProgressIndicator(strokeWidth: scaleW(1.5)),
                                   ),
                                 ),
                                 errorBuilder: (_, _, _) =>
                                     DrawIcon(StrokeIcons.accountCircle),
                               )
                             : DrawIcon(StrokeIcons.accountCircle,
-                                size: AppTheme.metrics.iconSize28,
+                                // 圆形头像盒是固定尺寸，图标只能走宽度族
+                                size: scaleW(28),
                               ),
                       ),
                     ),
@@ -125,23 +129,16 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
 
   /// 未登录提示区域
   Widget _buildLoginPrompt(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
-    final isDark = theme.brightness == Brightness.dark;
     return Center(
       child: Container(
         padding: EdgeInsets.all(metrics.kSpace32),
         margin: EdgeInsets.symmetric(horizontal: metrics.kSpace24),
         decoration: BoxDecoration(
-          color: isDark ? DarkColors.background2 : LightColors.background1,
+          color: s.surface,
           borderRadius: metrics.radius16,
-          boxShadow: [
-            BoxShadow(
-              color: theme.shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          boxShadow: s.elevation(Elevation.floating),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -150,28 +147,23 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
               width: scaleW(72),
               height: scaleW(72),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                color: s.accentContainer,
                 borderRadius: metrics.radius16,
               ),
               child: DrawIcon(StrokeIcons.lockPerson,
                 size: scaleW(36),
-                color: theme.colorScheme.primary,
+                color: s.accent,
               ),
             ),
             SizedBox(height: metrics.kSpace20),
             Text(
               '请先登录以使用 Manga',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTextStyles.sectionTitle(context),
             ),
             SizedBox(height: metrics.kSpace8),
             Text(
               '登录后可浏览、搜索和收藏漫画',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-              ),
+              style: AppTextStyles.caption(context),
             ),
             SizedBox(height: metrics.kSpace24),
             FilledButton.icon(
@@ -198,14 +190,14 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
 
   /// 主页内容（已登录）
   Widget _buildHomeContent(BuildContext context, MangaHomeViewModel vm) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
 
     return Stack(
       children: [
         NotificationListener<ScrollEndNotification>(
           onNotification: (notification) {
-            if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - 400) {
+            if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - scaleW(400)) {
               vm.loadMoreRandom();
             }
             return false;
@@ -224,15 +216,13 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         DrawIcon(StrokeIcons.cloudOff,
-                          size: scaleW(48),
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                          size: metrics.iconSize48,
+                          color: s.textDisabled,
                         ),
                         SizedBox(height: metrics.kSpace12),
                         Text(
                           vm.errorMessage!,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.error,
-                          ),
+                          style: AppTextStyles.body(context).copyWith(color: s.danger.color),
                         ),
                         SizedBox(height: metrics.kSpace12),
                         FilledButton(onPressed: vm.loadHomeData, child: const Text('重新加载')),
@@ -280,13 +270,13 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
           child: Obx(
             () => AnimatedScale(
               scale: _showBackToTop.value ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
+              duration: AppMotion.base,
               child: FloatingActionButton.small(
                 heroTag: 'home_back_to_top',
                 onPressed: () => _scrollController.animateTo(
                   0,
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeInOut,
+                  duration: AppMotion.slow,
+                  curve: AppMotion.standard,
                 ),
                 tooltip: '返回顶部',
                 child: DrawIcon(StrokeIcons.keyboardArrowUp),
@@ -300,7 +290,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
 
   /// Section 标题
   Widget _buildSectionHeader(BuildContext context, String title, VoidCallback? onRefresh) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
     return SliverToBoxAdapter(
       child: Padding(
@@ -313,26 +303,19 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
         child: Row(
           children: [
             Container(
-              width: 4,
-              height: AppTheme.metrics.kSpace20,
+              width: metrics.kSpace4,
+              height: metrics.kSpace20,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    theme.colorScheme.primary,
-                    theme.colorScheme.primary.withValues(alpha: 0.4),
-                  ],
-                ),
-                borderRadius: AppTheme.metrics.radius2,
+                color: s.accent,
+                borderRadius: metrics.radius2,
               ),
             ),
             SizedBox(width: metrics.kSpace10),
-            Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text(title, style: AppTextStyles.sectionTitle(context)),
             if (onRefresh != null) ...[
               const Spacer(),
               TextButton.icon(
-                icon: DrawIcon(StrokeIcons.refresh, size: AppTheme.metrics.iconSize16),
+                icon: DrawIcon(StrokeIcons.refresh, size: metrics.iconSize16),
                 label: const Text('换一批'),
                 onPressed: onRefresh,
               ),
@@ -346,7 +329,6 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
   /// 推荐集合（纵向列表每个集合）
   Widget _buildCollections(BuildContext context, List<MangaCollection> collections) {
     final metrics = appMetrics;
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -360,10 +342,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
             ),
             child: Text(
               collection.title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
+              style: AppTextStyles.cardTitle(context),
             ),
           ),
           SizedBox(
@@ -389,6 +368,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
 
   /// 随机漫画网格
   Widget _buildRandomComicsGrid(BuildContext context, List<MangaComic> comics) {
+    final metrics = appMetrics;
     final crossAxisCount = PlatformUtil.isDesktop ? 6 : 3;
     return SliverGrid(
       delegate: SliverChildBuilderDelegate(
@@ -398,8 +378,8 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
       ),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
-        mainAxisSpacing: scaleW(8),
-        crossAxisSpacing: scaleW(8),
+        mainAxisSpacing: metrics.kSpace8,
+        crossAxisSpacing: metrics.kSpace8,
         childAspectRatio: 0.6,
       ),
     );
@@ -419,19 +399,20 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
   void _showUserMenu(BuildContext context, MangaHomeViewModel vm) {
     if (_isMenuOpen) return;
     _isMenuOpen = true;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
+    final viz = AppVizSet.of(context);
+    final m = AppTheme.metrics;
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: m.radius16.topLeft),
       ),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
+              padding: EdgeInsets.all(m.kSpace16),
               child: Row(
                 children: [
                   ClipOval(
@@ -443,46 +424,48 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                               image: vm.currentUser.value!.avatar!,
                               fit: BoxFit.cover,
                               errorBuilder: (_, _, _) => Container(
-                                color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                                color: s.accentContainer,
                                 child: DrawIcon(StrokeIcons.accountCircle,
-                                  size: AppTheme.metrics.iconSize28,
-                                  color: theme.colorScheme.primary,
+                                  size: scaleW(28),
+                                  color: s.accent,
                                 ),
                               ),
                             )
                           : Container(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                              color: s.accentContainer,
                               child: DrawIcon(StrokeIcons.accountCircle,
-                                size: AppTheme.metrics.iconSize28,
-                                color: theme.colorScheme.primary,
+                                size: scaleW(28),
+                                color: s.accent,
                               ),
                             ),
                     ),
                   ),
-                  SizedBox(width: AppTheme.metrics.kSpace12),
+                  SizedBox(width: m.kSpace12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           vm.currentUser.value?.name ?? '未知用户',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                          style: AppTextStyles.sectionTitle(context),
                         ),
-                        SizedBox(height: AppTheme.metrics.kSpace2),
+                        SizedBox(height: m.kSpace2),
                         Container(
                           padding: EdgeInsets.symmetric(
-                            horizontal: AppTheme.metrics.kSpace8,
-                            vertical: AppTheme.metrics.kSpace2,
+                            horizontal: m.kSpace8,
+                            vertical: m.kSpace2,
                           ),
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                            borderRadius: AppTheme.metrics.radius4,
+                            color: s.accentContainer,
+                            borderRadius: m.radius4,
                           ),
                           child: Text(
                             'Lv.${vm.currentUser.value?.level ?? 0}',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.w600,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: m.fontSize11,
+                              color: s.accentText,
+                              weight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -492,10 +475,10 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                 ],
               ),
             ),
-            Divider(height: 1, color: theme.dividerColor),
+            Divider(height: m.kSpace1, color: s.hairline),
             _MenuTile(
               icon: StrokeIcons.favoriteOutline,
-              iconColor: Colors.red,
+              iconColor: viz.coral.base,
               title: '我的收藏',
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -506,7 +489,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
             ),
             _MenuTile(
               icon: StrokeIcons.history,
-              iconColor: theme.colorScheme.primary,
+              iconColor: s.accent,
               title: '观看记录',
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -515,7 +498,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
             ),
             _MenuTile(
               icon: StrokeIcons.block,
-              iconColor: Colors.orange,
+              iconColor: viz.amber.base,
               title: '屏蔽词管理',
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -524,17 +507,17 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
             ),
             _MenuTile(
               icon: StrokeIcons.download,
-              iconColor: isDark ? DarkColors.blue : LightColors.blue,
+              iconColor: viz.sky.base,
               title: '下载管理',
               onTap: () {
                 Navigator.of(ctx).pop();
                 const MangaDownloadsRoute().push(context);
               },
             ),
-            Divider(height: 1, color: theme.dividerColor),
+            Divider(height: m.kSpace1, color: s.hairline),
             _MenuTile(
               icon: StrokeIcons.logout,
-              iconColor: theme.colorScheme.error,
+              iconColor: s.danger.color,
               title: '退出登录',
               onTap: () async {
                 Navigator.of(ctx).pop();
@@ -568,35 +551,37 @@ class _MenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return InkWell(
+      borderRadius: m.radiusControl,
       onTap: onTap,
       child: Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: AppTheme.metrics.kSpace16,
-          vertical: AppTheme.metrics.kSpace12,
+          horizontal: m.kSpace16,
+          vertical: m.kSpace12,
         ),
         child: Row(
           children: [
             Container(
-              width: AppTheme.metrics.kSpace32,
-              height: AppTheme.metrics.kSpace32,
+              width: m.kSpace32,
+              height: m.kSpace32,
               decoration: BoxDecoration(
                 color: iconColor.withValues(alpha: 0.12),
-                borderRadius: AppTheme.metrics.radius8,
+                borderRadius: m.radius8,
               ),
-              child: DrawIcon(icon, size: AppTheme.metrics.iconSize18, color: iconColor),
+              child: DrawIcon(icon, size: scaleW(18), color: iconColor),
             ),
-            SizedBox(width: AppTheme.metrics.kSpace12),
+            SizedBox(width: m.kSpace12),
             Expanded(
               child: Text(
                 title,
-                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                style: AppTextStyles.rowTitle(context),
               ),
             ),
             DrawIcon(StrokeIcons.chevronRight,
-              size: AppTheme.metrics.iconSize20,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+              size: scaleW(20),
+              color: s.textDisabled,
             ),
           ],
         ),

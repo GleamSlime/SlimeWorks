@@ -130,7 +130,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     _currentIsVideo =
         widget.items[_currentIndex].kind == media_api.MediaKind.video ||
         widget.items[_currentIndex].kind == media_api.MediaKind.audio;
-    _snapCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+    _snapCtrl = AnimationController(vsync: this, duration: AppMotion.base);
     _snapCtrl.addListener(_onSnapTick);
     _snapCtrl.addStatusListener(_onSnapStatus);
     if (Platform.isAndroid || Platform.isIOS) {
@@ -366,8 +366,13 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
       );
     }
     if (source == null || source.isEmpty) {
-      return const Center(
-        child: Text('无法加载图片', style: TextStyle(color: Colors.white)),
+      // 查看器画布固定深色，错误提示白字不随明暗翻转
+      return Center(
+        child: Text('无法加载图片', style: AppTextStyles.role(
+          context,
+          color: Colors.white,
+          fontSize: AppTheme.metrics.fontSize13,
+        )),
       );
     }
     return _ImageViewer(
@@ -508,6 +513,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     final currDy = _isDraggingH ? 0.0 : offset;
 
     return Scaffold(
+      // 查看器是沉浸式深色画布：黑底固定，不跟随明暗主题
       backgroundColor: Colors.black,
       body: Focus(
         autofocus: true,
@@ -602,12 +608,12 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
             // ── 右下角：浮动操作菜单（视频/音频页自带控制栏，隐藏以免遮挡）────
             if (!_currentIsVideo)
               Positioned(
-                bottom: MediaQuery.paddingOf(context).bottom + 24,
+                bottom: MediaQuery.paddingOf(context).bottom + AppTheme.metrics.kSpace24,
                 left: AppTheme.metrics.kSpace16,
                 right: AppTheme.metrics.kSpace16,
               child: AnimatedOpacity(
                 opacity: _uiVisible ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 300),
+                duration: AppMotion.base,
                 child: IgnorePointer(
                   ignoring: !_uiVisible,
                   child: Row(
@@ -635,7 +641,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
               right: appMetrics.kSpace4,
               child: AnimatedOpacity(
                 opacity: _uiVisible ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 300),
+                duration: AppMotion.base,
                 child: IgnorePointer(
                   ignoring: !_uiVisible,
                   child: Row(
@@ -656,13 +662,15 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
                                 horizontal: appMetrics.kSpace10,
                                 vertical: appMetrics.kSpace10,
                               ),
+                              // 深色玻璃标题条上的白字不随明暗翻转
                               color: Colors.black.withValues(alpha: 0.42),
                               child: Text(
                                 widget.items[_currentIndex].title,
-                                style: TextStyle(
+                                style: AppTextStyles.role(
+                                  context,
                                   color: Colors.white,
                                   fontSize: AppTheme.metrics.fontSize13,
-                                  fontWeight: FontWeight.w500,
+                                  weight: FontWeight.w500,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,

@@ -424,7 +424,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
               // 已收藏的要一直看得见，不能只在悬停时露一下
               trailingAtRest: widget.isFavorited,
               media: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 120),
+                duration: AppMotion.fast,
                 // 悬停翻封面时按图源换页，不做淡入淡出会变成硬切闪屏
                 child: MediaCardCover(
                   key: ValueKey('${widget.collection.id}_$displaySource'),

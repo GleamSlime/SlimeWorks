@@ -7,7 +7,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
@@ -58,7 +58,7 @@ class _MangaFavouritesScreenState
 
   Widget _buildBody(BuildContext context) {
     final metrics = appMetrics;
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
 
     if (viewModel.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -69,14 +69,14 @@ class _MangaFavouritesScreenState
           mainAxisSize: MainAxisSize.min,
           children: [
             DrawIcon(StrokeIcons.cloudOff,
-              size: scaleW(48),
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+              size: metrics.iconSize48,
+              color: s.textDisabled,
             ),
             SizedBox(height: metrics.kSpace12),
             Text(
               viewModel.errorMessage!,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
+              style: AppTextStyles.body(context).copyWith(color: s.danger.color),
             ),
             SizedBox(height: metrics.kSpace12),
             FilledButton.icon(
@@ -91,21 +91,14 @@ class _MangaFavouritesScreenState
 
     return Obx(() {
       if (viewModel.comics.isEmpty && !viewModel.isLoadingMore.value) {
-        final isDark = theme.brightness == Brightness.dark;
         return Center(
           child: Container(
             padding: EdgeInsets.all(metrics.kSpace32),
             margin: EdgeInsets.symmetric(horizontal: metrics.kSpace24),
             decoration: BoxDecoration(
-              color: isDark ? DarkColors.background2 : LightColors.background1,
+              color: s.surface,
               borderRadius: metrics.radius16,
-              boxShadow: [
-                BoxShadow(
-                  color: theme.shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+              boxShadow: s.elevation(Elevation.floating),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -114,28 +107,23 @@ class _MangaFavouritesScreenState
                   width: scaleW(72),
                   height: scaleW(72),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                    color: s.accentContainer,
                     borderRadius: metrics.radius16,
                   ),
                   child: DrawIcon(StrokeIcons.favoriteBorder,
                     size: scaleW(36),
-                    color: theme.colorScheme.primary,
+                    color: s.accent,
                   ),
                 ),
                 SizedBox(height: metrics.kSpace20),
                 Text(
                   '还没有收藏任何漫画',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: AppTextStyles.sectionTitle(context),
                 ),
                 SizedBox(height: metrics.kSpace8),
                 Text(
                   '浏览漫画时点击收藏按钮即可添加',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
+                  style: AppTextStyles.caption(context),
                 ),
               ],
             ),
@@ -146,7 +134,7 @@ class _MangaFavouritesScreenState
       final crossAxisCount = PlatformUtil.isDesktop ? 6 : 3;
       return NotificationListener<ScrollEndNotification>(
         onNotification: (notification) {
-          if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - 280) {
+          if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - scaleW(280)) {
             viewModel.loadMore();
           }
           return false;
@@ -192,11 +180,17 @@ class _MangaFavouritesScreenState
                         ),
                       ),
                       SizedBox(width: metrics.kSpace8),
-                      Obx(
-                        () => Text(
-                          '${viewModel.comics.length} 部',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                      // 行尾的计数会跟着字号滑杆变长，必须封顶，否则顶破这一行。
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: metrics.kSpace56),
+                        child: ClipRect(
+                          child: Obx(
+                            () => Text(
+                              '${viewModel.comics.length} 部',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.caption(context),
+                            ),
                           ),
                         ),
                       ),
@@ -217,8 +211,8 @@ class _MangaFavouritesScreenState
                   }, childCount: viewModel.comics.length),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: crossAxisCount,
-                    mainAxisSpacing: scaleW(8),
-                    crossAxisSpacing: scaleW(8),
+                    mainAxisSpacing: metrics.kSpace8,
+                    crossAxisSpacing: metrics.kSpace8,
                     childAspectRatio: 0.6,
                   ),
                 ),

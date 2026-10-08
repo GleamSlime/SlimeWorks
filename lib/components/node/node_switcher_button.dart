@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -28,11 +28,10 @@ class NodeSwitcherButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     final isLocal = currentNodeId.isEmpty;
-    final isDark = theme.brightness == Brightness.dark;
-    final accent = theme.colorScheme.primary;
+    final accent = s.accent;
 
     String label;
     StrokeIcon iconData;
@@ -40,32 +39,30 @@ class NodeSwitcherButton extends StatelessWidget {
     if (isLocal) {
       label = '本机';
       iconData = StrokeIcons.computer;
-      dotColor = LightColors.green;
+      dotColor = s.success.color;
     } else {
       final node = nodeService.getNodeById(currentNodeId);
       final ok = nodeService.nodeConnectivity[currentNodeId] == true;
       label = node?.name ?? '未知';
       iconData = StrokeIcons.dns;
-      dotColor = ok ? LightColors.green : LightColors.red;
+      dotColor = ok ? s.success.color : s.danger.color;
     }
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: m.radius20,
+        borderRadius: m.radiusPill,
         onTap: () => _showNodePanel(context),
         child: Container(
           height: m.kSpace32,
           padding: EdgeInsets.only(left: m.kSpace10, right: m.kSpace6),
           decoration: BoxDecoration(
-            color: isDark
-                ? DarkColors.background2.withAlpha(200)
-                : LightColors.background2.withAlpha(220),
-            borderRadius: m.radius20,
+            // 胶囊底是半透明浮起面：原先按明暗手挑 DarkColors/LightColors.background2，
+            // 语义层里对应 surfaceRaised，透明度只留一档。
+            color: s.surfaceRaised.withAlpha(220),
+            borderRadius: m.radiusPill,
             border: Border.all(
-              color: isLocal
-                  ? (isDark ? DarkColors.white10 : LightColors.black10)
-                  : accent.withAlpha(60),
+              color: isLocal ? s.border : accent.withAlpha(60),
               width: isLocal ? 0.5 : 1.2,
             ),
           ),
@@ -88,20 +85,24 @@ class NodeSwitcherButton extends StatelessWidget {
                 ),
               ),
               SizedBox(width: m.kSpace6),
-              DrawIcon(iconData, size: m.iconSize14, color: isLocal ? theme.hintColor : accent),
+              DrawIcon(iconData, size: m.iconSize14, color: isLocal ? s.textTertiary : accent),
               SizedBox(width: m.kSpace4),
               Text(
                 label,
-                style: TextStyle(
+                style: AppTextStyles.role(
+                  context,
                   fontSize: m.fontSize12,
-                  fontWeight: FontWeight.w500,
-                  color: isLocal ? theme.colorScheme.onSurface.withAlpha(180) : accent,
+                  weight: FontWeight.w500,
+                  color: isLocal ? s.textSecondary : accent,
                 ),
+                // 节点名会随界面字号变长，胶囊行宁可截断不许顶破
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               SizedBox(width: m.kSpace2),
               DrawIcon(StrokeIcons.unfoldMore,
                 size: m.iconSize12,
-                color: theme.hintColor.withAlpha(120),
+                color: s.textTertiary.withAlpha(120),
               ),
             ],
           ),
@@ -111,19 +112,17 @@ class NodeSwitcherButton extends StatelessWidget {
   }
 
   void _showNodePanel(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final isDark = theme.brightness == Brightness.dark;
-    final accent = theme.colorScheme.primary;
+    final accent = s.accent;
     final remoteNodes = nodeService.enabledRemoteNodes;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      barrierColor: isDark ? DarkColors.overlay : LightColors.overlay.withAlpha(120),
+      barrierColor: s.scrim,
       isScrollControlled: true,
       builder: (sheetCtx) {
-        final s = AppSemantic.of(sheetCtx);
         return Container(
           constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetCtx).size.height * 0.55),
           margin: EdgeInsets.all(m.kSpace12),
@@ -158,19 +157,12 @@ class NodeSwitcherButton extends StatelessWidget {
                         children: [
                           Text(
                             '选择数据节点',
-                            style: TextStyle(
-                              fontSize: m.fontSize15,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onSurface,
-                            ),
+                            style: AppTextStyles.sectionTitle(sheetCtx),
                           ),
                           SizedBox(height: m.kSpace2),
                           Text(
                             '切换后界面数据来自所选节点',
-                            style: TextStyle(
-                              fontSize: m.fontSize11,
-                              color: theme.colorScheme.onSurface.withAlpha(100),
-                            ),
+                            style: AppTextStyles.caption(sheetCtx),
                           ),
                         ],
                       ),
@@ -184,7 +176,7 @@ class NodeSwitcherButton extends StatelessWidget {
                           padding: EdgeInsets.all(m.kSpace4),
                           child: DrawIcon(StrokeIcons.close,
                             size: m.iconSize18,
-                            color: theme.hintColor,
+                            color: s.textTertiary,
                           ),
                         ),
                       ),
@@ -195,7 +187,7 @@ class NodeSwitcherButton extends StatelessWidget {
               Divider(
                 height: m.kSpace1,
                 thickness: 0.5,
-                color: theme.colorScheme.outlineVariant.withAlpha(60),
+                color: s.hairline,
                 indent: m.kSpace20,
                 endIndent: m.kSpace20,
               ),
@@ -230,7 +222,7 @@ class NodeSwitcherButton extends StatelessWidget {
                               Expanded(
                                 child: Container(
                                   height: 0.5,
-                                  color: theme.colorScheme.outlineVariant.withAlpha(40),
+                                  color: s.hairline,
                                 ),
                               ),
                               SizedBox(width: m.kSpace44),
@@ -321,11 +313,10 @@ class _NodePanelItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final m = AppTheme.metrics;
-    final isDark = theme.brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
 
-    final dotColor = isAvailable ? (isSelected ? accent : LightColors.green) : LightColors.red;
+    final dotColor = isAvailable ? (isSelected ? accent : s.success.color) : s.danger.color;
 
     return Material(
       color: Colors.transparent,
@@ -336,7 +327,8 @@ class _NodePanelItem extends StatelessWidget {
           margin: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace2),
           padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace10),
           decoration: BoxDecoration(
-            color: isSelected ? accent.withAlpha(isDark ? 25 : 18) : Colors.transparent,
+            // 选中底走低浓度强调容器，未选中占位底走 surfaceSunken
+            color: isSelected ? s.accentContainer : Colors.transparent,
             borderRadius: m.radius12,
             border: isSelected ? Border.all(color: accent.withAlpha(80), width: 1.2) : null,
           ),
@@ -346,18 +338,13 @@ class _NodePanelItem extends StatelessWidget {
                 width: m.kSpace32,
                 height: m.kSpace32,
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? accent.withAlpha(25)
-                      : (isDark ? DarkColors.white10 : LightColors.black5),
+                  // 选中时图标底板比行底更实一档，避免两层同色后失去边界
+                color: isSelected ? accent.withAlpha(28) : s.surfaceSunken,
                   borderRadius: m.radius10,
                 ),
                 child: DrawIcon(icon,
                   size: m.iconSize18,
-                  color: isSelected
-                      ? accent
-                      : (isAvailable
-                            ? theme.colorScheme.onSurface.withAlpha(120)
-                            : theme.disabledColor),
+                  color: isSelected ? accent : (isAvailable ? s.textTertiary : s.textDisabled),
                 ),
               ),
               SizedBox(width: m.kSpace12),
@@ -367,20 +354,20 @@ class _NodePanelItem extends StatelessWidget {
                   children: [
                     Text(
                       label,
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: m.fontSize13,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                        color: isAvailable ? theme.colorScheme.onSurface : theme.disabledColor,
+                        weight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        color: isAvailable ? s.textPrimary : s.textDisabled,
                       ),
                     ),
                     SizedBox(height: m.kSpace1),
                     Text(
                       subtitle,
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: m.fontSize11,
-                        color: isAvailable
-                            ? theme.colorScheme.onSurface.withAlpha(80)
-                            : theme.disabledColor.withAlpha(120),
+                        color: isAvailable ? s.textTertiary : s.textDisabled,
                       ),
                     ),
                   ],
@@ -434,12 +421,12 @@ class _OverlaySnackBarState extends State<_OverlaySnackBar> with SingleTickerPro
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
-    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _controller = AnimationController(vsync: this, duration: AppMotion.base);
+    _opacity = CurvedAnimation(parent: _controller, curve: AppMotion.decelerate);
     _slide = Tween<Offset>(
       begin: const Offset(0, 1),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    ).animate(CurvedAnimation(parent: _controller, curve: AppMotion.decelerate));
     _controller.forward();
     Future.delayed(const Duration(seconds: 3), _dismiss);
   }
@@ -460,8 +447,8 @@ class _OverlaySnackBarState extends State<_OverlaySnackBar> with SingleTickerPro
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
-    final theme = Theme.of(navigatorKey.currentContext ?? context);
-    final isDark = theme.brightness == Brightness.dark;
+    final snackBarContext = navigatorKey.currentContext ?? context;
+    final s = AppSemantic.of(snackBarContext);
     return Positioned(
       bottom: MediaQuery.of(context).padding.bottom + scaleW(16),
       left: m.kSpace16,
@@ -473,13 +460,13 @@ class _OverlaySnackBarState extends State<_OverlaySnackBar> with SingleTickerPro
           child: Material(
             elevation: 6,
             borderRadius: m.radius12,
-            color: isDark ? DarkColors.background2 : LightColors.background2,
+            color: s.surfaceRaised,
             child: Container(
               padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace12),
               decoration: BoxDecoration(
                 borderRadius: m.radius12,
                 border: Border.all(
-                  color: isDark ? DarkColors.white10 : LightColors.black10,
+                  color: s.border,
                   width: 0.5,
                 ),
               ),
@@ -487,13 +474,17 @@ class _OverlaySnackBarState extends State<_OverlaySnackBar> with SingleTickerPro
                 children: [
                   DrawIcon(StrokeIcons.infoOutline,
                     size: m.iconSize18,
-                    color: theme.colorScheme.primary,
+                    color: s.accent,
                   ),
                   SizedBox(width: m.kSpace10),
                   Expanded(
                     child: Text(
                       widget.message,
-                      style: TextStyle(fontSize: m.fontSize13, color: theme.colorScheme.onSurface),
+                      style: AppTextStyles.role(
+                        snackBarContext,
+                        fontSize: m.fontSize13,
+                        color: s.textPrimary,
+                      ),
                     ),
                   ),
                 ],

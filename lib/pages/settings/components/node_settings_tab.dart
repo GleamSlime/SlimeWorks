@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -168,7 +168,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
   }
 
   Widget _buildSectionTitle(String title, StrokeIcon icon) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Row(
       children: [
@@ -176,20 +176,15 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
           width: m.kSpace24,
           height: m.kSpace24,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withAlpha(20),
+            color: s.accentContainer,
             borderRadius: m.radius6,
           ),
-          child: DrawIcon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+          child: DrawIcon(icon, size: m.iconSize12, color: s.accent),
         ),
         SizedBox(width: m.kSpace8),
         Text(
           title,
-          style: TextStyle(
-            fontSize: m.fontSize15,
-            height: 1.4,
-            color: theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppTextStyles.sectionTitle(context),
         ),
       ],
     );
@@ -202,9 +197,8 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final brandColor = isDark ? DarkColors.primary : LightColors.primary;
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(m.kSpace16),
@@ -218,10 +212,10 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
               width: double.infinity,
               padding: EdgeInsets.all(m.kSpace16),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(80),
+                color: s.surface,
                 borderRadius: m.radius12,
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
+                  color: s.border,
                 ),
               ),
               child: Column(
@@ -233,24 +227,20 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                         width: m.kSpace32,
                         height: m.kSpace32,
                         decoration: BoxDecoration(
-                          color: brandColor.withAlpha(25),
+                          color: s.accentContainer,
                           borderRadius: m.radius8,
                         ),
                         child: DrawIcon(
                           StrokeIcons.computer,
                           size: m.iconSize16,
-                          color: brandColor,
+                          color: s.accent,
                         ),
                       ),
                       SizedBox(width: m.kSpace10),
                       Expanded(
                         child: Text(
                           '本机节点服务',
-                          style: TextStyle(
-                            fontSize: m.fontSize13,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
+                          style: AppTextStyles.cardTitle(context),
                         ),
                       ),
                       Switch(value: service.localNodeEnabled.value, onChanged: _saveLocalSettings),
@@ -274,18 +264,16 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                     SizedBox(height: m.kSpace12),
                     Row(
                       children: [
-                        Text('本机授权码', style: Theme.of(context).textTheme.titleSmall),
+                        Text('本机授权码', style: AppTextStyles.cardTitle(context)),
                         SizedBox(width: m.kSpace8),
                         Expanded(
                           child: SelectableText(
                             service.localNodeAuthCode.value.isEmpty
                                 ? '未设置'
                                 : service.localNodeAuthCode.value,
-                            style: TextStyle(
-                              fontSize: m.fontSize13,
+                            style: AppTextStyles.mono(context, size: m.fontSize13).copyWith(
                               fontWeight: FontWeight.w600,
-                              fontFamily: 'monospace',
-                              color: Theme.of(context).colorScheme.onSurface,
+                              color: s.textPrimary,
                             ),
                           ),
                         ),
@@ -307,9 +295,10 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                     ),
                     Text(
                       '其他设备添加本节点时填写它；请求头 X-SW-Auth 携带其 sha256 摘要',
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: m.fontSize12,
-                        color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                        color: s.textTertiary,
                       ),
                     ),
                   ],
@@ -322,14 +311,15 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                     ),
                   ),
                   SizedBox(height: m.kSpace12),
-                  Text('本机API地址', style: Theme.of(context).textTheme.titleSmall),
+                  Text('本机API地址', style: AppTextStyles.cardTitle(context)),
                   SizedBox(height: m.kSpace6),
                   if (service.localNodeApiList.isEmpty)
                     Text(
                       '暂无可用地址',
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: m.fontSize12,
-                        color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                        color: s.textTertiary,
                       ),
                     )
                   else
@@ -338,13 +328,14 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                         padding: EdgeInsets.only(bottom: m.kSpace4),
                         child: Row(
                           children: [
-                            DrawIcon(StrokeIcons.link, size: m.iconSize12, color: brandColor),
+                            DrawIcon(StrokeIcons.link, size: m.iconSize12, color: s.accent),
                             SizedBox(width: m.kSpace6),
                             SelectableText(
                               api,
-                              style: TextStyle(
+                              style: AppTextStyles.role(
+                                context,
                                 fontSize: m.fontSize12,
-                                color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
+                                color: s.textSecondary,
                               ),
                             ),
                           ],
@@ -379,10 +370,10 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(horizontal: m.kSpace24, vertical: m.kSpace32),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(60),
+                  color: s.surfaceSunken,
                   borderRadius: m.radius12,
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant.withAlpha(60),
+                    color: s.hairline,
                   ),
                 ),
                 child: Column(
@@ -391,26 +382,23 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                       width: m.kSpace40,
                       height: m.kSpace40,
                       decoration: BoxDecoration(
-                        color: brandColor.withAlpha(20),
+                        color: s.accentContainer,
                         borderRadius: m.radius10,
                       ),
-                      child: DrawIcon(StrokeIcons.cloudOff, size: m.iconSize20, color: brandColor),
+                      child: DrawIcon(StrokeIcons.cloudOff, size: m.iconSize20, color: s.accent),
                     ),
                     SizedBox(height: m.kSpace12),
                     Text(
                       '暂无远程节点',
-                      style: TextStyle(
-                        fontSize: m.fontSize13,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
+                      style: AppTextStyles.cardTitle(context),
                     ),
                     SizedBox(height: m.kSpace4),
                     Text(
                       '点击右上角 + 添加远程节点',
-                      style: TextStyle(
+                      style: AppTextStyles.role(
+                        context,
                         fontSize: m.fontSize12,
-                        color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                        color: s.textTertiary,
                       ),
                     ),
                   ],
@@ -419,11 +407,11 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
             else
               ...service.remoteNodes.map((node) {
                 final ok = service.nodeConnectivity[node.id];
-                final dotColor = ok == null
-                    ? Colors.grey
+                final statusRole = ok == null
+                    ? s.neutral
                     : ok
-                    ? Colors.green
-                    : Colors.red;
+                    ? s.success
+                    : s.danger;
                 final statusLabel = ok == null
                     ? '检测中'
                     : ok
@@ -432,17 +420,17 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                 return Container(
                   margin: EdgeInsets.only(bottom: m.kSpace8),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(80),
+                    color: s.surface,
                     borderRadius: m.radius12,
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80),
+                      color: s.border,
                     ),
                   ),
                   child: ClipRRect(
                     borderRadius: m.radius12,
                     child: Row(
                       children: [
-                        Container(width: 4, height: 72, color: dotColor),
+                        Container(width: m.kSpace4, height: scaleH(72), color: statusRole.color),
                         Expanded(
                           child: ListTile(
                             title: Row(
@@ -454,7 +442,7 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                                     vertical: m.kSpace2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: dotColor.withAlpha(25),
+                                    color: statusRole.container,
                                     borderRadius: m.radius999,
                                   ),
                                   child: Row(
@@ -464,17 +452,18 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                                         width: m.kSpace6,
                                         height: m.kSpace6,
                                         decoration: BoxDecoration(
-                                          color: dotColor,
+                                          color: statusRole.color,
                                           shape: BoxShape.circle,
                                         ),
                                       ),
                                       SizedBox(width: m.kSpace4),
                                       Text(
                                         statusLabel,
-                                        style: TextStyle(
+                                        style: AppTextStyles.role(
+                                          context,
                                           fontSize: m.fontSize12,
-                                          fontWeight: FontWeight.w600,
-                                          color: dotColor,
+                                          weight: FontWeight.w600,
+                                          color: statusRole.onContainer,
                                         ),
                                       ),
                                     ],
@@ -485,19 +474,31 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(node.apiBaseUrl, style: TextStyle(fontSize: m.fontSize12)),
+                                Text(
+                                  node.apiBaseUrl,
+                                  style: AppTextStyles.role(
+                                    context,
+                                    fontSize: m.fontSize12,
+                                    color: s.textSecondary,
+                                  ),
+                                ),
                                 if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty)
                                   Text(
                                     '内网: ${node.lanApiBaseUrl}',
-                                    style: TextStyle(fontSize: m.fontSize12, color: Colors.teal),
+                                    style: AppTextStyles.role(
+                                      context,
+                                      fontSize: m.fontSize12,
+                                      color: s.info.color,
+                                    ),
                                   ),
                                 // 连通失败时给出原因（授权码错误 / 不可达 / 已禁用）
                                 if (ok == false)
                                   Text(
                                     service.nodeConnectivityError[node.id] ?? '',
-                                    style: TextStyle(
+                                    style: AppTextStyles.role(
+                                      context,
                                       fontSize: m.fontSize12,
-                                      color: Theme.of(context).colorScheme.error,
+                                      color: s.danger.color,
                                     ),
                                   ),
                               ],

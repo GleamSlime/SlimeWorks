@@ -7,13 +7,13 @@ import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_download_model.dart';
 import 'package:slime_works/pages/manga/view_models/manga_downloads_viewmodel.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
@@ -52,22 +52,16 @@ class _MangaDownloadsScreenState
       child: Obx(() {
         final entries = viewModel.entries;
         if (entries.isEmpty) {
-          final theme = Theme.of(context);
-          final isDark = theme.brightness == Brightness.dark;
+          final s = AppSemantic.of(context);
+          final m = AppTheme.metrics;
           return Center(
             child: Container(
-              padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
-              margin: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24),
+              padding: EdgeInsets.all(m.kSpace32),
+              margin: EdgeInsets.symmetric(horizontal: m.kSpace24),
               decoration: BoxDecoration(
-                color: isDark ? DarkColors.background2 : LightColors.background1,
-                borderRadius: AppTheme.metrics.radius16,
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.shadowColor.withValues(alpha: isDark ? 0.2 : 0.08),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+                color: s.surface,
+                borderRadius: m.radius16,
+                boxShadow: s.elevation(Elevation.floating),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -76,28 +70,23 @@ class _MangaDownloadsScreenState
                     width: scaleW(72),
                     height: scaleW(72),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                      borderRadius: AppTheme.metrics.radius16,
+                      color: s.accentContainer,
+                      borderRadius: m.radius16,
                     ),
                     child: DrawIcon(StrokeIcons.download,
                       size: scaleW(36),
-                      color: theme.colorScheme.primary,
+                      color: s.accent,
                     ),
                   ),
-                  SizedBox(height: AppTheme.metrics.kSpace20),
+                  SizedBox(height: m.kSpace20),
                   Text(
                     '还没有下载任何漫画',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: AppTextStyles.sectionTitle(context),
                   ),
-                  SizedBox(height: AppTheme.metrics.kSpace8),
+                  SizedBox(height: m.kSpace8),
                   Text(
                     '在漫画详情页选择章节进行下载',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                    ),
+                    style: AppTextStyles.caption(context),
                   ),
                 ],
               ),
@@ -172,14 +161,14 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final entry = widget.entry;
     final metrics = appMetrics;
 
     return Card(
       margin: EdgeInsets.only(bottom: metrics.kSpace12),
       child: InkWell(
-        borderRadius: AppTheme.metrics.radius12,
+        borderRadius: metrics.radius12,
         onTap: widget.onOpenDetail,
         child: Padding(
           padding: EdgeInsets.all(metrics.kSpace12),
@@ -209,10 +198,10 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                       width: scaleW(56),
                       height: scaleW(75),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: AppTheme.metrics.radius6,
+                        color: s.surfaceSunken,
+                        borderRadius: metrics.radius6,
                       ),
-                      child: DrawIcon(StrokeIcons.image),
+                      child: DrawIcon(StrokeIcons.image, color: s.textDisabled),
                     ),
                   SizedBox(width: metrics.kSpace12),
 
@@ -223,24 +212,22 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
                       children: [
                         Text(
                           entry.comicTitle,
-                          style: theme.textTheme.titleSmall,
+                          style: AppTextStyles.cardTitle(context),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                         SizedBox(height: metrics.kSpace4),
                         Text(
                           '${entry.completedEps} / ${entry.totalEps} 章节完成',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
+                          style: AppTextStyles.caption(context),
                         ),
                         SizedBox(height: metrics.kSpace4),
                         LinearProgressIndicator(
                           value: entry.totalEps > 0 ? entry.completedEps / entry.totalEps : 0,
-                          minHeight: AppTheme.metrics.kSpace6,
-                          borderRadius: AppTheme.metrics.radius3,
-                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                          color: theme.colorScheme.primary,
+                          minHeight: metrics.kSpace6,
+                          borderRadius: metrics.radius3,
+                          backgroundColor: s.surfaceSunken,
+                          color: s.accent,
                         ),
                       ],
                     ),
@@ -270,11 +257,11 @@ class _DownloadComicCardState extends State<_DownloadComicCard> {
               // 展开后的章节列表
               if (_expanded && entry.episodes.isNotEmpty) ...[
                 SizedBox(height: metrics.kSpace8),
-                const Divider(height: 1),
+                Divider(height: metrics.kSpace1, color: s.hairline),
                 SizedBox(height: metrics.kSpace8),
                 Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                  spacing: metrics.kSpace6,
+                  runSpacing: metrics.kSpace6,
                   children: entry.episodes.entries.map((e) {
                     final info = e.value;
                     return _EpsStatusChip(
@@ -310,7 +297,8 @@ class _EpsStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
 
     Color bgColor;
     Color fgColor;
@@ -318,42 +306,40 @@ class _EpsStatusChip extends StatelessWidget {
 
     switch (info.status) {
       case MangaDownloadStatus.completed:
-        bgColor = Colors.green.withValues(alpha: 0.15);
-        fgColor = Colors.green;
+        bgColor = s.success.container;
+        fgColor = s.success.color;
         trailing = DrawIcon(StrokeIcons.playCircleOutline,
-          size: AppTheme.metrics.iconSize13,
-          color: (Theme.of(context).brightness == Brightness.dark)
-              ? DarkColors.success
-              : LightColors.success,
+          size: m.iconSize13,
+          color: s.success.color,
         );
       case MangaDownloadStatus.downloading:
-        bgColor = theme.colorScheme.primaryContainer;
-        fgColor = theme.colorScheme.onPrimaryContainer;
+        bgColor = s.accentContainer;
+        fgColor = s.accentText;
         trailing = SizedBox(
-          width: AppTheme.metrics.kSpace10,
-          height: AppTheme.metrics.kSpace10,
+          width: m.kSpace10,
+          height: m.kSpace10,
           child: CircularProgressIndicator(
-            strokeWidth: 1.5,
+            strokeWidth: scaleW(1.5),
             value: info.progress > 0 ? info.progress : null,
           ),
         );
       case MangaDownloadStatus.error:
-        bgColor = theme.colorScheme.error.withValues(alpha: 0.15);
-        fgColor = Colors.red;
+        bgColor = s.danger.container;
+        fgColor = s.danger.color;
         trailing = GestureDetector(
           onTap: onRetry,
           child: DrawIcon(StrokeIcons.refresh,
-            size: AppTheme.metrics.iconSize12,
-            color: theme.colorScheme.error,
+            size: m.iconSize12,
+            color: s.danger.color,
           ),
         );
       case MangaDownloadStatus.waiting:
-        bgColor = theme.colorScheme.surfaceContainerHighest;
-        fgColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
+        bgColor = s.surfaceSunken;
+        fgColor = s.textSecondary;
         trailing = null;
       case MangaDownloadStatus.paused:
-        bgColor = theme.colorScheme.surfaceContainerHighest;
-        fgColor = theme.colorScheme.onSurface.withValues(alpha: 0.5);
+        bgColor = s.surfaceSunken;
+        fgColor = s.textTertiary;
         trailing = null;
     }
 
@@ -362,18 +348,18 @@ class _EpsStatusChip extends StatelessWidget {
       onLongPress: onDelete,
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: AppTheme.metrics.kSpace8,
-          vertical: AppTheme.metrics.kSpace4,
+          horizontal: m.kSpace8,
+          vertical: m.kSpace4,
         ),
-        decoration: BoxDecoration(color: bgColor, borderRadius: AppTheme.metrics.radius6),
+        decoration: BoxDecoration(color: bgColor, borderRadius: m.radius6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               '第${info.epsOrder}话',
-              style: TextStyle(fontSize: AppTheme.metrics.fontSize11, color: fgColor),
+              style: AppTextStyles.role(context, fontSize: m.fontSize11, color: fgColor),
             ),
-            if (trailing != null) ...[SizedBox(width: AppTheme.metrics.kSpace4), trailing],
+            if (trailing != null) ...[SizedBox(width: m.kSpace4), trailing],
           ],
         ),
       ),

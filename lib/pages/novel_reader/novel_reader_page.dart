@@ -9,6 +9,8 @@ import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/utils/logger.dart';
@@ -37,6 +39,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   late final NovelMetadata novel;
   late final NovelReaderViewModel controller;
   Timer? _immersiveTimer;
+  // 阅读页正文背景色：由用户在阅读设置里选，属于内容主题而非界面语义色，不进 AppSemantic
   Color _readerBgColor = const Color(0xFFF6F0E7);
 
   /// 本地沉浸模式状态（替代全局 DesktopScreenProvider.mobileImmersiveMode）
@@ -63,6 +66,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
 
   void _scheduleImmersiveMode() {
     _immersiveTimer?.cancel();
+    // 空闲计时（非动画），时长不参与动效档位
     _immersiveTimer = Timer(const Duration(seconds: 30), () {
       if (!mounted) return;
       _isImmersive.value = true;
@@ -82,21 +86,17 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final s = AppSemantic.of(context);
+            final m = AppTheme.metrics;
             return SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                padding: EdgeInsets.fromLTRB(m.kSpace16, m.kSpace16, m.kSpace16, m.kSpace24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '阅读设置',
-                      style: TextStyle(
-                        fontSize: AppTheme.metrics.fontSize15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: AppTheme.metrics.kSpace12),
+                    Text('阅读设置', style: AppTextStyles.sectionTitle(context)),
+                    SizedBox(height: m.kSpace12),
                     Row(
                       children: [
                         const Text('字体大小'),
@@ -143,7 +143,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                     const Text('背景色'),
                     SizedBox(height: AppTheme.metrics.kSpace8),
                     Wrap(
-                      spacing: 10,
+                      spacing: m.kSpace10,
                       children:
                           [
                                 const Color(0xFFF6F0E7),
@@ -159,16 +159,17 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                                     setModalState(() {});
                                   },
                                   child: Container(
-                                    width: 30,
-                                    height: 30,
+                                    width: scaleW(30),
+                                    height: scaleW(30),
                                     decoration: BoxDecoration(
                                       color: color,
                                       shape: BoxShape.circle,
                                       border: Border.all(
                                         color: _readerBgColor == color
-                                            ? Theme.of(context).colorScheme.primary
-                                            : Colors.grey.shade400,
-                                        width: _readerBgColor == color ? 2 : 1,
+                                            ? s.accent
+                                            : s.border,
+                                        // 选中环加粗一档，未选中保持 1 逻辑像素发丝描边
+                                        width: _readerBgColor == color ? scaleW(2) : 1,
                                       ),
                                     ),
                                   ),
@@ -232,7 +233,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
     );
   }
 
-  static const Duration _kOverlayAnim = Duration(milliseconds: 180);
+  static const Duration _kOverlayAnim = AppMotion.fast;
 
   @override
   Widget build(BuildContext context) {
@@ -281,11 +282,11 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   }
 
   Widget _buildContent(BuildContext context, bool isNarrow) {
+    final s = AppSemantic.of(context);
     if (isNarrow) {
       // 移动端布局：Stack 覆盖层管理 AppBar / BottomBar，支持沉浸模式动画
       return Obx(() {
         final showChapterList = controller.showChapterList.value;
-        final theme = Theme.of(context);
 
         return Scaffold(
           body: GestureDetector(
@@ -295,7 +296,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
               children: [
                 // ── 内容区 ──────────────────────────────────────────────────
                 AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
+                  duration: AppMotion.base,
                   color: _readerBgColor,
                   child: Column(
                     children: [
@@ -344,10 +345,10 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                       ignoring: isImmersive,
                       child: AnimatedSlide(
                         duration: _kOverlayAnim,
-                        curve: Curves.easeOutCubic,
+                        curve: AppMotion.decelerate,
                         offset: isImmersive ? const Offset(0, -1) : Offset.zero,
                         child: Material(
-                          color: theme.colorScheme.surface,
+                          color: s.surface,
                           elevation: 4,
                           child: SafeArea(
                             bottom: false,
@@ -412,10 +413,10 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                       ignoring: isImmersive,
                       child: AnimatedSlide(
                         duration: _kOverlayAnim,
-                        curve: Curves.easeOutCubic,
+                        curve: AppMotion.decelerate,
                         offset: isImmersive ? const Offset(0, 1) : Offset.zero,
                         child: Material(
-                          color: theme.colorScheme.surface,
+                          color: s.surface,
                           elevation: 8,
                           child: SafeArea(
                             top: false,
@@ -441,7 +442,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                         controller.toggleChapterList();
                       },
                       child: Container(
-                        color: Colors.black54,
+                        color: s.scrim,
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: GestureDetector(
@@ -449,7 +450,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                             child: SizedBox(
                               width: MediaQuery.of(context).size.width * 0.75,
                               child: Material(
-                                color: theme.colorScheme.surface,
+                                color: s.surface,
                                 child: Column(
                                   children: [Expanded(child: ChapterList(controller: controller))],
                                 ),
@@ -483,7 +484,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
         ),
         titleWidget: Row(
           children: [
-            _buildHeroCover(32),
+            _buildHeroCover(AppTheme.metrics.kSpace32),
             SizedBox(width: AppTheme.metrics.kSpace8),
             Expanded(
               child: Column(
@@ -492,14 +493,18 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                   Text(novel.title, overflow: TextOverflow.ellipsis, maxLines: 1),
                   if (novel.tags.isNotEmpty)
                     Wrap(
-                      spacing: 4,
+                      spacing: AppTheme.metrics.kSpace4,
                       children: novel.tags
                           .take(3)
                           .map(
                             (tag) => Chip(
                               label: Text(
                                 tag,
-                                style: TextStyle(fontSize: AppTheme.metrics.fontSize10),
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: AppTheme.metrics.fontSize10,
+                                  color: s.textSecondary,
+                                ),
                               ),
                               padding: EdgeInsets.zero,
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -538,7 +543,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
               final width = controller.chapterListWidth.value;
 
               return AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: AppMotion.base,
                 width: showList ? width : 0,
                 child: showList
                     ? Row(
@@ -558,7 +563,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                                 width: AppTheme.metrics.kSpace8,
                                 color: Colors.transparent,
                                 child: Center(
-                                  child: Container(width: 2, color: Theme.of(context).dividerColor),
+                                  child: Container(width: scaleW(2), color: s.border),
                                 ),
                               ),
                             ),
@@ -598,24 +603,27 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   }
 
   Widget _buildErrorView() {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           DrawIcon(StrokeIcons.errorOutline,
-            size: AppTheme.metrics.iconSize64,
-            color: Theme.of(context).colorScheme.error,
+            size: m.iconSize64,
+            color: s.danger.color,
           ),
-          SizedBox(height: AppTheme.metrics.kSpace16),
+          SizedBox(height: m.kSpace16),
           Text(
             controller.errorMessage.value,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.error,
-              fontSize: AppTheme.metrics.fontSize15,
+            style: AppTextStyles.role(
+              context,
+              fontSize: m.fontSize15,
+              color: s.danger.color,
             ),
             textAlign: TextAlign.center,
           ),
-          SizedBox(height: AppTheme.metrics.kSpace16),
+          SizedBox(height: m.kSpace16),
           ElevatedButton.icon(
             onPressed: () => controller.loadNovelContent(),
             icon: DrawIcon(StrokeIcons.refresh),
@@ -650,14 +658,15 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   }
 
   Widget _defaultCoverThumb(double size) {
+    final s = AppSemantic.of(context);
     return Container(
       width: size,
       height: size * 1.4,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.outline,
+        color: s.surfaceSunken,
         borderRadius: AppTheme.metrics.radius4,
       ),
-      child: DrawIcon(StrokeIcons.book, size: size * 0.5, color: Colors.white70),
+      child: DrawIcon(StrokeIcons.book, size: size * 0.5, color: s.textTertiary),
     );
   }
 }
@@ -677,10 +686,10 @@ class _MobileReaderBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+    final s = AppSemantic.of(context);
 
     return Material(
-      color: theme.colorScheme.surface.withAlpha(245),
+      color: s.surface.withAlpha(245),
       elevation: 8,
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace8),
@@ -707,7 +716,7 @@ class _MobileReaderBottomBar extends StatelessWidget {
                         : '${controller.currentChapterIndex.value + 1}/${controller.chapters.length}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelLarge,
+                    style: AppTextStyles.rowTitle(context),
                   ),
                 ),
               ),

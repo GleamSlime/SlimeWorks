@@ -9,6 +9,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
@@ -230,7 +231,7 @@ class _BlockWordsDialogState extends State<_BlockWordsDialog> with SingleTickerP
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
 
     return Dialog(
@@ -245,7 +246,7 @@ class _BlockWordsDialogState extends State<_BlockWordsDialog> with SingleTickerP
                 children: [
                   DrawIcon(StrokeIcons.block),
                   SizedBox(width: metrics.kSpace8),
-                  Text('屏蔽词管理', style: theme.textTheme.titleMedium),
+                  Text('屏蔽词管理', style: AppTextStyles.sectionTitle(context)),
                   const Spacer(),
                   IconButton(
                     icon: DrawIcon(StrokeIcons.close),
@@ -296,9 +297,7 @@ class _BlockWordsDialogState extends State<_BlockWordsDialog> with SingleTickerP
               padding: EdgeInsets.all(metrics.kSpace12),
               child: Text(
                 '屏蔽词在搜索结果中进行客户端过滤',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                ),
+                style: AppTextStyles.caption(context).copyWith(color: s.textDisabled),
               ),
             ),
           ],
@@ -326,7 +325,7 @@ class _WordListTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final metrics = appMetrics;
 
     return Column(
@@ -365,9 +364,7 @@ class _WordListTab extends StatelessWidget {
               ? Center(
                   child: Text(
                     '暂无屏蔽词',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                    ),
+                    style: AppTextStyles.caption(context).copyWith(color: s.textDisabled),
                   ),
                 )
               : ListView.builder(
@@ -377,9 +374,9 @@ class _WordListTab extends StatelessWidget {
                     final word = words[i];
                     return ListTile(
                       dense: true,
-                      title: Text(word, style: theme.textTheme.bodyMedium),
+                      title: Text(word, style: AppTextStyles.body(context)),
                       trailing: IconButton(
-                        icon: DrawIcon(StrokeIcons.close, size: scaleW(16), color: theme.colorScheme.error),
+                        icon: DrawIcon(StrokeIcons.close, size: metrics.iconSize16, color: s.danger.color),
                         onPressed: () => onRemove(word),
                       ),
                       contentPadding: EdgeInsets.zero,

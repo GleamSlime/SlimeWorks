@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -64,7 +64,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
   }
 
   Widget _buildSectionTitle(String title, StrokeIcon icon) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Row(
       children: [
@@ -72,35 +72,30 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
           width: m.kSpace24,
           height: m.kSpace24,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withAlpha(20),
+            color: s.accentContainer,
             borderRadius: m.radius6,
           ),
-          child: DrawIcon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+          child: DrawIcon(icon, size: m.iconSize12, color: s.accent),
         ),
         SizedBox(width: m.kSpace8),
         Text(
           title,
-          style: TextStyle(
-            fontSize: m.fontSize15,
-            height: 1.4,
-            color: theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppTextStyles.sectionTitle(context),
         ),
       ],
     );
   }
 
   Widget _buildSettingsCard({required Widget child}) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withAlpha(80),
+        color: s.surface,
         borderRadius: m.radius12,
-        border: Border.all(color: theme.colorScheme.outlineVariant.withAlpha(80)),
+        border: Border.all(color: s.border),
       ),
       child: child,
     );
@@ -131,9 +126,8 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
   }
 
   Widget _buildServerSection() {
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final brandColor = isDark ? DarkColors.primary : LightColors.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,10 +151,10 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
               width: double.infinity,
               padding: EdgeInsets.symmetric(horizontal: m.kSpace24, vertical: m.kSpace32),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(60),
+                color: s.surfaceSunken,
                 borderRadius: m.radius12,
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant.withAlpha(60),
+                  color: s.hairline,
                 ),
               ),
               child: Column(
@@ -169,26 +163,23 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
                     width: m.kSpace40,
                     height: m.kSpace40,
                     decoration: BoxDecoration(
-                      color: brandColor.withAlpha(20),
+                      color: s.accentContainer,
                       borderRadius: m.radius10,
                     ),
-                    child: DrawIcon(StrokeIcons.dns, size: m.iconSize20, color: brandColor),
+                    child: DrawIcon(StrokeIcons.dns, size: m.iconSize20, color: s.accent),
                   ),
                   SizedBox(height: m.kSpace12),
                   Text(
                     '暂无配置的服务器',
-                    style: TextStyle(
-                      fontSize: m.fontSize13,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    style: AppTextStyles.cardTitle(context),
                   ),
                   SizedBox(height: m.kSpace4),
                   Text(
                     '点击右上角 + 添加 Ollama 服务器',
-                    style: TextStyle(
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: m.fontSize12,
-                      color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
+                      color: s.textTertiary,
                     ),
                   ),
                 ],
@@ -210,41 +201,46 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
   }
 
   Widget _buildServerCard(OllamaServer server) {
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final statusColor = server.isAvailable ? Colors.green : Colors.grey;
+    final statusRole = server.isAvailable ? s.success : s.neutral;
 
     return Container(
       margin: EdgeInsets.only(bottom: m.kSpace8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(80),
+        color: s.surface,
         borderRadius: m.radius12,
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withAlpha(80)),
+        border: Border.all(color: s.border),
       ),
       child: ClipRRect(
         borderRadius: m.radius12,
         child: Row(
           children: [
-            Container(width: 4, height: 56, color: statusColor),
+            Container(width: m.kSpace4, height: scaleH(56), color: statusRole.color),
             Expanded(
               child: ListTile(
                 leading: Container(
                   width: m.kSpace32,
                   height: m.kSpace32,
                   decoration: BoxDecoration(
-                    color: statusColor.withAlpha(25),
+                    color: statusRole.container,
                     borderRadius: m.radius8,
                   ),
                   child: DrawIcon(
                     server.isAvailable ? StrokeIcons.checkCircleOutline : StrokeIcons.errorOutline,
                     size: m.iconSize16,
-                    color: statusColor,
+                    color: statusRole.color,
                   ),
                 ),
-                title: Text(server.url, style: TextStyle(fontSize: m.fontSize13, fontWeight: FontWeight.w600)),
+                title: Text(server.url, style: AppTextStyles.cardTitle(context)),
                 subtitle: server.lastChecked != null
                     ? Text(
                         '最后检查: ${_formatDateTime(server.lastChecked!)}',
-                        style: TextStyle(fontSize: m.fontSize12),
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize12,
+                          color: s.textSecondary,
+                        ),
                       )
                     : null,
                 trailing: Row(
@@ -462,6 +458,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
   }
 
   Future<void> _deleteServer(String url) async {
+    final s = AppSemantic.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -471,7 +468,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: ElevatedButton.styleFrom(backgroundColor: s.danger.color),
             child: const Text('删除'),
           ),
         ],

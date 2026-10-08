@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -23,7 +22,7 @@ class PendingRequests extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Get.isDarkMode;
+    final s = AppSemantic.of(context);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -35,7 +34,7 @@ class PendingRequests extends StatelessWidget {
             width: scaleW(36),
             height: scaleW(4),
             decoration: BoxDecoration(
-              color: isDark ? DarkColors.white20 : LightColors.black20,
+              color: s.textDisabled,
               borderRadius: AppTheme.metrics.radius2,
             ),
           ),
@@ -50,14 +49,20 @@ class PendingRequests extends StatelessWidget {
           child: Row(
             children: [
               DrawIcon(StrokeIcons.download,
-                color: isDark ? DarkColors.primary : LightColors.primary,
+                color: s.accent,
                 size: scaleW(22),
               ),
               SizedBox(width: AppTheme.metrics.kSpace8),
               Expanded(
                 child: Text(
                   '收到传输请求 (${requests.length})',
-                  style: TextStyle(fontSize: AppTheme.metrics.fontSize18, height: 1.4, fontWeight: FontWeight.w600),
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize18,
+                    height: 1.4,
+                    weight: FontWeight.w600,
+                    color: s.textPrimary,
+                  ),
                 ),
               ),
             ],
@@ -78,7 +83,6 @@ class PendingRequests extends StatelessWidget {
               final request = requests[index];
               return _PendingRequestCard(
                 request: request,
-                isDark: isDark,
                 onAccept: () => onAccept(request.transferId),
                 onReject: () => onReject(request.transferId),
                 onTrust: () {
@@ -105,14 +109,12 @@ class PendingRequests extends StatelessWidget {
 /// 待处理请求卡片
 class _PendingRequestCard extends StatefulWidget {
   final TransferItem request;
-  final bool isDark;
   final VoidCallback onAccept;
   final VoidCallback onReject;
   final VoidCallback onTrust;
 
   const _PendingRequestCard({
     required this.request,
-    required this.isDark,
     required this.onAccept,
     required this.onReject,
     required this.onTrust,
@@ -127,13 +129,14 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = widget.isDark ? DarkColors.primary : LightColors.primary;
+    // 取色只走语义层：isDark 三元分支与裸色值一律收敛到 AppSemantic
+    final s = AppSemantic.of(context);
 
     return Container(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
       decoration: BoxDecoration(
-        color: widget.isDark ? DarkColors.background1 : LightColors.background1,
-        border: Border.all(color: widget.isDark ? DarkColors.white10 : LightColors.black10),
+        color: s.surface,
+        border: Border.all(color: s.border),
         borderRadius: AppTheme.metrics.radius14,
       ),
       child: Column(
@@ -146,13 +149,13 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                 width: scaleW(40),
                 height: scaleW(40),
                 decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.12),
+                  color: s.accentContainer,
                   borderRadius: AppTheme.metrics.radius10,
                 ),
                 child: DrawIcon(
                   _getTypeIcon(widget.request.transferType),
                   size: scaleW(20),
-                  color: primaryColor,
+                  color: s.accent,
                 ),
               ),
               SizedBox(width: AppTheme.metrics.kSpace12),
@@ -162,13 +165,16 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                   children: [
                     Text(
                       widget.request.senderDeviceName,
-                      style: TextStyle(fontSize: AppTheme.metrics.fontSize13, height: 1.5, fontWeight: FontWeight.w600),
+                      style: AppTextStyles.cardTitle(context),
                     ),
                     SizedBox(height: AppTheme.metrics.kSpace2),
                     Text(
                       '请求发送${_getTypeText(widget.request.transferType)}',
-                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
-                        color: widget.isDark ? DarkColors.white80 : LightColors.black80,
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: AppTheme.metrics.fontSize11,
+                        height: 1.4,
+                        color: s.textSecondary,
                       ),
                     ),
                   ],
@@ -186,7 +192,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                 vertical: AppTheme.metrics.kSpace8,
               ),
               decoration: BoxDecoration(
-                color: widget.isDark ? DarkColors.white10 : LightColors.black10,
+                color: s.surfaceSunken,
                 borderRadius: AppTheme.metrics.radius8,
               ),
               child: Row(
@@ -194,7 +200,12 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                   Expanded(
                     child: Text(
                       widget.request.fileName ?? widget.request.textContent ?? '',
-                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4),
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: AppTheme.metrics.fontSize11,
+                        height: 1.4,
+                        color: s.textPrimary,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -203,8 +214,11 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                     SizedBox(width: AppTheme.metrics.kSpace8),
                     Text(
                       _formatFileSize(widget.request.fileSize!),
-                      style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
-                        color: widget.isDark ? DarkColors.white80 : LightColors.black80,
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: AppTheme.metrics.fontSize11,
+                        height: 1.4,
+                        color: s.textSecondary,
                       ),
                     ),
                   ],
@@ -233,8 +247,11 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                 SizedBox(width: AppTheme.metrics.kSpace8),
                 Text(
                   '信任此设备（下次自动接收）',
-                  style: TextStyle(fontSize: AppTheme.metrics.fontSize11, height: 1.4,
-                    color: widget.isDark ? DarkColors.white80 : LightColors.black80,
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: AppTheme.metrics.fontSize11,
+                    height: 1.4,
+                    color: s.textSecondary,
                   ),
                 ),
               ],
@@ -250,8 +267,8 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                 child: OutlinedButton(
                   onPressed: widget.onReject,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error,
-                    side: BorderSide(color: Theme.of(context).colorScheme.error, width: 0.8),
+                    foregroundColor: s.danger.onContainer,
+                    side: BorderSide(color: s.danger.containerBorder, width: 0.8),
                     padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),
                     shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius10),
                   ),
@@ -267,8 +284,8 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                     widget.onAccept();
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
+                    backgroundColor: s.accent,
+                    foregroundColor: s.accentOn,
                     elevation: 0,
                     padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),
                     shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius10),

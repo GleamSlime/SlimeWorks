@@ -117,7 +117,7 @@ class _SidebarResizeHandleState extends State<SidebarResizeHandle>
     final active = widget.activeColor ?? s.textSecondary;
 
     // 折这一下要一路看得见：easeOutBack 三成进度就折满了，等于没动画
-    final t = Curves.easeOutCubic.transform(_fold.value);
+    final t = AppMotion.decelerate.transform(_fold.value);
     // 拖拽只摊回竖线，不加粗不变色：那根线本来就是被拖着走的东西，
     // 再给它换个身份只会看成一件事变成了两件
     final lineColor = Color.lerp(idle, active, _fold.value)!;

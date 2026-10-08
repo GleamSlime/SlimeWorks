@@ -34,13 +34,15 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
         button: MouseRegion(
           cursor: SystemMouseCursors.click,
           child: DefaultTextStyle.merge(
+            // 只摘掉下划线这一档，字号/字色仍由下面的 textStyle 与继承链决定
             style: const TextStyle(decoration: TextDecoration.none),
             child: StateTransitionAnimation(
               label: label,
-              textStyle: TextStyle(
+              textStyle: AppTextStyles.role(
+                context,
                 fontSize: AppTheme.metrics.fontSize13,
-                color: Theme.of(context).textTheme.bodyMedium?.color,
-                fontWeight: FontWeight.w500,
+                color: AppSemantic.of(context).textSecondary,
+                weight: FontWeight.w500,
               ),
               icon: StrokeIcons.assetLibraryImport,
               iconSize: AppTheme.metrics.fontSize15,
@@ -49,17 +51,18 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
               padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
               decoration: BoxDecoration(
                 borderRadius: AppTheme.metrics.radius32,
-                color: Theme.of(context).appBarTheme.backgroundColor,
+                // 工具条底色由页面自己铺，按钮这一档保持不铺色，免得和磨砂层叠出双层底
+                color: Colors.transparent,
               ),
             ),
           ),
         ),
-        buttonColor: Theme.of(context).appBarTheme.backgroundColor!,
-        cardColor: Theme.of(context).appBarTheme.backgroundColor!,
+        buttonColor: Colors.transparent,
+        cardColor: Colors.transparent,
         content: _MessageContent(viewModel: widget.viewModel),
         buttonRadius: AppTheme.metrics.kSpace32,
         cardOffset: scaleW(30),
-        duration: const Duration(milliseconds: 150),
+        duration: AppMotion.fast,
       );
     });
   }
@@ -72,7 +75,7 @@ class _MessageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    ThemeData theme = Theme.of(context);
+    final s = AppSemantic.of(context);
 
     return Padding(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
@@ -80,8 +83,8 @@ class _MessageContent extends StatelessWidget {
         width: scaleW(250),
         padding: EdgeInsets.all(AppTheme.metrics.kSpace8),
         decoration: BoxDecoration(
-          color: theme.inputDecorationTheme.fillColor,
-          borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace8),
+          color: s.surfaceSunken,
+          borderRadius: AppTheme.metrics.radiusControl,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -138,12 +141,12 @@ class _ImportOptionItemState extends State<_ImportOptionItem> {
             vertical: AppTheme.metrics.kSpace10,
           ),
           decoration: BoxDecoration(
-            color: _isHovered ? Theme.of(context).colorScheme.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppTheme.metrics.kSpace10),
+            color: _isHovered ? AppSemantic.of(context).surface : Colors.transparent,
+            borderRadius: AppTheme.metrics.radiusCard,
             boxShadow: _isHovered
                 ? [
                     BoxShadow(
-                      color: Theme.of(context).shadowColor.withAlpha(25),
+                      color: AppSemantic.of(context).shadowKey.withAlpha(25),
                       blurRadius: scaleW(4),
                     ),
                   ]
@@ -154,17 +157,18 @@ class _ImportOptionItemState extends State<_ImportOptionItem> {
               DrawIcon(
                 widget.icon,
                 size: AppTheme.metrics.fontSize18,
-                color: Theme.of(context).textTheme.bodyMedium?.color,
+                color: AppSemantic.of(context).textSecondary,
               ),
               SizedBox(width: AppTheme.metrics.kSpace10),
               Expanded(
                 child: Text(
                   widget.label,
-                  style: TextStyle(
+                  // 继承字族的出口只带颜色/字重，下划线仍要显式关掉
+                  style: AppTextStyles.role(
+                    context,
                     fontSize: AppTheme.metrics.fontSize13,
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                    decoration: TextDecoration.none,
-                  ),
+                    color: AppSemantic.of(context).textSecondary,
+                  ).copyWith(decoration: TextDecoration.none),
                 ),
               ),
             ],

@@ -1,4 +1,6 @@
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
@@ -59,6 +61,8 @@ class NovelLibraryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     final controller = Get.put(NovelLibraryViewModel());
     final isNarrow = MediaQuery.of(context).size.width < 600;
 
@@ -111,7 +115,7 @@ class NovelLibraryPage extends StatelessWidget {
       ),
       child: Scaffold(
         body: Padding(
-          padding: EdgeInsets.all(isNarrow ? 12 : 24),
+          padding: EdgeInsets.all(isNarrow ? m.kSpace12 : m.kSpace24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -119,30 +123,30 @@ class NovelLibraryPage extends StatelessWidget {
               Obx(
                 () => controller.isScanning.value
                     ? Container(
-                        padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-                        margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace16),
+                        padding: EdgeInsets.all(m.kSpace12),
+                        margin: EdgeInsets.only(bottom: m.kSpace16),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                          borderRadius: AppTheme.metrics.radius8,
+                          color: s.accentContainer,
+                          borderRadius: m.radius8,
                         ),
                         child: Row(
                           children: [
                             SizedBox(
-                              width: AppTheme.metrics.kSpace20,
-                              height: AppTheme.metrics.kSpace20,
+                              width: m.kSpace20,
+                              height: m.kSpace20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Theme.of(context).primaryColor,
-                                ),
+                                valueColor: AlwaysStoppedAnimation<Color>(s.accent),
                               ),
                             ),
-                            SizedBox(width: AppTheme.metrics.kSpace12),
+                            SizedBox(width: m.kSpace12),
                             Text(
                               '正在扫描书籍文件...',
-                              style: TextStyle(
-                                color: Theme.of(context).primaryColor,
-                                fontWeight: FontWeight.w500,
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: m.fontSize13,
+                                color: s.accentText,
+                                weight: FontWeight.w500,
                               ),
                             ),
                           ],
@@ -155,26 +159,31 @@ class NovelLibraryPage extends StatelessWidget {
               Obx(
                 () => controller.isClearingNovels.value
                     ? Container(
-                        padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-                        margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace16),
+                        padding: EdgeInsets.all(m.kSpace12),
+                        margin: EdgeInsets.only(bottom: m.kSpace16),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
-                          borderRadius: AppTheme.metrics.radius8,
+                          color: s.warning.container,
+                          borderRadius: m.radius8,
                         ),
                         child: Row(
                           children: [
                             SizedBox(
-                              width: AppTheme.metrics.kSpace20,
-                              height: AppTheme.metrics.kSpace20,
-                              child: const CircularProgressIndicator(
+                              width: m.kSpace20,
+                              height: m.kSpace20,
+                              child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                                valueColor: AlwaysStoppedAnimation<Color>(s.warning.color),
                               ),
                             ),
-                            SizedBox(width: AppTheme.metrics.kSpace12),
-                            const Text(
+                            SizedBox(width: m.kSpace12),
+                            Text(
                               '正在清空所有书籍...',
-                              style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w500),
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: m.fontSize13,
+                                color: s.warning.onContainer,
+                                weight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
@@ -186,11 +195,11 @@ class NovelLibraryPage extends StatelessWidget {
               Obx(
                 () => controller.isSearching.value
                     ? Container(
-                        padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-                        margin: EdgeInsets.only(bottom: AppTheme.metrics.kSpace16),
+                        padding: EdgeInsets.all(m.kSpace12),
+                        margin: EdgeInsets.only(bottom: m.kSpace16),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.1),
-                          borderRadius: AppTheme.metrics.radius8,
+                          color: s.info.container,
+                          borderRadius: m.radius8,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,21 +207,23 @@ class NovelLibraryPage extends StatelessWidget {
                             Row(
                               children: [
                                 SizedBox(
-                                  width: AppTheme.metrics.kSpace20,
-                                  height: AppTheme.metrics.kSpace20,
+                                  width: m.kSpace20,
+                                  height: m.kSpace20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
                                     value: controller.searchProgress.value,
-                                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                                    valueColor: AlwaysStoppedAnimation<Color>(s.info.color),
                                   ),
                                 ),
-                                SizedBox(width: AppTheme.metrics.kSpace12),
+                                SizedBox(width: m.kSpace12),
                                 Expanded(
                                   child: Text(
                                     '正在搜索书籍内容... ${(controller.searchProgress.value * 100).toStringAsFixed(0)}%（${controller.searchCompleted.value} / ${controller.searchTotal.value}）',
-                                    style: const TextStyle(
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.w500,
+                                    style: AppTextStyles.role(
+                                      context,
+                                      fontSize: m.fontSize13,
+                                      color: s.info.onContainer,
+                                      weight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
@@ -220,37 +231,37 @@ class NovelLibraryPage extends StatelessWidget {
                                   () => controller.isCancelling.value
                                       ? Padding(
                                           padding: EdgeInsets.symmetric(
-                                            horizontal: AppTheme.metrics.kSpace12,
-                                            vertical: AppTheme.metrics.kSpace8,
+                                            horizontal: m.kSpace12,
+                                            vertical: m.kSpace8,
                                           ),
                                           child: SizedBox(
-                                            width: AppTheme.metrics.kSpace16,
-                                            height: AppTheme.metrics.kSpace16,
+                                            width: m.kSpace16,
+                                            height: m.kSpace16,
                                             child: const CircularProgressIndicator(strokeWidth: 2),
                                           ),
                                         )
                                       : TextButton.icon(
                                           onPressed: () => controller.cancelSearch(),
                                           icon: DrawIcon(StrokeIcons.cancel,
-                                            size: AppTheme.metrics.iconSize18,
+                                            size: m.iconSize18,
                                           ),
                                           label: const Text('取消'),
                                           style: TextButton.styleFrom(
-                                            foregroundColor: Theme.of(context).colorScheme.error,
+                                            foregroundColor: s.danger.color,
                                             padding: EdgeInsets.symmetric(
-                                              horizontal: AppTheme.metrics.kSpace12,
-                                              vertical: AppTheme.metrics.kSpace8,
+                                              horizontal: m.kSpace12,
+                                              vertical: m.kSpace8,
                                             ),
                                           ),
                                         ),
                                 ),
                               ],
                             ),
-                            SizedBox(height: AppTheme.metrics.kSpace8),
+                            SizedBox(height: m.kSpace8),
                             LinearProgressIndicator(
                               value: controller.searchProgress.value,
-                              backgroundColor: Theme.of(context).colorScheme.outline,
-                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                              backgroundColor: s.border,
+                              valueColor: AlwaysStoppedAnimation<Color>(s.info.color),
                             ),
                           ],
                         ),
@@ -262,24 +273,26 @@ class NovelLibraryPage extends StatelessWidget {
               Obx(
                 () => controller.novels.isNotEmpty
                     ? Padding(
-                        padding: EdgeInsets.only(bottom: AppTheme.metrics.kSpace16),
+                        padding: EdgeInsets.only(bottom: m.kSpace16),
                         child: Row(
                           children: [
                             Text(
                               '共 ${controller.novels.length} 本书籍',
-                              style: TextStyle(
-                                fontSize: AppTheme.metrics.fontSize13,
-                                color: Theme.of(context).hintColor,
-                                fontWeight: FontWeight.w500,
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: m.fontSize13,
+                                color: s.textTertiary,
+                                weight: FontWeight.w500,
                               ),
                             ),
                             if (controller.searchQuery.value.isNotEmpty)
                               Text(
                                 ' （搜索到 ${controller.filteredNovels.length} 本）',
-                                style: TextStyle(
-                                  fontSize: AppTheme.metrics.fontSize13,
-                                  color: Theme.of(context).primaryColor,
-                                  fontWeight: FontWeight.w500,
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: m.fontSize13,
+                                  color: s.accent,
+                                  weight: FontWeight.w500,
                                 ),
                               ),
                           ],
@@ -292,7 +305,7 @@ class NovelLibraryPage extends StatelessWidget {
               Obx(
                 () => controller.novels.isNotEmpty
                     ? Padding(
-                        padding: EdgeInsets.only(bottom: AppTheme.metrics.kSpace16),
+                        padding: EdgeInsets.only(bottom: m.kSpace16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -339,23 +352,27 @@ class NovelLibraryPage extends StatelessWidget {
                                         ],
                                       ),
                                       border: OutlineInputBorder(
-                                        borderRadius: AppTheme.metrics.radius8,
+                                        borderRadius: m.radiusField,
                                       ),
                                       contentPadding: EdgeInsets.symmetric(
-                                        horizontal: AppTheme.metrics.kSpace16,
-                                        vertical: AppTheme.metrics.kSpace12,
+                                        horizontal: m.kSpace16,
+                                        vertical: m.kSpace12,
                                       ),
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                            SizedBox(height: AppTheme.metrics.kSpace8),
+                            SizedBox(height: m.kSpace8),
                             Row(
                               children: [
                                 Text(
                                   '搜索模式: ',
-                                  style: TextStyle(fontSize: AppTheme.metrics.fontSize13),
+                                  style: AppTextStyles.role(
+                                    context,
+                                    fontSize: m.fontSize13,
+                                    color: s.textSecondary,
+                                  ),
                                 ),
                                 ChoiceChip(
                                   label: const Text('按名字'),
@@ -367,7 +384,7 @@ class NovelLibraryPage extends StatelessWidget {
                                     }
                                   },
                                 ),
-                                SizedBox(width: AppTheme.metrics.kSpace8),
+                                SizedBox(width: m.kSpace8),
                                 ChoiceChip(
                                   label: const Text('按内容'),
                                   selected: controller.searchByContent.value,
@@ -403,15 +420,16 @@ class NovelLibraryPage extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           DrawIcon(StrokeIcons.searchOff,
-                            size: AppTheme.metrics.iconSize64,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            size: m.iconSize64,
+                            color: s.textTertiary,
                           ),
-                          SizedBox(height: AppTheme.metrics.kSpace16),
+                          SizedBox(height: m.kSpace16),
                           Text(
                             '没有找到匹配的书籍',
-                            style: TextStyle(
-                              fontSize: AppTheme.metrics.fontSize15,
-                              color: Theme.of(context).hintColor,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: m.fontSize15,
+                              color: s.textTertiary,
                             ),
                           ),
                         ],
@@ -421,10 +439,10 @@ class NovelLibraryPage extends StatelessWidget {
 
                   return GridView.builder(
                     gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: isNarrow ? 150 : 200,
+                      maxCrossAxisExtent: isNarrow ? scaleW(150) : scaleW(200),
                       childAspectRatio: 0.65,
-                      crossAxisSpacing: isNarrow ? 12 : 16,
-                      mainAxisSpacing: isNarrow ? 12 : 16,
+                      crossAxisSpacing: isNarrow ? m.kSpace12 : m.kSpace16,
+                      mainAxisSpacing: isNarrow ? m.kSpace12 : m.kSpace16,
                     ),
                     itemCount: displayNovels.length,
                     itemBuilder: (context, index) {
@@ -433,12 +451,12 @@ class NovelLibraryPage extends StatelessWidget {
                         data: novel,
                         feedback: Material(
                           // canvasColor 现为透明，拖拽浮影需要自己铺底
-                          color: Theme.of(context).colorScheme.surface,
+                          color: s.surface,
                           elevation: 8,
                           child: Opacity(
                             opacity: 0.8,
                             child: SizedBox(
-                              width: isNarrow ? 150 : 200,
+                              width: isNarrow ? scaleW(150) : scaleW(200),
                               child: NovelCard(
                                 title: novel.title,
                                 author: novel.author ?? '未知作者',
@@ -508,32 +526,39 @@ class NovelLibraryPage extends StatelessWidget {
   }
 
   Widget _buildEmptyView(BuildContext context, bool isNarrow) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           DrawIcon(StrokeIcons.menuBook,
-            size: isNarrow ? 80 : 120,
-            color: Theme.of(context).colorScheme.outline,
+            size: isNarrow ? scaleW(80) : scaleW(120),
+            color: s.textTertiary,
           ),
-          SizedBox(height: AppTheme.metrics.kSpace24),
+          SizedBox(height: m.kSpace24),
           Text(
             '还没有添加书籍',
-            style: TextStyle(
-              fontSize: isNarrow ? 18 : 20,
-              color: Theme.of(context).hintColor,
-              fontWeight: FontWeight.w500,
+            style: AppTextStyles.role(
+              context,
+              fontSize: isNarrow ? m.fontSize18 : m.fontSize20,
+              color: s.textTertiary,
+              weight: FontWeight.w500,
             ),
           ),
-          SizedBox(height: AppTheme.metrics.kSpace12),
+          SizedBox(height: m.kSpace12),
           Text(
             '点击右上角按钮添加书籍',
-            style: TextStyle(fontSize: isNarrow ? 14 : 16, color: Theme.of(context).hintColor),
+            style: AppTextStyles.role(
+              context,
+              fontSize: isNarrow ? m.fontSize14 : m.fontSize16,
+              color: s.textTertiary,
+            ),
           ),
-          SizedBox(height: AppTheme.metrics.kSpace32),
+          SizedBox(height: m.kSpace32),
           Wrap(
-            spacing: 12,
-            runSpacing: 12,
+            spacing: m.kSpace12,
+            runSpacing: m.kSpace12,
             alignment: WrapAlignment.center,
             children: [
               ElevatedButton.icon(
@@ -542,8 +567,8 @@ class NovelLibraryPage extends StatelessWidget {
                 label: const Text('扫描文件夹'),
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.symmetric(
-                    horizontal: isNarrow ? 16 : 24,
-                    vertical: isNarrow ? 12 : 16,
+                    horizontal: isNarrow ? m.kSpace16 : m.kSpace24,
+                    vertical: isNarrow ? m.kSpace12 : m.kSpace16,
                   ),
                 ),
               ),
@@ -553,8 +578,8 @@ class NovelLibraryPage extends StatelessWidget {
                 label: const Text('添加单个文件'),
                 style: OutlinedButton.styleFrom(
                   padding: EdgeInsets.symmetric(
-                    horizontal: isNarrow ? 16 : 24,
-                    vertical: isNarrow ? 12 : 16,
+                    horizontal: isNarrow ? m.kSpace16 : m.kSpace24,
+                    vertical: isNarrow ? m.kSpace12 : m.kSpace16,
                   ),
                 ),
               ),

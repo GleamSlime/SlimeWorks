@@ -24,7 +24,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 180));
+    _ctrl = AnimationController(vsync: this, duration: AppMotion.fast);
     _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
     _ctrl.forward();
   }
@@ -37,6 +37,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     Widget content;
     if (widget.item is LibraryBookItem) {
       final meta = (widget.item as LibraryBookItem).metadata;
@@ -45,17 +46,22 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
         children: [
           meta.coverPath != null && File(meta.coverPath!).existsSync()
               ? Image.file(File(meta.coverPath!), fit: BoxFit.cover)
-              : Container(color: Theme.of(context).colorScheme.outline),
+              : Container(color: s.border),
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: Container(
               padding: EdgeInsets.all(scaleW(6)),
-              color: Colors.black.withAlpha(100),
+              color: s.scrim,
               child: Text(
                 meta.title,
-                style: TextStyle(color: Colors.white, fontSize: appMetrics.fontSize11),
+                // 封面底图上的压暗层恒为深色，白字不随主题反转
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: appMetrics.fontSize11,
+                  color: Colors.white,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -66,13 +72,21 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
     } else {
       final folder = (widget.item as LibraryFolderItem).folder;
       content = Container(
-        color: Theme.of(context).colorScheme.primaryContainer.withAlpha(100),
+        color: s.accentContainer.withAlpha(100),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            DrawIcon(StrokeIcons.folder, size: scaleW(40), color: Colors.blue.withAlpha(180)),
-            SizedBox(height: scaleW(4)),
-            Text(folder.name, style: TextStyle(fontSize: appMetrics.fontSize11), maxLines: 1),
+            DrawIcon(StrokeIcons.folder, size: scaleW(40), color: s.info.color.withAlpha(180)),
+            SizedBox(height: appMetrics.kSpace4),
+            Text(
+              folder.name,
+              style: AppTextStyles.role(
+                context,
+                fontSize: appMetrics.fontSize11,
+                color: s.textSecondary,
+              ),
+              maxLines: 1,
+            ),
           ],
         ),
       );
@@ -85,7 +99,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: appMetrics.radius8,
-          side: BorderSide(color: Theme.of(context).colorScheme.primary, width: scaleW(2)),
+          side: BorderSide(color: s.accent, width: scaleW(2)),
         ),
         child: Opacity(opacity: 0.5, child: content),
       ),

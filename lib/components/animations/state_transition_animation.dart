@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/core/index.dart';
@@ -29,7 +28,8 @@ class StateTransitionAnimation extends StatefulWidget {
     this.label,
     this.hoverIcon,
     this.enableScaleAnimation = true,
-    this.animationDuration = const Duration(milliseconds: 400),
+    // 默认档取 emphasis：一次「图标+文字」整体换态属于强调级，读秒要沉稳些
+    this.animationDuration = AppMotion.emphasis,
     this.height,
     this.padding,
     this.decoration,
@@ -78,24 +78,32 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
 
     const customCurve = _CustomCubicCurve();
 
+    // 位移要吃掉整格高度：胶囊默认高 40，只挪 travelLarge(30) 的话旧内容会
+    // 半截留在框里和新内容叠在一起，这一档 travel* 没覆盖到，保持宽度族等值。
+    final travel = scaleW(50);
+
     // 新内容从顶部（按钮外）进入到中间
-    _inOffset = Tween<double>(begin: -50.h, end: 0).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _inOffset = Tween<double>(begin: -travel, end: 0).animate(
+      CurvedAnimation(parent: _controller, curve: AppMotion.decelerate),
+    );
 
     // 旧内容向下移出按钮
-    _outOffset = Tween<double>(begin: 0, end: 50.h).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInCubic));
+    _outOffset = Tween<double>(begin: 0, end: travel).animate(
+      CurvedAnimation(parent: _controller, curve: AppMotion.accelerate),
+    );
 
     _inOpacity = CurvedAnimation(
       parent: _controller,
-      curve: const Interval(0.25, 1, curve: Curves.easeOut),
+      curve: const Interval(0.25, 1, curve: AppMotion.decelerate),
     );
 
     _outOpacity = CurvedAnimation(
       parent: _controller,
-      curve: const Interval(0, 0.75, curve: Curves.easeIn),
+      curve: const Interval(0, 0.75, curve: AppMotion.accelerate),
     );
 
-    _inBlur = Tween<double>(begin: 2, end: 0).animate(_controller);
-    _outBlur = Tween<double>(begin: 0, end: 2).animate(_controller);
+    _inBlur = Tween<double>(begin: AppMotion.blurContent, end: 0).animate(_controller);
+    _outBlur = Tween<double>(begin: 0, end: AppMotion.blurContent).animate(_controller);
 
     // 缩放动画：使用 cubic-bezier(0.4, 0, 0.2, 1) 曲线
     _scale = TweenSequence<double>([
@@ -176,22 +184,29 @@ class _StateTransitionAnimationState extends State<StateTransitionAnimation> wit
 
   @override
   Widget build(BuildContext context) {
-    final height = widget.height ?? 40.h;
-    final padding = widget.padding ?? EdgeInsets.symmetric(horizontal: 12.w);
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    // 胶囊整体（高/内距/图标/图标与文字的间隔）都走宽度族：它的外框高度是定值，
+    // 一旦图标改用随字号缩放的那一族，用户把字号拉到 2.0 就会把这一排顶破。
+    final height = widget.height ?? scaleW(40);
+    final padding = widget.padding ?? EdgeInsets.symmetric(horizontal: m.kSpace12);
     final decoration =
         widget.decoration ??
         BoxDecoration(
-          borderRadius: BorderRadius.circular(32.r),
-          border: Border.all(color: Colors.black45),
+          borderRadius: m.radiusPill,
+          border: Border.all(color: s.border),
         );
     // 如果调用方没有显式传入 textStyle，则从环境中继承 DefaultTextStyle，
     // 并与默认大小/粗细合并。这允许外层的 DefaultTextStyle（例如 overlay 中强制设置的样式）生效。
     final textStyle = widget.textStyle != null
         ? widget.textStyle!
-        : DefaultTextStyle.of(context).style.merge(TextStyle(fontSize: AppTheme.metrics.fontSize13, fontWeight: FontWeight.w500));
-    final iconSize = widget.iconSize ?? 20;
-    final spacing = widget.spacing ?? 10;
-    final iconColor = widget.iconColor ?? Theme.of(context).textTheme.bodyMedium?.color;
+        : DefaultTextStyle.of(context).style.merge(
+            // 只借角色档的字号/字重/字体族，颜色留给外层那条样式决定
+            AppTextStyles.rowTitle(context).copyWith(color: DefaultTextStyle.of(context).style.color),
+          );
+    final iconSize = widget.iconSize ?? scaleW(20);
+    final spacing = widget.spacing ?? m.kSpace10;
+    final iconColor = widget.iconColor ?? s.textSecondary;
 
     return MouseRegion(
       // cursor: widget.loading == true ? SystemMouseCursors.noDrop : SystemMouseCursors.click,
@@ -335,7 +350,8 @@ class _Content extends StatelessWidget {
     TextStyle textStyle = this.textStyle;
 
     if (loading == true) {
-      textStyle = textStyle.copyWith(color: (textStyle.color ?? Theme.of(context).textTheme.bodyMedium?.color)?.withAlpha(100));
+      // 载入中就是"暂时点不动"，直接用禁用文字角色，不再手压一层 alpha
+      textStyle = textStyle.copyWith(color: AppSemantic.of(context).textDisabled);
     }
 
     return Row(
@@ -356,7 +372,7 @@ class _Content extends StatelessWidget {
             height: iconSize,
             child: CircularProgressIndicator(
               strokeWidth: scaleW(0.5),
-              valueColor: AlwaysStoppedAnimation<Color>(iconColor ?? Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black),
+              valueColor: AlwaysStoppedAnimation<Color>(iconColor ?? AppSemantic.of(context).textSecondary),
             ),
           ),
         if (label.isNotEmpty) ...[

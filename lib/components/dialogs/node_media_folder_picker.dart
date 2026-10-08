@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
@@ -86,13 +88,15 @@ class _NodeMediaFolderPickerState extends State<NodeMediaFolderPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     final children = _children;
     return AlertDialog(
       title: const Text('选择媒体库文件夹'),
       contentPadding: EdgeInsets.zero,
       content: SizedBox(
-        width: 400,
-        height: 420,
+        width: scaleW(400),
+        height: scaleH(420),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -102,13 +106,13 @@ class _NodeMediaFolderPickerState extends State<NodeMediaFolderPicker> {
                 horizontal: AppTheme.metrics.kSpace16,
                 vertical: AppTheme.metrics.kSpace8,
               ),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              color: s.surfaceRaised,
               child: Row(
                 children: [
                   IconButton(
                     icon: DrawIcon(StrokeIcons.arrowUpward),
                     tooltip: '上级文件夹',
-                    iconSize: 18,
+                    iconSize: m.iconSize18,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: _pathStack.isEmpty ? null : _navigateUp,
@@ -117,7 +121,12 @@ class _NodeMediaFolderPickerState extends State<NodeMediaFolderPicker> {
                   Expanded(
                     child: Text(
                       _pathLabel,
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: AppTextStyles.role(
+                        context,
+                        fontSize: m.fontSize12,
+                        color: s.textTertiary,
+                        height: 1.6,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -134,7 +143,12 @@ class _NodeMediaFolderPickerState extends State<NodeMediaFolderPicker> {
                         padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
                         child: Text(
                           _error!,
-                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: m.fontSize13,
+                            color: s.danger.color,
+                            height: 1.65,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -143,7 +157,12 @@ class _NodeMediaFolderPickerState extends State<NodeMediaFolderPicker> {
                   ? Center(
                       child: Text(
                         '此文件夹下没有子文件夹',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize12,
+                          color: s.textTertiary,
+                          height: 1.6,
+                        ),
                       ),
                     )
                   : ListView.builder(

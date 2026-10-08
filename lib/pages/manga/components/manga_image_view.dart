@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
@@ -14,12 +17,12 @@ import 'package:slime_works/components/icons/stroke_icons.g.dart';
 /// 因 Rust 侧字节下载不提供流式进度，通过指数衰减时间模拟，
 /// 给用户提供「正在加载」的可感知反馈。
 class MangaProgressRing extends StatefulWidget {
-  const MangaProgressRing({super.key, this.size = 44, this.color});
+  const MangaProgressRing({super.key, this.size, this.color});
 
-  /// 环的整体尺寸（宽高相等）
-  final double size;
+  /// 环的整体尺寸（宽高相等），留空走 iconSize44 那一档
+  final double? size;
 
-  /// 颜色（默认使用 Theme.of(context).colorScheme.primary）
+  /// 颜色（默认使用语义强调色）
   final Color? color;
 
   @override
@@ -51,26 +54,30 @@ class _MangaProgressRingState extends State<MangaProgressRing> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final pct = _progress.toInt().clamp(0, 99);
-    final color = widget.color ?? Theme.of(context).colorScheme.primary;
+    final size = widget.size ?? AppTheme.metrics.kSpace44;
+    final color = widget.color ?? s.accent;
     return SizedBox(
-      width: widget.size,
-      height: widget.size,
+      width: size,
+      height: size,
       child: Stack(
         alignment: Alignment.center,
         children: [
           CircularProgressIndicator(
             value: pct / 100,
-            strokeWidth: 2.5,
+            strokeWidth: scaleW(2.5),
             color: color,
             backgroundColor: color.withValues(alpha: 0.15),
           ),
           Text(
             '$pct%',
-            style: TextStyle(
-              fontSize: widget.size * 0.27,
+            // 字号由环的宽度族尺寸派生：数字只跟环长，不跟用户字号滑杆，否则会长出环外。
+            style: AppTextStyles.role(
+              context,
+              fontSize: size * 0.27,
               color: color,
-              fontWeight: FontWeight.w600,
+              weight: FontWeight.w600,
               height: 1,
             ),
           ),
@@ -145,7 +152,7 @@ class _MangaImageViewState extends State<MangaImageView> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return widget.loadingBuilder?.call(context) ??
-              Center(child: MangaProgressRing(size: AppTheme.metrics.iconSize44));
+              Center(child: MangaProgressRing(size: AppTheme.metrics.kSpace44));
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
@@ -164,8 +171,8 @@ class _MangaImageViewState extends State<MangaImageView> {
 
         return TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeOut,
+          duration: AppMotion.slow,
+          curve: AppMotion.decelerate,
           builder: (_, value, child) => Opacity(opacity: value, child: child),
           child: Image.memory(
             snapshot.data!,

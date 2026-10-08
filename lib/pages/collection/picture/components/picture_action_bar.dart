@@ -49,6 +49,7 @@ class PictureActionBar extends StatelessWidget {
   }
 
   Widget _buildActionBar(BuildContext context) {
+    final s = AppSemantic.of(context);
     final inDetail = viewModel.isInDetail;
     final showBack = inDetail || viewModel.currentFolderId.value != null;
     if (inDetail) {
@@ -73,7 +74,7 @@ class PictureActionBar extends StatelessWidget {
                 // button being visible inside MediaViewerPage at the same time.
                 AnimatedOpacity(
                   opacity: showBack ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 150),
+                  duration: AppMotion.fast,
                   child: IgnorePointer(
                     ignoring: !showBack,
                     child: DesktopHeadToolsButton(
@@ -95,7 +96,7 @@ class PictureActionBar extends StatelessWidget {
                 Flexible(
                   child: Text(
                     '集合内媒体 ${items.length} 项 · ${_formatBytes(totalSize)}',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: AppTextStyles.body(context),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -108,7 +109,7 @@ class PictureActionBar extends StatelessWidget {
                     DrawIcon(
                       StrokeIcons.gridView,
                       size: scaleW(16),
-                      color: Theme.of(context).hintColor,
+                      color: s.textTertiary,
                     ),
                     SizedBox(width: appMetrics.kSpace4),
                     IconButton(
@@ -119,7 +120,11 @@ class PictureActionBar extends StatelessWidget {
                       tooltip: '减少列数',
                       onPressed: detailColumnCount > 1 ? onColumnDecrement : null,
                     ),
-                    Text('$detailColumnCount 列', style: Theme.of(context).textTheme.bodySmall),
+                    Text('$detailColumnCount 列', style: AppTextStyles.role(
+                      context,
+                      fontSize: appMetrics.fontSize12,
+                      color: s.textTertiary,
+                    )),
                     IconButton(
                       icon: DrawIcon(StrokeIcons.add),
                       iconSize: scaleW(16),
@@ -143,7 +148,11 @@ class PictureActionBar extends StatelessWidget {
                         constraints: BoxConstraints(maxWidth: scaleW(72)),
                         child: Text(
                           viewModel.itemSortOrder.value.label,
-                          style: Theme.of(context).textTheme.bodySmall,
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: appMetrics.fontSize12,
+                            color: s.textTertiary,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -195,7 +204,11 @@ class PictureActionBar extends StatelessWidget {
                 Flexible(
                   child: Text(
                     '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: appMetrics.fontSize12,
+                      color: s.textTertiary,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -213,7 +226,11 @@ class PictureActionBar extends StatelessWidget {
                         constraints: BoxConstraints(maxWidth: scaleW(80)),
                         child: Text(
                           '已连接节点 ${viewModel.enabledRemoteNodes.length} 个',
-                          style: Theme.of(context).textTheme.bodySmall,
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: appMetrics.fontSize12,
+                            color: s.textTertiary,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -231,7 +248,11 @@ class PictureActionBar extends StatelessWidget {
                             constraints: BoxConstraints(maxWidth: scaleW(72)),
                             child: Text(
                               viewModel.collectionSortOrder.value.label,
-                              style: Theme.of(context).textTheme.bodySmall,
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: appMetrics.fontSize12,
+                                color: s.textTertiary,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -283,7 +304,12 @@ class PictureActionBar extends StatelessWidget {
           // 同名集合分组标题段（虚拟分组，面包屑末段，不可点击）
           if (viewModel.currentDupGroupTitle != null) ...[
             DrawIcon(StrokeIcons.chevronRight, size: scaleW(18)),
-            Text(viewModel.currentDupGroupTitle!, style: Theme.of(context).textTheme.labelMedium),
+            Text(viewModel.currentDupGroupTitle!, style: AppTextStyles.role(
+              context,
+              fontSize: appMetrics.fontSize12,
+              color: AppSemantic.of(context).textSecondary,
+              weight: FontWeight.w500,
+            )),
           ],
           // Smart folder in trail (always root-level, no further sub-path)
           if (smartFolder != null) ...[
@@ -293,7 +319,12 @@ class PictureActionBar extends StatelessWidget {
               children: [
                 DrawIcon(StrokeIcons.autoAwesome, size: scaleW(14)),
                 SizedBox(width: appMetrics.kSpace4),
-                Text(smartFolder.name, style: Theme.of(context).textTheme.labelMedium),
+                Text(smartFolder.name, style: AppTextStyles.role(
+                  context,
+                  fontSize: appMetrics.fontSize12,
+                  color: AppSemantic.of(context).textSecondary,
+                  weight: FontWeight.w500,
+                )),
               ],
             ),
           ],

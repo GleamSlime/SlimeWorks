@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/manga_service.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/pages/manga/components/manga_login_dialog.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -138,7 +141,7 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
 
     return ListView(
@@ -165,20 +168,23 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
                     Expanded(
                       child: Text(
                         '分流通过 IP 直连或反向代理绕过 DNS 封锁，使用分流时通常无需设置代理。',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize12,
+                          color: s.textSecondary,
+                          height: 1.6,
                         ),
                       ),
                     ),
                     SizedBox(width: m.kSpace8),
                     OutlinedButton.icon(
                       icon: _testingAll
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                          ? SizedBox(
+                              width: m.iconSize14,
+                              height: m.iconSize14,
+                              child: CircularProgressIndicator(strokeWidth: scaleW(2)),
                             )
-                          : DrawIcon(StrokeIcons.speed, size: AppTheme.metrics.iconSize16),
+                          : DrawIcon(StrokeIcons.speed, size: m.iconSize16),
                       label: const Text('全部测速'),
                       onPressed: _testingAll ? null : _testAll,
                       style: OutlinedButton.styleFrom(
@@ -207,7 +213,7 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
                 ),
                 // CDN分流 自定义 IP 输入框
                 AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
+                  duration: AppMotion.base,
                   child: _channel == MangaChannelMode.cdnIp
                       ? Padding(
                           padding: EdgeInsets.only(top: m.kSpace8, left: m.kSpace32),
@@ -236,7 +242,7 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
                 ),
                 // PC 中转 地址输入框
                 AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
+                  duration: AppMotion.base,
                   child: _channel == MangaChannelMode.lanRelay
                       ? Padding(
                           padding: EdgeInsets.only(top: m.kSpace8, left: m.kSpace32),
@@ -267,10 +273,11 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
                               Text(
                                 '需先在 PC 端《设置 → 节点服务》中启动节点，'
                                 '端口默认 17888。移动端所有请求将经由 PC 分流代为获取。',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface.withValues(alpha: 0.55),
+                                style: AppTextStyles.role(
+                                  context,
+                                  fontSize: m.fontSize12,
+                                  color: s.textSecondary,
+                                  height: 1.6,
                                 ),
                               ),
                             ],
@@ -297,8 +304,11 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
                 Text(
                   '支持 HTTP 代理（http://host:port）或 SOCKS5 代理（socks5://host:port）。'
                   '清空后保存以禁用代理。',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize12,
+                    color: s.textSecondary,
+                    height: 1.6,
                   ),
                 ),
                 SizedBox(height: m.kSpace12),
@@ -337,8 +347,11 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
               children: [
                 Text(
                   '当某个服务器访问缓慢时可以切换。通常 storage1 或 s3 速度较快。',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize12,
+                    color: s.textSecondary,
+                    height: 1.6,
                   ),
                 ),
                 SizedBox(height: m.kSpace8),
@@ -373,7 +386,7 @@ class _AccountCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
 
     if (service.isLoggedIn) {
@@ -381,13 +394,18 @@ class _AccountCard extends StatelessWidget {
         margin: EdgeInsets.zero,
         child: ListTile(
           leading: CircleAvatar(
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: DrawIcon(StrokeIcons.person, color: theme.colorScheme.onPrimaryContainer),
+            backgroundColor: s.accentContainer,
+            child: DrawIcon(StrokeIcons.person, color: s.accent),
           ),
           title: Text(service.currentUser?.name ?? '已登录'),
           subtitle: Text(
             'Lv.${service.currentUser?.level ?? 0}  ·  ${service.currentUser?.email ?? ''}',
-            style: theme.textTheme.bodySmall,
+            style: AppTextStyles.role(
+              context,
+              fontSize: m.fontSize12,
+              color: s.textTertiary,
+              height: 1.6,
+            ),
           ),
           trailing: TextButton.icon(
             icon: DrawIcon(StrokeIcons.logout, size: AppTheme.metrics.iconSize16),
@@ -412,12 +430,12 @@ class _AccountCard extends StatelessWidget {
               width: m.iconSize40,
               height: m.iconSize40,
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withAlpha(25),
+                color: s.accentContainer,
                 borderRadius: m.radius10,
               ),
               child: DrawIcon(StrokeIcons.accountCircle,
                 size: m.iconSize24,
-                color: theme.colorScheme.primary,
+                color: s.accent,
               ),
             ),
             SizedBox(width: m.kSpace12),
@@ -427,13 +445,16 @@ class _AccountCard extends StatelessWidget {
                 children: [
                   Text(
                     '尚未登录',
-                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: AppTextStyles.cardTitle(context),
                   ),
                   SizedBox(height: m.kSpace2),
                   Text(
                     '登录后可收藏、下载漫画',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(120),
+                    style: AppTextStyles.role(
+                      context,
+                      fontSize: m.fontSize12,
+                      color: s.textTertiary,
+                      height: 1.6,
                     ),
                   ),
                 ],
@@ -473,32 +494,43 @@ class _ChannelRadioTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
 
     Widget? trailing;
     if (latency == -1) {
-      trailing = const SizedBox(
-        width: 14,
-        height: 14,
-        child: CircularProgressIndicator(strokeWidth: 2),
+      trailing = SizedBox(
+        width: m.iconSize14,
+        height: m.iconSize14,
+        child: CircularProgressIndicator(strokeWidth: scaleW(2)),
       );
     } else if (latency == -2) {
+      // 行尾徽章只有一段文字，字号族会随用户界面字号变长，先封顶再谈颜色
       trailing = Text(
         '不可达',
-        style: TextStyle(color: theme.colorScheme.error, fontSize: AppTheme.metrics.fontSize11),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTextStyles.role(
+          context,
+          fontSize: m.fontSize11,
+          color: s.danger.color,
+        ),
       );
     } else if (latency != null && latency! >= 0) {
       final color = latency! < 300
-          ? Colors.green
+          ? s.success.color
           : latency! < 800
-          ? Colors.orange
-          : theme.colorScheme.error;
+          ? s.warning.color
+          : s.danger.color;
       trailing = Text(
         '${latency}ms',
-        style: TextStyle(
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTextStyles.role(
+          context,
+          fontSize: m.fontSize11,
           color: color,
-          fontWeight: FontWeight.bold,
-          fontSize: AppTheme.metrics.fontSize11,
+          weight: FontWeight.w600,
         ),
       );
     }
@@ -523,7 +555,7 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Padding(
       padding: EdgeInsets.only(bottom: m.kSpace8),
@@ -533,17 +565,20 @@ class _SectionTitle extends StatelessWidget {
             width: m.kSpace24,
             height: m.kSpace24,
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withAlpha(20),
+              color: s.accentContainer,
               borderRadius: m.radius6,
             ),
-            child: DrawIcon(icon, size: m.iconSize12, color: theme.colorScheme.primary),
+            child: DrawIcon(icon, size: m.iconSize12, color: s.accent),
           ),
           SizedBox(width: m.kSpace8),
           Text(
             text,
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.bold,
+            style: AppTextStyles.role(
+              context,
+              fontSize: m.fontSize13,
+              color: s.accent,
+              weight: FontWeight.w600,
+              height: 1.5,
             ),
           ),
         ],

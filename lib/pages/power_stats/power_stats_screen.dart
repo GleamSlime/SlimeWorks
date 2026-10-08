@@ -403,7 +403,82 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
             ),
           ),
         ),
+        SizedBox(height: m.kSpace8),
+        // 计量单位切换（Wh / kWh / MWh），统一作用于卡片与图表
+        Obx(
+          () => Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: m.kSpace6,
+              vertical: m.kSpace6,
+            ),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: m.radius12,
+              border: Border.all(color: theme.dividerColor.withAlpha(40)),
+            ),
+            child: Wrap(
+              spacing: m.kSpace4,
+              runSpacing: m.kSpace4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: m.kSpace8),
+                  child: Text(
+                    '计量单位',
+                    style: TextStyle(
+                      fontSize: m.fontSize12,
+                      color: theme.colorScheme.onSurface.withAlpha(120),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                ...PowerUnit.values.map(
+                  (u) => _buildUnitChip(theme, m, u),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildUnitChip(ThemeData theme, ThemeMetrics m, PowerUnit unit) {
+    final selected = _viewModel.selectedUnit.value == unit;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: m.radius8,
+        onTap: () => _viewModel.setUnit(unit),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: m.kSpace12,
+            vertical: m.kSpace6,
+          ),
+          decoration: BoxDecoration(
+            color: selected
+                ? LightColors.yellow.withAlpha(25)
+                : Colors.transparent,
+            borderRadius: m.radius8,
+            border: Border.all(
+              color: selected
+                  ? LightColors.yellow.withAlpha(90)
+                  : theme.dividerColor.withAlpha(40),
+            ),
+          ),
+          child: Text(
+            unit.label,
+            style: TextStyle(
+              fontSize: m.fontSize12,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected
+                  ? LightColors.orange
+                  : theme.colorScheme.onSurface.withAlpha(120),
+              fontFamily: 'monospace',
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -511,11 +586,19 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     ThemeMetrics m,
     bool isNarrow,
   ) {
-    final crossCount = isNarrow ? 2 : 4;
+    final crossCount = isNarrow ? 2 : 3;
     return Obx(() {
-      final kwh = _viewModel.currentKwh.value;
-      final yuan = _viewModel.currentYuan.value;
-      final price = _viewModel.price.value;
+      final unit = _viewModel.selectedUnit.value;
+      final summaryKwh = (_viewModel.summary['current_kwh'] as num?)?.toDouble() ?? 0.0;
+      final summaryYuan = (_viewModel.summary['current_yuan'] as num?)?.toDouble() ?? 0.0;
+      // 远程节点进程重启后 status 的内存态会归零，而 summary 走节点数据库仍有值；
+      // 谁有值用谁，免得卡片停在 0.000 而下面图表却有数据
+      final kwh = _viewModel.currentKwh.value > 0
+          ? _viewModel.currentKwh.value
+          : summaryKwh;
+      final yuan = _viewModel.currentYuan.value > 0
+          ? _viewModel.currentYuan.value
+          : summaryYuan;
       final lastUpdate = _viewModel.summary['last_update'] as String? ??
           _viewModel.lastFetch.value;
       final minuteCons = _viewModel.getSummaryConsumption('minute_consumption');
@@ -524,8 +607,8 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
         _SummaryCardData(
           icon: StrokeIcons.bolt,
           label: '剩余电量',
-          value: kwh.toStringAsFixed(2),
-          unit: 'kWh',
+          value: unit.format(kwh),
+          unit: unit.label,
           color: LightColors.yellow,
         ),
         _SummaryCardData(
@@ -536,17 +619,10 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           color: LightColors.blue,
         ),
         _SummaryCardData(
-          icon: StrokeIcons.localOffer,
-          label: '综合单价',
-          value: price.toStringAsFixed(2),
-          unit: '元/kWh',
-          color: LightColors.purple,
-        ),
-        _SummaryCardData(
           icon: StrokeIcons.timer,
           label: '分钟耗电',
-          value: minuteCons.toStringAsFixed(3),
-          unit: 'kWh',
+          value: unit.format(minuteCons),
+          unit: unit.label,
           color: LightColors.green,
         ),
       ];
@@ -669,14 +745,18 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
       Color color;
       double sumValue = 0;
       String sumText = '';
+      // 只有电量维度吃用户选的计量单位，余额/电费固定按元展示
+      double unitScale = 1;
       switch (metric) {
         case PowerChartMetric.consumption:
+          final powerUnit = _viewModel.selectedUnit.value;
           title = '耗电量趋势';
-          unit = 'kWh';
+          unit = powerUnit.label;
+          unitScale = powerUnit.factor;
           color = LightColors.orange;
           // 耗电量：所有桶累加
           sumValue = buckets.fold<double>(0, (s, b) => s + b.consumptionKwh);
-          sumText = '${sumValue.toStringAsFixed(2)}$unit';
+          sumText = '${powerUnit.format(sumValue)}${powerUnit.label}';
         case PowerChartMetric.balance:
           title = '余额变化';
           unit = '元';
@@ -780,6 +860,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                       metric: metric,
                       color: color,
                       unit: unit,
+                      unitScale: unitScale,
                     ),
             ),
           ],
@@ -843,6 +924,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
   ) {
     final crossCount = isNarrow ? 2 : 3;
     return Obx(() {
+      final unit = _viewModel.selectedUnit.value;
       final dims = <_DimensionData>[
         _DimensionData(
           title: '小时',
@@ -907,14 +989,19 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
               childAspectRatio: isNarrow ? 1.5 : 1.8,
             ),
             itemCount: dims.length,
-            itemBuilder: (context, i) => _buildDimensionCard(theme, m, dims[i]),
+            itemBuilder: (context, i) => _buildDimensionCard(theme, m, unit, dims[i]),
           ),
         ],
       );
     });
   }
 
-  Widget _buildDimensionCard(ThemeData theme, ThemeMetrics m, _DimensionData data) {
+  Widget _buildDimensionCard(
+    ThemeData theme,
+    ThemeMetrics m,
+    PowerUnit unit,
+    _DimensionData data,
+  ) {
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
       decoration: BoxDecoration(
@@ -944,7 +1031,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                data.consumption.toStringAsFixed(3),
+                unit.format(data.consumption),
                 style: TextStyle(
                   fontSize: m.fontSize18,
                   fontWeight: FontWeight.w700,
@@ -954,7 +1041,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
               ),
               SizedBox(width: m.kSpace4),
               Text(
-                'kWh',
+                unit.label,
                 style: TextStyle(
                   fontSize: m.fontSize10,
                   color: theme.colorScheme.onSurface.withAlpha(100),
@@ -1294,17 +1381,30 @@ class _DimensionData {
 }
 
 // ── 交互式图表（hover十字线 + tooltip）──────────────────────────────────────
+
+/// 图表数值的自适应小数位：数值越大位数越少，避免 Wh 下出现一长串无意义小数
+String _formatPowerValue(double v) {
+  final a = v.abs();
+  if (a >= 1000) return v.toStringAsFixed(0);
+  if (a >= 100) return v.toStringAsFixed(1);
+  if (a >= 1) return v.toStringAsFixed(2);
+  return v.toStringAsFixed(3);
+}
+
 class _InteractivePowerChart extends StatefulWidget {
   final List<PowerStatBucket> buckets;
   final PowerChartMetric metric;
   final Color color;
   final String unit;
+  /// kWh → 展示单位的换算系数（余额/电费恒为 1）
+  final double unitScale;
 
   const _InteractivePowerChart({
     required this.buckets,
     required this.metric,
     required this.color,
     required this.unit,
+    this.unitScale = 1.0,
   });
 
   @override
@@ -1321,7 +1421,7 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
   double _value(PowerStatBucket b) {
     switch (widget.metric) {
       case PowerChartMetric.consumption:
-        return b.consumptionKwh;
+        return b.consumptionKwh * widget.unitScale;
       case PowerChartMetric.balance:
         return b.balanceYuan;
       case PowerChartMetric.cost:
@@ -1409,6 +1509,7 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
                         theme.textTheme.bodySmall?.color ?? Colors.grey,
                     gridColor: theme.dividerColor.withAlpha(40),
                     hoverIndex: _hoverIndex,
+                    unitScale: widget.unitScale,
                   ),
                 ),
                 if (_hoverIndex != null &&
@@ -1449,34 +1550,26 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
     switch (widget.metric) {
       case PowerChartMetric.consumption:
         metricLabel = '耗电量';
-        currentValue = bucket.consumptionKwh;
-        valueText = '${currentValue.toStringAsFixed(3)} ${widget.unit}';
+        currentValue = _value(bucket);
+        valueText = '${_formatPowerValue(currentValue)} ${widget.unit}';
         // 耗电量上升=多用电=负面（红），下降=省电=正面（绿）
         isUpGood = false;
       case PowerChartMetric.balance:
         metricLabel = '余额';
-        currentValue = bucket.balanceYuan;
-        valueText = '${currentValue.toStringAsFixed(2)} ${widget.unit}';
+        currentValue = _value(bucket);
+        valueText = '${_formatPowerValue(currentValue)} ${widget.unit}';
         // 余额上升=正面（绿），下降=负面（红）
         isUpGood = true;
       case PowerChartMetric.cost:
         metricLabel = '电费';
-        currentValue = bucket.costYuan;
-        valueText = '${currentValue.toStringAsFixed(2)} ${widget.unit}';
+        currentValue = _value(bucket);
+        valueText = '${_formatPowerValue(currentValue)} ${widget.unit}';
         // 电费上升=负面（红），下降=正面（绿）
         isUpGood = false;
     }
     // 取上一个数据点对比
     if (idx > 0) {
-      final prev = widget.buckets[idx - 1];
-      switch (widget.metric) {
-        case PowerChartMetric.consumption:
-          prevValue = prev.consumptionKwh;
-        case PowerChartMetric.balance:
-          prevValue = prev.balanceYuan;
-        case PowerChartMetric.cost:
-          prevValue = prev.costYuan;
-      }
+      prevValue = _value(widget.buckets[idx - 1]);
     }
 
     // 环比百分比
@@ -1644,6 +1737,8 @@ class _ChartCanvas extends CustomPainter {
   final Color textColor;
   final Color gridColor;
   final int? hoverIndex;
+  /// kWh → 展示单位的换算系数（余额/电费恒为 1）
+  final double unitScale;
 
   _ChartCanvas({
     required this.buckets,
@@ -1652,12 +1747,13 @@ class _ChartCanvas extends CustomPainter {
     required this.textColor,
     required this.gridColor,
     this.hoverIndex,
+    this.unitScale = 1.0,
   });
 
   double _value(PowerStatBucket b) {
     switch (metric) {
       case PowerChartMetric.consumption:
-        return b.consumptionKwh;
+        return b.consumptionKwh * unitScale;
       case PowerChartMetric.balance:
         return b.balanceYuan;
       case PowerChartMetric.cost:
@@ -1703,9 +1799,9 @@ class _ChartCanvas extends CustomPainter {
       final v = maxV - range * i / 4;
       _drawText(
         canvas,
-        _formatValue(v),
+        _formatPowerValue(v),
         Offset(2, y - 6),
-        TextStyle(color: textColor.withAlpha(120), fontSize: 9),
+        TextStyle(color: textColor.withAlpha(120), fontSize: AppTheme.metrics.fontSize9),
       );
     }
 
@@ -1732,7 +1828,7 @@ class _ChartCanvas extends CustomPainter {
         canvas,
         buckets[idx].label,
         Offset(x - 14, padTop + chartH + 8),
-        TextStyle(color: textColor.withAlpha(120), fontSize: 9),
+        TextStyle(color: textColor.withAlpha(120), fontSize: AppTheme.metrics.fontSize9),
       );
     }
 
@@ -1810,12 +1906,6 @@ class _ChartCanvas extends CustomPainter {
     }
   }
 
-  String _formatValue(double v) {
-    if (v >= 100) return v.toStringAsFixed(0);
-    if (v >= 10) return v.toStringAsFixed(1);
-    return v.toStringAsFixed(2);
-  }
-
   void _drawText(Canvas canvas, String text, Offset pos, TextStyle style) {
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
@@ -1829,5 +1919,6 @@ class _ChartCanvas extends CustomPainter {
       old.buckets != buckets ||
       old.metric != metric ||
       old.color != color ||
-      old.hoverIndex != hoverIndex;
+      old.hoverIndex != hoverIndex ||
+      old.unitScale != unitScale;
 }

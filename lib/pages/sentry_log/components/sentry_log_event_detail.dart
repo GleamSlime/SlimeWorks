@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -18,29 +19,28 @@ class SentryLogEventDetail extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final theme = Theme.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = AppSemantic.of(context);
     final level = event['level']?.toString() ?? 'info';
-    final levelColor = viewModel.getLevelColor(level);
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: m.radius16),
+      shape: RoundedRectangleBorder(borderRadius: m.radiusOverlay),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: 680,
+          maxWidth: scaleW(680),
           maxHeight: MediaQuery.of(context).size.height * 0.85,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildHeader(context, theme, m, isDark, level, levelColor),
+            _buildHeader(context, theme, m, s, level),
             Flexible(
               child: SingleChildScrollView(
                 padding: EdgeInsets.all(m.kSpace16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildInfoGrid(theme, m, isDark),
+                    _buildInfoGrid(theme, m, s),
                     if (_hasExceptions()) ...[
                       SizedBox(height: m.kSpace16),
                       _buildSectionTitle(
@@ -48,10 +48,10 @@ class SentryLogEventDetail extends StatelessWidget {
                         m,
                         StrokeIcons.bugReport,
                         '异常信息',
-                        const Color(0xFFE53935),
+                        s.danger.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildExceptions(theme, m, isDark),
+                      _buildExceptions(theme, m, s),
                     ],
                     if (_hasBreadcrumbs()) ...[
                       SizedBox(height: m.kSpace16),
@@ -60,10 +60,10 @@ class SentryLogEventDetail extends StatelessWidget {
                         m,
                         StrokeIcons.timeline,
                         '面包屑',
-                        const Color(0xFF1E88E5),
+                        s.info.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildBreadcrumbs(theme, m, isDark),
+                      _buildBreadcrumbs(theme, m, s),
                     ],
                     if (_hasTags()) ...[
                       SizedBox(height: m.kSpace16),
@@ -72,10 +72,10 @@ class SentryLogEventDetail extends StatelessWidget {
                         m,
                         StrokeIcons.label,
                         '标签',
-                        const Color(0xFFFB8C00),
+                        s.warning.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildTags(theme, m, isDark),
+                      _buildTags(theme, m, s),
                     ],
                     if (_hasExtra()) ...[
                       SizedBox(height: m.kSpace16),
@@ -84,10 +84,10 @@ class SentryLogEventDetail extends StatelessWidget {
                         m,
                         StrokeIcons.dataObject,
                         '额外数据',
-                        const Color(0xFF43A047),
+                        s.success.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildExtra(theme, m, isDark),
+                      _buildExtra(theme, m, s),
                     ],
                     if (_hasUser()) ...[
                       SizedBox(height: m.kSpace16),
@@ -96,10 +96,10 @@ class SentryLogEventDetail extends StatelessWidget {
                         m,
                         StrokeIcons.person,
                         '用户信息',
-                        const Color(0xFF8E24AA),
+                        s.info.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildUser(theme, m, isDark),
+                      _buildUser(theme, m, s),
                     ],
                     if (_hasRequest()) ...[
                       SizedBox(height: m.kSpace16),
@@ -108,10 +108,10 @@ class SentryLogEventDetail extends StatelessWidget {
                         m,
                         StrokeIcons.http,
                         '请求信息',
-                        const Color(0xFF00897B),
+                        s.info.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildRequest(theme, m, isDark),
+                      _buildRequest(theme, m, s),
                     ],
                     if (_hasContexts()) ...[
                       SizedBox(height: m.kSpace16),
@@ -120,10 +120,10 @@ class SentryLogEventDetail extends StatelessWidget {
                         m,
                         StrokeIcons.devices,
                         '上下文',
-                        const Color(0xFF546E7A),
+                        s.neutral.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildContexts(theme, m, isDark),
+                      _buildContexts(theme, m, s),
                     ],
                     SizedBox(height: m.kSpace16),
                     _buildSectionTitle(
@@ -131,10 +131,10 @@ class SentryLogEventDetail extends StatelessWidget {
                       m,
                       StrokeIcons.code,
                       '原始数据',
-                      theme.colorScheme.primary,
+                      s.accent,
                     ),
                     SizedBox(height: m.kSpace8),
-                    _buildRawJson(theme, m, isDark),
+                    _buildRawJson(theme, m, s),
                   ],
                 ),
               ),
@@ -149,10 +149,10 @@ class SentryLogEventDetail extends StatelessWidget {
     BuildContext context,
     ThemeData theme,
     ThemeMetrics m,
-    bool isDark,
+    AppSemantic s,
     String level,
-    Color levelColor,
   ) {
+    final role = _levelRole(s, level);
     final message = _extractMessage();
     return Container(
       padding: EdgeInsets.fromLTRB(m.kSpace16, m.kSpace14, m.kSpace8, m.kSpace14),
@@ -160,11 +160,9 @@ class SentryLogEventDetail extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [levelColor.withAlpha(30), levelColor.withAlpha(8)],
+          colors: [role.color.withAlpha(30), role.color.withAlpha(8)],
         ),
-        border: Border(
-          bottom: BorderSide(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
-        ),
+        border: Border(bottom: BorderSide(color: s.border, width: 0.5)),
       ),
       child: Row(
         children: [
@@ -172,11 +170,11 @@ class SentryLogEventDetail extends StatelessWidget {
             width: m.kSpace40,
             height: m.kSpace40,
             decoration: BoxDecoration(
-              color: levelColor.withAlpha(25),
-              borderRadius: m.radius8,
-              border: Border.all(color: levelColor.withAlpha(50), width: 0.5),
+              color: role.container,
+              borderRadius: m.radiusControl,
+              border: Border.all(color: role.containerBorder, width: 0.5),
             ),
-            child: DrawIcon(_getLevelIcon(level), color: levelColor, size: m.iconSize18),
+            child: DrawIcon(_getLevelIcon(level), color: role.color, size: m.iconSize18),
           ),
           SizedBox(width: m.kSpace12),
           Expanded(
@@ -195,13 +193,14 @@ class SentryLogEventDetail extends StatelessWidget {
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: m.kSpace6, vertical: m.kSpace1),
                       decoration: BoxDecoration(
-                        color: levelColor.withAlpha(25),
+                        color: role.container,
                         borderRadius: m.radius4,
                       ),
                       child: Text(
                         level.toUpperCase(),
+                        // 容器上的文字走 onContainer：状态主色是给"点"用的，直接当小字会糊
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: levelColor,
+                          color: role.onContainer,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
                         ),
@@ -211,7 +210,7 @@ class SentryLogEventDetail extends StatelessWidget {
                     if (event['environment'] != null)
                       Text(
                         event['environment'].toString(),
-                        style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+                        style: theme.textTheme.labelSmall?.copyWith(color: s.textTertiary),
                       ),
                   ],
                 ),
@@ -219,7 +218,7 @@ class SentryLogEventDetail extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: DrawIcon(StrokeIcons.close, size: m.iconSize20, color: theme.hintColor),
+            icon: DrawIcon(StrokeIcons.close, size: m.iconSize20, color: s.textTertiary),
             onPressed: () => Navigator.pop(context),
             visualDensity: VisualDensity.compact,
           ),
@@ -247,7 +246,7 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoGrid(ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildInfoGrid(ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final entries = <_InfoEntry>[];
     if (event['event_id'] != null) {
       entries.add(_InfoEntry('事件ID', event['event_id'].toString()));
@@ -277,28 +276,28 @@ class SentryLogEventDetail extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
       decoration: BoxDecoration(
-        color: isDark ? DarkColors.background1 : LightColors.background1,
-        borderRadius: m.radius10,
-        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
+        color: s.surface,
+        borderRadius: m.radiusCard,
+        border: Border.all(color: s.border, width: 0.5),
       ),
       child: Column(
-        children: entries.map((e) => _buildInfoRow(theme, m, isDark, e.label, e.value)).toList(),
+        children: entries.map((e) => _buildInfoRow(theme, m, s, e.label, e.value)).toList(),
       ),
     );
   }
 
-  Widget _buildInfoRow(ThemeData theme, ThemeMetrics m, bool isDark, String label, String value) {
+  Widget _buildInfoRow(ThemeData theme, ThemeMetrics m, AppSemantic s, String label, String value) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: m.kSpace4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 64,
+            width: m.kSpace64,
             child: Text(
               label,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.hintColor,
+                color: s.textTertiary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -315,7 +314,7 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildExceptions(ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildExceptions(ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final exception = event['exception'] as Map<String, dynamic>?;
     if (exception == null) return const SizedBox.shrink();
     final values = exception['values'] as List<dynamic>? ?? [];
@@ -332,12 +331,9 @@ class SentryLogEventDetail extends StatelessWidget {
           margin: EdgeInsets.only(bottom: m.kSpace8),
           padding: EdgeInsets.all(m.kSpace12),
           decoration: BoxDecoration(
-            color: isDark ? DarkColors.background1 : LightColors.background1,
-            borderRadius: m.radius10,
-            border: Border.all(
-              color: isDark ? DarkColors.white10 : LightColors.black10,
-              width: 0.5,
-            ),
+            color: s.surface,
+            borderRadius: m.radiusCard,
+            border: Border.all(color: s.border, width: 0.5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,13 +341,13 @@ class SentryLogEventDetail extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE53935).withAlpha(15),
+                  color: s.danger.container,
                   borderRadius: m.radius6,
                 ),
                 child: Text(
                   '$type: $value',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFFE53935),
+                    color: s.danger.onContainer,
                     fontWeight: FontWeight.w600,
                     fontFamily: 'monospace',
                   ),
@@ -372,11 +368,11 @@ class SentryLogEventDetail extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          width: 3,
+                          width: m.kSpace3,
                           height: m.kSpace14,
                           margin: EdgeInsets.only(top: m.kSpace4),
                           decoration: BoxDecoration(
-                            color: inApp ? const Color(0xFFE53935) : theme.hintColor.withAlpha(80),
+                            color: inApp ? s.danger.color : s.textTertiary,
                             borderRadius: m.radius2,
                           ),
                         ),
@@ -386,20 +382,20 @@ class SentryLogEventDetail extends StatelessWidget {
                             text: TextSpan(
                               style: theme.textTheme.labelSmall?.copyWith(
                                 fontFamily: 'monospace',
-                                color: isDark ? DarkColors.white80 : LightColors.black80,
+                                color: s.textPrimary,
                               ),
                               children: [
                                 TextSpan(
                                   text: function,
                                   style: TextStyle(
                                     fontWeight: inApp ? FontWeight.w700 : FontWeight.w400,
-                                    color: inApp ? theme.colorScheme.primary : null,
+                                    color: inApp ? s.accent : null,
                                   ),
                                 ),
                                 TextSpan(text: '  '),
                                 TextSpan(
                                   text: '$filename:$lineno',
-                                  style: TextStyle(color: theme.hintColor),
+                                  style: TextStyle(color: s.textTertiary),
                                 ),
                               ],
                             ),
@@ -417,7 +413,7 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildBreadcrumbs(ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildBreadcrumbs(ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final breadcrumbs = event['breadcrumbs'] as Map<String, dynamic>?;
     if (breadcrumbs == null) return const SizedBox.shrink();
     final values = breadcrumbs['values'] as List<dynamic>? ?? [];
@@ -425,9 +421,9 @@ class SentryLogEventDetail extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
       decoration: BoxDecoration(
-        color: isDark ? DarkColors.background1 : LightColors.background1,
-        borderRadius: m.radius10,
-        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
+        color: s.surface,
+        borderRadius: m.radiusCard,
+        border: Border.all(color: s.border, width: 0.5),
       ),
       child: Column(
         children: values.map<Widget>((b) {
@@ -442,7 +438,7 @@ class SentryLogEventDetail extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                DrawIcon(_getBreadcrumbIcon(type), size: m.iconSize12, color: theme.hintColor),
+                DrawIcon(_getBreadcrumbIcon(type), size: m.iconSize12, color: s.textTertiary),
                 SizedBox(width: m.kSpace6),
                 Expanded(
                   child: Column(
@@ -461,7 +457,7 @@ class SentryLogEventDetail extends StatelessWidget {
                             Text(
                               viewModel.formatTimestamp(timestamp),
                               style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.hintColor,
+                                color: s.textTertiary,
                                 fontFeatures: [const FontFeature.tabularFigures()],
                               ),
                             ),
@@ -471,7 +467,7 @@ class SentryLogEventDetail extends StatelessWidget {
                         Text(
                           message,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
+                            color: s.textTertiary,
                             fontFamily: 'monospace',
                           ),
                           maxLines: 2,
@@ -488,7 +484,7 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildTags(ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildTags(ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final tags = event['tags'] as Map<String, dynamic>? ?? {};
     if (tags.isEmpty) return const SizedBox.shrink();
 
@@ -499,9 +495,9 @@ class SentryLogEventDetail extends StatelessWidget {
         return Container(
           padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
           decoration: BoxDecoration(
-            color: const Color(0xFFFB8C00).withAlpha(12),
+            color: s.warning.container,
             borderRadius: m.radius6,
-            border: Border.all(color: const Color(0xFFFB8C00).withAlpha(30), width: 0.5),
+            border: Border.all(color: s.warning.containerBorder, width: 0.5),
           ),
           child: RichText(
             text: TextSpan(
@@ -509,11 +505,11 @@ class SentryLogEventDetail extends StatelessWidget {
               children: [
                 TextSpan(
                   text: '${e.key}: ',
-                  style: TextStyle(color: const Color(0xFFFB8C00), fontWeight: FontWeight.w600),
+                  style: TextStyle(color: s.warning.onContainer, fontWeight: FontWeight.w600),
                 ),
                 TextSpan(
                   text: e.value.toString(),
-                  style: TextStyle(color: isDark ? DarkColors.white80 : LightColors.black80),
+                  style: TextStyle(color: s.textPrimary),
                 ),
               ],
             ),
@@ -523,42 +519,42 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildExtra(ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildExtra(ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final extra = event['extra'] as Map<String, dynamic>? ?? {};
     if (extra.isEmpty) return const SizedBox.shrink();
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
       decoration: BoxDecoration(
-        color: isDark ? DarkColors.background1 : LightColors.background1,
-        borderRadius: m.radius10,
-        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
+        color: s.surface,
+        borderRadius: m.radiusCard,
+        border: Border.all(color: s.border, width: 0.5),
       ),
       child: Column(
         children: extra.entries
-            .map((e) => _buildInfoRow(theme, m, isDark, e.key, e.value.toString()))
+            .map((e) => _buildInfoRow(theme, m, s, e.key, e.value.toString()))
             .toList(),
       ),
     );
   }
 
-  Widget _buildUser(ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildUser(ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final user = event['user'] as Map<String, dynamic>? ?? {};
     if (user.isEmpty) return const SizedBox.shrink();
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
       decoration: BoxDecoration(
-        color: isDark ? DarkColors.background1 : LightColors.background1,
-        borderRadius: m.radius10,
-        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
+        color: s.surface,
+        borderRadius: m.radiusCard,
+        border: Border.all(color: s.border, width: 0.5),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: m.kSpace16,
-            backgroundColor: const Color(0xFF8E24AA).withAlpha(25),
-            child: DrawIcon(StrokeIcons.person, size: m.iconSize16, color: const Color(0xFF8E24AA)),
+            backgroundColor: s.info.container,
+            child: DrawIcon(StrokeIcons.person, size: m.iconSize16, color: s.info.color),
           ),
           SizedBox(width: m.kSpace12),
           Expanded(
@@ -573,13 +569,13 @@ class SentryLogEventDetail extends StatelessWidget {
                 if (user['email'] != null)
                   Text(
                     user['email'].toString(),
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                    style: theme.textTheme.bodySmall?.copyWith(color: s.textTertiary),
                   ),
                 if (user['id'] != null)
                   Text(
                     'ID: ${user['id']}',
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.hintColor,
+                      color: s.textTertiary,
                       fontFamily: 'monospace',
                     ),
                   ),
@@ -591,16 +587,16 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildRequest(ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildRequest(ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final request = event['request'] as Map<String, dynamic>? ?? {};
     if (request.isEmpty) return const SizedBox.shrink();
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
       decoration: BoxDecoration(
-        color: isDark ? DarkColors.background1 : LightColors.background1,
-        borderRadius: m.radius10,
-        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
+        color: s.surface,
+        borderRadius: m.radiusCard,
+        border: Border.all(color: s.border, width: 0.5),
       ),
       child: Column(
         children: [
@@ -608,27 +604,27 @@ class SentryLogEventDetail extends StatelessWidget {
             _buildInfoRow(
               theme,
               m,
-              isDark,
+              s,
               '请求',
               '${request['method'] ?? ''} ${request['url'] ?? ''}',
             ),
           if (request['headers'] != null)
-            _buildInfoRow(theme, m, isDark, 'Headers', request['headers'].toString()),
+            _buildInfoRow(theme, m, s, 'Headers', request['headers'].toString()),
         ],
       ),
     );
   }
 
-  Widget _buildContexts(ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildContexts(ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final contexts = event['contexts'] as Map<String, dynamic>? ?? {};
     if (contexts.isEmpty) return const SizedBox.shrink();
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
       decoration: BoxDecoration(
-        color: isDark ? DarkColors.background1 : LightColors.background1,
-        borderRadius: m.radius10,
-        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
+        color: s.surface,
+        borderRadius: m.radiusCard,
+        border: Border.all(color: s.border, width: 0.5),
       ),
       child: Column(
         children: contexts.entries.map((e) {
@@ -643,31 +639,31 @@ class SentryLogEventDetail extends StatelessWidget {
                     e.key,
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: const Color(0xFF546E7A),
+                      color: s.neutral.onContainer,
                     ),
                   ),
                 ),
                 ...value.entries.map(
-                  (item) => _buildInfoRow(theme, m, isDark, item.key, item.value.toString()),
+                  (item) => _buildInfoRow(theme, m, s, item.key, item.value.toString()),
                 ),
               ],
             );
           }
-          return _buildInfoRow(theme, m, isDark, e.key, value.toString());
+          return _buildInfoRow(theme, m, s, e.key, value.toString());
         }).toList(),
       ),
     );
   }
 
-  Widget _buildRawJson(ThemeData theme, ThemeMetrics m, bool isDark) {
+  Widget _buildRawJson(ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final raw = const JsonEncoder.withIndent('  ').convert(event);
     return Container(
-      constraints: BoxConstraints(maxHeight: 200),
+      constraints: BoxConstraints(maxHeight: scaleW(200)),
       padding: EdgeInsets.all(m.kSpace12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF5F5F5),
-        borderRadius: m.radius10,
-        border: Border.all(color: isDark ? DarkColors.white10 : LightColors.black10, width: 0.5),
+        color: s.accentContainer,
+        borderRadius: m.radiusCard,
+        border: Border.all(color: s.border, width: 0.5),
       ),
       child: SingleChildScrollView(
         child: Column(
@@ -683,21 +679,18 @@ class SentryLogEventDetail extends StatelessWidget {
                   child: Container(
                     padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withAlpha(15),
+                      color: s.accentContainer,
                       borderRadius: m.radius4,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        DrawIcon(StrokeIcons.copy,
-                          size: m.iconSize12,
-                          color: theme.colorScheme.primary,
-                        ),
+                        DrawIcon(StrokeIcons.copy, size: m.iconSize12, color: s.accent),
                         SizedBox(width: m.kSpace4),
                         Text(
                           '复制',
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.primary,
+                            color: s.accent,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -712,7 +705,7 @@ class SentryLogEventDetail extends StatelessWidget {
               raw,
               style: theme.textTheme.bodySmall?.copyWith(
                 fontFamily: 'monospace',
-                color: isDark ? DarkColors.white80 : LightColors.black80,
+                color: s.textPrimary,
                 height: 1.5,
               ),
             ),
@@ -760,6 +753,21 @@ class SentryLogEventDetail extends StatelessWidget {
       }
     }
     return '未知事件';
+  }
+
+  /// 级别 → 状态角色：语义层没有"致命"这一档，fatal 与 error 同归 danger
+  AppStatusRole _levelRole(AppSemantic s, String level) {
+    switch (level) {
+      case 'fatal':
+      case 'error':
+        return s.danger;
+      case 'warning':
+        return s.warning;
+      case 'info':
+        return s.info;
+      default:
+        return s.neutral;
+    }
   }
 
   StrokeIcon _getLevelIcon(String level) {

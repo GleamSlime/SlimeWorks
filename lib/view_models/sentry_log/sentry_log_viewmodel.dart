@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_it/get_it.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
@@ -284,23 +283,6 @@ class SentryLogViewModel extends GetxController {
       await loadInitialData();
     } catch (e) {
       _logger.error('清空项目事件失败: $e');
-    }
-  }
-
-  Color getLevelColor(String level) {
-    switch (level) {
-      case 'fatal':
-        return Colors.purple.shade700;
-      case 'error':
-        return Colors.red.shade700;
-      case 'warning':
-        return Colors.orange.shade700;
-      case 'info':
-        return Colors.blue.shade700;
-      case 'debug':
-        return Colors.grey.shade600;
-      default:
-        return Colors.grey;
     }
   }
 

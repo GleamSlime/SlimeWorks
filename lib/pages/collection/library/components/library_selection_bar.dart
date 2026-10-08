@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
-import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
@@ -24,7 +23,9 @@ class LibrarySelectionBar extends StatelessWidget {
         actions: [
           TextButton(onPressed: () => Navigator.pop(dlgCtx), child: const Text('取消')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(dlgCtx).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppSemantic.of(dlgCtx).danger.color,
+            ),
             onPressed: () {
               Navigator.pop(dlgCtx);
               viewModel.deleteSelected();
@@ -69,7 +70,14 @@ class LibrarySelectionBar extends StatelessWidget {
           ),
           if (foldersToShow.isEmpty && contextFolderId == null)
             SimpleDialogOption(
-              child: Text('暂无文件夹', style: TextStyle(color: Theme.of(context).colorScheme.outline)),
+              child: Text(
+                '暂无文件夹',
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: AppTheme.metrics.fontSize13,
+                  color: AppSemantic.of(context).textTertiary,
+                ),
+              ),
             ),
         ],
       ),
@@ -84,7 +92,7 @@ class LibrarySelectionBar extends StatelessWidget {
   }
 
   Widget _buildBar(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final count = viewModel.selectedIds.length;
 
     final selectedNovels = viewModel.selectedIds
@@ -94,17 +102,17 @@ class LibrarySelectionBar extends StatelessWidget {
     final allFavorited = selectedNovels.isNotEmpty && selectedNovels.every((n) => n.isFavorite);
 
     return Container(
-      height: appMetrics.kSpace48 + 16,
+      height: appMetrics.kSpace48 + appMetrics.kSpace16,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: s.surface,
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withAlpha(20),
+            color: s.shadowKey.withAlpha(20),
             blurRadius: 12,
             offset: const Offset(0, -4),
           ),
         ],
-        border: Border(top: BorderSide(color: theme.dividerColor.withAlpha(30))),
+        border: Border(top: BorderSide(color: s.hairline)),
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -125,7 +133,12 @@ class LibrarySelectionBar extends StatelessWidget {
             SizedBox(width: AppTheme.metrics.kSpace4),
             Text(
               '已选 $count 项',
-              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+              style: AppTextStyles.role(
+                context,
+                fontSize: AppTheme.metrics.fontSize13,
+                weight: FontWeight.w500,
+                color: s.textSecondary,
+              ),
             ),
             const Spacer(),
             // 收藏 / 取消收藏
@@ -135,7 +148,7 @@ class LibrarySelectionBar extends StatelessWidget {
                   : null,
               icon: DrawIcon(
                 allFavorited ? StrokeIcons.star : StrokeIcons.starBorder,
-                color: allFavorited ? Colors.amber : null,
+                color: allFavorited ? s.warning.color : null,
               ),
               tooltip: allFavorited ? '取消收藏' : '加入收藏',
             ),
@@ -155,8 +168,9 @@ class LibrarySelectionBar extends StatelessWidget {
               icon: DrawIcon(StrokeIcons.deleteOutline, size: AppTheme.metrics.iconSize18),
               label: const Text('删除'),
               style: FilledButton.styleFrom(
-                backgroundColor: theme.colorScheme.error,
-                foregroundColor: theme.colorScheme.onError,
+                backgroundColor: s.danger.color,
+                // 语义层还没有"实心状态底上的字"这一档，主题里 colorScheme.onError 也正是纯白
+                foregroundColor: Colors.white,
               ),
             ),
           ],

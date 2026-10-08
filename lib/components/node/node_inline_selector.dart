@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -26,7 +26,7 @@ class NodeInlineSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     final localNodeEnabled = nodeService.localNodeEnabled.value;
     final remoteNodes = nodeService.enabledRemoteNodes;
@@ -34,9 +34,9 @@ class NodeInlineSelector extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace4),
       decoration: BoxDecoration(
-        color: theme.brightness == Brightness.dark
-            ? Colors.white.withAlpha(8)
-            : Colors.black.withAlpha(4),
+        // 面板底色是中性半透明水洗（原先按明暗手写 black@4 / white@8），
+        // 语义层里对应的就是永远朝"看得见"一侧走的 surfaceHover。
+        color: s.surfaceHover,
         borderRadius: m.radius8,
       ),
       child: Column(
@@ -69,7 +69,11 @@ class NodeInlineSelector extends StatelessWidget {
               padding: EdgeInsets.all(m.kSpace12),
               child: Text(
                 '暂无可用节点，请在节点设置中添加或启用节点',
-                style: TextStyle(fontSize: m.fontSize12, color: theme.hintColor),
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: m.fontSize12,
+                  color: s.textTertiary,
+                ),
               ),
             ),
         ],
@@ -86,9 +90,9 @@ class NodeInlineSelector extends StatelessWidget {
     required bool isSelected,
     required bool isAvailable,
   }) {
-    final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final accent = theme.colorScheme.primary;
+    final accent = s.accent;
 
     return InkWell(
       borderRadius: m.radius8,
@@ -128,7 +132,8 @@ class NodeInlineSelector extends StatelessWidget {
         decoration: BoxDecoration(
           border: isSelected ? Border.all(color: accent, width: 1.5) : null,
           borderRadius: m.radius8,
-          color: isSelected ? accent.withAlpha(20) : Colors.transparent,
+          // 选中底走低浓度强调容器，不再手搓 accent@alpha
+          color: isSelected ? s.accentContainer : Colors.transparent,
         ),
         child: Row(
           children: [
@@ -136,16 +141,14 @@ class NodeInlineSelector extends StatelessWidget {
               width: m.kSpace32,
               height: m.kSpace32,
               decoration: BoxDecoration(
-                color: isSelected
-                    ? accent.withAlpha(25)
-                    : (theme.brightness == Brightness.dark
-                          ? DarkColors.white10
-                          : LightColors.black5),
+                // 选中时图标底板要比行底更实一档，否则两者同色就等于抹平了层次；
+                // 未选中走图标占位底（surfaceSunken 的既定用途）
+                color: isSelected ? accent.withAlpha(28) : s.surfaceSunken,
                 borderRadius: m.radius8,
               ),
               child: DrawIcon(icon,
                 size: m.iconSize16,
-                color: isSelected ? accent : (isAvailable ? theme.hintColor : theme.disabledColor),
+                color: isSelected ? accent : (isAvailable ? s.textTertiary : s.textDisabled),
               ),
             ),
             SizedBox(width: m.kSpace10),
@@ -155,17 +158,19 @@ class NodeInlineSelector extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: TextStyle(
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: m.fontSize13,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                      color: isAvailable ? theme.colorScheme.onSurface : theme.disabledColor,
+                      weight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                      color: isAvailable ? s.textPrimary : s.textDisabled,
                     ),
                   ),
                   Text(
                     subtitle,
-                    style: TextStyle(
+                    style: AppTextStyles.role(
+                      context,
                       fontSize: m.fontSize12,
-                      color: isAvailable ? theme.hintColor : theme.disabledColor,
+                      color: isAvailable ? s.textTertiary : s.textDisabled,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),

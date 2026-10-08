@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/widgets/app_text_field.dart';
@@ -171,12 +173,14 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return AlertDialog(
       title: const Text('选择目录'),
       contentPadding: EdgeInsets.zero,
       content: SizedBox(
-        width: 400,
-        height: 420,
+        width: scaleW(400),
+        height: scaleH(420),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -186,26 +190,26 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
                 horizontal: AppTheme.metrics.kSpace16,
                 vertical: AppTheme.metrics.kSpace8,
               ),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              color: s.surfaceRaised,
               child: Row(
                 children: [
                   IconButton(
                     icon: DrawIcon(StrokeIcons.arrowUpward),
                     tooltip: '上级目录',
-                    iconSize: 18,
+                    iconSize: m.iconSize18,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: _loading ? null : _navigateUp,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.create_new_folder, size: 18),
+                    icon: Icon(Icons.create_new_folder, size: m.iconSize18),
                     tooltip: '新建文件夹',
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: _loading ? null : _createFolder,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.drive_file_rename_outline, size: 18),
+                    icon: Icon(Icons.drive_file_rename_outline, size: m.iconSize18),
                     tooltip: '重命名文件夹',
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -216,9 +220,9 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
                   Expanded(
                     child: Text(
                       _currentPath,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                      style: AppTextStyles.mono(context, size: m.fontSize12).copyWith(
+                        color: s.textTertiary,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -235,13 +239,28 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
                         padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
                         child: Text(
                           _error!,
-                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: m.fontSize13,
+                            color: s.danger.color,
+                            height: 1.65,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
                     )
                   : _entries.isEmpty
-                  ? Center(child: Text('此目录下没有子目录', style: Theme.of(context).textTheme.bodySmall))
+                  ? Center(
+                      child: Text(
+                        '此目录下没有子目录',
+                        style: AppTextStyles.role(
+                          context,
+                          fontSize: m.fontSize12,
+                          color: s.textTertiary,
+                          height: 1.6,
+                        ),
+                      ),
+                    )
                   : ListView.builder(
                       itemCount: _entries.length,
                       itemBuilder: (context, index) {
@@ -253,7 +272,14 @@ class _NodeDirectoryPickerState extends State<NodeDirectoryPicker> {
                           title: Text(name),
                           subtitle: Text(
                             entry,
-                            style: Theme.of(context).textTheme.labelSmall,
+                            style: AppTextStyles.role(
+                              context,
+                              fontSize: m.fontSize11,
+                              weight: FontWeight.w600,
+                              color: s.textTertiary,
+                              height: 1.5,
+                              letterSpacing: 0.6,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                           onTap: () => _navigateTo(entry),
