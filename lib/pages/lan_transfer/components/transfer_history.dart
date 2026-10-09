@@ -386,7 +386,7 @@ class _TransferHistoryCard extends StatelessWidget {
         Clipboard.setData(ClipboardData(text: item.textContent ?? ''));
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板'), duration: Duration(seconds: 2)));
+        ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板'), duration: AppMotion.dwell));
       },
       child: Container(
         padding: EdgeInsets.symmetric(

@@ -583,7 +583,7 @@ class _CollectionLibraryScreenState
                         child: SizedBox(
                           width: AppTheme.metrics.kSpace18,
                           height: AppTheme.metrics.kSpace18,
-                          child: const CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                         ),
                       )
                     : TextButton.icon(
@@ -955,7 +955,7 @@ class _CollectionLibraryScreenState
       if (isReorderTarget) {
         return Container(
           decoration: BoxDecoration(
-            border: Border.all(color: AppSemantic.of(ctx).accent, width: scaleW(2)),
+            border: Border.all(color: AppSemantic.of(ctx).accent, width: AppTheme.metrics.strokeRegular),
             borderRadius: appMetrics.radius8,
           ),
           child: _buildItemCard(ctx, item, isSelected, isSelecting, isBookHover),
@@ -1273,7 +1273,7 @@ class _CollectionLibraryScreenState
                   // 与同排卡片卡面同底，只有拖拽悬停时才抬成强调容器
                   color: isDragHovering ? s.accentContainer : s.surface,
                   border: isDragHovering
-                      ? Border.all(color: s.accent, width: scaleW(2))
+                      ? Border.all(color: s.accent, width: AppTheme.metrics.strokeRegular)
                       : null,
                 ),
                 child: Column(
@@ -1431,7 +1431,7 @@ class _SelectionBoxPainter extends CustomPainter {
     final borderPaint = Paint()
       ..color = borderColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
+      ..strokeWidth = AppTheme.metrics.strokeRegular;
     canvas.drawRect(rect, borderPaint);
   }
 

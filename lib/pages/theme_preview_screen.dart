@@ -72,7 +72,7 @@ class _ThemePreviewScreenState extends State<ThemePreviewScreen> {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: m.kSpace24),
                 decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(color: s.hairline, width: scaleW(1))),
+                  border: Border(bottom: BorderSide(color: s.hairline, width: AppTheme.metrics.strokeHairline)),
                 ),
                 child: const TabBar(
                   isScrollable: true,
@@ -178,7 +178,7 @@ class _ColorTab extends StatelessWidget {
               decoration: BoxDecoration(
                 color: color,
                 borderRadius: m.radius8,
-                border: Border.all(color: s.border, width: scaleW(1)),
+                border: Border.all(color: s.border, width: AppTheme.metrics.strokeHairline),
               ),
             ),
             SizedBox(height: m.kSpace6),
@@ -309,7 +309,7 @@ class _BorderedBox extends StatelessWidget {
             decoration: BoxDecoration(
               color: s.surface,
               borderRadius: m.radius8,
-              border: Border.all(color: borderColor, width: scaleW(1)),
+              border: Border.all(color: borderColor, width: AppTheme.metrics.strokeHairline),
             ),
           ),
           SizedBox(height: m.kSpace6),
@@ -324,13 +324,15 @@ class _AccentPickerRow extends StatelessWidget {
   const _AccentPickerRow({required this.color});
   final Color color;
 
+  // 强调色候选：直接引用调色板常量，跟设置页「强调色」那一排菜单同源，
+  // 这样这里显示的就是真正可选的那几档，改一处不会两处对不上。
   static const List<Color> _presets = [
-    Color(0xFFA89FEE),
-    Color(0xFF6F5FD9),
-    Color(0xFF6FB8E8),
-    Color(0xFF82D7BB),
-    Color(0xFFF5A569),
-    Color(0xFFFF6C74),
+    LightColors.primary,
+    LightColors.accentStrong,
+    LightColors.blue,
+    LightColors.mint,
+    LightColors.orange,
+    LightColors.red,
   ];
 
   @override
@@ -963,7 +965,7 @@ class _GlassTabState extends State<_GlassTab> {
           decoration: BoxDecoration(
             color: s.accentContainer,
             borderRadius: radius,
-            border: Border.all(color: s.accentContainerBorder, width: scaleW(1)),
+            border: Border.all(color: s.accentContainerBorder, width: AppTheme.metrics.strokeHairline),
           ),
         ),
         SizedBox(height: m.kSpace6),

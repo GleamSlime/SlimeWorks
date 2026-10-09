@@ -176,7 +176,7 @@ class ReaderToolbar extends StatelessWidget {
                       SizedBox(
                         width: scaleW(16),
                         height: scaleW(16),
-                        child: const CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                       ),
                       SizedBox(width: m.kSpace4),
                       Text(
@@ -363,7 +363,7 @@ class ReaderToolbar extends StatelessWidget {
                     SizedBox(
                       width: scaleW(14),
                       height: scaleW(14),
-                      child: const CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                     ),
                     SizedBox(width: m.kSpace4),
                     Text(

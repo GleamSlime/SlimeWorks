@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/asr/asr_models.dart';
 import 'package:slime_works/core/services/asr/asr_settings_service.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -294,7 +295,7 @@ class AsrSubtitleSection extends StatelessWidget {
     final available = await _settings.testAllServers();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('探测完成：$available 个服务可用'), duration: const Duration(seconds: 2)),
+      SnackBar(content: Text('探测完成：$available 个服务可用'), duration: AppMotion.dwell),
     );
   }
 
@@ -600,7 +601,7 @@ class AsrSubtitleSection extends StatelessWidget {
     final available = await _settings.testAllTranslateServers();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('探测完成：$available 个翻译服务可用'), duration: const Duration(seconds: 2)),
+      SnackBar(content: Text('探测完成：$available 个翻译服务可用'), duration: AppMotion.dwell),
     );
   }
 
@@ -800,7 +801,7 @@ class AsrSubtitleSection extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(error == null ? '本地语音识别引擎已部署完成' : '部署失败：$error'),
-        duration: const Duration(seconds: 3),
+        duration: AppMotion.dwellLong,
       ),
     );
   }

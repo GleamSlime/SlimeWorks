@@ -152,7 +152,7 @@ class _GooeyDropdownShaderState extends State<GooeyDropdownShader> with SingleTi
   double get gap => widget.gap ?? 0.0;
   double get cardOffset => widget.cardOffset ?? 80.0;
   DropdownDirection get direction => widget.direction ?? DropdownDirection.auto;
-  Curve get curve => widget.curve ?? Curves.easeInOutCubic;
+  Curve get curve => widget.curve ?? AppMotion.standard;
 
   @override
   void initState() {
@@ -805,7 +805,7 @@ class _ContentWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     // 内容在卡片出现期间淡入：透明度从0到1
     final contentProgress = progress.clamp(0.0, 1.0);
-    final opacity = Curves.easeInOut.transform(contentProgress);
+    final opacity = AppMotion.standard.transform(contentProgress);
 
     // 当进度非常小时，隐藏内容以避免布局和渲染开销
     // 进度太小时卡片尺寸不足，会导致内部 Row/Text 布局溢出，使用较高阈值避免此问题

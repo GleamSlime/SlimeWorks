@@ -302,7 +302,7 @@ class SentryLogList extends StatelessWidget {
         // 容器底与描边由角色派生，不手写 withAlpha
         color: role.container,
         borderRadius: m.radius4,
-        border: Border.all(color: role.containerBorder, width: 0.5),
+        border: Border.all(color: role.containerBorder, width: AppTheme.metrics.strokeUltraThin),
         boxShadow: [
           BoxShadow(
             color: color.withAlpha(20),

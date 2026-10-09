@@ -18,7 +18,7 @@ class _ScanningAnimationState extends State<ScanningAnimation> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(duration: const Duration(seconds: 2), vsync: this)..repeat();
+    _controller = AnimationController(duration: AppMotion.ambient, vsync: this)..repeat();
   }
 
   @override
@@ -99,7 +99,7 @@ class _RadarPainter extends CustomPainter {
         Paint()
           ..color = primaryColor.withValues(alpha: 0.08)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
+          ..strokeWidth = AppTheme.metrics.strokeHairline,
       );
     }
 
@@ -132,7 +132,7 @@ class _RadarPainter extends CustomPainter {
       lineEnd,
       Paint()
         ..color = primaryColor.withValues(alpha: 0.6)
-        ..strokeWidth = 1.5
+        ..strokeWidth = AppTheme.metrics.strokeThin
         ..strokeCap = StrokeCap.round,
     );
   }

@@ -217,9 +217,9 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
           shape: RoundedRectangleBorder(
             borderRadius: appMetrics.radius8,
             side: widget.isSelected
-                ? BorderSide(color: accent, width: scaleW(2))
+                ? BorderSide(color: accent, width: AppTheme.metrics.strokeRegular)
                 : widget.isBookHover
-                ? BorderSide(color: dropTint, width: scaleW(2))
+                ? BorderSide(color: dropTint, width: AppTheme.metrics.strokeRegular)
                 : BorderSide.none,
           ),
           child: Stack(
@@ -490,7 +490,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                       color: widget.isSelected ? accent : s.scrim.withAlpha(60),
                       shape: BoxShape.circle,
                       // 选中环压在封面 art 上，白环不随主题反转
-                      border: Border.all(color: s.onMedia, width: scaleW(2)),
+                      border: Border.all(color: s.onMedia, width: AppTheme.metrics.strokeRegular),
                     ),
                     child: widget.isSelected
                         // 勾压在强调底上，明暗两档要跟着反相

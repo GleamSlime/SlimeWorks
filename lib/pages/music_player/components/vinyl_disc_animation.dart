@@ -6,11 +6,38 @@ import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
-/// 唱片本体的质感色
+/// 唱片与唱臂的材质色（恒定材质调色板）
 ///
-/// 黑胶在任何主题下都是黑的，所以这一组值不跟明暗走。
-const Color _discPlaceholderColor = Color(0xFF3a3a3a);
+/// 黑胶在任何主题下都是黑的，唱臂也永远是那几档金属灰：判据同 `AppReaderPaper`
+/// / `AppTerminalPalette`——这一层是"用户看到的一件实物材质"，不是界面表面，
+/// 跟主题反相的话，暗色下盘面会糊进背景、亮色下唱臂会变白。
+/// 集中成一组常量（而不是散在各 build 方法里）是为了看得出
+/// 「盘面五档沟槽 + 轴心 + 唱臂金属」是成套的，单独调其中一档就破坏关系。
+abstract final class _DiscMaterial {
+  /// 无封面时的盘面占位底（也是默认封面那一格的底）
+  static const Color placeholder = Color(0xFF3a3a3a);
+
+  /// 盘面径向渐变的五档：中心→外缘反复明暗，模拟沟槽反光
+  static const List<Color> discGradient = [
+    Color(0xFF1a1a1a),
+    Color(0xFF2a2a2a),
+    Color(0xFF1a1a1a),
+    Color(0xFF333333),
+    Color(0xFF1a1a1a),
+  ];
+
+  /// 轴心圆点与其外圈
+  static const Color spindle = Color(0xFF555555);
+  static const Color spindleRing = Color(0xFF333333);
+
+  /// 唱臂支点与臂杆（同一种金属灰）
+  static const Color toneArmMetal = Color(0xFF888888);
+
+  /// 唱针头（比臂杆亮一档）
+  static const Color toneArmStylus = Color(0xFFAAAAAA);
+}
 
 /// 唱片机播放动效组件（参考网易音乐黑胶唱片风格）
 ///
@@ -39,10 +66,10 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
     // 唱片旋转动画：一整圈自转走 AppMotion.spin（转得出来但不至于晕）
     _spinController = AnimationController(vsync: this, duration: AppMotion.spin);
 
-    // 唱臂动画
+    // 唱臂动画：落下/抬起是一次性的重头动作，时长并到 AppMotion.emphasis
     _toneArmController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: AppMotion.emphasis,
     );
 
     if (widget.isPlaying) {
@@ -108,13 +135,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: const RadialGradient(
-          colors: [
-            Color(0xFF1a1a1a),
-            Color(0xFF2a2a2a),
-            Color(0xFF1a1a1a),
-            Color(0xFF333333),
-            Color(0xFF1a1a1a),
-          ],
+          colors: _DiscMaterial.discGradient,
           stops: [0.0, 0.3, 0.5, 0.7, 1.0],
         ),
         boxShadow: [
@@ -152,8 +173,8 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
               // 无封面时的占位色必须跟着唱片本身的暗色质感走：这里原先用主题的
               // surfaceContainerHighest，亮色模式下会在黑胶上挖出一个白圆盘，
               // 和下面 _buildDefaultCover 的深灰占位也对不上。
-              color: _discPlaceholderColor,
-              border: Border.all(color: s.mediaStage.withValues(alpha: 0.3), width: 1),
+              color: _DiscMaterial.placeholder,
+              border: Border.all(color: s.mediaStage.withValues(alpha: 0.3), width: AppTheme.metrics.strokeHairline),
             ),
             child: ClipOval(
               child: widget.coverPath != null && File(widget.coverPath!).existsSync()
@@ -173,8 +194,8 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
             height: 12,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF555555),
-              border: Border.all(color: const Color(0xFF333333), width: 2),
+              color: _DiscMaterial.spindle,
+              border: Border.all(color: _DiscMaterial.spindleRing, width: AppTheme.metrics.strokeRegular),
             ),
           ),
         ],
@@ -186,7 +207,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
     // 无封面时的占位是深色盘面，音符图标是盘面之上的墨字（恒白）
     final s = AppSemantic.of(context);
     return Container(
-      color: _discPlaceholderColor,
+      color: _DiscMaterial.placeholder,
       child: DrawIcon(StrokeIcons.musicNote,
         size: size * 0.4,
         color: s.onMedia.withValues(alpha: 0.5),
@@ -215,14 +236,14 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
           Container(
             width: 10,
             height: 10,
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF888888)),
+            decoration: const BoxDecoration(shape: BoxShape.circle, color: _DiscMaterial.toneArmMetal),
           ),
           // 唱臂杆
           Container(
             width: 3,
             height: armLength,
             decoration: BoxDecoration(
-              color: const Color(0xFF888888),
+              color: _DiscMaterial.toneArmMetal,
               borderRadius: BorderRadius.circular(1.5),
             ),
           ),
@@ -231,7 +252,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
             width: 6,
             height: 12,
             decoration: BoxDecoration(
-              color: const Color(0xFFAAAAAA),
+              color: _DiscMaterial.toneArmStylus,
               borderRadius: BorderRadius.circular(1),
             ),
           ),

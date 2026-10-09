@@ -438,7 +438,7 @@ class _MangaComicDetailScreenState
                               decoration: BoxDecoration(
                                 color: s.surfaceSunken,
                                 borderRadius: metrics.radius12,
-                                border: Border.all(color: s.hairline, width: scaleW(1)),
+                                border: Border.all(color: s.hairline, width: AppTheme.metrics.strokeHairline),
                               ),
                               child: Text(
                                 t,
@@ -1589,7 +1589,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                             padding: EdgeInsets.symmetric(vertical: m.kSpace16),
                             child: Center(
                               child: _loadingMore
-                                  ? CircularProgressIndicator(strokeWidth: scaleW(2), color: s.accent)
+                                  ? CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular, color: s.accent)
                                   : TextButton(onPressed: _loadMore, child: const Text('加载更多')),
                             ),
                           );

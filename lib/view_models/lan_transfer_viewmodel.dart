@@ -1072,7 +1072,7 @@ class LanTransferViewModel extends BaseViewModel {
   void handleError(dynamic error, String message) {
     setError('$message: $error');
     _logger.error(message, error: error);
-    _showSnack(message: message, isError: true, duration: const Duration(seconds: 3));
+    _showSnack(message: message, isError: true, duration: AppMotion.dwellLong);
   }
 
   /// 显示错误消息
@@ -1088,7 +1088,7 @@ class LanTransferViewModel extends BaseViewModel {
   void _showSnack({
     required String message,
     required bool isError,
-    Duration duration = const Duration(seconds: 2),
+    Duration duration = AppMotion.dwell,
   }) {
     // 页面已销毁时（onClose 里 stopService 的失败回调就在这一类时机到达）不再弹提示，
     // 否则会把局域网页的错误条甩到用户已经切换过去的页面上

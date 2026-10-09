@@ -49,7 +49,7 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
       vsync: this,
       duration: AppMotion.entrance,
     );
-    _entranceAnimation = CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic);
+    _entranceAnimation = CurvedAnimation(parent: _entranceController, curve: AppMotion.decelerate);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _entranceController.forward();
@@ -117,7 +117,7 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
       child: ClipRRect(
         borderRadius: m.radius12,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
           child: Container(
             decoration: BoxDecoration(
               // 磨砂页签条：着色/描边/投影统一走语义玻璃与投影档
@@ -736,7 +736,7 @@ class _GlassCard extends StatelessWidget {
     return ClipRRect(
       borderRadius: AppTheme.metrics.radius12,
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: AppTheme.metrics.kSpace16,
@@ -832,7 +832,7 @@ class _BlurredCoverBackground extends StatelessWidget {
       children: <Widget>[
         image,
         BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          filter: ImageFilter.blur(sigmaX: AppGlass.blurMedium, sigmaY: AppGlass.blurMedium),
           child: const ColoredBox(color: Colors.transparent),
         ),
       ],
@@ -871,7 +871,7 @@ class _CategoryCardState extends State<_CategoryCard> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: AppMotion.base,
-          curve: Curves.easeOutCubic,
+          curve: AppMotion.decelerate,
           padding: EdgeInsets.all(m.kSpace16),
           decoration: BoxDecoration(
             // 悬停走中性水洗层，静止态是浮起卡片

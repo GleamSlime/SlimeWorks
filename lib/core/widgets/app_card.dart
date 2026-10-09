@@ -281,7 +281,7 @@ class AppDivider extends StatelessWidget {
     final s = AppSemantic.of(context);
     return Divider(
       height: spacing ?? scaleW(1),
-      thickness: scaleW(1),
+      thickness: AppTheme.metrics.strokeHairline,
       indent: indent,
       endIndent: endIndent,
       color: s.hairline,

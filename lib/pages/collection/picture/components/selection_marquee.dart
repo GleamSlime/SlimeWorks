@@ -155,7 +155,7 @@ class _MarqueePainter extends CustomPainter {
     final borderPaint = Paint()
       ..color = borderColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = scaleW(1.5);
+      ..strokeWidth = AppTheme.metrics.strokeThin;
     canvas.drawRect(rect, borderPaint);
   }
 

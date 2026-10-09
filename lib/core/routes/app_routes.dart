@@ -387,8 +387,8 @@ class AppRoutes {
           child: FadeTransition(
             opacity: CurvedAnimation(
               parent: animation,
-              curve: Curves.easeOutCubic,
-              reverseCurve: Curves.easeInCubic,
+              curve: AppMotion.decelerate,
+              reverseCurve: AppMotion.accelerate,
             ),
             child: child,
           ),
@@ -403,7 +403,7 @@ class AppRoutes {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+    final curved = CurvedAnimation(parent: animation, curve: AppMotion.decelerate);
     final scale = Tween(begin: 0.985, end: 1.0).animate(curved);
     return ColoredBox(
       // color: Theme.of(context).scaffoldBackgroundColor,

@@ -371,7 +371,7 @@ class _Content extends StatelessWidget {
             width: iconSize,
             height: iconSize,
             child: CircularProgressIndicator(
-              strokeWidth: scaleW(0.5),
+              strokeWidth: AppTheme.metrics.strokeUltraThin,
               valueColor: AlwaysStoppedAnimation<Color>(iconColor ?? AppSemantic.of(context).textSecondary),
             ),
           ),

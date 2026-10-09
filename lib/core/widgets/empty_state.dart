@@ -57,7 +57,7 @@ class EmptyState extends StatelessWidget {
               decoration: BoxDecoration(
                 color: s.surfaceSunken,
                 shape: BoxShape.circle,
-                border: Border.all(color: s.hairline, width: scaleW(1)),
+                border: Border.all(color: s.hairline, width: AppTheme.metrics.strokeHairline),
               ),
               child: DrawIcon(
                 icon,
@@ -112,7 +112,7 @@ class AppLoading extends StatelessWidget {
             width: size ?? m.iconSize24,
             height: size ?? m.iconSize24,
             child: CircularProgressIndicator(
-              strokeWidth: scaleW(2.2),
+              strokeWidth: AppTheme.metrics.strokeRegular,
               strokeCap: StrokeCap.round,
               color: s.accent,
             ),

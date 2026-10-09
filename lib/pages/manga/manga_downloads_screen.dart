@@ -319,7 +319,7 @@ class _EpsStatusChip extends StatelessWidget {
           width: m.kSpace10,
           height: m.kSpace10,
           child: CircularProgressIndicator(
-            strokeWidth: scaleW(1.5),
+            strokeWidth: AppTheme.metrics.strokeThin,
             value: info.progress > 0 ? info.progress : null,
           ),
         );

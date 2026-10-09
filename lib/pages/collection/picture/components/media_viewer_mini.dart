@@ -215,7 +215,7 @@ class _GlassPulsePainter extends CustomPainter {
     // 边框
     final stroke = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
+      ..strokeWidth = AppTheme.metrics.strokeRegular
       ..color = color.withValues(alpha: opacity * 0.5);
     canvas.drawCircle(center, radius, stroke);
   }
@@ -258,11 +258,16 @@ class _GlassPulseLoaderState extends State<_GlassPulseLoader> with SingleTickerP
 }
 
 class _AudioWavePainter extends CustomPainter {
+  const _AudioWavePainter({required this.color});
+
+  /// 波形条压在舞台渐变上，颜色由调用方给（画笔里拿不到 context）
+  final Color color;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 2
+      ..color = color
+      ..strokeWidth = AppTheme.metrics.strokeRegular
       ..strokeCap = StrokeCap.round;
     const barCount = 40;
     final barW = size.width / barCount;

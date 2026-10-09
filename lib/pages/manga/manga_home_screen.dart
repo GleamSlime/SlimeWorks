@@ -95,7 +95,7 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                                   child: SizedBox(
                                     width: AppTheme.metrics.kSpace14,
                                     height: AppTheme.metrics.kSpace14,
-                                    child: CircularProgressIndicator(strokeWidth: scaleW(1.5)),
+                                    child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeThin),
                                   ),
                                 ),
                                 errorBuilder: (_, _, _) =>

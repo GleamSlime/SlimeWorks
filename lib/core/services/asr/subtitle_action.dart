@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/asr/asr_models.dart';
 import 'package:slime_works/core/services/asr/asr_settings_service.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
 import 'package:slime_works/src/rust/api/asr.dart' as asr_api;
 
@@ -38,7 +39,7 @@ Future<void> recognizeSubtitleAction(
     messenger.showSnackBar(
       const SnackBar(
         content: Text('尚未部署本地语音识别引擎，也没有可用的内网大模型，请先到资源库设置中配置'),
-        duration: Duration(seconds: 3),
+        duration: AppMotion.dwellLong,
       ),
     );
     return;
@@ -52,7 +53,7 @@ Future<void> recognizeSubtitleAction(
   messenger.showSnackBar(
     SnackBar(
       content: Text('「$displayName」已加入识别队列（${asrLanguageLabel(language)}）'),
-      duration: const Duration(seconds: 2),
+      duration: AppMotion.dwell,
     ),
   );
   _notifyWhenDone(context, task);
@@ -79,7 +80,7 @@ Future<void> translateSubtitleAction(
     messenger.showSnackBar(
       SnackBar(
         content: Text('未找到字幕文件 $sourceSrt，请先执行"识别字幕"'),
-        duration: const Duration(seconds: 3),
+        duration: AppMotion.dwellLong,
       ),
     );
     return;
@@ -88,7 +89,7 @@ Future<void> translateSubtitleAction(
     messenger.showSnackBar(
       const SnackBar(
         content: Text('尚未配置内网字幕翻译服务（LibreTranslate 兼容的 NMT 接口），请先到资源库设置中添加'),
-        duration: Duration(seconds: 3),
+        duration: AppMotion.dwellLong,
       ),
     );
     return;
@@ -104,7 +105,7 @@ Future<void> translateSubtitleAction(
   messenger.showSnackBar(
     SnackBar(
       content: Text('「$displayName」已加入翻译队列（源语言：${asrLanguageLabel(language)} → 中文）'),
-      duration: const Duration(seconds: 2),
+      duration: AppMotion.dwell,
     ),
   );
   _notifyWhenDone(context, task);
@@ -133,7 +134,10 @@ void _notifyWhenDone(BuildContext context, TranscriptionTask task) {  late final
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        duration: Duration(seconds: state == TranscriptionTaskState.completed ? 4 : 3),
+        // 完成那条会把生成路径整段念出来，按"要读完的通知"档走；其余是短状态条
+        duration: state == TranscriptionTaskState.completed
+            ? AppMotion.dwellNotice
+            : AppMotion.dwellLong,
       ),
     );
   });

@@ -349,7 +349,7 @@ class _HttpBridgeTestPageState extends State<HttpBridgeTestPage> {
                 ? SizedBox(
                     width: m.kSpace16,
                     height: m.kSpace16,
-                    child: CircularProgressIndicator(strokeWidth: scaleW(2)),
+                    child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                   )
                 : DrawIcon(StrokeIcons.send),
             label: Text(_isLoading ? '发送中...' : '发送请求'),

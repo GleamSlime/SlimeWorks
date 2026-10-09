@@ -664,7 +664,7 @@ class _AnimatedSwitcherWrapper extends StatelessWidget {
         // 而不是 scaffoldBackgroundColor 的实心画布——后者会把整页的磨砂彻底盖掉。
         color: AppSemantic.of(context).canvas.withAlpha(WindowGlass.contentAlpha),
         child: SlideTransition(
-          position: tween.animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+          position: tween.animate(CurvedAnimation(parent: animation, curve: AppMotion.decelerate)),
           child: child,
         ),
       ),

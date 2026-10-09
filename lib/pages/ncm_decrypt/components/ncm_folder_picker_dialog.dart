@@ -80,7 +80,7 @@ class _NcmFolderPickerDialogState extends State<NcmFolderPickerDialog> {
               Center(
                 child: Padding(
                   padding: EdgeInsets.all(m.kSpace16),
-                  child: CircularProgressIndicator(strokeWidth: scaleW(2)),
+                  child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                 ),
               )
             else if (_scannedFiles.isNotEmpty) ...[

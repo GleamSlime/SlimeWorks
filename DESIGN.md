@@ -252,7 +252,13 @@ double sp = m.kSpace16;
 - **图标**：`iconSize12/13/14/15/16/18/20/22/24/28/32/40/44/48/64/96`（**没有 38**）
 - **描边宽度**：`strokeUltraThin`(0.5) · `strokeHairline`(1.0) · `strokeThin`(1.5) ·
   `strokeRegular`(2.0) · `strokeEmphasis`(2.5) · `strokeBold`(3.0)——这六档是**固定值，
-  不吃 `scaleW`**（原因见 §3.3），别在调用点裸写 `width: 0.5` / `strokeWidth: 2.5`。
+  不吃 `scaleW`**（原因见 §3.3），别在调用点裸写 `width: 0.5` / `strokeWidth: 2.5`，
+  也别写 `width: scaleW(1)`：后者看着像走了尺寸口径，实际是把"1 这条线"塞进了宽度族，
+  窗口一放大描边就跟着变粗。
+  **覆盖范围是四个入口**：`Border.all(width:)`、`BorderSide(width:)`、
+  `Divider(thickness:)`、`Paint()..strokeWidth` 与 `CircularProgressIndicator(strokeWidth:)`。
+  口径：`grep -rn "Border\.all(\|BorderSide(\|strokeWidth\|thickness:" lib/ --include='*.dart' | grep -E "(width|thickness|strokeWidth)[=:] *(scaleW\()?0?[0-9]"`
+  剩下的应当只有图表画笔（§2.6 的 `AppViz` 那类：仪表盘环 6、十字线 0.8 这类跟几何走的量）。
   `strokeEmphasis` 是给"2.0 压在封面上细成一条线、3.0 又太笨"那档进度环/选中环的
 
 ### 3.1 两族尺寸：宽度族 vs 字号族（最贵的一个坑）
@@ -418,12 +424,30 @@ double sp = m.kSpace16;
 | `ambient` | 1600ms | 慢速常驻环境动效：在线状态点、缓慢呼吸的图标底 |
 | `spin` | 8s | 一整圈自转（黑胶那类"要看出在转但不能晕"） |
 | `dwell` / `dwellLong` | 2s / 3s | SnackBar·Toast 驻留；带操作入口或信息量大的那条用 `dwellLong` |
+| `dwellNotice` | 5s | 正文要逐字读完的通知（失败原因、生成路径、新版本号） |
+
+**不是动效的时长不进这套档位**。网络超时、轮询、防抖、权限重试间隔、播放器 seek、
+逐帧节拍（16ms）和"多久没动就进沉浸模式"这类 idle 计时是**数据节奏**，留在各自的
+service / 设置项里、各带一句注释说明为什么是这个数；把它们塞进 `AppMotion`
+只会让节奏表变成垃圾桶。判据一句话：**这个时长决定的是"画面怎么变"，还是"什么时候再做一次"**
+——前者上档，后者不上。同理，用户在设置里可调的那个数（隐私模糊 sigma、自动沉浸秒数）
+也不进档位。
 
 ### 5.3 曲线与弹簧
 
 现有：`standard`（通用，起步快收尾稳）、`decelerate`（进场/展开，落位感）、
 `accelerate`（退场/收起，不拖尾）、`linearish`（进度条）。
 `AnimatedX` 一律用 `AppMotion.defaultDuration` + `defaultCurve`，不要每处手写。
+
+**全站 `Curves.*` 已归零**（口径：`grep -rn "Curves\." lib/ --include='*.dart' | grep -v core/theme/`
+再排掉 §12.3 的实验室页）。换法是一条固定映射，遇到新的手写曲线按它归位，别新增档位：
+
+| 原来写的 | 收到 |
+|---|---|
+| `easeOutCubic` / `easeOut` | `decelerate` |
+| `easeInCubic` / `easeIn`（含 `reverseCurve`） | `accelerate` |
+| `easeInOut` / `easeInOutCubic` | `standard` |
+| `easeOutBack` / `elasticOut`（§5.1 禁的多次过冲） | `springCurve` |
 
 弹簧档已落地：`AppMotion.spring`（`mass 1 / stiffness 260 / damping 22`，
 阻尼比 ζ≈0.68 → 过冲约 5%，**只回一次**）。两种用法：
@@ -432,7 +456,7 @@ double sp = m.kSpace16;
 - `AnimatedContainer` / `AnimatedSize` 这类只吃 `Curve` 的走 `AppMotion.springCurve`
   （同一条弹簧的近似曲线，过冲量对齐，免得两个档位观感对不上），时长取 `springSettle`。
 
-规则：**只有"状态改变"用弹簧，hover/press 这类高频反馈仍然用短时长 `Curves`**——
+规则：**只有"状态改变"用弹簧，hover/press 这类高频反馈仍然用短时长曲线档**——
 弹簧在 90ms 尺度上看不出过冲，只会让手感发黏。
 
 🔧 待接线：全站绝大多数 `AnimatedX` 还挂在 `standard` 上，按 §5.5 逐面迁到弹簧档。
@@ -443,10 +467,11 @@ double sp = m.kSpace16;
   那种写法会造成"可点击但无内容"的空窗）。
 - `StateTransitionAnimation`（图标+文字换脸，已带 in/out 位移与瞬时模糊，
   是 §5.4 那一族唯一的现成消费者）。
-- 🔧 `AppPageTransitions.fadeUp` **定义了但没人用**：路由转场现在走
-  `app_routes.dart:275` 手写的 320/260ms + `easeOutCubic/easeInCubic` 淡入
-  （另有一条带 0.985 微缩放的 builder）。260 不在 §5.2 的档位上，两条口径要合一条；
-  `StateTransitionAnimation.animationDuration` 的默认值同样是手写的 400ms。
+- 🔧 `AppPageTransitions.fadeUp` **定义了但没人用**：路由转场现在仍走
+  `app_routes.dart` 里两条各自手写的 builder（一条纯淡入，一条淡入 + 0.985 微缩放）。
+  曲线已经都在档上（`decelerate` 进 / `accelerate` 出），但 260ms 那一档不在 §5.2 的刻度里，
+  0.985 也不在 §5.4 的缩放五档里——两条 builder 合成一条 `fadeUp` 之后，
+  这两个数才会自动归位。`StateTransitionAnimation.animationDuration` 的默认值同样还是手写的 400ms。
 
 ### 5.4 位移 / 缩放 / 瞬时模糊：三族新档
 
@@ -462,9 +487,10 @@ double sp = m.kSpace16;
 | `travelMedium` | 12 | 面板从触发点下方展开 |
 | `travelLarge` | 30 | 整块内容换脸（列表↔详情这类） |
 
-**缩放是无量纲**的，只有四个合法值，别在页面里现写 `0.93`：
+**缩放是无量纲**的，只有五个合法值，别在页面里现写 `0.93`：
 `scalePress 0.98`（按压）/ `scaleMenu 0.97`（菜单从触发点长出）/
-`scaleEnter 0.96`（浮层进场起点）/ `scaleRetreat 0.99`（收起终态，留 1% 才看得出是
+`scaleEnter 0.96`（浮层进场起点）/ `scaleStage 0.93`（全屏舞台进场：看图器这类整块画面
+推近，比浮层要看得出更多位移）/ `scaleRetreat 0.99`（收起终态，留 1% 才看得出是
 同一个东西缩回去，而不是消失）。
 
 **瞬时模糊**是这套语言里"内容换脸"的那一下：状态切换的瞬间给旧内容加模糊、新内容从模糊里
@@ -474,9 +500,14 @@ double sp = m.kSpace16;
 | 族 | 值 | 对象 |
 |---|---|---|
 | `AppMotion.blurContent 2 / blurPanel 4 / blurPage 8` | sigma，**几帧之内退干净** | 正在换脸的内容 |
-| `AppGlass.blurSoft 12 / blurMedium 24 / blurStrong 40` | sigma，**常驻** | 玻璃面板背后 |
+| `AppGlass.blurTrace 3 / blurFeather 8 / blurSoft 12 / blurMedium 24 / blurStrong 40 / blurArtwork 50` | sigma，**常驻** | 玻璃面板背后 |
+
+`blurTrace`/`blurFeather` 是量程下界：封面卡上的浮层（收藏角标、底部磨砂栏）要在
+"透出封面才知道是同一张卡"和"压得住白字"之间分 hover 前后两档，`blurSoft` 一起步就糊成一块板。
 
 内容模糊停在半路就是"糊了"，不是"在动"——进出场两侧都必须收到 0。
+隐私遮罩的 sigma 是**用户设置值**（`MediaPrefsService.privacyBlurSigma`），不是档位，
+不要往 `AppGlass` 上收。
 
 ### 5.5 场景对照：每一面具体怎么动
 
@@ -849,10 +880,17 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
     按 `s.terminal` 成套取，不许逐色判主题。
 15. **描边粗细走 `m.strokeUltraThin/strokeHairline/strokeThin/strokeRegular/strokeEmphasis/strokeBold`**
     （§3.3）：发丝线是**固定 1**，写成 `1.w`/`scaleW(1)` 会在高分屏上被缩成糊线。
-    这五档是固定值、不吃 `scaleW`，别当"漏改的裸数字"收掉。
+    这六档是固定值、不吃 `scaleW`，别当"漏改的裸数字"收掉。
+    四个入口都算：`Border.all(width:)`、`BorderSide(width:)`、`Divider(thickness:)`、
+    `Paint()..strokeWidth` 与 `CircularProgressIndicator(strokeWidth:)`。
 16. **收编字面色到令牌时必须字节等价**：只有精确对上命名档位才换 token，对不上就写算式
     （`s.onMedia.withAlpha(0x5C)`、`s.mediaStage.withValues(alpha: .35)`），
     **不许往邻近档上靠**。收编是治理，不是重新设计——规范化的同时改了渲染像素就算失败。
+17. **动效族反过来：就是要它靠档**。时长、曲线、缩放、sigma、描边这些一档之差看不出来，
+    留着 250/260/280/300/400 五种"差不多"才是问题；把 `Curves.easeOutCubic` 换成
+    `decelerate`、`sigmaX: 8` 换成 `blurSoft` 是这套语言的落位，不是回归失败（映射见 §5.3）。
+    代价必须**当场列出来报给用户**，并且出图的用例要跟着重跑基线。
+    颜色不许靠、动效许靠，是同一枚硬币的两面：颜色错了是缺陷，节奏差了是风格。
 
 ---
 
@@ -1544,6 +1582,23 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
   从过渡档位里分出来——它们不是 A→B 的时长，以前一律拿 `base/slow` 顶，常驻呼吸就抖得发慌。
 - **描边宽度成阶梯**（§3.3）：`strokeUltraThin/Hairline/Thin/Regular/Emphasis/Bold` 六档固定值、
   不吃 `scaleW`；主题自身的 11 处发丝线已从 `scaleW(1)` 换成 `m.strokeHairline`。
+  这一族**全部四个入口**（`Border.all`/`BorderSide`/`Divider(thickness:)`/`Paint..strokeWidth`
+  与 `CircularProgressIndicator(strokeWidth:)`）已整体落到档上：生产代码里剩下的数值描边
+  只有图表几何两处（仪表盘环 6、十字线 0.8，§2.6 口径），约 60 处 `scaleW(1)/(2)` 边框已改掉
+  （**副作用**：边框不再随窗口缩放变粗，高分屏上是有意为之）。
+- **曲线全归 AppMotion**（§5.3）：`Curves.*` 在生产代码归零，映射一条不加新档
+  （`easeOutCubic/easeOut→decelerate`、`easeIn*/reverseCurve→accelerate`、
+  `easeInOut*→standard`、`easeOutBack/elasticOut→springCurve`）。
+  多次过冲那两处（gooey 下拉的 `elasticOut`、传输气泡的 `easeOutBack`）按 §5.1 换成弹簧近似档。
+- **磨砂 sigma 全归 AppGlass**（§5.4）：12 处裸 sigma（6/8/10/12/20/30）收进现有档，
+  并补了下界两档 `blurTrace 3` / `blurFeather 8` 给封面卡浮层；漫画阅读器两条
+  `scaleW(18)` 磨砂换成 `blurMedium`（描边/磨砂不吃 `scaleW` 的同一理由）。
+- **驻留与循环补齐调用点**（§5.2）：SnackBar 默认值、导入状态自动清除、节点面板自收、
+  局域网扫描雷达那类改走 `dwell/dwellLong/dwellNotice/ambient`；
+  同时把"不是动效的时长"（超时/轮询/防抖/seek/idle 计时）划出档位之外并写明判据。
+- **两处白字白底类缺陷**：标签色板的勾（`#F6BD16` 这类亮黄上恒白看不见）改按底色亮度取
+  `s.onMediaInk`/`s.onMedia`；关于页品牌标 tint 换 `s.onMedia`。
+- **看图器进场缩放成档**：`AppMotion.scaleStage 0.93`（三处入口原本各写各的 0.93）。
 - **等宽字族单一出处**：`AppTheme._monoFontFamily` + `_monoFontFamilyFallback`（Menlo → Consolas →
   DejaVu/Liberation → monospace），调用点只走 `AppTextStyles.mono(context, …)`。
 
@@ -1554,11 +1609,12 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 | 📐 外壳 logo / 面包屑 / 子项连接线 | 代码与出图都已就位（§6.2/§6.3/§6.5：`sidebar_expanded_*` / `sidebar_tree_light` / `shell_topbar_*`）；剩连接线"自上而下描出 + 横枝 stagger"和面包屑末端换脸两组动效未做 | §5.5 的 3、5，§6.5 |
 | 🔧 弹簧档已有、调用点未接线 | `AppMotion.spring` / `springCurve` 已落地，全站 `AnimatedX` 仍挂 `Cubic` | §5.3、§5.5 的 1/3/7/10/11/12 |
 | 🔧 DPI 档位偏少 | `_adaptiveScaleFactor()` 只四档、上限 1.14 | §3.3 |
-| 全站历史取色未收敛 | `lib/`（不含 `core/theme/`）`LightColors.`/`DarkColors.` 26 行、裸 `Colors.*`（去掉 `transparent` 与 lab/展示页）57 处、裸 `Color(0x…)` 41 处（多数是"恒定材质/色板"族：黑胶盘面、专辑封面 chrome 的 `_OnArt`、搜索高亮笔）；`brandColor` 只剩 2 处。里面还有一成是**注释里点名旧写法**，不是活代码 | `rg -c 'LightColors\\.\|DarkColors\\.' lib --glob '!lib/core/theme/**'`；`rg -o 'Color\\(0x[0-9A-Fa-f]{8}\\)' lib \\| grep -Ev 'core/theme\|lib/gen\|_lab\|/demo/\|/backup/' \| wc -l` |
-| 死文件待清 | `lib/pages/novel_library_page.dart`（根级，10KB，路由实际指向 `pages/novel_library/novel_library_page.dart`，全仓零引用）带着 9 处裸 `Colors.*`，收编时按"死代码"跳过 | `rg -n 'pages/novel_library_page' lib/ test/` 应为空 |
+| 图标残留：`IconData` 形参的-helper | `Icon(Icons.*)` 直接渲染只剩 5 处（`node_directory_picker` 2、看图器三个 part 各 1），但**私有 helper 用 `IconData` 收参数、内部再 `Icon(icon)`** 的写法在看图器那组 `part` 里成窝（`_GlassIconButton` 收 4 个 `Icons.*_rounded`）。§13 早先记的"图标全部收敛"指的是渲染点，这一类是漏网的签名层 | `rg -o 'Icon\(Icons\.[a-zA-Z_]+' lib --no-heading \| wc -l`；再逐处查 `final IconData` 形参 |
+| 历史取色的**残余豁免**（收编已到底，剩下的是记账） | 生产代码（排 `core/theme/`、`lib/gen/`、§12.3 实验室与两张展示页）里：① 裸 hex **21 处**全部在命名常量族内——黑胶盘面 `_DiscMaterial` 10、搜索高亮 `_SearchHighlight` 4、小说卡 3、漫画条按钮 `_BarBtn` 3、音频舞台渐变 1；② 裸 `Colors.*`（非 `transparent`）**26 处**各有豁免理由——启动图 5（`runApp` 前禁 `AppTheme.metrics`）、强调色选择器的原始色板 12（这个面的职责就是摆色板）、按亮度反差挑勾字 2（`computeLuminance()`）、死文件 7、设备头像 HSL 派生 1；③ `LightColors.`/`DarkColors.` **12 行** = 色板 10 + `live_frost` 窗口底 1 + 死文件 1；④ `Colors.transparent` 82 处不是取色，是"这里没底"，不进这套账。`brandColor` 已 0 处 | `grep -rn "Color(0x[0-9A-Fa-f]\{8\})" lib --include='*.dart' \| grep -vE "core/theme/\|lib/gen/" \| grep -v ":[ ]*//"`；`grep -rn "Colors\.[a-z]" lib --include='*.dart' \| grep -v Colors.transparent \| grep -vE "core/theme/\|pages/(backup\|demo\|surface_lab\|motion_lab\|interaction_lab\|theme_preview_screen\|style_showcase_screen)"` |
+| 死文件待清 | `lib/pages/novel_library_page.dart`（根级，10KB，路由实际指向 `pages/novel_library/novel_library_page.dart`，全仓零引用）带着 7 处裸 `Colors.*` + 1 处 `LightColors/DarkColors` 三元分支（另 2 处 `transparent`），收编时按"死代码"跳过 | `rg -n 'pages/novel_library_page' lib/ test/` 应为空 |
 | 其余 ~29 个页面仍是旧语言 | 和新外壳并排看会明显不一致（这是**预期中的中间态**） | 逐模块迁移，见任务 Stage 4–10 |
 | 共享组件库未铺满 | 大量页面仍手搓卡片/空状态/小节标题（~25 套卡片、`_GlassCard` 两处重复、`EmptyState` 两套打架） | 见 §9 右列 |
-| 动效体系未铺满 | 除歌词行与 `Hoverable` 外多数页面仍是各自的手写时长；`StateTransitionAnimation` 已随图标迁移换签名（`icon`/`hoverIcon` 现为 `StrokeIcon?`），图标固定 `StrokeTrigger.none`（§9.1 的"一个主角"） | §5.5 逐面 + §5.6 逐输入，`grep -rn "Duration(milliseconds:" lib/pages/` |
+| 动效**字面量已清零，编排还没统一** | 时长/曲线/描边/sigma 四类字面量都落档了（口径见 §5.3、§3.3、§5.4 的 grep），剩下的不是数字而是编排：① 绝大多数 `AnimatedX` 还挂 `standard`，弹簧档只接到 §5.5 点名的几面；② 退场普遍还在倒放同一条时间轴（该取相邻低档，§5.2）；③ 路由转场两条手写 builder 没并给 `AppPageTransitions.fadeUp`（260ms 与 0.985 因此还在档外，§5.3）；④ `StateTransitionAnimation.animationDuration` 默认仍是手写 400ms。另：`StateTransitionAnimation` 已随图标迁移换签名（`icon`/`hoverIcon` 现为 `StrokeIcon?`），图标固定 `StrokeTrigger.none`（§9.1 的"一个主角"） | §5.5 逐面 + §5.6 逐输入；字面量账：`grep -rn "Duration(milliseconds:\|Curves\.\|sigmaX: [0-9]\|Border\.all(.*width: [0-9]" lib/pages lib/components --include='*.dart'`（曲线 / sigma / 描边三项应只剩 §12.3 实验室页与图表几何两处；`Duration(milliseconds:` 剩下的 18 处全是 §5.2 划出去的"数据节奏"——超时、轮询、防抖、重试、逐帧节拍、idle 计时，逐处自解释） |
 | 自选强调色仍会覆盖新墨色 | 用户以前存过自定义强调色的话，除非改选第一档"跟随主题"，否则旧色仍生效 | 设置页 → 主题 → 第一档 |
 | `surfaceActive` 仍是实心 | 按压态会打断窗口磨砂（悬停已修，按压未修） | `app_colors.dart` |
 | 仪表盘卡片是死控件 | `onTap: () {}`；指标卡在 300px 封顶，宽窗留白 | `dashboard_screen.dart` |

@@ -87,7 +87,7 @@ class BottomPlayerBar extends StatelessWidget {
       // 播放条压在列表之上，整块实心就把整窗的磨砂截断了；浮层档透明度，
       // 上面还有内容区的底色兜着，文字对比度不受影响。
       color: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
-      border: Border(top: BorderSide(color: s.hairline, width: scaleW(1))),
+      border: Border(top: BorderSide(color: s.hairline, width: AppTheme.metrics.strokeHairline)),
       // 投影朝上：这条是贴在窗口底边的停靠栏，向下的影子落在窗口外等于没有。
       boxShadow: [
         for (final shadow in s.elevation(Elevation.floating))

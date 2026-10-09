@@ -54,7 +54,7 @@ class _ExtractProgressDialogState extends State<ExtractProgressDialog> {
           SizedBox(
             width: m.iconSize20,
             height: m.iconSize20,
-            child: CircularProgressIndicator(strokeWidth: scaleW(2)),
+            child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
           ),
           SizedBox(width: m.kSpace12),
           const Text('正在解压'),

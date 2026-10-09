@@ -340,7 +340,7 @@ class _ImageViewerState extends State<_ImageViewer> {
               child: ClipRRect(
                 borderRadius: AppTheme.metrics.radius22,
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
                   child: FilledButton.icon(
                     onPressed: _reset,
                     icon: Icon(Icons.zoom_out_map_rounded, size: AppTheme.metrics.iconSize18),

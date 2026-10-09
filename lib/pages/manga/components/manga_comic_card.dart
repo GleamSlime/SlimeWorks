@@ -201,7 +201,7 @@ class _ComicCoverImage extends StatelessWidget {
           color: s.surfaceSunken,
           child: Center(
             child: CircularProgressIndicator(
-              strokeWidth: scaleW(2),
+              strokeWidth: AppTheme.metrics.strokeRegular,
               color: s.accent,
             ),
           ),

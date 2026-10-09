@@ -361,7 +361,7 @@ class _BlurredCoverBackground extends StatelessWidget {
       children: <Widget>[
         image,
         BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          filter: ImageFilter.blur(sigmaX: AppGlass.blurMedium, sigmaY: AppGlass.blurMedium),
           child: const ColoredBox(color: Colors.transparent),
         ),
       ],
@@ -381,7 +381,7 @@ class _GlassCard extends StatelessWidget {
     return ClipRRect(
       borderRadius: AppTheme.metrics.radius12,
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace12),
           decoration: BoxDecoration(

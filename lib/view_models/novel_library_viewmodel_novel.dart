@@ -276,7 +276,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         _logger.log('[ScanDebug] 用户取消目录选择', name: '书库');
         return;
       }
-      showSnack('扫描中', '正在扫描目录，请稍候...', duration: const Duration(seconds: 1));
+      showSnack('扫描中', '正在扫描目录，请稍候...', duration: AppMotion.dwell);
       _logger.log('[ScanDebug] 已选择目录: $result', name: '书库');
       scanStatusText.value = '扫描中...';
 
@@ -341,7 +341,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
           showSnack(
             '扫描中',
             '已扫描 ${batch.completed}/${batch.total} 个文件，找到 $totalFound 本书籍',
-            duration: const Duration(seconds: 1),
+            duration: AppMotion.dwell,
           );
         }
       }

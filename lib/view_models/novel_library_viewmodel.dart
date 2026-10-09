@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/core/services/time_consumption_test.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
@@ -560,7 +561,7 @@ class NovelLibraryViewModel extends BaseViewModel {
                 '$title：$message',
                 style: colorText == null ? null : TextStyle(color: colorText),
               ),
-              duration: duration ?? const Duration(seconds: 2),
+              duration: duration ?? AppMotion.dwell,
               backgroundColor: backgroundColor,
               behavior: SnackBarBehavior.floating,
             ),

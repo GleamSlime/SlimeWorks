@@ -8,6 +8,7 @@ import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
@@ -37,7 +38,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
         SnackBar(
           content: Text(message),
           backgroundColor: backgroundColor,
-          duration: duration ?? const Duration(seconds: 2),
+          duration: duration ?? AppMotion.dwell,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -158,7 +159,7 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
 
       if (mounted) {
         if (newVersion != null) {
-          _showSnack('模块 $moduleName 有新版本: $newVersion', duration: const Duration(seconds: 5));
+          _showSnack('模块 $moduleName 有新版本: $newVersion', duration: AppMotion.dwellNotice);
         } else {
           _showSnack('模块 $moduleName 已是最新版本');
         }

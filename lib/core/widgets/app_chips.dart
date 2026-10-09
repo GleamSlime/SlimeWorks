@@ -77,7 +77,7 @@ class StatusChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: container,
           borderRadius: m.radiusPill,
-          border: Border.all(color: border, width: scaleW(1)),
+          border: Border.all(color: border, width: AppTheme.metrics.strokeHairline),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

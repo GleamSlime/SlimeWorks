@@ -338,7 +338,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                               height: AppTheme.metrics.kSpace14,
                               // 转圈压在实心强调底上，颜色跟着强调底反相
                               child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                                strokeWidth: AppTheme.metrics.strokeRegular,
                                 color: s.accentOn,
                               ),
                             )

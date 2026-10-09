@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/core/utils/size_utils.dart';
 
 /// 波形进度条组件
 ///
@@ -20,9 +19,12 @@ class WaveformSeekBar extends StatelessWidget {
   final ValueChanged<int> onSeek;
 
   /// 已播放部分颜色
+  ///
+  /// 必填：波形条可能压在任意底上（封面图 / 深色舞台 / 亮色面板），
+  /// 组件本身无从判断，给不了安全默认值，由调用方按所在的那一层媒体档传。
   final Color activeColor;
 
-  /// 未播放部分颜色
+  /// 未播放部分颜色（同样必填，理由同上）
   final Color inactiveColor;
 
   /// 是否正在加载
@@ -43,8 +45,8 @@ class WaveformSeekBar extends StatelessWidget {
     required this.positionMs,
     required this.durationMs,
     required this.onSeek,
-    this.activeColor = Colors.white,
-    this.inactiveColor = const Color(0x66FFFFFF),
+    required this.activeColor,
+    required this.inactiveColor,
     this.isLoading = false,
     this.barGap = 2.0,
     this.barRadius = 2.0,
@@ -64,7 +66,7 @@ class WaveformSeekBar extends StatelessWidget {
             height: m.iconSize20,
             // 转圈跟着波形自己的配色走：默认会拿主题的强调色，
             // 压在深色封面上时亮色模式下几乎看不见。
-            child: CircularProgressIndicator(strokeWidth: scaleW(2), color: activeColor),
+            child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular, color: activeColor),
           ),
         ),
       );

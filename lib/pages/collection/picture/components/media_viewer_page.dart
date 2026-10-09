@@ -211,7 +211,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     _snapFrom = 0.0;
     _snapTo = delta < 0 ? screenExtent : -screenExtent;
     _pendingIndex = next;
-    _snapAnim = CurvedAnimation(parent: _snapCtrl, curve: Curves.easeOutCubic);
+    _snapAnim = CurvedAnimation(parent: _snapCtrl, curve: AppMotion.decelerate);
     // 非相邻跳转时清空邻页缓存，确保 build() 重建正确的邻页
     if (delta.abs() > 1) {
       _prevPageWidget = null;
@@ -269,7 +269,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     }
     _snapAnim = CurvedAnimation(
       parent: _snapCtrl,
-      curve: next != null ? Curves.easeOutCubic : Curves.easeOutBack,
+      curve: next != null ? AppMotion.decelerate : AppMotion.springCurve,
     );
     _snapCtrl.forward(from: 0.0);
   }
@@ -657,7 +657,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
                         child: ClipRRect(
                           borderRadius: AppTheme.metrics.radius10,
                           child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                            filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
                             child: Container(
                               padding: EdgeInsets.symmetric(
                                 horizontal: appMetrics.kSpace10,

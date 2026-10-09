@@ -151,7 +151,7 @@ class AppTheme {
       ),
       tabBarTheme: themed.tabBarTheme.copyWith(
         indicator: UnderlineTabIndicator(
-          borderSide: BorderSide(color: fill, width: scaleW(2.5)),
+          borderSide: BorderSide(color: fill, width: AppTheme.metrics.strokeEmphasis),
         ),
         labelColor: cs.onSurface,
         unselectedLabelColor: cs.onSurface.withValues(alpha: 0.55),
@@ -485,7 +485,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: m.radiusField,
-          borderSide: BorderSide(color: s.accent, width: scaleW(1.6)),
+          borderSide: BorderSide(color: s.accent, width: m.strokeThin),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: m.radiusField,
@@ -493,7 +493,7 @@ class AppTheme {
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: m.radiusField,
-          borderSide: BorderSide(color: s.danger.color, width: scaleW(1.6)),
+          borderSide: BorderSide(color: s.danger.color, width: m.strokeThin),
         ),
         // 框高 = 上下内距 ×2 + 行高(fontSize13 × 1.4) + 两条边框 ≈ 38，
         // 和同排按钮的自然高（kSpace10 ×2 + fontSize13 × 1.2）落在同一档。
@@ -512,7 +512,7 @@ class AppTheme {
       // ── 分割线 ──
       dividerTheme: DividerThemeData(
         color: s.hairline,
-        thickness: scaleW(1),
+        thickness: m.strokeHairline,
         space: scaleW(1),
       ),
 
@@ -679,7 +679,7 @@ class AppTheme {
           (states) => states.contains(WidgetState.selected) ? accent : Colors.transparent,
         ),
         checkColor: WidgetStatePropertyAll(onAccent),
-        side: BorderSide(color: s.borderStrong, width: scaleW(1.4)),
+        side: BorderSide(color: s.borderStrong, width: m.strokeThin),
         shape: RoundedRectangleBorder(borderRadius: m.radius4),
         splashRadius: 0,
       ),

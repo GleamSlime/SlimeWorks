@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/theme/app_semantics.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 
 /// 树形连接线：把一组子项和它们的父项在视觉上串成一族
@@ -91,7 +92,7 @@ class _TreeLinePainter extends CustomPainter {
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
+      ..strokeWidth = AppTheme.metrics.strokeHairline
       ..strokeCap = StrokeCap.round;
 
     double center(int i) => i * (rowHeight + spacing) + rowHeight / 2;

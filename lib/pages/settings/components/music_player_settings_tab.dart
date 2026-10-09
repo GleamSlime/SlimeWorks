@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/src/rust/api/whisper.dart' as whisper_api;
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -349,7 +348,7 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
       return SizedBox(
         width: m.iconSize24,
         height: m.iconSize24,
-        child: CircularProgressIndicator(strokeWidth: scaleW(2)),
+        child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
       );
     }
 

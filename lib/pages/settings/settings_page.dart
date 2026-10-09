@@ -6,7 +6,6 @@ import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/pages/settings/components/aliyun_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/extract_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/game_settings_tab.dart';
@@ -347,7 +346,7 @@ class _SettingsTabItemState extends State<_SettingsTabItem> {
             borderRadius: m.radius10,
             border: borderColor == null
                 ? null
-                : Border.all(color: borderColor, width: scaleW(1)),
+                : Border.all(color: borderColor, width: AppTheme.metrics.strokeHairline),
             boxShadow: shadows,
           ),
           child: Text(

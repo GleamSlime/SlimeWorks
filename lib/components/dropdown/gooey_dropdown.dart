@@ -45,10 +45,10 @@ class _GooeyDropdownState extends State<GooeyDropdown> with SingleTickerProvider
     super.initState();
     _controller = AnimationController(vsync: this, duration: widget.duration);
 
-    _expandAnim = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
+    _expandAnim = CurvedAnimation(parent: _controller, curve: AppMotion.springCurve);
     _fadeAnim = CurvedAnimation(
       parent: _controller,
-      curve: const Interval(0.4, 1, curve: Curves.easeOut),
+      curve: const Interval(0.4, 1, curve: AppMotion.decelerate),
     );
   }
 

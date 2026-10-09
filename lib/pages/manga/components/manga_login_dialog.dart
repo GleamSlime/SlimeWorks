@@ -226,7 +226,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                       ? SizedBox(
                           height: AppTheme.metrics.kSpace20,
                           width: AppTheme.metrics.kSpace20,
-                          child: CircularProgressIndicator(strokeWidth: scaleW(2)),
+                          child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                         )
                       : const Text('登录'),
                 ),

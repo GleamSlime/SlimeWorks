@@ -607,11 +607,19 @@ class _ColorRow extends StatelessWidget {
                 borderRadius: m.radius6,
                 border: Border.all(
                   color: hex == selected ? s.textPrimary : s.hairline,
-                  width: hex == selected ? scaleW(2) : scaleW(1),
+                  width: hex == selected ? m.strokeRegular : m.strokeHairline,
                 ),
               ),
               child: hex == selected
-                  ? DrawIcon(StrokeIcons.check, size: m.iconSize12, color: Colors.white)
+                  ? DrawIcon(
+                      StrokeIcons.check,
+                      size: m.iconSize12,
+                      // 色板里有 #F6BD16 这类亮黄，恒白的勾压上去就等于看不见：
+                      // 勾的墨色跟着这颗色块的亮度走，深底用白、亮底用墨。
+                      color: ledgerColorOf(hex, fallback: s.textTertiary).computeLuminance() > 0.5
+                          ? s.onMediaInk
+                          : s.onMedia,
+                    )
                   : null,
             ),
           ),
@@ -623,7 +631,7 @@ class _ColorRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: picked,
               borderRadius: m.radius6,
-              border: Border.all(color: s.textPrimary, width: scaleW(2)),
+              border: Border.all(color: s.textPrimary, width: AppTheme.metrics.strokeRegular),
             ),
           ),
       ],

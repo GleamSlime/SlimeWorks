@@ -321,7 +321,7 @@ class _GameDetailScreenState
                 width: AppTheme.metrics.kSpace16,
                 height: AppTheme.metrics.kSpace16,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2,
+                  strokeWidth: AppTheme.metrics.strokeRegular,
                   color: s.success.onContainer,
                 ),
               ),
@@ -729,7 +729,7 @@ class _GameDetailScreenState
                 SizedBox(
                   width: AppTheme.metrics.kSpace16,
                   height: AppTheme.metrics.kSpace16,
-                  child: const CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                 ),
                 SizedBox(width: AppTheme.metrics.kSpace12),
                 const Text('正在加载萌娘百科...'),
@@ -1105,7 +1105,7 @@ class _GameDetailScreenState
                       width: AppTheme.metrics.kSpace20,
                       height: AppTheme.metrics.kSpace20,
                       child: CircularProgressIndicator(
-                        strokeWidth: 2,
+                        strokeWidth: AppTheme.metrics.strokeRegular,
                         color: s.success.color,
                       ),
                     ),
@@ -1223,7 +1223,7 @@ class _GameDetailScreenState
                                   width: AppTheme.metrics.kSpace18,
                                   height: AppTheme.metrics.kSpace18,
                                   child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+                                    strokeWidth: AppTheme.metrics.strokeRegular,
                                     color: s.accentOn,
                                   ),
                                 )
@@ -1543,7 +1543,7 @@ class _GameDetailScreenState
                                 width: AppTheme.metrics.kSpace16,
                                 height: AppTheme.metrics.kSpace16,
                                 child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                                  strokeWidth: AppTheme.metrics.strokeRegular,
                                   color: s.accentOn,
                                 ),
                               )
@@ -1573,8 +1573,8 @@ class _GameDetailScreenState
                                 ? SizedBox(
                                     width: AppTheme.metrics.kSpace14,
                                     height: AppTheme.metrics.kSpace14,
-                                    child: const CircularProgressIndicator(
-                                      strokeWidth: 1.5,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: AppTheme.metrics.strokeThin,
                                     ),
                                   )
                                 : DrawIcon(StrokeIcons.expandMore,
@@ -1739,7 +1739,7 @@ class _GameDetailScreenState
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('已复制: $path'),
-                    duration: const Duration(seconds: 2),
+                    duration: AppMotion.dwell,
                   ),
                 );
               },

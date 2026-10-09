@@ -103,7 +103,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
           end: Alignment.bottomRight,
         ),
         borderRadius: m.radius10,
-        border: Border.all(color: s.hairline, width: scaleW(0.5)),
+        border: Border.all(color: s.hairline, width: AppTheme.metrics.strokeUltraThin),
         boxShadow: [
           ...s.elevation(Elevation.raised),
           BoxShadow(
@@ -141,7 +141,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
               decoration: BoxDecoration(
                 color: s.surfaceSunken,
                 borderRadius: m.radius6,
-                border: Border.all(color: s.border, width: scaleW(0.5)),
+                border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
               ),
               child: AppTextField(
                 controller: _searchController,

@@ -385,7 +385,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
   void initState() {
     super.initState();
     _entranceController = AnimationController(vsync: this, duration: AppMotion.entrance);
-    _entranceAnimation = CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic);
+    _entranceAnimation = CurvedAnimation(parent: _entranceController, curve: AppMotion.decelerate);
     Future.delayed(AppMotion.base, () {
       if (mounted) {
         _entranceController.forward();
@@ -695,7 +695,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
           padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
           child: Divider(
             height: scaleW(1),
-            thickness: scaleW(0.5),
+            thickness: AppTheme.metrics.strokeUltraThin,
             color: AppSemantic.of(context).hairline,
           ),
         ),
@@ -773,7 +773,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                 horizontal: AppTheme.metrics.kSpace16,
                 vertical: AppTheme.metrics.kSpace8,
               ),
-              child: Divider(height: 1, thickness: scaleW(0.5), color: s.hairline),
+              child: Divider(height: 1, thickness: AppTheme.metrics.strokeUltraThin, color: s.hairline),
             ),
 
           AnimatedSize(
@@ -822,7 +822,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
             ? null
             : BoxDecoration(
                 color: isItemExpanded ? s.surfaceHover : Colors.transparent,
-                border: isItemExpanded ? Border.all(width: 1, color: s.hairline) : null,
+                border: isItemExpanded ? Border.all(width: AppTheme.metrics.strokeHairline, color: s.hairline) : null,
               ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1369,7 +1369,7 @@ class _SidebarEntranceAnimationState extends State<_SidebarEntranceAnimation>
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: AppMotion.emphasis);
-    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    _animation = CurvedAnimation(parent: _controller, curve: AppMotion.decelerate);
     final delay = AppMotion.slow + AppMotion.entranceGap * widget.index;
     Future.delayed(delay, () {
       if (mounted) _controller.forward();

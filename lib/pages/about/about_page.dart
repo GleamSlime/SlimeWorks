@@ -98,7 +98,7 @@ class AboutPage extends StatelessWidget {
               height: scaleW(100),
               // 底板是紫色渐变，原图的深蓝描边压在上面几乎读不出来；
               // 资产已经去掉底色与投影，单色压平后就是干净的线稿
-              colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+              colorFilter: ColorFilter.mode(s.onMedia, BlendMode.srcIn),
             ),
           ),
         ),
@@ -346,7 +346,7 @@ class AboutPage extends StatelessWidget {
                           width: m.iconSize16,
                           height: m.iconSize16,
                           child: CircularProgressIndicator(
-                            strokeWidth: scaleW(2),
+                            strokeWidth: AppTheme.metrics.strokeRegular,
                             color: s.accentOn,
                           ),
                         )

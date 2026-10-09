@@ -77,6 +77,10 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   /// 初始按行逐帧展开的最大行数；超过后一次性加载剩余全部。
   static const int _kInitialRevealRows = 12;
 
+  /// 高亮标记驻留时长：两条路径（首帧、外部换 ID）必须同一条，否则从 Viewer
+  /// 返回的那次高亮会比直接进来看久十倍。
+  static const Duration _kHighlightDwell = Duration(milliseconds: 2500);
+
   StreamSubscription<bool>? _overlaySub;
 
   @override
@@ -91,7 +95,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       // 等待首批 tiles 渲染后滚动到高亮项，并在 2.5s 后消退高亮
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToHighlighted();
-        _highlightTimer = Timer(const Duration(milliseconds: 2500), () {
+        _highlightTimer = Timer(_kHighlightDwell, () {
           if (mounted) setState(() => _highlightId = null);
           widget.viewModel.lastViewedItemId.value = null;
         });
@@ -110,7 +114,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       setState(() => _highlightId = widget.lastViewedItemId);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToHighlighted();
-        _highlightTimer = Timer(const Duration(milliseconds: 25000), () {
+        _highlightTimer = Timer(_kHighlightDwell, () {
           if (mounted) setState(() => _highlightId = null);
           widget.viewModel.lastViewedItemId.value = null;
         });
@@ -472,7 +476,7 @@ class SelectionBoxPainter extends CustomPainter {
     final borderPaint = Paint()
       ..color = borderColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = scaleW(1.5);
+      ..strokeWidth = AppTheme.metrics.strokeThin;
     canvas.drawRect(rect, borderPaint);
   }
 

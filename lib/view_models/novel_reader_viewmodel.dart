@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:get/get.dart';
 import 'package:dio/dio.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/utils/logger.dart';
@@ -93,7 +94,7 @@ class NovelReaderViewModel extends GetxController {
                 '$title：$message',
                 style: colorText == null ? null : TextStyle(color: colorText),
               ),
-              duration: duration ?? const Duration(seconds: 2),
+              duration: duration ?? AppMotion.dwell,
               backgroundColor: backgroundColor,
               behavior: SnackBarBehavior.floating,
             ),

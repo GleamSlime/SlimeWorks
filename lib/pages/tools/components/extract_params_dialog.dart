@@ -124,7 +124,7 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
                     child: SizedBox(
                       width: m.kSpace16,
                       height: m.kSpace16,
-                      child: CircularProgressIndicator(strokeWidth: scaleW(2)),
+                      child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                     ),
                   ),
                 ),

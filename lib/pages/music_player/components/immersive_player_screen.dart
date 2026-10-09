@@ -401,7 +401,7 @@ class _BlurredBackground extends StatelessWidget {
           ),
         // 半透明遮罩：把封面压暗到能看清白色文字，档位用全局 scrim 而不是本地再调一次
         BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          filter: ImageFilter.blur(sigmaX: AppGlass.blurMedium, sigmaY: AppGlass.blurMedium),
           child: ColoredBox(color: AppSemantic.of(context).scrim),
         ),
       ],
@@ -545,7 +545,7 @@ class _VolumePopupOverlay extends StatelessWidget {
               decoration: BoxDecoration(
                 color: art.panel,
                 borderRadius: m.radiusPill,
-                border: Border.all(color: art.hairline, width: scaleW(1)),
+                border: Border.all(color: art.hairline, width: AppTheme.metrics.strokeHairline),
                 boxShadow: s.elevation(Elevation.overlay),
               ),
               child: Padding(
@@ -668,7 +668,7 @@ class _LyricsPanelState extends State<_LyricsPanel> {
                       width: m.iconSize14,
                       height: m.iconSize14,
                       child: CircularProgressIndicator(
-                        strokeWidth: scaleW(2),
+                        strokeWidth: AppTheme.metrics.strokeRegular,
                         color: art.muted,
                       ),
                     ),

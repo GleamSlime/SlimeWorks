@@ -27,7 +27,7 @@ class MediaSelectionBar extends StatelessWidget {
     final s = AppSemantic.of(context);
     return ClipRect(
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: appMetrics.kSpace16,

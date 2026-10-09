@@ -16,6 +16,7 @@ import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
 import 'package:slime_works/core/services/transcription_task_queue.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
@@ -652,7 +653,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       importingStatus.value = '导入失败: $e';
     } finally {
       // 封面提取是后台的，不阻塞 finally
-      Future.delayed(const Duration(seconds: 2), () {
+      Future.delayed(AppMotion.dwell, () {
         if (importingStatus.value.contains('提取封面')) {
           isImporting.value = false;
           importingStatus.value = '';
@@ -676,7 +677,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       _logger.info('[播放器] 导入音乐失败: $e');
       importingStatus.value = '导入失败: $e';
     } finally {
-      Future.delayed(const Duration(seconds: 2), () {
+      Future.delayed(AppMotion.dwell, () {
         isImporting.value = false;
         importingStatus.value = '';
       });
@@ -1017,7 +1018,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       importingStatus.value = '导入失败: $e';
       return null;
     } finally {
-      Future.delayed(const Duration(seconds: 3), () {
+      Future.delayed(AppMotion.dwellLong, () {
         isImporting.value = false;
         importingStatus.value = '';
         importingProgress.value = -1;

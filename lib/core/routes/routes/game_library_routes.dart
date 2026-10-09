@@ -64,12 +64,12 @@ class GameLibraryRoute extends AppRouteData with $GameLibraryRoute {
           ) {
             final Animation<double> fadeIn = CurvedAnimation(
               parent: animation,
-              curve: Curves.easeOutCubic,
+              curve: AppMotion.decelerate,
             );
             final Animation<double> fadeOut = Tween<double>(
               begin: 1.0,
               end: 0.0,
-            ).animate(CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeInCubic));
+            ).animate(CurvedAnimation(parent: secondaryAnimation, curve: AppMotion.accelerate));
             return FadeTransition(
               opacity: fadeIn,
               child: FadeTransition(opacity: fadeOut, child: child),

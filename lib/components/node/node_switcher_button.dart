@@ -131,7 +131,7 @@ class NodeSwitcherButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: s.surfaceRaised.withAlpha(WindowGlass.overlayAlpha),
             borderRadius: m.radiusPanel,
-            border: Border.all(color: s.glassBorder, width: scaleW(1)),
+            border: Border.all(color: s.glassBorder, width: AppTheme.metrics.strokeHairline),
             boxShadow: s.elevation(Elevation.overlay),
           ),
           child: Column(
@@ -330,7 +330,7 @@ class _NodePanelItem extends StatelessWidget {
             // 选中底走低浓度强调容器，未选中占位底走 surfaceSunken
             color: isSelected ? s.accentContainer : Colors.transparent,
             borderRadius: m.radius12,
-            border: isSelected ? Border.all(color: accent.withAlpha(80), width: 1.2) : null,
+            border: isSelected ? Border.all(color: accent.withAlpha(80), width: AppTheme.metrics.strokeThin) : null,
           ),
           child: Row(
             children: [
@@ -428,7 +428,7 @@ class _OverlaySnackBarState extends State<_OverlaySnackBar> with SingleTickerPro
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: AppMotion.decelerate));
     _controller.forward();
-    Future.delayed(const Duration(seconds: 3), _dismiss);
+    Future.delayed(AppMotion.dwellLong, _dismiss);
   }
 
   void _dismiss() {

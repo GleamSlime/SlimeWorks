@@ -8,7 +8,6 @@ import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 
@@ -66,7 +65,7 @@ class _MangaProgressRingState extends State<MangaProgressRing> {
         children: [
           CircularProgressIndicator(
             value: pct / 100,
-            strokeWidth: scaleW(2.5),
+            strokeWidth: AppTheme.metrics.strokeEmphasis,
             color: color,
             backgroundColor: color.withValues(alpha: 0.15),
           ),

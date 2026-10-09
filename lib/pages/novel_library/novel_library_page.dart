@@ -135,7 +135,7 @@ class NovelLibraryPage extends StatelessWidget {
                               width: m.kSpace20,
                               height: m.kSpace20,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                                strokeWidth: AppTheme.metrics.strokeRegular,
                                 valueColor: AlwaysStoppedAnimation<Color>(s.accent),
                               ),
                             ),
@@ -171,7 +171,7 @@ class NovelLibraryPage extends StatelessWidget {
                               width: m.kSpace20,
                               height: m.kSpace20,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                                strokeWidth: AppTheme.metrics.strokeRegular,
                                 valueColor: AlwaysStoppedAnimation<Color>(s.warning.color),
                               ),
                             ),
@@ -210,7 +210,7 @@ class NovelLibraryPage extends StatelessWidget {
                                   width: m.kSpace20,
                                   height: m.kSpace20,
                                   child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+                                    strokeWidth: AppTheme.metrics.strokeRegular,
                                     value: controller.searchProgress.value,
                                     valueColor: AlwaysStoppedAnimation<Color>(s.info.color),
                                   ),
@@ -237,7 +237,7 @@ class NovelLibraryPage extends StatelessWidget {
                                           child: SizedBox(
                                             width: m.kSpace16,
                                             height: m.kSpace16,
-                                            child: const CircularProgressIndicator(strokeWidth: 2),
+                                            child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                                           ),
                                         )
                                       : TextButton.icon(

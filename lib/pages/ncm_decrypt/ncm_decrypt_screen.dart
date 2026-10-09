@@ -142,7 +142,7 @@ class _NcmDecryptScreenState extends State<NcmDecryptScreen> {
                   SizedBox(
                     width: m.iconSize20,
                     height: m.iconSize20,
-                    child: CircularProgressIndicator(strokeWidth: scaleW(2), color: s.accent),
+                    child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular, color: s.accent),
                   ),
                   SizedBox(width: m.kSpace12),
                   Text('正在扫描 NCM 文件...', style: AppTextStyles.body(context)),

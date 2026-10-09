@@ -70,7 +70,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
               onTap: isRunning ? viewModel.stopService : viewModel.startService,
               child: AnimatedContainer(
                 duration: AppMotion.base,
-                curve: Curves.easeOutCubic,
+                curve: AppMotion.decelerate,
                 padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace6),
                 decoration: BoxDecoration(
                   gradient: isRunning
@@ -178,7 +178,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: m.radius8,
-                border: Border.all(color: primaryColor.withValues(alpha: 0.15), width: 1),
+                border: Border.all(color: primaryColor.withValues(alpha: 0.15), width: AppTheme.metrics.strokeHairline),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -187,7 +187,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
                     SizedBox(
                       width: m.kSpace10,
                       height: m.kSpace10,
-                      child: CircularProgressIndicator(strokeWidth: 1.5, color: primaryColor),
+                      child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeThin, color: primaryColor),
                     )
                   else
                     DrawIcon(StrokeIcons.radar, size: m.iconSize14, color: primaryColor),
@@ -223,7 +223,7 @@ class _LanTransferScreenState extends BasePageState<LanTransferViewModel, LanTra
           decoration: BoxDecoration(
             color: s.surfaceSunken,
             borderRadius: m.radius8,
-            border: Border.all(color: s.border, width: 1),
+            border: Border.all(color: s.border, width: AppTheme.metrics.strokeHairline),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -678,7 +678,7 @@ class _LanTransferToolbar extends StatelessWidget {
                       width: AppTheme.metrics.kSpace10,
                       height: AppTheme.metrics.kSpace10,
                       child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
+                        strokeWidth: AppTheme.metrics.strokeThin,
                         color: s.accent,
                       ),
                     )
@@ -832,7 +832,7 @@ class _DeviceSheetContent extends StatelessWidget {
                             width: scaleW(12),
                             height: scaleW(12),
                             child: CircularProgressIndicator(
-                              strokeWidth: 1.5,
+                              strokeWidth: AppTheme.metrics.strokeThin,
                               color: s.warning.color,
                             ),
                           )
@@ -966,7 +966,7 @@ class _EmptyDevicesPlaceholder extends StatelessWidget {
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: m.radius12,
-                border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: 1),
+                border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: AppTheme.metrics.strokeHairline),
                 boxShadow: [
                   BoxShadow(
                     color: primaryColor.withValues(alpha: 0.1),
@@ -1168,13 +1168,13 @@ class _PeerListItemState extends State<_PeerListItem> {
         onLongPress: () => widget.onContextMenu(),
         child: AnimatedContainer(
           duration: AppMotion.fast,
-          curve: Curves.easeOutCubic,
+          curve: AppMotion.decelerate,
           padding: EdgeInsets.symmetric(horizontal: m.kSpace14, vertical: m.kSpace12),
           decoration: BoxDecoration(
             color: _isHovered ? s.surfaceHover : Colors.transparent,
             borderRadius: m.radius14,
             border: _isHovered
-                ? Border.all(color: primaryColor.withValues(alpha: 0.08), width: 1)
+                ? Border.all(color: primaryColor.withValues(alpha: 0.08), width: AppTheme.metrics.strokeHairline)
                 : null,
             boxShadow: _isHovered ? s.elevation(Elevation.raised) : null,
           ),

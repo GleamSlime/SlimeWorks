@@ -265,7 +265,7 @@ class _TranslationPanelState extends State<TranslationPanel> {
                   ? SizedBox(
                       width: scaleW(16),
                       height: scaleW(16),
-                      child: const CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                     )
                   : DrawIcon(StrokeIcons.translate),
               label: Text(_isTranslating.value ? '翻译中...' : '开始翻译'),

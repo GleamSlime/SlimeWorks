@@ -35,7 +35,7 @@ class SentryLogFilterBar extends StatelessWidget {
             decoration: BoxDecoration(
               color: s.glassTint,
               borderRadius: m.radius12,
-              border: Border.all(color: s.glassBorder, width: 0.5),
+              border: Border.all(color: s.glassBorder, width: AppTheme.metrics.strokeUltraThin),
             ),
             child: Wrap(
               spacing: m.kSpace8,
@@ -127,7 +127,7 @@ class SentryLogFilterBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: s.surfaceSunken,
           borderRadius: m.radiusControl,
-          border: Border.all(color: s.border, width: 0.5),
+          border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

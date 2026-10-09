@@ -172,7 +172,7 @@ class SentryLogEventDetail extends StatelessWidget {
             decoration: BoxDecoration(
               color: role.container,
               borderRadius: m.radiusControl,
-              border: Border.all(color: role.containerBorder, width: 0.5),
+              border: Border.all(color: role.containerBorder, width: AppTheme.metrics.strokeUltraThin),
             ),
             child: DrawIcon(_getLevelIcon(level), color: role.color, size: m.iconSize18),
           ),
@@ -278,7 +278,7 @@ class SentryLogEventDetail extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.surface,
         borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: 0.5),
+        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
       ),
       child: Column(
         children: entries.map((e) => _buildInfoRow(context, theme, m, s, e.label, e.value)).toList(),
@@ -341,7 +341,7 @@ class SentryLogEventDetail extends StatelessWidget {
           decoration: BoxDecoration(
             color: s.surface,
             borderRadius: m.radiusCard,
-            border: Border.all(color: s.border, width: 0.5),
+            border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,7 +438,7 @@ class SentryLogEventDetail extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.surface,
         borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: 0.5),
+        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
       ),
       child: Column(
         children: values.map<Widget>((b) {
@@ -509,7 +509,7 @@ class SentryLogEventDetail extends StatelessWidget {
           decoration: BoxDecoration(
             color: s.warning.container,
             borderRadius: m.radius6,
-            border: Border.all(color: s.warning.containerBorder, width: 0.5),
+            border: Border.all(color: s.warning.containerBorder, width: AppTheme.metrics.strokeUltraThin),
           ),
           child: RichText(
             text: TextSpan(
@@ -540,7 +540,7 @@ class SentryLogEventDetail extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.surface,
         borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: 0.5),
+        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
       ),
       child: Column(
         children: extra.entries
@@ -564,7 +564,7 @@ class SentryLogEventDetail extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.surface,
         borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: 0.5),
+        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
       ),
       child: Row(
         children: [
@@ -610,7 +610,7 @@ class SentryLogEventDetail extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.surface,
         borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: 0.5),
+        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
       ),
       child: Column(
         children: [
@@ -644,7 +644,7 @@ class SentryLogEventDetail extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.surface,
         borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: 0.5),
+        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
       ),
       child: Column(
         children: contexts.entries.map((e) {
@@ -688,7 +688,7 @@ class SentryLogEventDetail extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.accentContainer,
         borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: 0.5),
+        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
       ),
       child: SingleChildScrollView(
         child: Column(

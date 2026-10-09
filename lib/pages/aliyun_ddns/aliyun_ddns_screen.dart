@@ -842,7 +842,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
             ? SizedBox(
                 width: m.iconSize18,
                 height: m.iconSize18,
-                child: CircularProgressIndicator(strokeWidth: scaleW(2), color: s.accent),
+                child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular, color: s.accent),
               )
             : DrawIcon(StrokeIcons.sync, size: m.iconSize20),
         tooltip: '立即检查',

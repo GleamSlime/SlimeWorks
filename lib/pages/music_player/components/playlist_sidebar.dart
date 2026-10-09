@@ -34,7 +34,7 @@ class PlaylistSidebar extends StatelessWidget {
         color: s.surface.withAlpha(WindowGlass.panelAlpha),
         // 原来只画右边一条描边却配了圆角：圆角处描边断开，看着像缺了一角。
         borderRadius: AppTheme.metrics.radius10,
-        border: Border.all(color: s.hairline, width: scaleW(1)),
+        border: Border.all(color: s.hairline, width: AppTheme.metrics.strokeHairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

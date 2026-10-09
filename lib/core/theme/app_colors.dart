@@ -329,6 +329,13 @@ class AppGlass {
   /// 封面/ artwork 之上那种"化成一团"的重模糊，超出上面三档的量程
   static const double blurArtwork = 50;
 
+  /// 轻磨砂两档：封面卡上的浮层（收藏角标、底部磨砂栏）hover 前后各占一档。
+  ///
+  /// 量程比 [blurSoft] 低是因为这些浮层要"透出封面才知道是同一张卡"，
+  /// 磨砂一重就变成一块贴上去的板子；两档都必须带状态变化，单值没有意义。
+  static const double blurTrace = 3;
+  static const double blurFeather = 8;
+
   /// 玻璃上的着色叠加层透明度：亮色下需要更多白，暗色下更多黑
   static const double tintLight = 0.72;
   static const double tintDark = 0.55;

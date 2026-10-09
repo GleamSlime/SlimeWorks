@@ -10,6 +10,24 @@ import 'package:slime_works/components/icons/stroke_icons.g.dart';
 const Loggers _logger = Loggers(name: '书籍卡片');
 
 
+/// 无封面书目的占位封面渐变（恒不反转）
+///
+/// 这一档不是界面颜色而是"替身封面"——它就是这本书此刻的唯一画面，
+/// 是最底下那一层，图标墨字压在它上面（走媒体 chrome 档）。
+/// 所以它跟 `mediaStage`、读者纸面那几族一样不参与明暗解析：
+/// 跟着主题反相会变成"亮色模式下一片浅粉"，白字立刻看不见。
+/// 三档写精确值（不再用 `Colors.x.shade400` 这种链式取名），
+/// 是因为渐变一旦由别处改色，这里的像素会跟着无声漂走。
+abstract final class _PlaceholderCover {
+  /// 左上→右下三档：蓝紫粉
+  static const List<Color> gradient = [
+    Color(0xFF42A5F5),
+    Color(0xFFAB47BC),
+    Color(0xFFEC407A),
+  ];
+}
+
+
 /// 书籍卡片组件
 class NovelCard extends StatelessWidget {
   final String title;
@@ -236,7 +254,7 @@ class NovelCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Colors.blue.shade400, Colors.purple.shade400, Colors.pink.shade400],
+          colors: _PlaceholderCover.gradient,
         ),
       ),
       child: Center(

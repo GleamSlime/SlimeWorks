@@ -20,6 +20,7 @@ import 'package:slime_works/core/services/manga_download_service.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -199,8 +200,8 @@ class _MangaReaderScreenState
                   child: ClipRect(
                     child: BackdropFilter(
                       filter: ImageFilter.blur(
-                        sigmaX: scaleW(18),
-                        sigmaY: scaleW(18),
+                        sigmaX: AppGlass.blurMedium,
+                        sigmaY: AppGlass.blurMedium,
                       ),
                       child: Container(
                         decoration: BoxDecoration(
@@ -282,8 +283,8 @@ class _MangaReaderScreenState
                   child: ClipRect(
                     child: BackdropFilter(
                       filter: ImageFilter.blur(
-                        sigmaX: scaleW(18),
-                        sigmaY: scaleW(18),
+                        sigmaX: AppGlass.blurMedium,
+                        sigmaY: AppGlass.blurMedium,
                       ),
                       child: Container(
                         decoration: BoxDecoration(
@@ -1248,6 +1249,23 @@ class _ReaderBottomBar extends StatelessWidget {
   }
 }
 
+/// 白磨砂条上的那一组墨色（恒不反转）
+///
+/// 图标和文字固定使用深色，以适配白色磨砂背景：覆盖层的底是 `s.onMedia`
+/// 的 62% 白（压在漫画画面之上），底恒白则墨恒深，跟着主题翻转会在浅色档
+/// 糊成一片。语义层目前只有 `onMediaInk`（#0A0A0A）一档纯黑墨，套不出
+/// 这三档浓度，先在阅读器文件内集中成一组常量，等 theme 目录补上对应档位再并过去。
+abstract final class _FrostedBarInk {
+  /// 图标（最重一档）
+  static const Color icon = Color(0xFF1A1A1A);
+
+  /// 标签文字
+  static const Color label = Color(0xFF444444);
+
+  /// 角标（最弱一档）
+  static const Color badge = Color(0xFF888888);
+}
+
 class _BarBtn extends StatelessWidget {
   const _BarBtn({
     required this.icon,
@@ -1262,11 +1280,6 @@ class _BarBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    /// 图标和文字固定使用深色，以适配白色磨砂背景
-    const iconColor = Color(0xFF1A1A1A);
-    const labelColor = Color(0xFF444444);
-    const badgeColor = Color(0xFF888888);
-
     return InkWell(
       onTap: onTap,
       borderRadius: AppTheme.metrics.radius10,
@@ -1281,14 +1294,14 @@ class _BarBtn extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              DrawIcon(icon, color: iconColor, size: AppTheme.metrics.iconSize20),
+              DrawIcon(icon, color: _FrostedBarInk.icon, size: AppTheme.metrics.iconSize20),
               SizedBox(height: AppTheme.metrics.kSpace2),
               Text(
                 label,
                 style: AppTextStyles.role(
                   context,
                   fontSize: AppTheme.metrics.fontSize10,
-                  color: labelColor,
+                  color: _FrostedBarInk.label,
                   weight: FontWeight.w500,
                   letterSpacing: 0.2,
                 ),
@@ -1301,7 +1314,7 @@ class _BarBtn extends StatelessWidget {
                   style: AppTextStyles.role(
                     context,
                     fontSize: AppTheme.metrics.fontSize9,
-                    color: badgeColor,
+                    color: _FrostedBarInk.badge,
                   ),
                 ),
               ],

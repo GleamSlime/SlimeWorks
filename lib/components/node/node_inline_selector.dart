@@ -130,7 +130,7 @@ class NodeInlineSelector extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace10),
         decoration: BoxDecoration(
-          border: isSelected ? Border.all(color: accent, width: 1.5) : null,
+          border: isSelected ? Border.all(color: accent, width: AppTheme.metrics.strokeThin) : null,
           borderRadius: m.radius8,
           // 选中底走低浓度强调容器，不再手搓 accent@alpha
           color: isSelected ? s.accentContainer : Colors.transparent,

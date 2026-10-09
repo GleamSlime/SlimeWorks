@@ -79,7 +79,7 @@ class _StrokeIconButtonState extends State<StrokeIconButton> {
         child: AnimatedScale(
           scale: widget.scaleOnPress && _pressed ? 1.1 : 1.0,
           duration: AppMotion.instant,
-          curve: Curves.easeOutCubic,
+          curve: AppMotion.decelerate,
           child: Opacity(
             opacity: widget.enabled ? 1.0 : 0.4,
             child: StrokeZone(

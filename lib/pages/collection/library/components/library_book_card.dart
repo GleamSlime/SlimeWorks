@@ -315,7 +315,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
         reverseTransitionDuration: AppMotion.base,
         pageBuilder: (_, _, _) => page,
         transitionsBuilder: (_, animation, _, child) {
-          final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+          final curved = CurvedAnimation(parent: animation, curve: AppMotion.decelerate);
           return Stack(
             children: [
               FadeTransition(
@@ -340,7 +340,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
     final s = AppSemantic.of(context);
     // 卡片所有动效都由 hover 驱动，属反馈类，只允许取 ≤160ms 那一档
     const dur = AppMotion.fast;
-    const curve = Curves.easeOut;
+    const curve = AppMotion.decelerate;
 
     return AnimatedScale(
       scale: _hovering ? 1.03 : 1.0,
@@ -389,7 +389,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                           child: ClipRRect(
                             borderRadius: appMetrics.radius12,
                             child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+                              filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
                               child: Row(
                                 spacing: appMetrics.kSpace2,
                                 children: [
@@ -462,8 +462,8 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                 duration: dur,
                                 curve: curve,
                                 tween: Tween(
-                                  begin: _hovering ? 8.0 : 0.0,
-                                  end: _hovering ? 0.0 : 8.0,
+                                  begin: _hovering ? AppGlass.blurFeather : 0.0,
+                                  end: _hovering ? 0.0 : AppGlass.blurFeather,
                                 ),
                                 builder: (_, sigma, child) => BackdropFilter(
                                   filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
@@ -513,7 +513,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                               child: ClipRRect(
                                 borderRadius: appMetrics.radius12,
                                 child: BackdropFilter(
-                                  filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+                                  filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
                                   child: Container(
                                     padding: EdgeInsets.symmetric(
                                       horizontal: scaleW(6),
@@ -588,7 +588,10 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                     child: TweenAnimationBuilder<double>(
                       duration: dur,
                       curve: curve,
-                      tween: Tween(begin: _hovering ? 6.0 : 3.0, end: _hovering ? 3.0 : 6.0),
+                      tween: Tween(
+                        begin: _hovering ? AppGlass.blurFeather : AppGlass.blurTrace,
+                        end: _hovering ? AppGlass.blurTrace : AppGlass.blurFeather,
+                      ),
                       builder: (_, blurSigma, child) => ClipRRect(
                         borderRadius: BorderRadius.only(
                           bottomLeft: appMetrics.radius8.bottomLeft,
@@ -758,7 +761,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                         : s.scrim.withAlpha(60),
                                     shape: BoxShape.circle,
                                     // 选中圆点压在封面 art 上，那圈白环不随主题反转
-                                    border: Border.all(color: s.onMedia, width: scaleW(2)),
+                                    border: Border.all(color: s.onMedia, width: AppTheme.metrics.strokeRegular),
                                   ),
                                   child: widget.isSelected
                                       ? DrawIcon(StrokeIcons.check,
@@ -830,7 +833,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
             child: AnimatedScale(
               scale: _hovering ? 1.08 : 1.0,
               duration: AppMotion.fast,
-              curve: Curves.easeOut,
+              curve: AppMotion.decelerate,
               child: Hero(
                 tag: 'book_cover_${widget.metadata.id}',
                 child: Image.memory(
@@ -851,7 +854,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
             child: AnimatedScale(
               scale: _hovering ? 1.08 : 1.0,
               duration: AppMotion.fast,
-              curve: Curves.easeOut,
+              curve: AppMotion.decelerate,
               child: Hero(
                 tag: 'book_cover_${widget.metadata.id}',
                 child: Image.file(

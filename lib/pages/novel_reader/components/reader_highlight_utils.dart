@@ -6,6 +6,27 @@ import 'package:slime_works/core/utils/logger.dart';
 
 final _logger = Loggers(name: '阅读器');
 
+/// 正文搜索命中的两档荧光标记（恒不反转）
+///
+/// 标记压在用户选的纸面（`AppReaderPaper`：羊皮纸/雪白/薄荷/天空/石墨）上，
+/// 纸面属于内容主题而不是界面表面——走语义色档的话，暗色主题会把荧光拉成灰蓝，
+/// 命中位置就找不出来了。所以跟纸面族并列存成一组成套常量：
+/// 普通命中是黄荧光 30%、当前选中是橙荧光 50%，墨色各取同色系加深一档保对比。
+/// 浓度写成算式，为的是和原像素逐位相等，不并档。
+abstract final class _SearchHighlight {
+  /// 普通命中的底：黄荧光（配合 alpha .3 用）
+  static const Color mark = Color(0xFFFFEB3B);
+
+  /// 当前选中的底：橙荧光（配合 alpha .5 用）
+  static const Color selectedMark = Color(0xFFFF9800);
+
+  /// 压在黄荧光上的墨
+  static const Color markInk = Color(0xFFF57F17);
+
+  /// 压在橙荧光上的墨
+  static const Color selectedMarkInk = Color(0xFFE65100);
+}
+
 /// 构建纯文本模式下带搜索高亮的文本
 Widget buildHighlightedText({
   required BuildContext context,
@@ -152,9 +173,9 @@ Widget buildHighlightedText({
           height: 1.8,
           letterSpacing: 0.5,
           backgroundColor: isSelected
-              ? Colors.orange.withValues(alpha: 0.5)
-              : Colors.yellow.withValues(alpha: 0.3),
-          color: isSelected ? Colors.orange.shade900 : Colors.yellow.shade900,
+              ? _SearchHighlight.selectedMark.withValues(alpha: 0.5)
+              : _SearchHighlight.mark.withValues(alpha: 0.3),
+          color: isSelected ? _SearchHighlight.selectedMarkInk : _SearchHighlight.markInk,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
         ),
       ),

@@ -86,7 +86,7 @@ class _TransferChatViewState extends State<TransferChatView> {
           _scrollController.animateTo(
             _scrollController.position.maxScrollExtent,
             duration: AppMotion.base,
-            curve: Curves.easeOut,
+            curve: AppMotion.decelerate,
           );
         }
       });
@@ -153,7 +153,7 @@ class _TransferChatViewState extends State<TransferChatView> {
                   _scrollController.animateTo(
                     _scrollController.position.maxScrollExtent,
                     duration: AppMotion.base,
-                    curve: Curves.easeOut,
+                    curve: AppMotion.decelerate,
                   );
                 }
               },
@@ -305,11 +305,11 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
   void initState() {
     super.initState();
     _animController = AnimationController(vsync: this, duration: AppMotion.slow);
-    _scaleAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOutBack);
+    _scaleAnim = CurvedAnimation(parent: _animController, curve: AppMotion.springCurve);
     _slideAnim = Tween<Offset>(
       begin: Offset(widget.isSelf ? 0.3 : -0.3, 0),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+    ).animate(CurvedAnimation(parent: _animController, curve: AppMotion.decelerate));
     _animController.forward();
   }
 
@@ -691,7 +691,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
           Get.snackbar(
             '发送失败',
             errMsg,
-            duration: const Duration(seconds: 5),
+            duration: AppMotion.dwellNotice,
             snackPosition: SnackPosition.BOTTOM,
             backgroundColor: s.danger.color.withValues(alpha: 0.85),
             // 底色是实心状态色本身，墨只能是恒白（onStatusBadge），不能用 onContainer
@@ -714,12 +714,12 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
       TransferStatus.transferring => SizedBox(
         width: scaleW(14),
         height: scaleW(14),
-        child: CircularProgressIndicator(strokeWidth: 1.5, color: s.info.color),
+        child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeThin, color: s.info.color),
       ),
       TransferStatus.queued => SizedBox(
         width: scaleW(14),
         height: scaleW(14),
-        child: CircularProgressIndicator(strokeWidth: 1.5, color: s.warning.color),
+        child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeThin, color: s.warning.color),
       ),
       _ => DrawIcon(StrokeIcons.schedule, size: scaleW(14), color: s.border),
     };
@@ -784,7 +784,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                   Clipboard.setData(ClipboardData(text: item.textContent ?? ''));
                   Navigator.of(ctx).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已复制到剪贴板'), duration: Duration(seconds: 2)),
+                    const SnackBar(content: Text('已复制到剪贴板'), duration: AppMotion.dwell),
                   );
                 },
               ),

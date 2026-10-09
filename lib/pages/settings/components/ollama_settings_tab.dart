@@ -331,7 +331,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
                       ? SizedBox(
                           width: scaleW(16),
                           height: scaleW(16),
-                          child: const CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                         )
                       : DrawIcon(StrokeIcons.wifiFind),
                   label: Text(_isLoading.value ? '测试中...' : '测试所有服务器'),

@@ -241,7 +241,7 @@ class _GlobalBlurBackground extends StatelessWidget {
       children: <Widget>[
         image,
         BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          filter: ImageFilter.blur(sigmaX: AppGlass.blurMedium, sigmaY: AppGlass.blurMedium),
           child: ColoredBox(color: AppSemantic.of(context).canvas.withAlpha(120)),
         ),
       ],

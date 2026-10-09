@@ -176,12 +176,12 @@ class MediaCollectionDetailView extends StatelessWidget {
                   transitionDuration: AppMotion.slow,
                   reverseTransitionDuration: AppMotion.base,
                   transitionsBuilder: (_, animation, _, child) => FadeTransition(
-                    opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
+                    opacity: CurvedAnimation(parent: animation, curve: AppMotion.accelerate),
                     child: ScaleTransition(
                       scale: Tween<double>(
-                        begin: 0.93,
+                        begin: AppMotion.scaleStage,
                         end: 1.0,
-                      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                      ).animate(CurvedAnimation(parent: animation, curve: AppMotion.decelerate)),
                       child: child,
                     ),
                   ),
@@ -264,12 +264,12 @@ class MediaCollectionDetailView extends StatelessWidget {
                       transitionDuration: AppMotion.slow,
                       reverseTransitionDuration: AppMotion.base,
                       transitionsBuilder: (_, animation, _, child) => FadeTransition(
-                        opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
+                        opacity: CurvedAnimation(parent: animation, curve: AppMotion.accelerate),
                         child: ScaleTransition(
                           scale: Tween<double>(
-                            begin: 0.93,
+                            begin: AppMotion.scaleStage,
                             end: 1.0,
-                          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                          ).animate(CurvedAnimation(parent: animation, curve: AppMotion.decelerate)),
                           child: child,
                         ),
                       ),

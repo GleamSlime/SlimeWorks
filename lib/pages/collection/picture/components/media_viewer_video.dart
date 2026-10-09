@@ -2,6 +2,16 @@ part of 'media_viewer_page.dart';
 
 // ── 视频预览 ───────────────────────────────────────────────────────────────
 
+/// 音频占位舞台的底（恒不反转）
+///
+/// 没有画面可放时，这一层就是"舞台本身"——同 `mediaStage` 一样是恒定暗底，
+/// 只是带了点靛蓝色相，让封面/波形那层白色墨字有对比。它不是界面表面，
+/// 跟主题反相的话，亮色模式下整块舞台会变白，压在其上的 chrome 白字直接消失。
+/// 三档是同一支渐变的三个停靠点，成套，单独调一档就破坏明暗节奏。
+abstract final class _AudioStageBackdrop {
+  static const List<Color> gradient = [Color(0xFF12101E), Color(0xFF1A1632), Color(0xFF0D0B15)];
+}
+
 class _VideoPreview extends StatefulWidget {
   const _VideoPreview({
     required this.source,
@@ -80,6 +90,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
       if ((params.dw ?? 0) > 0 && !_playerReady) {
         _readySub?.cancel();
         _readySub = null;
+        // 等播放器把尺寸真正定下来再揭界面：这是就绪等待，不是动效时长（§5.2）
         Future.delayed(const Duration(milliseconds: 200), () {
           if (!mounted) return;
           _playerReady = true;
@@ -330,7 +341,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
             child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF12101E), Color(0xFF1A1632), Color(0xFF0D0B15)],
+                  colors: _AudioStageBackdrop.gradient,
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -338,7 +349,10 @@ class _VideoPreviewState extends State<_VideoPreview> {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: Opacity(opacity: 0.04, child: CustomPaint(painter: _AudioWavePainter())),
+                    child: Opacity(
+                      opacity: 0.04,
+                      child: CustomPaint(painter: _AudioWavePainter(color: s.onMedia)),
+                    ),
                   ),
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -800,7 +814,7 @@ class _VolumePanel extends StatelessWidget {
     return ClipRRect(
       borderRadius: AppTheme.metrics.radius12,
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
         child: Container(
           width: scaleW(220),
           padding: EdgeInsets.symmetric(

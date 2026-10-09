@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../components/window/sidebar_resize_handle.dart';
 import '../core/theme/app_motion.dart';
+import '../core/theme/app_semantics.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/style_tokens.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -200,7 +201,7 @@ class _IconRail extends StatelessWidget {
           _RailButton(icon: StrokeIcons.helpOutline, palette: palette),
           _RailButton(icon: StrokeIcons.settings, palette: palette),
           const SizedBox(height: DesignSpace.u1),
-          const _Avatar(label: 'A', size: 28, hue: Color(0xFFAC4BFF)),
+          const _Avatar(label: 'A', size: 28, hue: _ExhibitHue.violet),
           const SizedBox(height: DesignSpace.u2),
         ],
       ),
@@ -431,7 +432,7 @@ class _MissionCard extends StatelessWidget {
                     avatar: const _Avatar(
                       label: 'M',
                       size: 26,
-                      hue: Color(0xFFFCBB00),
+                      hue: _ExhibitHue.amber,
                     ),
                     status: _Status.onTime,
                     palette: palette,
@@ -441,7 +442,7 @@ class _MissionCard extends StatelessWidget {
                     avatar: const _Avatar(
                       label: 'D',
                       size: 26,
-                      hue: Color(0xFFF05100),
+                      hue: _ExhibitHue.vermillion,
                     ),
                     status: _Status.late,
                     palette: palette,
@@ -452,7 +453,7 @@ class _MissionCard extends StatelessWidget {
                     avatar: const _Avatar(
                       label: 'P',
                       size: 26,
-                      hue: Color(0xFF009588),
+                      hue: _ExhibitHue.teal,
                     ),
                     status: _Status.onTime,
                     palette: palette,
@@ -462,7 +463,7 @@ class _MissionCard extends StatelessWidget {
                     avatar: const _Avatar(
                       label: 'H',
                       size: 26,
-                      hue: Color(0xFF104E64),
+                      hue: _ExhibitHue.inkTeal,
                     ),
                     status: _Status.failed,
                     palette: palette,
@@ -473,7 +474,7 @@ class _MissionCard extends StatelessWidget {
                     avatar: const _Avatar(
                       label: 'K',
                       size: 26,
-                      hue: Color(0xFFEDB200),
+                      hue: _ExhibitHue.gold,
                     ),
                     status: _Status.onTimeMuted,
                     palette: palette,
@@ -892,7 +893,7 @@ class _RunDetail extends StatelessWidget {
             const Spacer(),
             _UserPill(
               label: 'Mark',
-              avatarHue: const Color(0xFFEDB200),
+              avatarHue: _ExhibitHue.gold,
               palette: palette,
             ),
           ],
@@ -940,7 +941,7 @@ class _RunDetail extends StatelessWidget {
           icon: StrokeIcons.altRoute,
           trailing: _UserPill(
             label: 'Chris',
-            avatarHue: const Color(0xFF00BB7F),
+            avatarHue: _ExhibitHue.jade,
             palette: palette,
           ),
         ),
@@ -1380,6 +1381,37 @@ class _SquareIconButton extends StatelessWidget {
   }
 }
 
+/// 展板里"某个人"的身份色（夹具常量，故意不进语义层）
+///
+/// 这一页是把亮、暗两版画在同一块屏上对照的展板：`_Avatar`/`_UserPill`
+/// 的圆底是**展牌中那个角色自己的颜色**，不是界面强调色。它必须和
+/// `palette` 无关地钉死，否则同一个人并排出现两次会变两种发色，
+/// 对照就失去意义（同 `style_tokens.dart` 的 `DesignPalette`：只服务这一页）。
+/// 集中成一组具名常量，是为了看得出「同一个人 = 同一档色」，
+/// 换角色时不会有一处悄悄改了另一处没跟上。
+abstract final class _ExhibitHue {
+  /// 侧栏账号位
+  static const Color violet = Color(0xFFAC4BFF);
+
+  /// Meow S025
+  static const Color amber = Color(0xFFFCBB00);
+
+  /// Dock C112
+  static const Color vermillion = Color(0xFFF05100);
+
+  /// Pip W92 与 Nick Bold（同一档青）
+  static const Color teal = Color(0xFF009588);
+
+  /// Humble P028（深一档的青）
+  static const Color inkTeal = Color(0xFF104E64);
+
+  /// Kiko B17 与 Mark（同一档金）
+  static const Color gold = Color(0xFFEDB200);
+
+  /// Chris
+  static const Color jade = Color(0xFF00BB7F);
+}
+
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.label, required this.size, required this.hue});
 
@@ -1389,6 +1421,8 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 头像字压在固定色相的圆底上，这一层不随主题反相，所以取恒白的媒体 chrome 档
+    final s = AppSemantic.of(context);
     return Container(
       width: size,
       height: size,
@@ -1406,7 +1440,7 @@ class _Avatar extends StatelessWidget {
         style: TextStyle(
           fontSize: size * 0.42,
           fontWeight: FontWeight.w600,
-          color: Colors.white,
+          color: s.onMedia,
         ),
       ),
     );
@@ -1790,7 +1824,7 @@ class _ShellNav extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const _Avatar(label: 'N', size: 26, hue: Color(0xFF009588)),
+                  const _Avatar(label: 'N', size: 26, hue: _ExhibitHue.teal),
                   if (expanded) ...[
                     const SizedBox(width: DesignSpace.u2),
                     Expanded(

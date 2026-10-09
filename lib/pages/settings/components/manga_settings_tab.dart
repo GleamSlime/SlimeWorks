@@ -4,7 +4,6 @@ import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/pages/manga/components/manga_login_dialog.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -183,7 +182,7 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
                           ? SizedBox(
                               width: m.iconSize14,
                               height: m.iconSize14,
-                              child: CircularProgressIndicator(strokeWidth: scaleW(2)),
+                              child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                             )
                           : DrawIcon(StrokeIcons.speed, size: m.iconSize16),
                       label: const Text('全部测速'),
@@ -503,7 +502,7 @@ class _ChannelRadioTile extends StatelessWidget {
       trailing = SizedBox(
         width: m.iconSize14,
         height: m.iconSize14,
-        child: CircularProgressIndicator(strokeWidth: scaleW(2)),
+        child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
       );
     } else if (latency == -2) {
       // 行尾徽章只有一段文字，字号族会随用户界面字号变长，先封顶再谈颜色

@@ -186,7 +186,7 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
             decoration: BoxDecoration(
               color: s.glassTint,
               borderRadius: m.radius12,
-              border: Border.all(color: s.glassBorder, width: 0.5),
+              border: Border.all(color: s.glassBorder, width: AppTheme.metrics.strokeUltraThin),
               boxShadow: [
                 m.boxShadow10,
                 BoxShadow(

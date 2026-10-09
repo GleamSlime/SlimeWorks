@@ -717,7 +717,7 @@ class _SparklinePainter extends CustomPainter {
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
       ).createShader(Offset.zero & size)
-      ..strokeWidth = 2
+      ..strokeWidth = AppTheme.metrics.strokeRegular
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;

@@ -188,7 +188,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: appMetrics.radiusCard,
-                border: Border.all(color: color, width: scaleW(3)),
+                border: Border.all(color: color, width: AppTheme.metrics.strokeBold),
                 color: color.withAlpha(40),
               ),
             ),

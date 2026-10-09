@@ -89,7 +89,7 @@ class ExtractResultDialog extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.surface,
         borderRadius: m.radius12,
-        border: Border.all(color: s.hairline, width: scaleW(1)),
+        border: Border.all(color: s.hairline, width: AppTheme.metrics.strokeHairline),
       ),
       child: Column(
         children: [

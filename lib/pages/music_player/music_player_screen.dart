@@ -149,7 +149,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                   width: m.iconSize16,
                   child: viewModel.importingProgress.value < 0
                       ? CircularProgressIndicator(
-                          strokeWidth: scaleW(2),
+                          strokeWidth: AppTheme.metrics.strokeRegular,
                           color: s.accent,
                         )
                       : LinearProgressIndicator(
@@ -342,7 +342,7 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
         decoration: BoxDecoration(
           color: s.accent.withValues(alpha: 0.08),
           borderRadius: m.radiusPanel,
-          border: Border.all(color: s.accent, width: scaleW(2)),
+          border: Border.all(color: s.accent, width: AppTheme.metrics.strokeRegular),
         ),
         child: Center(
           child: Column(
@@ -789,7 +789,7 @@ class _FolderInfoHeader extends StatelessWidget {
               .map((color) => color.withAlpha(WindowGlass.panelAlpha))
               .toList(),
         ),
-        border: Border(bottom: BorderSide(color: s.hairline, width: scaleW(1))),
+        border: Border(bottom: BorderSide(color: s.hairline, width: AppTheme.metrics.strokeHairline)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

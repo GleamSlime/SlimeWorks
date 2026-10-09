@@ -59,6 +59,9 @@ class AppMotion {
   /// 带操作入口或信息量大的 SnackBar 驻留
   static const Duration dwellLong = Duration(seconds: 3);
 
+  /// 正文要逐字读完的那类通知驻留（失败原因、新版本号这类多行文案）
+  static const Duration dwellNotice = Duration(seconds: 5);
+
   // ── 曲线 ──
   /// 通用：起步快、收尾稳
   static const Cubic standard = Cubic(0.2, 0.0, 0.0, 1.0);
@@ -117,6 +120,12 @@ class AppMotion {
 
   /// 菜单从触发点长出来
   static const double scaleMenu = 0.97;
+
+  /// 全屏舞台（看图器、合集详情）进场起点
+  ///
+  /// 整块画面换脸要看得出"推近"，比浮层的 [scaleEnter] 再退一档；
+  /// 三处入口（合集卡、缩略图、集合详情）必须同一档，否则同一个看图器有三种进场。
+  static const double scaleStage = 0.93;
 
   /// 收起终态：差一点就是 1，留着这 1% 才看得出是"同一个东西缩回去"
   static const double scaleRetreat = 0.99;

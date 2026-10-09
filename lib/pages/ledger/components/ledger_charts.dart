@@ -120,7 +120,7 @@ class _BarPainter extends CustomPainter {
     final baseline = size.height - labelBand - scaleW(1);
     final line = Paint()
       ..color = baselineColor
-      ..strokeWidth = scaleW(1);
+      ..strokeWidth = AppTheme.metrics.strokeHairline;
     canvas.drawLine(Offset(0, baseline), Offset(size.width, baseline), line);
 
     final slot = size.width / groups.length;
@@ -316,7 +316,7 @@ class _LinePainter extends CustomPainter {
 
     final grid = Paint()
       ..color = gridColor
-      ..strokeWidth = scaleW(1);
+      ..strokeWidth = AppTheme.metrics.strokeHairline;
     canvas.drawLine(Offset(0, yOf(hi)), Offset(size.width, yOf(hi)), grid);
     // 0 轴：结余线和资产曲线都会穿到负的那一侧，没有这条线就分不清"少花"和"倒贴"
     final zeroY = yOf(0);
@@ -326,7 +326,7 @@ class _LinePainter extends CustomPainter {
         ..lineTo(size.width, zeroY),
       Paint()
         ..color = zeroColor.withValues(alpha: 0.4)
-        ..strokeWidth = scaleW(1)
+        ..strokeWidth = AppTheme.metrics.strokeHairline
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round,
     );
@@ -351,7 +351,7 @@ class _LinePainter extends CustomPainter {
         path,
         Paint()
           ..color = line.color
-          ..strokeWidth = scaleW(2)
+          ..strokeWidth = AppTheme.metrics.strokeRegular
           ..style = PaintingStyle.stroke
           ..strokeJoin = StrokeJoin.round
           ..strokeCap = StrokeCap.round,

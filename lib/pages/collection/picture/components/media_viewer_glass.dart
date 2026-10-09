@@ -17,7 +17,7 @@ class _GlassIconButton extends StatelessWidget {
       child: ClipRRect(
         borderRadius: AppTheme.metrics.radius22,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
           child: Container(
             width: scaleW(42),
             height: scaleW(42),
@@ -67,7 +67,7 @@ class _GlassChipState extends State<_GlassChip> {
     return ClipRRect(
       borderRadius: AppTheme.metrics.radius14,
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        filter: ImageFilter.blur(sigmaX: AppGlass.blurSoft, sigmaY: AppGlass.blurSoft),
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: AppTheme.metrics.kSpace10,
@@ -89,7 +89,7 @@ class _GlassChipState extends State<_GlassChip> {
                   final pos = Tween<Offset>(
                     begin: begin,
                     end: Offset.zero,
-                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+                  ).animate(CurvedAnimation(parent: animation, curve: AppMotion.decelerate));
                   return ClipRect(
                     child: SlideTransition(position: pos, child: child),
                   );
@@ -199,12 +199,19 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
     return FadeTransition(
       opacity: CurvedAnimation(
         parent: _animController,
-        curve: Interval(delayMs / 300.0, 1.0, curve: Curves.easeOut),
+        // 分母必须是这条 controller 自己的时长：原先写死 300，而 controller 走
+        // `AppMotion.base`(220)，错拍会静默地把三级错峰压成几乎同时出。
+        curve: Interval(
+          delayMs / AppMotion.base.inMilliseconds,
+          1.0,
+          curve: AppMotion.decelerate,
+        ),
       ),
       child: ScaleTransition(
         scale: CurvedAnimation(
           parent: _animController,
-          curve: Interval(delayMs / 300.0, 1.0, curve: Curves.easeOutBack),
+          // easeOutBack 是多次回弹，§5.1 禁；只过一次冲量的落位感走弹簧近似档
+          curve: Interval(delayMs / AppMotion.base.inMilliseconds, 1.0, curve: AppMotion.springCurve),
         ),
         child: _GlassIconButton(icon: icon, tooltip: tooltip, onTap: () => _handleAction(onTap)),
       ),

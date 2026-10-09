@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -58,7 +59,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
     });
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('缓存已清除'), duration: Duration(seconds: 2)));
+    ).showSnackBar(const SnackBar(content: Text('缓存已清除'), duration: AppMotion.dwell));
   }
 
   /// 选一张本地图片当作伪封面

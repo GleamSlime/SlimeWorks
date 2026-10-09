@@ -241,7 +241,7 @@ class SentryLogStatsPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.glassTint,
         borderRadius: m.radiusPanel,
-        border: Border.all(color: s.glassBorder, width: 0.5),
+        border: Border.all(color: s.glassBorder, width: AppTheme.metrics.strokeUltraThin),
         boxShadow: [
           ...s.elevation(Elevation.raised),
           BoxShadow(

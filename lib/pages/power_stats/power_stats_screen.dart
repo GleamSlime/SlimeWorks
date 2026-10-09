@@ -9,6 +9,7 @@ import 'package:slime_works/components/node/node_switcher_button.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_viz.dart';
@@ -48,11 +49,11 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
 
     _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: AppMotion.entrance,
     );
     _entranceAnimation = CurvedAnimation(
       parent: _entranceController,
-      curve: Curves.easeOutCubic,
+      curve: AppMotion.decelerate,
     );
 
     _nodeListSub = _nodeService!.remoteNodes.listen((_) {
@@ -167,7 +168,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
             decoration: BoxDecoration(
               color: s.warning.color.withAlpha(30),
               borderRadius: m.radius20,
-              border: Border.all(color: s.warning.color.withAlpha(80), width: 1),
+              border: Border.all(color: s.warning.color.withAlpha(80), width: AppTheme.metrics.strokeHairline),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -176,7 +177,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                     ? SizedBox(
                         width: m.iconSize14,
                         height: m.iconSize14,
-                        child: const CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                       )
                     : DrawIcon(StrokeIcons.bolt,
                         size: m.iconSize14,
@@ -842,7 +843,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                     decoration: BoxDecoration(
                       color: color.withAlpha(15),
                       borderRadius: m.radius6,
-                      border: Border.all(color: color.withAlpha(50), width: 0.5),
+                      border: Border.all(color: color.withAlpha(50), width: AppTheme.metrics.strokeUltraThin),
                     ),
                     child: Text(
                       sumText,
@@ -1642,7 +1643,7 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
               decoration: BoxDecoration(
                 color: theme.colorScheme.surface.withAlpha(248),
                 borderRadius: m.radius8,
-                border: Border.all(color: widget.color.withAlpha(120), width: 1),
+                border: Border.all(color: widget.color.withAlpha(120), width: AppTheme.metrics.strokeHairline),
                 boxShadow: [
                   BoxShadow(
                     color: s.shadowKey.withAlpha(60),
@@ -1825,7 +1826,7 @@ class _ChartCanvas extends CustomPainter {
     // 网格 + Y轴标签
     final gridPaint = Paint()
       ..color = gridColor
-      ..strokeWidth = 0.5;
+      ..strokeWidth = AppTheme.metrics.strokeUltraThin;
     for (int i = 0; i <= 4; i++) {
       final y = padTop + chartH * i / 4;
       canvas.drawLine(Offset(padLeft, y), Offset(padLeft + chartW, y), gridPaint);
@@ -1893,7 +1894,7 @@ class _ChartCanvas extends CustomPainter {
     final linePaint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
+      ..strokeWidth = AppTheme.metrics.strokeRegular
       ..strokeJoin = StrokeJoin.round
       ..strokeCap = StrokeCap.round;
     if (points.length >= 2) {

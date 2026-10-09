@@ -92,7 +92,7 @@ class PictureLibraryToolbar extends StatelessWidget {
                           SizedBox(
                             width: AppTheme.metrics.kSpace20,
                             height: AppTheme.metrics.kSpace20,
-                            child: const CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
                           ),
                           Text(
                             statusText.isNotEmpty ? statusText : ' ',
@@ -467,7 +467,7 @@ class _ThumbProgressIndicatorState extends State<_ThumbProgressIndicator> {
               height: AppTheme.metrics.kSpace18,
               child: CircularProgressIndicator(
                 value: total > 0 ? completed / total : 0,
-                strokeWidth: 2,
+                strokeWidth: AppTheme.metrics.strokeRegular,
               ),
             ),
             Text(

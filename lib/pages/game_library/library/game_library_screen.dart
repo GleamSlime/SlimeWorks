@@ -751,7 +751,7 @@ class _BoxSelectPainter extends CustomPainter {
       rect,
       Paint()
         ..color = color
-        ..strokeWidth = 1.5
+        ..strokeWidth = AppTheme.metrics.strokeThin
         ..style = PaintingStyle.stroke,
     );
   }

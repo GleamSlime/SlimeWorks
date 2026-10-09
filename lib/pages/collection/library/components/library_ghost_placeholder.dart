@@ -25,7 +25,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
   void initState() {
     super.initState();
     _ctrl = AnimationController(vsync: this, duration: AppMotion.fast);
-    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _opacity = CurvedAnimation(parent: _ctrl, curve: AppMotion.decelerate);
     _ctrl.forward();
   }
 
@@ -99,7 +99,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: appMetrics.radius8,
-          side: BorderSide(color: s.accent, width: scaleW(2)),
+          side: BorderSide(color: s.accent, width: AppTheme.metrics.strokeRegular),
         ),
         child: Opacity(opacity: 0.5, child: content),
       ),
