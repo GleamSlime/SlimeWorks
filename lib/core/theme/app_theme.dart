@@ -1143,6 +1143,9 @@ class ThemeMetrics {
   /// 常规描边：进度环、选中环
   final double strokeRegular;
 
+  /// 加重描边：要压在画面上仍然看得清的环与条（2.0 在封面上会细成一条线）
+  final double strokeEmphasis;
+
   /// 粗描边：需要压住画面的环形/条形指示
   final double strokeBold;
 
@@ -1242,6 +1245,7 @@ class ThemeMetrics {
       strokeUltraThin = 0.5,
       strokeThin = 1.5,
       strokeRegular = 2.0,
+      strokeEmphasis = 2.5,
       strokeBold = 3.0,
 
       boxShadow10 = (() {

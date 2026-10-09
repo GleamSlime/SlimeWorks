@@ -324,10 +324,10 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       key: ValueKey('anim_$globalIndex'),
       tween: Tween(begin: 0.0, end: 1.0),
       duration: AppMotion.emphasis,
-      curve: Curves.easeOutCubic,
+      curve: AppMotion.decelerate,
       builder: (context, value, child) => Opacity(
         opacity: value.clamp(0.0, 1.0),
-        child: Transform.translate(offset: Offset(0, scaleH(28) * (1 - value)), child: child),
+        child: Transform.translate(offset: Offset(0, AppMotion.travelLarge * (1 - value)), child: child),
       ),
       child: _buildTile(item, globalIndex, colWidth),
     );

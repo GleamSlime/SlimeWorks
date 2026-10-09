@@ -1200,7 +1200,8 @@ class _PeerListItemState extends State<_PeerListItem> {
                 ),
                 // 身份色头像底深浅两档都是中低亮度，图标固定用不透明的 on-dark 白，
                 // 换成 accentOn 会在暗色档变成深墨、在头像上消失
-                child: DrawIcon(deviceIcon, size: scaleW(22), color: Colors.white.withValues(alpha: 0.9)),
+                // 令牌取 onStatusBadge：它才是"实心色块上恒白墨"这一职（头像不是 art，别拿 onMedia 顶）
+                child: DrawIcon(deviceIcon, size: scaleW(22), color: s.onStatusBadge.withValues(alpha: 0.9)),
               ),
               SizedBox(width: m.kSpace14),
               Expanded(

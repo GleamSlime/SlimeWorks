@@ -53,7 +53,7 @@ class NovelCard extends StatelessWidget {
                 child: Stack(
                   children: [
                     // 封面图片或默认背景
-                    if (coverPath != null) _buildCoverImage() else _buildDefaultCover(),
+                    if (coverPath != null) _buildCoverImage(context) else _buildDefaultCover(context),
 
                     // 格式标签
                     Positioned(
@@ -74,8 +74,8 @@ class NovelCard extends StatelessWidget {
                           style: AppTextStyles.role(
                             context,
                             fontSize: m.fontSize10,
-                            // 封面上的固定浅字：语义层没有“暗遮罩上的白字”这一档，先按原样保留
-                            color: Colors.white,
+                            // 封面上的固定浅字：走媒体 chrome 档，明暗两档都不反转
+                            color: s.onMedia,
                             weight: FontWeight.bold,
                           ),
                         ),
@@ -92,7 +92,8 @@ class NovelCard extends StatelessWidget {
                           height: AppTheme.metrics.kSpace4,
                           child: LinearProgressIndicator(
                             value: progress,
-                            backgroundColor: Colors.white.withValues(alpha: 0.3),
+                            // 进度条压在封面 art 上：轨道用恒白水洗，alpha 沿用原值
+                            backgroundColor: s.onMedia.withValues(alpha: 0.3),
                             valueColor: AlwaysStoppedAnimation<Color>(s.accent),
                           ),
                         ),
@@ -219,17 +220,17 @@ class NovelCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCoverImage() {
+  Widget _buildCoverImage(BuildContext context) {
     try {
       final file = File(coverPath!);
       if (file.existsSync()) {
         return Positioned.fill(child: Image.file(file, fit: BoxFit.cover));
       }
     } catch (_) {}
-    return _buildDefaultCover();
+    return _buildDefaultCover(context);
   }
 
-  Widget _buildDefaultCover() {
+  Widget _buildDefaultCover(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -239,7 +240,12 @@ class NovelCard extends StatelessWidget {
         ),
       ),
       child: Center(
-        child: DrawIcon(StrokeIcons.menuBook, size: AppTheme.metrics.iconSize64, color: Colors.white70),
+        // 占位封面的渐变底恒不反转，图标走媒体 chrome 档
+        child: DrawIcon(
+          StrokeIcons.menuBook,
+          size: AppTheme.metrics.iconSize64,
+          color: AppSemantic.of(context).onMediaSecondary,
+        ),
       ),
     );
   }

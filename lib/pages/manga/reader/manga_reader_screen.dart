@@ -165,9 +165,11 @@ class _MangaReaderScreenState
     final String epsTitle = widget.epsTitle.isNotEmpty
         ? widget.epsTitle
         : '第 ${widget.epsOrder} 话';
+    // 阅读舞台与顶底栏是恒深/恒白的媒体 chrome，不随明暗反转
+    final s = AppSemantic.of(context);
 
     return ColoredBox(
-      color: Colors.black,
+      color: s.mediaStage,
       child: Stack(
         children: [
           // 内容区：点击切换沉浸模式
@@ -204,10 +206,10 @@ class _MangaReaderScreenState
                         decoration: BoxDecoration(
                           // 覆盖层压在漫画画面之上：白色磨砂 + 深色字是固定搭配，
                           // 跟着主题翻转会在浅色档糊成一片，所以这里不取语义色。
-                          color: Colors.white.withValues(alpha: 0.62),
+                          color: s.onMedia.withValues(alpha: 0.62),
                           border: Border(
                             bottom: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.4),
+                              color: s.onMedia.withValues(alpha: 0.4),
                               width: scaleW(0.5),
                             ),
                           ),
@@ -221,13 +223,13 @@ class _MangaReaderScreenState
                               toolbarHeight: AppTheme.metrics.kSpace48,
                               backgroundColor: Colors.transparent,
                               elevation: 0,
-                              foregroundColor: Colors.black87,
+                              foregroundColor: s.onMediaInk.withValues(alpha: .87),
                               leading: IconButton(
                                 icon: DrawIcon(StrokeIcons.arrowBackIosNew,
                                   size: AppTheme.metrics.iconSize20,
                                 ),
                                 onPressed: _handleBack,
-                                color: Colors.black87,
+                                color: s.onMediaInk.withValues(alpha: .87),
                               ),
                               centerTitle: true,
                               title: Text(
@@ -238,7 +240,7 @@ class _MangaReaderScreenState
                                 style: AppTextStyles.role(
                                   context,
                                   fontSize: AppTheme.metrics.fontSize15,
-                                  color: Colors.black87,
+                                  color: s.onMediaInk.withValues(alpha: .87),
                                   weight: FontWeight.w600,
                                 ),
                               ),
@@ -248,7 +250,7 @@ class _MangaReaderScreenState
                                     size: AppTheme.metrics.iconSize22,
                                   ),
                                   onPressed: () => _showMoreMenu(context),
-                                  color: Colors.black87,
+                                  color: s.onMediaInk.withValues(alpha: .87),
                                 ),
                               ],
                               actionsPadding: EdgeInsets.zero,
@@ -287,10 +289,10 @@ class _MangaReaderScreenState
                         decoration: BoxDecoration(
                           // 覆盖层压在漫画画面之上：白色磨砂 + 深色字是固定搭配，
                           // 跟着主题翻转会在浅色档糊成一片，所以这里不取语义色。
-                          color: Colors.white.withValues(alpha: 0.62),
+                          color: s.onMedia.withValues(alpha: 0.62),
                           border: Border(
                             top: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.4),
+                              color: s.onMedia.withValues(alpha: 0.4),
                               width: scaleW(0.5),
                             ),
                           ),
@@ -1093,6 +1095,8 @@ class _MangaReaderScreenState
 
   /// 错误页面（支持重试）
   Widget _buildErrorView(BuildContext context, String error) {
+    // 错误页整块铺在黑舞台上，字色属媒体 chrome，不随主题反转
+    final s = AppSemantic.of(context);
     return SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
@@ -1105,7 +1109,7 @@ class _MangaReaderScreenState
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 DrawIcon(StrokeIcons.errorOutline,
-                  color: Colors.white70,
+                  color: s.onMediaSecondary,
                   size: AppTheme.metrics.iconSize48,
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace16),
@@ -1115,7 +1119,7 @@ class _MangaReaderScreenState
                   style: AppTextStyles.role(
                     context,
                     fontSize: AppTheme.metrics.fontSize13,
-                    color: Colors.white,
+                    color: s.onMedia,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -1151,8 +1155,11 @@ class _MangaReaderScreenState
             if (viewModel.hasMore) {
               return Padding(
                 padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
-                child: const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
+                child: Center(
+                  // 加载圈在黑舞台上，属媒体 chrome
+                  child: CircularProgressIndicator(
+                    color: AppSemantic.of(ctx).onMedia,
+                  ),
                 ),
               );
             }
@@ -1206,6 +1213,8 @@ class _ReaderBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 底栏 chrome 恒不反转：分隔线取黑舞台色的算术档
+    final s = AppSemantic.of(context);
     return SizedBox(
       // 底栏是固定高度的窄条，尺寸一律宽度族；栏内内容用 FittedBox 收住，
       // 字号滑杆拉到顶也不会顶破这一条。
@@ -1224,7 +1233,7 @@ class _ReaderBottomBar extends StatelessWidget {
           Container(
             width: scaleW(0.5),
             height: AppTheme.metrics.kSpace32,
-            color: Colors.black.withValues(alpha: 0.1),
+            color: s.mediaStage.withValues(alpha: 0.1),
           ),
           Expanded(
             child: _BarBtn(
@@ -1349,9 +1358,11 @@ class _ComicPageImageState extends State<_ComicPageImage> {
   @override
   Widget build(BuildContext context) {
     final placeholderHeight = widget.initialHeight ?? scaleW(400);
+    // 页面四周的 letterbox 是恒黑舞台，占位/报错的字色都属媒体 chrome
+    final s = AppSemantic.of(context);
     return ColoredBox(
       key: _containerKey,
-      color: Colors.black,
+      color: s.mediaStage,
       child: MangaImageView(
         image: widget.image,
         width: double.infinity,
@@ -1361,7 +1372,7 @@ class _ComicPageImageState extends State<_ComicPageImage> {
           return SizedBox(
             height: placeholderHeight,
             child: Center(
-              child: MangaProgressRing(size: scaleW(44), color: Colors.white70),
+              child: MangaProgressRing(size: scaleW(44), color: s.onMediaSecondary),
             ),
           );
         },
@@ -1372,7 +1383,7 @@ class _ComicPageImageState extends State<_ComicPageImage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DrawIcon(StrokeIcons.brokenImage,
-                  color: Colors.white54,
+                  color: s.onMediaTertiary,
                   size: AppTheme.metrics.iconSize48,
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace12),
@@ -1382,7 +1393,7 @@ class _ComicPageImageState extends State<_ComicPageImage> {
                   style: AppTextStyles.role(
                     context,
                     fontSize: AppTheme.metrics.fontSize11,
-                    color: Colors.white54,
+                    color: s.onMediaTertiary,
                   ),
                 ),
                 SizedBox(height: AppTheme.metrics.kSpace8),
@@ -1390,10 +1401,10 @@ class _ComicPageImageState extends State<_ComicPageImage> {
                   onPressed: onRetry,
                   // 黑色舞台上的重试按钮：前景色固定为白，其余仍走主题按钮档
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.white70,
+                    foregroundColor: s.onMediaSecondary,
                   ),
                   icon: DrawIcon(StrokeIcons.refresh,
-                    color: Colors.white70,
+                    color: s.onMediaSecondary,
                     size: AppTheme.metrics.iconSize16,
                   ),
                   label: const Text('重试'),

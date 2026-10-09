@@ -40,7 +40,7 @@ class SentryLogEventDetail extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildInfoGrid(theme, m, s),
+                    _buildInfoGrid(context, theme, m, s),
                     if (_hasExceptions()) ...[
                       SizedBox(height: m.kSpace16),
                       _buildSectionTitle(
@@ -51,7 +51,7 @@ class SentryLogEventDetail extends StatelessWidget {
                         s.danger.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildExceptions(theme, m, s),
+                      _buildExceptions(context, m, s),
                     ],
                     if (_hasBreadcrumbs()) ...[
                       SizedBox(height: m.kSpace16),
@@ -63,7 +63,7 @@ class SentryLogEventDetail extends StatelessWidget {
                         s.info.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildBreadcrumbs(theme, m, s),
+                      _buildBreadcrumbs(context, theme, m, s),
                     ],
                     if (_hasTags()) ...[
                       SizedBox(height: m.kSpace16),
@@ -87,7 +87,7 @@ class SentryLogEventDetail extends StatelessWidget {
                         s.success.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildExtra(theme, m, s),
+                      _buildExtra(context, theme, m, s),
                     ],
                     if (_hasUser()) ...[
                       SizedBox(height: m.kSpace16),
@@ -99,7 +99,7 @@ class SentryLogEventDetail extends StatelessWidget {
                         s.info.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildUser(theme, m, s),
+                      _buildUser(context, theme, m, s),
                     ],
                     if (_hasRequest()) ...[
                       SizedBox(height: m.kSpace16),
@@ -111,7 +111,7 @@ class SentryLogEventDetail extends StatelessWidget {
                         s.info.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildRequest(theme, m, s),
+                      _buildRequest(context, theme, m, s),
                     ],
                     if (_hasContexts()) ...[
                       SizedBox(height: m.kSpace16),
@@ -123,7 +123,7 @@ class SentryLogEventDetail extends StatelessWidget {
                         s.neutral.color,
                       ),
                       SizedBox(height: m.kSpace8),
-                      _buildContexts(theme, m, s),
+                      _buildContexts(context, theme, m, s),
                     ],
                     SizedBox(height: m.kSpace16),
                     _buildSectionTitle(
@@ -134,7 +134,7 @@ class SentryLogEventDetail extends StatelessWidget {
                       s.accent,
                     ),
                     SizedBox(height: m.kSpace8),
-                    _buildRawJson(theme, m, s),
+                    _buildRawJson(context, theme, m, s),
                   ],
                 ),
               ),
@@ -246,7 +246,7 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoGrid(ThemeData theme, ThemeMetrics m, AppSemantic s) {
+  Widget _buildInfoGrid(BuildContext context, ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final entries = <_InfoEntry>[];
     if (event['event_id'] != null) {
       entries.add(_InfoEntry('事件ID', event['event_id'].toString()));
@@ -281,12 +281,19 @@ class SentryLogEventDetail extends StatelessWidget {
         border: Border.all(color: s.border, width: 0.5),
       ),
       child: Column(
-        children: entries.map((e) => _buildInfoRow(theme, m, s, e.label, e.value)).toList(),
+        children: entries.map((e) => _buildInfoRow(context, theme, m, s, e.label, e.value)).toList(),
       ),
     );
   }
 
-  Widget _buildInfoRow(ThemeData theme, ThemeMetrics m, AppSemantic s, String label, String value) {
+  Widget _buildInfoRow(
+    BuildContext context,
+    ThemeData theme,
+    ThemeMetrics m,
+    AppSemantic s,
+    String label,
+    String value,
+  ) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: m.kSpace4),
       child: Row(
@@ -306,7 +313,8 @@ class SentryLogEventDetail extends StatelessWidget {
           Expanded(
             child: SelectableText(
               value,
-              style: theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+              // 等宽值走 AppTextStyles.mono：字族清单由主题统一定义，不再手写 monospace
+              style: AppTextStyles.mono(context, size: m.fontSize12, color: s.textTertiary),
             ),
           ),
         ],
@@ -314,7 +322,7 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildExceptions(ThemeData theme, ThemeMetrics m, AppSemantic s) {
+  Widget _buildExceptions(BuildContext context, ThemeMetrics m, AppSemantic s) {
     final exception = event['exception'] as Map<String, dynamic>?;
     if (exception == null) return const SizedBox.shrink();
     final values = exception['values'] as List<dynamic>? ?? [];
@@ -346,11 +354,12 @@ class SentryLogEventDetail extends StatelessWidget {
                 ),
                 child: Text(
                   '$type: $value',
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  // 异常签名等宽展示；字重是原 copyWith 显式声明的，用 copyWith 保留
+                  style: AppTextStyles.mono(
+                    context,
+                    size: m.fontSize12,
                     color: s.danger.onContainer,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'monospace',
-                  ),
+                  ).copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
               if (frames.isNotEmpty) ...[
@@ -380,8 +389,9 @@ class SentryLogEventDetail extends StatelessWidget {
                         Expanded(
                           child: RichText(
                             text: TextSpan(
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                fontFamily: 'monospace',
+                              style: AppTextStyles.mono(
+                                context,
+                                size: m.fontSize11,
                                 color: s.textPrimary,
                               ),
                               children: [
@@ -413,7 +423,12 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildBreadcrumbs(ThemeData theme, ThemeMetrics m, AppSemantic s) {
+  Widget _buildBreadcrumbs(
+    BuildContext context,
+    ThemeData theme,
+    ThemeMetrics m,
+    AppSemantic s,
+  ) {
     final breadcrumbs = event['breadcrumbs'] as Map<String, dynamic>?;
     if (breadcrumbs == null) return const SizedBox.shrink();
     final values = breadcrumbs['values'] as List<dynamic>? ?? [];
@@ -466,10 +481,7 @@ class SentryLogEventDetail extends StatelessWidget {
                       if (message.isNotEmpty)
                         Text(
                           message,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: s.textTertiary,
-                            fontFamily: 'monospace',
-                          ),
+                          style: AppTextStyles.mono(context, size: m.fontSize12, color: s.textTertiary),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -519,7 +531,7 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildExtra(ThemeData theme, ThemeMetrics m, AppSemantic s) {
+  Widget _buildExtra(BuildContext context, ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final extra = event['extra'] as Map<String, dynamic>? ?? {};
     if (extra.isEmpty) return const SizedBox.shrink();
 
@@ -532,13 +544,18 @@ class SentryLogEventDetail extends StatelessWidget {
       ),
       child: Column(
         children: extra.entries
-            .map((e) => _buildInfoRow(theme, m, s, e.key, e.value.toString()))
+            .map((e) => _buildInfoRow(context, theme, m, s, e.key, e.value.toString()))
             .toList(),
       ),
     );
   }
 
-  Widget _buildUser(ThemeData theme, ThemeMetrics m, AppSemantic s) {
+  Widget _buildUser(
+    BuildContext context,
+    ThemeData theme,
+    ThemeMetrics m,
+    AppSemantic s,
+  ) {
     final user = event['user'] as Map<String, dynamic>? ?? {};
     if (user.isEmpty) return const SizedBox.shrink();
 
@@ -574,10 +591,7 @@ class SentryLogEventDetail extends StatelessWidget {
                 if (user['id'] != null)
                   Text(
                     'ID: ${user['id']}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: s.textTertiary,
-                      fontFamily: 'monospace',
-                    ),
+                    style: AppTextStyles.mono(context, size: m.fontSize11, color: s.textTertiary),
                   ),
               ],
             ),
@@ -587,7 +601,7 @@ class SentryLogEventDetail extends StatelessWidget {
     );
   }
 
-  Widget _buildRequest(ThemeData theme, ThemeMetrics m, AppSemantic s) {
+  Widget _buildRequest(BuildContext context, ThemeData theme, ThemeMetrics m, AppSemantic s) {
     final request = event['request'] as Map<String, dynamic>? ?? {};
     if (request.isEmpty) return const SizedBox.shrink();
 
@@ -602,6 +616,7 @@ class SentryLogEventDetail extends StatelessWidget {
         children: [
           if (request['method'] != null || request['url'] != null)
             _buildInfoRow(
+              context,
               theme,
               m,
               s,
@@ -609,13 +624,18 @@ class SentryLogEventDetail extends StatelessWidget {
               '${request['method'] ?? ''} ${request['url'] ?? ''}',
             ),
           if (request['headers'] != null)
-            _buildInfoRow(theme, m, s, 'Headers', request['headers'].toString()),
+            _buildInfoRow(context, theme, m, s, 'Headers', request['headers'].toString()),
         ],
       ),
     );
   }
 
-  Widget _buildContexts(ThemeData theme, ThemeMetrics m, AppSemantic s) {
+  Widget _buildContexts(
+    BuildContext context,
+    ThemeData theme,
+    ThemeMetrics m,
+    AppSemantic s,
+  ) {
     final contexts = event['contexts'] as Map<String, dynamic>? ?? {};
     if (contexts.isEmpty) return const SizedBox.shrink();
 
@@ -644,18 +664,23 @@ class SentryLogEventDetail extends StatelessWidget {
                   ),
                 ),
                 ...value.entries.map(
-                  (item) => _buildInfoRow(theme, m, s, item.key, item.value.toString()),
+                  (item) => _buildInfoRow(context, theme, m, s, item.key, item.value.toString()),
                 ),
               ],
             );
           }
-          return _buildInfoRow(theme, m, s, e.key, value.toString());
+          return _buildInfoRow(context, theme, m, s, e.key, value.toString());
         }).toList(),
       ),
     );
   }
 
-  Widget _buildRawJson(ThemeData theme, ThemeMetrics m, AppSemantic s) {
+  Widget _buildRawJson(
+    BuildContext context,
+    ThemeData theme,
+    ThemeMetrics m,
+    AppSemantic s,
+  ) {
     final raw = const JsonEncoder.withIndent('  ').convert(event);
     return Container(
       constraints: BoxConstraints(maxHeight: scaleW(200)),
@@ -703,11 +728,9 @@ class SentryLogEventDetail extends StatelessWidget {
             SizedBox(height: m.kSpace8),
             Text(
               raw,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontFamily: 'monospace',
-                color: s.textPrimary,
-                height: 1.5,
-              ),
+              // 原始 JSON 等宽展示；行高是原 copyWith 显式声明的，用 copyWith 保留
+              style: AppTextStyles.mono(context, size: m.fontSize12, color: s.textPrimary)
+                  .copyWith(height: 1.5),
             ),
           ],
         ),

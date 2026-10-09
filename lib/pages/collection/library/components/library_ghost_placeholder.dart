@@ -60,7 +60,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
                 style: AppTextStyles.role(
                   context,
                   fontSize: appMetrics.fontSize11,
-                  color: Colors.white,
+                  color: s.onMedia,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

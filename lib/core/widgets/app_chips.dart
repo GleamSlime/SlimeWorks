@@ -301,9 +301,10 @@ class _PulseDotPainter extends CustomPainter {
 }
 
 class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
+  // 常驻环境动效（在线状态点）取循环最慢档 ambient，值与原本一致
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1600),
+    duration: AppMotion.ambient,
   )..repeat();
 
   @override

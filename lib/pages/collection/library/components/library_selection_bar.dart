@@ -169,8 +169,8 @@ class LibrarySelectionBar extends StatelessWidget {
               label: const Text('删除'),
               style: FilledButton.styleFrom(
                 backgroundColor: s.danger.color,
-                // 语义层还没有"实心状态底上的字"这一档，主题里 colorScheme.onError 也正是纯白
-                foregroundColor: Colors.white,
+                // 实心状态底上的字现已有档：onStatusBadge（恒白）
+                foregroundColor: s.onStatusBadge,
               ),
             ),
           ],

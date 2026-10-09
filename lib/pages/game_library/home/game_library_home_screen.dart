@@ -76,12 +76,13 @@ class _GameLibraryHomeScreenState
               ),
 
             // ── 层 1：暗色渐变遮罩，确保文字可读 ────────────────
-            const DecoratedBox(
+            // 遮罩压的是封面，底色由内容决定，两档主题下同值，不跟随翻转
+            DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: <Color>[Color(0x22000000), Color(0xAA000000)],
+                  colors: <Color>[s.mediaScrimSoft, s.mediaScrimFoot],
                   stops: <double>[0.0, 1.0],
                 ),
               ),
@@ -102,9 +103,9 @@ class _GameLibraryHomeScreenState
                         Text(
                           '首页',
                           style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                            color: Colors.white,
+                            color: s.onMedia,
                             fontWeight: FontWeight.w700,
-                            shadows: <Shadow>[const Shadow(blurRadius: 8, color: Colors.black54)],
+                            shadows: <Shadow>[Shadow(blurRadius: 8, color: s.mediaScrimMedium)],
                           ),
                         ),
                         SizedBox(height: AppTheme.metrics.kSpace4),
@@ -112,7 +113,7 @@ class _GameLibraryHomeScreenState
                           '欢迎回来',
                           style: Theme.of(
                             context,
-                          ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                          ).textTheme.bodyMedium?.copyWith(color: s.onMediaSecondary),
                         ),
                       ],
                     ),
@@ -126,7 +127,7 @@ class _GameLibraryHomeScreenState
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          DrawIcon(StrokeIcons.schedule, size: AppTheme.metrics.iconSize20, color: Colors.white70),
+                          DrawIcon(StrokeIcons.schedule, size: AppTheme.metrics.iconSize20, color: s.onMediaSecondary),
                           SizedBox(width: AppTheme.metrics.kSpace8),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,12 +137,12 @@ class _GameLibraryHomeScreenState
                                 '今日游玩时间',
                                 style: Theme.of(
                                   context,
-                                ).textTheme.labelSmall?.copyWith(color: Colors.white60),
+                                ).textTheme.labelSmall?.copyWith(color: s.onMediaTertiary),
                               ),
                               Text(
                                 viewModel.formatDuration(data.todayPlayTimeSec),
                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: Colors.white,
+                                  color: s.onMedia,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -188,10 +189,10 @@ class _GameLibraryHomeScreenState
                                 Text(
                                   lastGame.name,
                                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                    color: Colors.white,
+                                    color: s.onMedia,
                                     fontWeight: FontWeight.w700,
                                     shadows: <Shadow>[
-                                      const Shadow(blurRadius: 8, color: Colors.black54),
+                                      Shadow(blurRadius: 8, color: s.mediaScrimMedium),
                                     ],
                                   ),
                                   maxLines: 2,
@@ -203,13 +204,13 @@ class _GameLibraryHomeScreenState
                                     '上次游玩: ${_formatDateTime(lastGame.lastPlayedAt!)}',
                                     style: Theme.of(
                                       context,
-                                    ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+                                    ).textTheme.bodySmall?.copyWith(color: s.onMediaSecondary),
                                   ),
                                 Text(
                                   '总游玩时长: ${viewModel.formatDuration(lastGame.totalPlayTimeSec)}',
                                   style: Theme.of(
                                     context,
-                                  ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+                                  ).textTheme.bodySmall?.copyWith(color: s.onMediaSecondary),
                                 ),
                               ],
                             ),
@@ -228,13 +229,13 @@ class _GameLibraryHomeScreenState
                         children: <Widget>[
                           DrawIcon(StrokeIcons.sportsEsports,
                             size: AppTheme.metrics.iconSize64,
-                            color: Colors.white38,
+                            color: s.onMediaFaint,
                           ),
                           SizedBox(height: AppTheme.metrics.kSpace12),
                           Text(
                             '还没有游玩记录',
                             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              color: Colors.white,
+                              color: s.onMedia,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -243,13 +244,14 @@ class _GameLibraryHomeScreenState
                             '先去添加游戏，开始记录游玩时间吧。',
                             style: Theme.of(
                               context,
-                            ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                            ).textTheme.bodyMedium?.copyWith(color: s.onMediaSecondary),
                           ),
                           SizedBox(height: AppTheme.metrics.kSpace16),
                           FilledButton.icon(
                             style: FilledButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Colors.black87,
+                              // 按钮铺恒白实底，字恒深墨：这一层不吃主题翻转
+                              backgroundColor: s.onMedia,
+                              foregroundColor: s.onMediaInk,
                             ),
                             onPressed: () => const GameLibraryRoute().go(context),
                             icon: DrawIcon(StrokeIcons.libraryBooks),
@@ -266,8 +268,9 @@ class _GameLibraryHomeScreenState
                       bottom: 0,
                       child: FilledButton.icon(
                         style: FilledButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black87,
+                          // 浮在封面上的白底按钮，字不随主题反相
+                          backgroundColor: s.onMedia,
+                          foregroundColor: s.onMediaInk,
                           padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24, vertical: AppTheme.metrics.kSpace16),
                         ),
                         onPressed: () async {
@@ -287,12 +290,13 @@ class _GameLibraryHomeScreenState
   }
 
   Widget _buildCoverImage(String coverPath) {
+    final s = AppSemantic.of(context);
     final String value = coverPath.trim();
     if (value.isEmpty) {
       return DecoratedBox(
-        decoration: BoxDecoration(color: Colors.white12, borderRadius: AppTheme.metrics.radius14),
+        decoration: BoxDecoration(color: s.onMediaWash, borderRadius: AppTheme.metrics.radius14),
         child: Center(
-          child: DrawIcon(StrokeIcons.imageNotSupported, color: Colors.white38, size: AppTheme.metrics.iconSize40),
+          child: DrawIcon(StrokeIcons.imageNotSupported, color: s.onMediaFaint, size: AppTheme.metrics.iconSize40),
         ),
       );
     }
@@ -301,10 +305,10 @@ class _GameLibraryHomeScreenState
         imageUrl: value,
         fit: BoxFit.cover,
         placeholder: (_, _) =>
-            const DecoratedBox(decoration: BoxDecoration(color: Colors.white12)),
-        errorWidget: (_, _, _) => const DecoratedBox(
-          decoration: BoxDecoration(color: Colors.white12),
-          child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: Colors.white38)),
+            DecoratedBox(decoration: BoxDecoration(color: s.onMediaWash)),
+        errorWidget: (_, _, _) => DecoratedBox(
+          decoration: BoxDecoration(color: s.onMediaWash),
+          child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: s.onMediaFaint)),
         ),
       );
     }
@@ -312,9 +316,9 @@ class _GameLibraryHomeScreenState
     if (file.existsSync()) {
       return Image.file(file, fit: BoxFit.cover);
     }
-    return const DecoratedBox(
-      decoration: BoxDecoration(color: Colors.white12),
-      child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: Colors.white38)),
+    return DecoratedBox(
+      decoration: BoxDecoration(color: s.onMediaWash),
+      child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: s.onMediaFaint)),
     );
   }
 
@@ -332,21 +336,23 @@ class _BlurredCoverBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     Widget image;
     final String value = coverPath.trim();
     if (value.startsWith('http://') || value.startsWith('https://')) {
       image = CachedNetworkImage(
         imageUrl: value,
         fit: BoxFit.cover,
-        placeholder: (_, _) => const ColoredBox(color: Colors.black),
-        errorWidget: (_, _, _) => const ColoredBox(color: Colors.black),
+        // 封面未就绪时铺的是看图舞台黑底，不是主题表面
+        placeholder: (_, _) => ColoredBox(color: s.mediaStage),
+        errorWidget: (_, _, _) => ColoredBox(color: s.mediaStage),
       );
     } else {
       final File file = File(value);
       if (file.existsSync()) {
         image = Image.file(file, fit: BoxFit.cover);
       } else {
-        image = const ColoredBox(color: Colors.black);
+        image = ColoredBox(color: s.mediaStage);
       }
     }
 
@@ -371,6 +377,7 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return ClipRRect(
       borderRadius: AppTheme.metrics.radius12,
       child: BackdropFilter(
@@ -378,9 +385,10 @@ class _GlassCard extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16, vertical: AppTheme.metrics.kSpace12),
           decoration: BoxDecoration(
-            color: Colors.white.withAlpha(40),
+            // 玻璃卡洗的是封面图，透明度沿用原值，只把色相收到媒体墨档
+            color: s.onMedia.withAlpha(40),
             borderRadius: AppTheme.metrics.radius12,
-            border: Border.all(color: Colors.white.withAlpha(60)),
+            border: Border.all(color: s.onMedia.withAlpha(60)),
           ),
           child: child,
         ),

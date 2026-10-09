@@ -286,6 +286,10 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
   /// 不能用 `AppStatusRole.onContainer`（那是给半透明容器底配的深色字）。
   Color get onStatusBadge => AppMediaChrome.ink;
 
+  /// 日志控制台那套自成体系的配色（详见 [AppTerminalPalette]）
+  AppTerminalPalette get terminal =>
+      isDark ? AppTerminalPalette.dark : AppTerminalPalette.light;
+
   /// 统一的悬浮抬升投影：key + ambient 双层，替代散落的 95 处手写 BoxShadow
   List<BoxShadow> elevation(Elevation level, {Color? tint}) {
     final base = switch (level) {

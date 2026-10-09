@@ -30,6 +30,12 @@ class MangaComicDetailViewModel extends BaseViewModel {
   /// 章节分页
   MangaPagination? epsPagination;
 
+  /// 章节补齐任务的句柄（上游分页只给 20 章；重进详情或换漫画要重新置空）
+  Future<void>? _epsAllLoading;
+
+  /// 当前详情页对应的漫画 id
+  String _comicId = '';
+
   /// 是否已收藏（响应式，支持 Obx 监听）
   final RxBool isFavourite = false.obs;
 
@@ -48,6 +54,9 @@ class MangaComicDetailViewModel extends BaseViewModel {
   /// 加载漫画详情和章节列表
   Future<void> loadDetail(String comicId) async {
     setLoading(true);
+    _comicId = comicId;
+    // 换本子/重试都要重新补齐章节，否则 ensureAllEps 会拿着上一本的完成标记直接返回
+    _epsAllLoading = null;
     try {
       final results = await Future.wait([
         _service.getComicDetail(comicId),
@@ -65,11 +74,32 @@ class MangaComicDetailViewModel extends BaseViewModel {
       // 后台加载推荐 + 进度（不阻塞主加载）
       _loadRecommendations(comicId);
       _loadReadProgress(comicId);
+      // 章节分页补齐：首屏只有第 1 页那 20 章，剩下的静默拉完才算全量
+      ensureAllEps();
     } catch (e) {
       setError(e.toString());
     } finally {
       setLoading(false);
     }
+  }
+
+  /// 把章节列表补齐成全量（已在补齐中就等它，补齐过就直接返回）
+  ///
+  /// 下载弹层的"全选"与章节计数都要吃全量，调用点在弹层打开前 await 这一句，
+  /// 免得用户以为下载整本、实际只排了前 20 章。
+  Future<void> ensureAllEps() {
+    if (_comicId.isEmpty || eps.isEmpty) return Future.value();
+    return _epsAllLoading ??= () async {
+      final pagination = epsPagination;
+      if (pagination == null || pagination.pages <= 1) return;
+      final all = await _service.getComicEpsAll(
+        _comicId,
+        MangaEpsList(eps: eps, pagination: pagination),
+      );
+      if (isClosed) return;
+      eps = all;
+      update();
+    }();
   }
 
   /// 后台加载推荐

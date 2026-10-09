@@ -11,6 +11,7 @@ class _GlassIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final btn = GestureDetector(
       onTap: onTap,
       child: ClipRRect(
@@ -22,9 +23,10 @@ class _GlassIconButton extends StatelessWidget {
             height: scaleW(42),
             // 沉浸式查看器的玻璃按钮常驻深底：画面之下没有可依赖的主题表面，
             // 黑底白字不随明暗翻转，保留字面量
-            color: Colors.black.withValues(alpha: 0.42),
+            // 这份恒定值现已收进媒体 chrome 语义层，取 token 后像素不变
+            color: s.immersivePanel,
             alignment: Alignment.center,
-            child: Icon(icon, color: Colors.white, size: AppTheme.metrics.iconSize22),
+            child: Icon(icon, color: s.onMedia, size: AppTheme.metrics.iconSize22),
           ),
         ),
       ),
@@ -61,6 +63,7 @@ class _GlassChipState extends State<_GlassChip> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return ClipRRect(
       borderRadius: AppTheme.metrics.radius14,
       child: BackdropFilter(
@@ -70,7 +73,7 @@ class _GlassChipState extends State<_GlassChip> {
             horizontal: AppTheme.metrics.kSpace10,
             vertical: AppTheme.metrics.kSpace4,
           ),
-          color: Colors.black.withValues(alpha: 0.42),
+          color: s.immersivePanel,
           // 固定宽度避免数字变化时容器宽度跳动
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -95,13 +98,13 @@ class _GlassChipState extends State<_GlassChip> {
                   '${widget.current + 1}',
                   key: ValueKey(widget.current),
                   // 深色玻璃面上的计数文字：白字固定不随明暗翻转，见 _GlassIconButton 同款说明
-                  style: AppTextStyles.role(context, color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
+                  style: AppTextStyles.role(context, color: s.onMediaSecondary, fontSize: AppTheme.metrics.fontSize13),
                 ),
               ),
               // 总数静止，无动画
               Text(
                 ' / ${widget.total}',
-                style: AppTextStyles.role(context, color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
+                style: AppTextStyles.role(context, color: s.onMediaSecondary, fontSize: AppTheme.metrics.fontSize13),
               ),
             ],
           ),
@@ -175,7 +178,8 @@ class _FloatingActionMenuState extends State<_FloatingActionMenu>
 
   void _resetAutoCollapse() {
     _autoCollapseTimer?.cancel();
-    _autoCollapseTimer = Timer(const Duration(seconds: 3), () {
+    // 浮层自己待多久是驻留档，不是过渡档：这组按钮带操作入口，取 dwellLong
+    _autoCollapseTimer = Timer(AppMotion.dwellLong, () {
       if (mounted && _expanded) _collapse();
     });
   }

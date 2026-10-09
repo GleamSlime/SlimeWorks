@@ -488,6 +488,33 @@ class MangaService {
     return MangaEpsList.fromJson(data);
   }
 
+  /// 把章节分页拉平成完整列表
+  ///
+  /// 上游每页只给 `pagination.limit`（一般 20）章，把"第 1 页"当全量会让详情页只显示
+  /// 前 20 章、下载弹层的"全选"也只选中这 20 章。首屏仍由调用方先渲染 [first]，
+  /// 再调这里补齐后续页。
+  ///
+  /// 后续页失败就退回已经拿到的部分：章节少几章只是看不全，整页报错则是完全读不了。
+  Future<List<MangaEps>> getComicEpsAll(
+    String comicId,
+    MangaEpsList first,
+  ) async {
+    final all = <MangaEps>[...first.eps];
+    final totalPages = first.pagination.pages;
+    for (int page = 2; page <= totalPages; page++) {
+      try {
+        final more = await getComicEps(comicId, page: page);
+        all.addAll(more.eps);
+      } catch (e) {
+        _logger.error('Manga 章节后续页拉取失败: $comicId 第$page页, $e');
+        break;
+      }
+    }
+    // 上游不保证顺序（常见倒序返回），而阅读器翻下一章、下载排队都按 order 推进
+    all.sort((a, b) => a.order.compareTo(b.order));
+    return all;
+  }
+
   /// 获取章节图片
   Future<MangaPageList> getEpsPages(String comicId, int epsOrder, {int page = 1}) async {
     _logger.info('Manga 章节图片: $comicId, 第$epsOrder集, 第$page页');

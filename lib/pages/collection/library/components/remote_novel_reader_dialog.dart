@@ -173,7 +173,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   List<Map<String, dynamic>> _chapters = <Map<String, dynamic>>[];
   int _selected = 0;
   String _chapterText = '';
-  Color _readerBgColor = const Color(0xFFF6F0E7);
+  Color _readerBgColor = AppReaderPaper.parchment;
   double _readerFontSize = 16;
   double _readerLineHeight = 1.8;
   double _leadingOverscroll = 0;
@@ -342,13 +342,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                     Wrap(
                       spacing: AppTheme.metrics.kSpace10,
                       children:
-                          [
-                                const Color(0xFFF6F0E7),
-                                const Color(0xFFFFFFFF),
-                                const Color(0xFFEAF4E8),
-                                const Color(0xFFEAF1F8),
-                                const Color(0xFF1F1F1F),
-                              ]
+                          AppReaderPaper.presets
                               .map(
                                 (color) => GestureDetector(
                                   onTap: () {

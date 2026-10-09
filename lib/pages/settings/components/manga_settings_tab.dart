@@ -127,7 +127,8 @@ class _MangaSettingsTabState extends State<MangaSettingsTab> {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('代理已保存'), duration: Duration(seconds: 1)));
+    // 驻留取 dwell 档：原来手写的 1s 短到来不及读完一行提示
+    ).showSnackBar(const SnackBar(content: Text('代理已保存'), duration: AppMotion.dwell));
   }
 
   Future<void> _applyImageServer(String server) async {

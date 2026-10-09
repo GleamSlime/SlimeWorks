@@ -209,23 +209,4 @@ class AppLogViewModel extends GetxController {
     selectedLevel.value = '';
     entries.value = _applyFilter(_allEntries);
   }
-
-  /// 级别 → 固定色值查表：脱离主题上下文也能拿到同一个颜色（导出、离屏渲染）
-  ///
-  /// 界面上的等级着色由 `AppSemantic` 的状态角色负责，这里只保留一份与明暗无关
-  /// 的基准映射。
-  Color getLevelColor(String level) {
-    switch (level) {
-      case 'ERROR':
-        return const Color(0xFFEF4444);
-      case 'WARN':
-        return const Color(0xFFF59E0B);
-      case 'DEBUG':
-        return const Color(0xFF8B5CF6);
-      case 'INFO':
-        return const Color(0xFF22C55E);
-      default:
-        return const Color(0xFF94A3B8);
-    }
-  }
 }

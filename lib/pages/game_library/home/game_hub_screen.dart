@@ -125,7 +125,7 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
               borderRadius: m.radius12,
               border: Border.all(
                 color: s.glassBorder,
-                width: 0.5,
+                width: m.strokeUltraThin,
               ),
               boxShadow: s.elevation(Elevation.card),
             ),
@@ -133,7 +133,7 @@ class _GameHubScreenState extends State<GameHubScreen> with TickerProviderStateM
               controller: _tabController,
               indicatorSize: TabBarIndicatorSize.label,
               indicator: UnderlineTabIndicator(
-                borderSide: BorderSide(color: s.accent, width: 3),
+                borderSide: BorderSide(color: s.accent, width: m.strokeBold),
                 insets: EdgeInsets.symmetric(horizontal: -m.kSpace8),
               ),
               labelColor: s.accent,
@@ -225,12 +225,13 @@ class _HomeTab extends StatelessWidget {
               ),
             ),
 
-          const DecoratedBox(
+          // 压模糊封面的渐变遮罩：底色由封面自己决定，两档主题下同值，不跟随翻转
+          DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: <Color>[Color(0x18000000), Color(0xBB000000)],
+                colors: <Color>[s.mediaScrimTrace, s.mediaScrimVeil],
                 stops: <double>[0.0, 1.0],
               ),
             ),
@@ -249,15 +250,15 @@ class _HomeTab extends StatelessWidget {
                       Text(
                         '游戏中心',
                         style: theme.textTheme.headlineLarge?.copyWith(
-                          color: Colors.white,
+                          color: s.onMedia,
                           fontWeight: FontWeight.w700,
-                          shadows: <Shadow>[const Shadow(blurRadius: 8, color: Colors.black54)],
+                          shadows: <Shadow>[Shadow(blurRadius: 8, color: s.mediaScrimMedium)],
                         ),
                       ),
                       SizedBox(height: m.kSpace4),
                       Text(
                         '欢迎回来',
-                        style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                        style: theme.textTheme.bodyMedium?.copyWith(color: s.onMediaSecondary),
                       ),
                     ],
                   ),
@@ -270,7 +271,7 @@ class _HomeTab extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        DrawIcon(StrokeIcons.schedule, size: m.iconSize20, color: Colors.white70),
+                        DrawIcon(StrokeIcons.schedule, size: m.iconSize20, color: s.onMediaSecondary),
                         SizedBox(width: m.kSpace8),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,12 +279,12 @@ class _HomeTab extends StatelessWidget {
                           children: <Widget>[
                             Text(
                               '今日游玩',
-                              style: theme.textTheme.labelSmall?.copyWith(color: Colors.white60),
+                              style: theme.textTheme.labelSmall?.copyWith(color: s.onMediaTertiary),
                             ),
                             Text(
                               homeVm.formatDuration(data.todayPlayTimeSec),
                               style: theme.textTheme.titleMedium?.copyWith(
-                                color: Colors.white,
+                                color: s.onMedia,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -305,7 +306,7 @@ class _HomeTab extends StatelessWidget {
                       children: [
                         Text(
                           '总览',
-                          style: theme.textTheme.labelSmall?.copyWith(color: Colors.white60),
+                          style: theme.textTheme.labelSmall?.copyWith(color: s.onMediaTertiary),
                         ),
                         SizedBox(height: m.kSpace8),
                         Row(
@@ -349,7 +350,7 @@ class _HomeTab extends StatelessWidget {
                             ),
                             child: ClipRRect(
                               borderRadius: m.radius14,
-                              child: _buildCoverImage(lastGame.coverPath),
+                              child: _buildCoverImage(lastGame.coverPath, s),
                             ),
                           ),
                         ),
@@ -362,10 +363,10 @@ class _HomeTab extends StatelessWidget {
                               Text(
                                 lastGame.name,
                                 style: theme.textTheme.headlineMedium?.copyWith(
-                                  color: Colors.white,
+                                  color: s.onMedia,
                                   fontWeight: FontWeight.w700,
                                   shadows: <Shadow>[
-                                    const Shadow(blurRadius: 8, color: Colors.black54),
+                                    Shadow(blurRadius: 8, color: s.mediaScrimMedium),
                                   ],
                                 ),
                                 maxLines: 2,
@@ -375,17 +376,18 @@ class _HomeTab extends StatelessWidget {
                               if (lastGame.lastPlayedAt != null)
                                 Text(
                                   '上次游玩: ${_formatDateTime(lastGame.lastPlayedAt!)}',
-                                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+                                  style: theme.textTheme.bodySmall?.copyWith(color: s.onMediaSecondary),
                                 ),
                               Text(
                                 '总时长: ${homeVm.formatDuration(lastGame.totalPlayTimeSec)}',
-                                style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+                                style: theme.textTheme.bodySmall?.copyWith(color: s.onMediaSecondary),
                               ),
                               SizedBox(height: m.kSpace16),
                               FilledButton.icon(
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Colors.black87,
+                                  // 按钮铺的是恒白实心底，字也就恒深，不跟主题反相
+                                  backgroundColor: s.onMedia,
+                                  foregroundColor: s.onMediaInk,
                                 ),
                                 onPressed: () async {
                                   await homeVm.launchGame(lastGame);
@@ -410,26 +412,27 @@ class _HomeTab extends StatelessWidget {
                       children: <Widget>[
                         DrawIcon(StrokeIcons.sportsEsports,
                           size: m.iconSize64,
-                          color: Colors.white38,
+                          color: s.onMediaFaint,
                         ),
                         SizedBox(height: m.kSpace12),
                         Text(
                           '还没有游玩记录',
                           style: theme.textTheme.headlineSmall?.copyWith(
-                            color: Colors.white,
+                            color: s.onMedia,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         SizedBox(height: m.kSpace8),
                         Text(
                           '先去添加游戏，开始记录游玩时间吧。',
-                          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                          style: theme.textTheme.bodyMedium?.copyWith(color: s.onMediaSecondary),
                         ),
                         SizedBox(height: m.kSpace16),
                         FilledButton.icon(
                           style: FilledButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.black87,
+                            // 同上：白实心按钮上的字恒深
+                            backgroundColor: s.onMedia,
+                            foregroundColor: s.onMediaInk,
                           ),
                           onPressed: () => const GameLibraryRoute().go(context),
                           icon: DrawIcon(StrokeIcons.libraryBooks),
@@ -446,14 +449,15 @@ class _HomeTab extends StatelessWidget {
     });
   }
 
-  Widget _buildCoverImage(String coverPath) {
+  // 封面槽位的占位层：它顶替的是画面本身，不吃主题翻转，故走媒体墨档
+  Widget _buildCoverImage(String coverPath, AppSemantic s) {
     final String value = coverPath.trim();
     if (value.isEmpty) {
       return DecoratedBox(
-        decoration: BoxDecoration(color: Colors.white12, borderRadius: AppTheme.metrics.radius14),
+        decoration: BoxDecoration(color: s.onMediaWash, borderRadius: AppTheme.metrics.radius14),
         child: Center(
           child: DrawIcon(StrokeIcons.imageNotSupported,
-            color: Colors.white38,
+            color: s.onMediaFaint,
             size: AppTheme.metrics.iconSize40,
           ),
         ),
@@ -463,10 +467,10 @@ class _HomeTab extends StatelessWidget {
       return CachedNetworkImage(
         imageUrl: value,
         fit: BoxFit.cover,
-        placeholder: (_, _) => const DecoratedBox(decoration: BoxDecoration(color: Colors.white12)),
-        errorWidget: (_, _, _) => const DecoratedBox(
-          decoration: BoxDecoration(color: Colors.white12),
-          child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: Colors.white38)),
+        placeholder: (_, _) => DecoratedBox(decoration: BoxDecoration(color: s.onMediaWash)),
+        errorWidget: (_, _, _) => DecoratedBox(
+          decoration: BoxDecoration(color: s.onMediaWash),
+          child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: s.onMediaFaint)),
         ),
       );
     }
@@ -474,9 +478,9 @@ class _HomeTab extends StatelessWidget {
     if (file.existsSync()) {
       return Image.file(file, fit: BoxFit.cover);
     }
-    return const DecoratedBox(
-      decoration: BoxDecoration(color: Colors.white12),
-      child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: Colors.white38)),
+    return DecoratedBox(
+      decoration: BoxDecoration(color: s.onMediaWash),
+      child: Center(child: DrawIcon(StrokeIcons.brokenImage, color: s.onMediaFaint)),
     );
   }
 
@@ -657,7 +661,7 @@ class _StatsTab extends StatelessWidget {
                     borderRadius: m.radius12,
                     border: Border.all(
                       color: s.border,
-                      width: 0.5,
+                      width: m.strokeUltraThin,
                     ),
                   ),
                   child: Column(
@@ -728,6 +732,7 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return ClipRRect(
       borderRadius: AppTheme.metrics.radius12,
       child: BackdropFilter(
@@ -738,9 +743,10 @@ class _GlassCard extends StatelessWidget {
             vertical: AppTheme.metrics.kSpace12,
           ),
           decoration: BoxDecoration(
-            color: Colors.white.withAlpha(40),
+            // 玻璃卡洗的是封面图而不是主题表面，透明度沿用原值，只把色相收到媒体墨档
+            color: s.onMedia.withAlpha(40),
             borderRadius: AppTheme.metrics.radius12,
-            border: Border.all(color: Colors.white.withAlpha(60)),
+            border: Border.all(color: s.onMedia.withAlpha(60)),
           ),
           child: child,
         ),
@@ -758,6 +764,7 @@ class _GlassStatItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -765,7 +772,7 @@ class _GlassStatItem extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            DrawIcon(icon, size: m.iconSize14, color: Colors.white60),
+            DrawIcon(icon, size: m.iconSize14, color: s.onMediaTertiary),
             SizedBox(width: m.kSpace4),
             Text(
               label,
@@ -773,7 +780,7 @@ class _GlassStatItem extends StatelessWidget {
                 context,
                 fontSize: m.fontSize11,
                 height: 1.4,
-                color: Colors.white60,
+                color: s.onMediaTertiary,
               ),
             ),
           ],
@@ -786,7 +793,7 @@ class _GlassStatItem extends StatelessWidget {
             fontSize: m.fontSize13,
             height: 1.4,
             weight: FontWeight.w700,
-            color: Colors.white,
+            color: s.onMedia,
           ),
         ),
       ],
@@ -800,21 +807,23 @@ class _BlurredCoverBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     Widget image;
     final String value = coverPath.trim();
     if (value.startsWith('http://') || value.startsWith('https://')) {
       image = CachedNetworkImage(
         imageUrl: value,
         fit: BoxFit.cover,
-        placeholder: (_, _) => const ColoredBox(color: Colors.black),
-        errorWidget: (_, _, _) => const ColoredBox(color: Colors.black),
+        // 封面未就绪时铺的是看图舞台黑底，不是主题表面
+        placeholder: (_, _) => ColoredBox(color: s.mediaStage),
+        errorWidget: (_, _, _) => ColoredBox(color: s.mediaStage),
       );
     } else {
       final File file = File(value);
       if (file.existsSync()) {
         image = Image.file(file, fit: BoxFit.cover);
       } else {
-        image = const ColoredBox(color: Colors.black);
+        image = ColoredBox(color: s.mediaStage);
       }
     }
 
@@ -870,7 +879,7 @@ class _CategoryCardState extends State<_CategoryCard> {
             borderRadius: m.radius14,
             border: Border.all(
               color: _hovered ? s.borderStrong : s.border,
-              width: _hovered ? 1.5 : 0.5,
+              width: _hovered ? m.strokeThin : m.strokeUltraThin,
             ),
             boxShadow: _hovered ? s.elevation(Elevation.card) : null,
           ),
@@ -975,7 +984,7 @@ class _StatsOverviewCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.surfaceRaised,
         borderRadius: m.radius14,
-        border: Border.all(color: s.border, width: 0.5),
+        border: Border.all(color: s.border, width: m.strokeUltraThin),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1051,7 +1060,7 @@ class _DateRangeCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: s.surfaceRaised,
           borderRadius: m.radius14,
-          border: Border.all(color: s.info.containerBorder, width: 0.5),
+          border: Border.all(color: s.info.containerBorder, width: m.strokeUltraThin),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

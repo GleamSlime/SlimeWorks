@@ -183,6 +183,10 @@ class _DrawIconState extends State<DrawIcon>
   }
 
   /// flow 是无限循环的，单独一个 controller，不能混进一次性描边时长
+  ///
+  /// 循环节奏取绝对档位 [AppMotion.pulse]（"正在进行"那类中速循环），不再按
+  /// `_duration * 4` 派生：调用方给一次性时长（描笔快慢）时，把循环速度一起
+  /// 带跑会读成"越小的图标转得越慌"，两者本来就该各走各的档。
   void _syncFlowLoop() {
     if (widget.effect != StrokeEffect.flow || _reducedMotion) {
       _flow?.stop();
@@ -190,10 +194,9 @@ class _DrawIconState extends State<DrawIcon>
     }
     _flow ??= AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: AppMotion.pulse,
     );
     _flow!
-      ..duration = _duration * 4
       ..value = 0
       ..repeat();
   }

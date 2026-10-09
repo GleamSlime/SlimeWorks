@@ -354,6 +354,9 @@ class AppMediaChrome {
   static const Color inkSecondary = Color(0xB3FFFFFF);
 
   /// 弱化字与轨道（约 60%）
+  ///
+  /// 这里刻意把 54% 与 60% 两档并成一条：两者只差 5 个透明度单位，肉眼分不出，
+  /// 留着两档只会让每个调用点各自猜该用哪个。
   static const Color inkTertiary = Color(0x99FFFFFF);
 
   /// 更弱的提示与角标（约 38%）
@@ -406,5 +409,122 @@ class AppBrandWash {
   /// 我方聊天气泡：紫底白字，透明度要压得住画面之外的聊天背景
   static const Color bubbleLight = Color(0xD9A89FEE);
   static const Color bubbleDark = Color(0xE0A89FEE);
+}
+
+/// 日志控制台配色（Terminal Chrome）
+///
+/// 这块区域是一整套"代码编辑器"配色：自己的深底/浅底、自己的语法高亮成套。
+/// 故意不并进 [AppSemantic]：界面语义色一改（比如 textSecondary 调灰），
+/// 日志正文会跟着失去层次，终端也不再像终端。但字面量不许留在 widget 里——
+/// 成套关系只有集中定义才看得出"这三档是一组"。
+///
+/// 用法：`final t = s.terminal;` 然后 `t.body` / `t.keyword` …
+class AppTerminalPalette {
+  const AppTerminalPalette({
+    required this.screen,
+    required this.chromeBorder,
+    required this.titleBar,
+    required this.titleText,
+    required this.timestamp,
+    required this.body,
+    required this.sourceRust,
+    required this.sourceDart,
+    required this.keyword,
+    required this.path,
+    required this.number,
+  });
+
+  /// 终端底色
+  final Color screen;
+
+  /// 终端外框描边
+  final Color chromeBorder;
+
+  /// 标题栏底
+  final Color titleBar;
+
+  /// 标题栏路径文字
+  final Color titleText;
+
+  /// 时间戳与分隔空格
+  final Color timestamp;
+
+  /// 正文
+  final Color body;
+
+  /// Rust 侧来源标记
+  final Color sourceRust;
+
+  /// Dart 侧来源标记
+  final Color sourceDart;
+
+  /// 关键词高亮
+  final Color keyword;
+
+  /// 路径高亮
+  final Color path;
+
+  /// 数字高亮
+  final Color number;
+
+  static const AppTerminalPalette light = AppTerminalPalette(
+    screen: Color(0xFFFAFAFA),
+    chromeBorder: Color(0xFFE0E0E0),
+    titleBar: Color(0xFFE8E8E8),
+    titleText: Color(0xFF888888),
+    timestamp: Color(0xFFA0A0A0),
+    body: Color(0xFF383A42),
+    sourceRust: Color(0xFFBE5046),
+    sourceDart: Color(0xFF4078F2),
+    keyword: Color(0xFF986801),
+    path: Color(0xFF50A14F),
+    number: Color(0xFFA45200),
+  );
+
+  static const AppTerminalPalette dark = AppTerminalPalette(
+    screen: Color(0xFF0A0E14),
+    chromeBorder: Color(0xFF1A1F29),
+    titleBar: Color(0xFF1A1F29),
+    titleText: Color(0xFF6C7A89),
+    timestamp: Color(0xFF5C6370),
+    body: Color(0xFFABB2BF),
+    sourceRust: Color(0xFFE06C75),
+    sourceDart: Color(0xFF61AFEF),
+    keyword: Color(0xFFE5C07B),
+    path: Color(0xFF98C379),
+    number: Color(0xFFD19A66),
+  );
+
+  /// 标题栏那三颗仿终端窗饰灯：恒为红/黄/绿，不跟主题反相
+  static const Color windowDotClose = Color(0xFFFF5F56);
+  static const Color windowDotMinimize = Color(0xFFFFBD2E);
+  static const Color windowDotZoom = Color(0xFF27C93F);
+}
+
+/// 阅读页正文的"纸张"预设（Reader Paper）
+///
+/// 这是用户在阅读设置里自己选的内容底色，属于内容主题而不是界面语义色：
+/// 选了羊皮纸就一直是羊皮纸，不该被明暗主题翻成黑。两处阅读器（本机页与
+/// 远程弹窗）共用这一份清单，预设与默认值只能有一个出处。
+class AppReaderPaper {
+  AppReaderPaper._();
+
+  /// 羊皮纸（默认）
+  static const Color parchment = Color(0xFFF6F0E7);
+
+  /// 雪纸
+  static const Color snow = Color(0xFFFFFFFF);
+
+  /// 淡薄荷
+  static const Color mint = Color(0xFFEAF4E8);
+
+  /// 淡天蓝
+  static const Color sky = Color(0xFFEAF1F8);
+
+  /// 石墨（深读档）
+  static const Color graphite = Color(0xFF1F1F1F);
+
+  /// 选择器铺的这一排，顺序即 UI 顺序
+  static const List<Color> presets = [parchment, snow, mint, sky, graphite];
 }
 

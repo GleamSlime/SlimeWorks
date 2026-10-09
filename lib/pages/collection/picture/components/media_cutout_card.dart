@@ -87,10 +87,7 @@ abstract final class MediaCutoutGeometry {
     final spacing = appMetrics.kSpace12;
     final gridWidth = viewportWidth - 2 * spacing;
     if (gridWidth <= 0) return (0, 0);
-    final columns = math.max(
-      1,
-      (gridWidth / (maxCellWidth + spacing)).ceil(),
-    );
+    final columns = math.max(1, (gridWidth / (maxCellWidth + spacing)).ceil());
     final usable = math.max(0.0, gridWidth - spacing * (columns - 1));
     return (columns, usable / columns);
   }
@@ -254,11 +251,7 @@ class MediaCutoutCard extends StatelessWidget {
                   width: MediaCutoutGeometry.trailingSize,
                   height: MediaCutoutGeometry.trailingSize,
                   child: Center(
-                    child: DrawIcon(
-                      trailingIcon!,
-                      size: scaleW(14),
-                      color: s.accentOn,
-                    ),
+                    child: DrawIcon(trailingIcon!, size: scaleW(14), color: s.accentOn),
                   ),
                 ),
               ),
@@ -328,10 +321,13 @@ class _CutoutMedia extends StatelessWidget {
           ),
           if (overlay != null) Positioned.fill(child: overlay!),
           // 资源卡关掉叠加信息时 label 是空串：不挖这一格，否则图上贴一枚空标签
-          if (label.isNotEmpty)
-            Positioned(left: 0, bottom: 0, child: _CutoutLabel(text: label)),
+          if (label.isNotEmpty) Positioned(left: 0, bottom: 0, child: _CutoutLabel(text: label)),
           if (tagLabel != null && tagLabel!.isNotEmpty)
-            Positioned(right: 0, top: 0, child: _CutoutTag(text: tagLabel!, icon: tagIcon)),
+            Positioned(
+              right: 0,
+              top: 0,
+              child: _CutoutTag(text: tagLabel!, icon: tagIcon),
+            ),
         ],
       ),
     );
@@ -355,30 +351,33 @@ class _CutoutLabel extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: s.surface,
-            borderRadius: BorderRadius.only(
-              topRight: Radius.circular(MediaCutoutGeometry.labelRadius),
+        Transform.translate(
+          offset: Offset(0, scaleW(1)),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: s.surface,
+              borderRadius: BorderRadius.only(
+                topRight: Radius.circular(MediaCutoutGeometry.labelRadius),
+              ),
             ),
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: MediaCutoutGeometry.labelPadX,
-              vertical: MediaCutoutGeometry.labelPadY,
-            ),
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.overline(context),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: MediaCutoutGeometry.labelPadX,
+                vertical: MediaCutoutGeometry.labelPadY,
+              ),
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.overline(context),
+              ),
             ),
           ),
         ),
         // 上边外侧那块：内凹的斜边正好接住标签的上边
         Positioned(
           left: -MediaCutoutGeometry.edge,
-          top: -over,
+          top: -over + scaleW(1),
           child: _Flare(side: MediaCutoutGeometry.labelFlare, color: s.surface),
         ),
         // 右边外侧那块：内凹斜边从标签右上角扫到图的下边
@@ -568,11 +567,7 @@ class _Avatar extends StatelessWidget {
         width: MediaCutoutGeometry.avatarSize,
         height: MediaCutoutGeometry.avatarSize,
         child: Center(
-          child: DrawIcon(
-            icon,
-            size: MediaCutoutGeometry.avatarIcon,
-            color: s.textSecondary,
-          ),
+          child: DrawIcon(icon, size: MediaCutoutGeometry.avatarIcon, color: s.textSecondary),
         ),
       ),
     );
@@ -659,14 +654,15 @@ class MediaCardCover extends StatelessWidget {
   Widget _cover(BuildContext context) {
     final s = AppSemantic.of(context);
     final src = source;
-    final prefs = getIt.isRegistered<MediaPrefsService>()
-        ? getIt.get<MediaPrefsService>()
-        : null;
+    final prefs = getIt.isRegistered<MediaPrefsService>() ? getIt.get<MediaPrefsService>() : null;
     // 两个开关在任何提前 return 之前无条件读一遍：Obx 只登记本次构建真读到的 Rx，
     // 写在 return 后面会让没有封面的卡片这次构建漏听，之后切换开关不再重绘。
     final fakeCover = prefs?.fakeCover.value ?? false;
     final privacyOn = prefs?.privacyMode.value ?? false;
-    final broken = _CoverPlaceholder(icon: lostIcon ?? placeholderIcon, background: s.surfaceSunken);
+    final broken = _CoverPlaceholder(
+      icon: lostIcon ?? placeholderIcon,
+      background: s.surfaceSunken,
+    );
     if (isLost || src == null || src.isEmpty) return broken;
 
     // 伪封面：整张换成设置里指定的那张无害图片，不糊也不加锁角标，优先于隐私模糊
@@ -685,11 +681,7 @@ class MediaCardCover extends StatelessWidget {
       null,
       isHttp ? NetworkImage(src) : FileImage(File(src)),
     );
-    final image = Image(
-      image: provider,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => broken,
-    );
+    final image = Image(image: provider, fit: BoxFit.cover, errorBuilder: (_, _, _) => broken);
 
     if (privacyOn) {
       final sigma = prefs?.privacyBlurSigma.value ?? 15.0;
@@ -709,7 +701,8 @@ class MediaCardCover extends StatelessWidget {
                 child: DrawIcon(
                   StrokeIcons.lockOutline,
                   size: appMetrics.iconSize16,
-                  color: Colors.white70,
+                  // 隐私遮罩压的是封面本身，图标走恒白的媒体 chrome 档
+                  color: s.onMediaSecondary,
                 ),
               ),
             ),

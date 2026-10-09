@@ -17,6 +17,7 @@ class _MiniPipWindow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return GestureDetector(
       onTap: onExpand,
       onPanUpdate: (d) => onPan(d.delta),
@@ -27,11 +28,12 @@ class _MiniPipWindow extends StatelessWidget {
           width: scaleW(200),
           height: scaleW(112),
           decoration: BoxDecoration(
-            color: Colors.black,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+            color: s.mediaStage,
+            // 浮窗描边与黑玻璃面板同一条（≈15% 白），直接取 token
+            border: Border.all(color: s.immersiveBorder),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
+                color: s.mediaStage.withValues(alpha: 0.5),
                 blurRadius: 16,
                 offset: const Offset(0, 6),
               ),
@@ -73,8 +75,9 @@ class _MiniPipWindow extends StatelessWidget {
                     return LinearProgressIndicator(
                       value: ratio,
                       minHeight: 3,
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      backgroundColor: s.onMedia.withValues(alpha: 0.2),
+                      // 语义色取不到 const，这里丢掉 const
+                      valueColor: AlwaysStoppedAnimation<Color>(s.onMedia),
                     );
                   },
                 ),
@@ -93,14 +96,15 @@ class _MiniPipBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return Container(
       margin: EdgeInsets.all(AppTheme.metrics.kSpace6),
       padding: EdgeInsets.all(AppTheme.metrics.kSpace3),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.5),
+        color: s.mediaStage.withValues(alpha: 0.5),
         borderRadius: AppTheme.metrics.radius8,
       ),
-      child: Icon(icon, color: Colors.white70, size: scaleW(14)),
+      child: Icon(icon, color: s.onMediaSecondary, size: scaleW(14)),
     );
   }
 }
@@ -114,6 +118,7 @@ class _SeekIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final t = target ?? player.state.position;
     final deltaMs = t.inMilliseconds - player.state.position.inMilliseconds;
     final deltaSec = deltaMs ~/ 1000;
@@ -124,7 +129,7 @@ class _SeekIndicator extends StatelessWidget {
         vertical: AppTheme.metrics.kSpace8,
       ),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.6),
+        color: s.mediaStage.withValues(alpha: 0.6),
         borderRadius: AppTheme.metrics.radius10,
       ),
       child: Column(
@@ -143,7 +148,7 @@ class _SeekIndicator extends StatelessWidget {
           SizedBox(height: AppTheme.metrics.kSpace4),
           Text(
             _fmt(t),
-            style: AppTextStyles.role(context, color: Colors.white70, fontSize: AppTheme.metrics.fontSize13),
+            style: AppTextStyles.role(context, color: s.onMediaSecondary, fontSize: AppTheme.metrics.fontSize13),
           ),
         ],
       ),
@@ -167,11 +172,12 @@ class _GlassControlIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return IconButton(
       tooltip: tooltip,
       icon: Icon(
         icon,
-        color: Colors.white.withValues(alpha: 0.85),
+        color: s.onMedia.withValues(alpha: 0.85),
         size: AppTheme.metrics.iconSize20,
       ),
       onPressed: onTap,
@@ -223,8 +229,7 @@ class _GlassPulseLoaderState extends State<_GlassPulseLoader> with SingleTickerP
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
-      ..repeat();
+    _ctrl = AnimationController(vsync: this, duration: AppMotion.pulse)..repeat();
   }
 
   @override
@@ -235,15 +240,16 @@ class _GlassPulseLoaderState extends State<_GlassPulseLoader> with SingleTickerP
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     // RepaintBoundary 限定重绘范围；播放图标保持静态，不随动画重建
     return RepaintBoundary(
       child: SizedBox(
         width: scaleW(68),
         height: scaleW(68),
         child: CustomPaint(
-          painter: _GlassPulsePainter(_ctrl, color: AppSemantic.of(context).info.color),
+          painter: _GlassPulsePainter(_ctrl, color: s.info.color),
           child: Center(
-            child: Icon(Icons.play_arrow_rounded, color: Colors.white60, size: scaleW(24)),
+            child: Icon(Icons.play_arrow_rounded, color: s.onMediaTertiary, size: scaleW(24)),
           ),
         ),
       ),

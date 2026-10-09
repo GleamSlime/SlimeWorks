@@ -408,7 +408,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                         context,
                                         fontSize: appMetrics.fontSize9,
                                         weight: FontWeight.bold,
-                                        color: Colors.white,
+                                        color: s.onMedia,
                                       ),
                                     ),
                                   ),
@@ -422,11 +422,12 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                         : s.scrim.withAlpha(84),
                                     child: Text(
                                       widget.metadata.format.name.toUpperCase(),
+                                      // 同为封面 art 上的恒白 chrome
                                       style: AppTextStyles.role(
                                         context,
                                         fontSize: appMetrics.fontSize9,
                                         weight: FontWeight.bold,
-                                        color: Colors.white,
+                                        color: s.onMedia,
                                       ),
                                     ),
                                   ),
@@ -479,7 +480,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                         : StrokeIcons.starBorder,
                                     color: widget.metadata.isFavorite
                                         ? s.warning.color
-                                        : Colors.white70,
+                                        : s.onMediaSecondary,
                                     size: scaleW(16),
                                   ),
                                 ),
@@ -550,7 +551,8 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                                       vertical: scaleW(1),
                                                     ),
                                                     decoration: BoxDecoration(
-                                                      color: Colors.white.withAlpha(40),
+                                                      // 标签药丸底：封面上的白色水洗，alpha 沿用原值
+                                                      color: s.onMedia.withAlpha(40),
                                                       borderRadius: appMetrics.radius8,
                                                     ),
                                                     child: Text(
@@ -559,7 +561,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                                         context,
                                                         fontSize: appMetrics.fontSize9,
                                                         weight: FontWeight.w500,
-                                                        color: Colors.white,
+                                                        color: s.onMedia,
                                                       ),
                                                     ),
                                                   ),
@@ -647,7 +649,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                           context,
                                           fontSize: appMetrics.fontSize13,
                                           weight: FontWeight.bold,
-                                          color: Colors.white,
+                                          color: s.onMedia,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -658,7 +660,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                         style: AppTextStyles.role(
                                           context,
                                           fontSize: appMetrics.fontSize11,
-                                          color: Colors.white70,
+                                          color: s.onMediaSecondary,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -709,7 +711,8 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                             vertical: scaleW(2),
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Colors.white.withAlpha(20),
+                                            // 同理：封面磨砂栏上的白色水洗小底
+                                            color: s.onMedia.withAlpha(20),
                                             borderRadius: appMetrics.radius10,
                                           ),
                                           child: Text(
@@ -717,7 +720,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                             style: AppTextStyles.role(
                                               context,
                                               fontSize: appMetrics.fontSize11,
-                                              color: Colors.white70,
+                                              color: s.onMediaSecondary,
                                             ),
                                           ),
                                         ),
@@ -729,7 +732,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                               style: AppTextStyles.role(
                                                 context,
                                                 fontSize: appMetrics.fontSize11,
-                                                color: Colors.white70,
+                                                color: s.onMediaSecondary,
                                               ),
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -755,7 +758,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                         : s.scrim.withAlpha(60),
                                     shape: BoxShape.circle,
                                     // 选中圆点压在封面 art 上，那圈白环不随主题反转
-                                    border: Border.all(color: Colors.white, width: scaleW(2)),
+                                    border: Border.all(color: s.onMedia, width: scaleW(2)),
                                   ),
                                   child: widget.isSelected
                                       ? DrawIcon(StrokeIcons.check,
@@ -888,7 +891,8 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                   ),
                   child: DrawIcon(StrokeIcons.lockOutline,
                     size: AppTheme.metrics.iconSize16,
-                    color: Colors.white70,
+                    // 隐私锁徽标压在封面 blur 之上的深色圆底里，白字档同理不反转
+                    color: AppSemantic.of(context).onMediaSecondary,
                   ),
                 ),
               ),
@@ -907,8 +911,12 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
       child: Container(
         color: AppSemantic.of(context).border,
         child: Center(
-          // 这是占位封面，本身要压得住 art 上的白字，所以图标不走语义色
-          child: DrawIcon(StrokeIcons.book, size: scaleW(40), color: Colors.white70),
+          // 这是占位封面，本身要压得住 art 上的白字，所以图标走媒体 chrome 档而非主题语义色
+          child: DrawIcon(
+            StrokeIcons.book,
+            size: scaleW(40),
+            color: AppSemantic.of(context).onMediaSecondary,
+          ),
         ),
       ),
     );

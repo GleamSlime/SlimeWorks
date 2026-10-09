@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/animations/state_transition_animation.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 
 class AnimatedButton extends StatelessWidget {
   final void Function()? onTap;
@@ -29,7 +30,9 @@ class AnimatedButton extends StatelessWidget {
     this.label,
     this.hoverIcon,
     this.enableScaleAnimation = true,
-    this.animationDuration = const Duration(milliseconds: 400),
+    // 默认档跟内层 StateTransitionAnimation 同一条：手写的 400ms 会把内层已经
+    // 收好的 emphasis 顶掉，两处必须是一个数，否则同一动作两页不同速。
+    this.animationDuration = AppMotion.emphasis,
     this.height,
     this.padding,
     this.decoration,

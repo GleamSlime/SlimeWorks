@@ -780,7 +780,7 @@ class _MediaSettingsTabState extends State<MediaSettingsTab> {
                   ? SizedBox(
                       width: scaleW(36),
                       height: scaleW(36),
-                      child: const CircularProgressIndicator(strokeWidth: 2.5),
+                      child: CircularProgressIndicator(strokeWidth: m.strokeEmphasis),
                     )
                   : FilledButton.tonal(
                       onPressed: _clearCache,

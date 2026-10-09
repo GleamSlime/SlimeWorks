@@ -219,6 +219,7 @@ class _ImageViewerState extends State<_ImageViewer> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final src = widget.source;
     // 注意：不要在此处内嵌 Listener 拦截滚轮——指针信号由命中路径上先注册者独占，
     // 外层 Listener 永远先于内层收到，内层拦截不会生效。滚轮逻辑统一由父级处理。
@@ -264,8 +265,8 @@ class _ImageViewerState extends State<_ImageViewer> {
                           children: [
                             CircularProgressIndicator(
                               value: pct,
-                              color: Colors.white70,
-                              strokeWidth: 2.5,
+                              color: s.onMediaSecondary,
+                              strokeWidth: AppTheme.metrics.strokeEmphasis,
                             ),
                             SizedBox(height: AppTheme.metrics.kSpace12),
                             Text(
@@ -273,7 +274,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                               // 深色查看器画面上的加载文字：白字固定不随明暗翻转
                               style: AppTextStyles.role(
                                 context,
-                                color: Colors.white70,
+                                color: s.onMediaSecondary,
                                 fontSize: AppTheme.metrics.fontSize11,
                               ),
                             ),
@@ -285,7 +286,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                       child: Icon(
                         Icons.broken_image_outlined,
                         size: AppTheme.metrics.iconSize64,
-                        color: Colors.white38,
+                        color: s.onMediaFaint,
                       ),
                     ),
                   );
@@ -301,7 +302,8 @@ class _ImageViewerState extends State<_ImageViewer> {
                         alignment: Alignment.center,
                         children: [
                           child,
-                          const CircularProgressIndicator(color: Colors.white70, strokeWidth: 2.5),
+                          // 语义色取不到 const，这里丢掉 const
+                          CircularProgressIndicator(color: s.onMediaSecondary, strokeWidth: AppTheme.metrics.strokeEmphasis),
                         ],
                       );
                     },
@@ -309,7 +311,7 @@ class _ImageViewerState extends State<_ImageViewer> {
                       child: Icon(
                         Icons.broken_image_outlined,
                         size: AppTheme.metrics.iconSize64,
-                        color: Colors.white38,
+                        color: s.onMediaFaint,
                       ),
                     ),
                   );
@@ -344,8 +346,8 @@ class _ImageViewerState extends State<_ImageViewer> {
                     icon: Icon(Icons.zoom_out_map_rounded, size: AppTheme.metrics.iconSize18),
                     label: const Text('重置缩放'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: Colors.black.withAlpha(42),
-                      foregroundColor: Colors.white,
+                      backgroundColor: s.mediaStage.withAlpha(42),
+                      foregroundColor: s.onMedia,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),

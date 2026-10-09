@@ -439,8 +439,10 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
     final item = widget.item;
     // 我方气泡走唯一的实心强调底（accent + accentOn），
     // 对方气泡走半透明表面洗色，层次靠透明度而非第二种灰
-    final bubbleColor = isSelf ? s.accent : s.surfaceHover;
-    final textColor = isSelf ? s.accentOn : s.textPrimary;
+    // 上面那条已被品牌水洗取代：气泡要认的是"我说的"那层紫（底是紫、字恒白），
+    // 用全局 accent 当底时，暗色档会翻成白底深字，品牌色相整个丢掉。
+    final bubbleColor = isSelf ? s.bubbleSelf : s.surfaceHover;
+    final textColor = isSelf ? s.bubbleSelfOn : s.textPrimary;
     final radius = BorderRadius.only(
       topLeft: AppTheme.metrics.radius16.topLeft,
       topRight: AppTheme.metrics.radius16.topRight,
@@ -483,6 +485,8 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
   }
 
   Widget _buildFileBubble(TransferItem item, Color textColor, bool isSelf) {
+    // 缩略图上压的是视频画面本身：播放键属媒体层 chrome，不跟明暗反相
+    final s = AppSemantic.of(context);
     final iconData = _typeIcon(item.transferType);
     final name = item.fileName ?? '未知文件';
     final size = item.fileSize != null ? _formatFileSize(item.fileSize!) : '';
@@ -540,7 +544,7 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                     child: Center(
                       child: DrawIcon(StrokeIcons.playCircleOutline,
                         size: scaleW(48),
-                        color: Colors.white70,
+                        color: s.onMediaSecondary,
                       ),
                     ),
                   ),
@@ -690,7 +694,8 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
             duration: const Duration(seconds: 5),
             snackPosition: SnackPosition.BOTTOM,
             backgroundColor: s.danger.color.withValues(alpha: 0.85),
-            colorText: Colors.white,
+            // 底色是实心状态色本身，墨只能是恒白（onStatusBadge），不能用 onContainer
+            colorText: s.onStatusBadge,
           );
         },
         child: DrawIcon(StrokeIcons.errorOutline,
@@ -932,7 +937,8 @@ class _ImagePreviewPageState extends State<_ImagePreviewPage> {
     final s = AppSemantic.of(context);
     final topPadding = MediaQuery.of(context).padding.top;
     return Scaffold(
-      backgroundColor: Colors.black,
+      // 舞台底与看图墨字都取自媒体令牌：值仍是恒黑/恒白，只是不再各写一份
+      backgroundColor: s.mediaStage,
       body: Stack(
         children: [
           // 图片内容
@@ -945,13 +951,13 @@ class _ImagePreviewPageState extends State<_ImagePreviewPage> {
             child: Row(
               children: [
                 IconButton(
-                  color: Colors.white,
+                  color: s.onMedia,
                   icon: DrawIcon(StrokeIcons.arrowBackIosNew),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
                 const Spacer(),
                 IconButton(
-                  color: Colors.white,
+                  color: s.onMedia,
                   icon: DrawIcon(StrokeIcons.moreHoriz),
                   onPressed: () {
                     showModalBottomSheet<void>(
@@ -1062,7 +1068,7 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
     final s = AppSemantic.of(context);
     final topPadding = MediaQuery.of(context).padding.top;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: s.mediaStage,
       body: Stack(
         children: [
           // 视频内容
@@ -1082,13 +1088,13 @@ class _VideoPreviewPageState extends State<_VideoPreviewPage> {
             child: Row(
               children: [
                 IconButton(
-                  color: Colors.white,
+                  color: s.onMedia,
                   icon: DrawIcon(StrokeIcons.arrowBackIosNew),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
                 const Spacer(),
                 IconButton(
-                  color: Colors.white,
+                  color: s.onMedia,
                   icon: DrawIcon(StrokeIcons.moreHoriz),
                   onPressed: () {
                     showModalBottomSheet<void>(

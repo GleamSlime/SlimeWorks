@@ -8,7 +8,6 @@
 //   被吞、返回空列表，不影响断言。
 // - Loggers._logs 是 isolate 内全局累加器，断言一律用唯一 marker 过滤，
 //   不锁全局总数。
-import 'package:flutter/material.dart' show Color;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/view_models/sentry_log/app_log_viewmodel.dart';
@@ -193,15 +192,6 @@ void main() {
       expect(vm.isWatching.value, isTrue);
       vm.stopWatching();
       expect(vm.isWatching.value, isFalse);
-    });
-
-    test('getLevelColor 四级各有颜色，未知级别走默认灰', () {
-      const kColor = Color(0xFF94A3B8);
-      expect(vm.getLevelColor('ERROR'), const Color(0xFFEF4444));
-      expect(vm.getLevelColor('WARN'), const Color(0xFFF59E0B));
-      expect(vm.getLevelColor('DEBUG'), const Color(0xFF8B5CF6));
-      expect(vm.getLevelColor('INFO'), const Color(0xFF22C55E));
-      expect(vm.getLevelColor('LOG'), kColor);
     });
   });
 }

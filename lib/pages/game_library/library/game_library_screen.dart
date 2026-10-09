@@ -345,7 +345,7 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                           color: s.accent.withAlpha(36),
                           border: Border.all(
                             color: s.accent,
-                            width: 2,
+                            width: AppTheme.metrics.strokeRegular,
                           ),
                         ),
                         child: Center(
@@ -906,7 +906,7 @@ class _GameCardState extends State<_GameCard> {
           decoration: BoxDecoration(
             borderRadius: AppTheme.metrics.radius12,
             border: isSelected
-                ? Border.all(color: s.accent, width: 2.5)
+                ? Border.all(color: s.accent, width: AppTheme.metrics.strokeEmphasis)
                 : null,
           ),
           child: Card(
@@ -947,11 +947,12 @@ class _GameCardState extends State<_GameCard> {
                           right: AppTheme.metrics.kSpace4,
                           child: PopupMenuButton<String>(
                             icon: Container(
-                              decoration: const BoxDecoration(
-                                color: Colors.black38,
+                              decoration: BoxDecoration(
+                                // 浮在封面上的角标底：压暗层不吃主题，沿用原 black38 浓度
+                                color: s.mediaStage.withValues(alpha: .38),
                                 shape: BoxShape.circle,
                               ),
-                              child: DrawIcon(StrokeIcons.moreVert, color: Colors.white, size: AppTheme.metrics.iconSize18),
+                              child: DrawIcon(StrokeIcons.moreVert, color: s.onMedia, size: AppTheme.metrics.iconSize18),
                             ),
                             onSelected: (String value) {
                               switch (value) {
@@ -1003,7 +1004,7 @@ class _GameCardState extends State<_GameCard> {
                           child: Container(
                             padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace6, vertical: AppTheme.metrics.kSpace2),
                             decoration: BoxDecoration(
-                              color: Colors.black54,
+                              color: s.mediaScrimMedium,
                               borderRadius: AppTheme.metrics.radius4,
                             ),
                             child: Text(
@@ -1012,7 +1013,7 @@ class _GameCardState extends State<_GameCard> {
                               style: AppTextStyles.role(
                                 context,
                                 fontSize: AppTheme.metrics.fontSize10,
-                                color: Colors.white,
+                                color: s.onMedia,
                                 height: 1.2,
                               ),
                             ),
@@ -1022,16 +1023,16 @@ class _GameCardState extends State<_GameCard> {
                         if (widget.isRunning)
                           Positioned.fill(
                             child: DecoratedBox(
-                              decoration: BoxDecoration(color: Colors.black.withAlpha(100)),
+                              decoration: BoxDecoration(color: s.mediaStage.withAlpha(100)),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: <Widget>[
                                   SizedBox(
                                     width: AppTheme.metrics.kSpace24,
                                     height: AppTheme.metrics.kSpace24,
-                                    child: const CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: AppTheme.metrics.strokeRegular,
+                                      color: s.onMedia,
                                     ),
                                   ),
                                   SizedBox(height: AppTheme.metrics.kSpace6),
@@ -1042,7 +1043,7 @@ class _GameCardState extends State<_GameCard> {
                                       context,
                                       fontSize: AppTheme.metrics.fontSize11,
                                       weight: FontWeight.w600,
-                                      color: Colors.white,
+                                      color: s.onMedia,
                                       height: 1.2,
                                     ),
                                   ),

@@ -1131,7 +1131,7 @@ class _CollectionLibraryScreenState
         cover = Container(
           color: s.border,
           child: Center(
-            child: DrawIcon(StrokeIcons.book, size: scaleW(28), color: Colors.white70),
+            child: DrawIcon(StrokeIcons.book, size: scaleW(28), color: s.onMediaSecondary),
           ),
         );
       }
@@ -1167,7 +1167,7 @@ class _CollectionLibraryScreenState
                           context,
                           fontSize: AppTheme.metrics.fontSize9,
                           weight: FontWeight.w600,
-                          color: Colors.white,
+                          color: s.onMedia,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

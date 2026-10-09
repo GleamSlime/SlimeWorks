@@ -144,7 +144,7 @@ class MangaReaderViewModel extends BaseViewModel {
       if (epsList.isEmpty && results.length > 1 && results[1] is MangaEpsList) {
         final epsList0 = results[1] as MangaEpsList;
         epsList.assignAll(epsList0.eps);
-        _loadRestEps(comicId, epsList0.pagination);
+        _loadRestEps(comicId, epsList0);
       }
 
       // 后台静默拉取漫画信息（用于下载弹层 + 历史记录封面）
@@ -170,17 +170,10 @@ class MangaReaderViewModel extends BaseViewModel {
   }
 
   /// 后台静默加载剩余章节页（不影响阅读）
-  Future<void> _loadRestEps(String comicId, MangaPagination firstPagination) async {
-    for (int page = 2; page <= firstPagination.pages; page++) {
-      try {
-        final more = await _service.getComicEps(comicId, page: page);
-        epsList.addAll(more.eps);
-      } catch (_) {
-        break;
-      }
-    }
-    // 按 order 升序排列（API 返回可能是降序）
-    epsList.sort((a, b) => a.order.compareTo(b.order));
+  Future<void> _loadRestEps(String comicId, MangaEpsList first) async {
+    final all = await _service.getComicEpsAll(comicId, first);
+    if (isClosed) return;
+    epsList.assignAll(all);
   }
 
   /// 切换到另一章节（保留已加载的 epsList）

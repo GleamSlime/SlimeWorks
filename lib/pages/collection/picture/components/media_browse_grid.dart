@@ -534,7 +534,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
                   key: ValueKey('anim_${item.id}'),
                   tween: Tween(begin: 0.0, end: 1.0),
                   duration: AppMotion.emphasis,
-                  curve: Curves.easeOutCubic,
+                  curve: AppMotion.decelerate,
                   builder: (context, value, child) => Opacity(
                     opacity: value.clamp(0.0, 1.0),
                     child: Transform.translate(

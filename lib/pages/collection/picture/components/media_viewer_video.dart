@@ -225,12 +225,14 @@ class _VideoPreviewState extends State<_VideoPreview> {
 
   @override
   Widget build(BuildContext context) {
+    // 视频层的所有 chrome 都压在画面/黑台上，取不随明暗翻转的媒体 chrome 语义色
+    final s = AppSemantic.of(context);
     final player = _player;
     final controller = _videoController;
     if (player == null || controller == null) {
       // 非活跃页（邻页预缓存）：显示黑色占位或封面缩略图
       if (!widget.isActive) {
-        return const SizedBox.expand(child: ColoredBox(color: Colors.black));
+        return SizedBox.expand(child: ColoredBox(color: s.mediaStage));
       }
       return Center(
         child: Column(
@@ -241,7 +243,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
               height: AppTheme.metrics.kSpace56,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.08),
+                color: s.onMedia.withValues(alpha: 0.08),
               ),
               alignment: Alignment.center,
               child: Icon(
@@ -254,7 +256,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
             SizedBox(height: AppTheme.metrics.kSpace12),
             Text(
               '无法加载视频',
-              style: AppTextStyles.role(context, color: Colors.white54, fontSize: AppTheme.metrics.fontSize13),
+              style: AppTextStyles.role(context, color: s.onMediaTertiary, fontSize: AppTheme.metrics.fontSize13),
             ),
           ],
         ),
@@ -302,10 +304,10 @@ class _VideoPreviewState extends State<_VideoPreview> {
         ),
         seekBarHeight: 3.2,
         seekBarThumbSize: 14.0,
-        seekBarColor: Colors.white.withValues(alpha: 0.15),
-        seekBarPositionColor: AppSemantic.of(context).info.color,
-        seekBarBufferColor: Colors.white.withValues(alpha: 0.25),
-        seekBarThumbColor: Colors.white,
+        seekBarColor: s.onMedia.withValues(alpha: 0.15),
+        seekBarPositionColor: s.info.color,
+        seekBarBufferColor: s.onMedia.withValues(alpha: 0.25),
+        seekBarThumbColor: s.onMedia,
         bottomButtonBar: bottomBar,
         bottomButtonBarMargin: EdgeInsets.only(
           bottom: bottomInset + AppTheme.metrics.kSpace12,
@@ -313,8 +315,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
           right: AppTheme.metrics.kSpace8,
         ),
         buttonBarHeight: buttonBarH,
-        buttonBarButtonColor: Colors.white.withValues(alpha: 0.85),
-        backdropColor: Colors.black.withValues(alpha: 0.45),
+        buttonBarButtonColor: s.onMedia.withValues(alpha: 0.85),
+        backdropColor: s.mediaStage.withValues(alpha: 0.45),
         bufferingIndicatorBuilder: (_) => const _GlassPulseLoader(),
       ),
       fullscreen: const media_controls.MaterialVideoControlsThemeData(),
@@ -376,8 +378,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
                           height: scaleW(200),
                           decoration: BoxDecoration(
                             borderRadius: AppTheme.metrics.radius16,
-                            color: Colors.white.withValues(alpha: 0.05),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                            color: s.onMedia.withValues(alpha: 0.05),
+                            border: Border.all(color: s.onMedia.withValues(alpha: 0.08)),
                           ),
                           alignment: Alignment.center,
                           child: Icon(
@@ -394,7 +396,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
                             widget.title!,
                             style: AppTextStyles.role(
                               context,
-                              color: Colors.white.withValues(alpha: 0.8),
+                              color: s.onMedia.withValues(alpha: 0.8),
                               fontSize: AppTheme.metrics.fontSize15,
                               weight: FontWeight.w500,
                               letterSpacing: 0.3,
@@ -409,7 +411,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
                           '音频播放中',
                           style: AppTextStyles.role(
                             context,
-                            color: Colors.white38,
+                            color: s.onMediaFaint,
                             fontSize: AppTheme.metrics.fontSize13,
                           ),
                         ),
@@ -434,7 +436,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
                             ? Image.network(widget.coverSource!, fit: _videoFit)
                             : Image.file(File(widget.coverSource!), fit: _videoFit))
                       : Container(
-                          color: Colors.black,
+                          color: s.mediaStage,
                           child: const Center(child: _GlassPulseLoader()),
                         ),
                 ),
@@ -448,18 +450,18 @@ class _VideoPreviewState extends State<_VideoPreview> {
               behavior: HitTestBehavior.opaque,
               onTap: _toggleMini,
               child: Container(
-                color: Colors.black,
+                color: s.mediaStage,
                 alignment: Alignment.center,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.fullscreen_rounded, color: Colors.white54, size: scaleW(56)),
+                    Icon(Icons.fullscreen_rounded, color: s.onMediaTertiary, size: scaleW(56)),
                     SizedBox(height: AppTheme.metrics.kSpace12),
                     Text(
                       '已进入画中画，点击画面或小窗恢复全屏',
                       style: AppTextStyles.role(
                         context,
-                        color: Colors.white54,
+                        color: s.onMediaTertiary,
                         fontSize: AppTheme.metrics.fontSize13,
                       ),
                     ),
@@ -690,11 +692,13 @@ class _VideoSpeedButton extends StatelessWidget {
       stream: player.stream.rate,
       initialData: player.state.rate,
       builder: (context, snapshot) {
+        final s = AppSemantic.of(context);
         final rate = snapshot.data ?? 1.0;
         final label = (rate == rate.truncateToDouble()) ? '${rate.toInt()}x' : '${rate}x';
         return PopupMenuButton<double>(
           tooltip: '播放速度',
-          color: Colors.black87,
+          // 速度菜单浮在播放画面上，底色必须是恒定的深遮罩而非主题表面
+          color: s.mediaScrimStrong,
           itemBuilder: (_) => [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
               .map(
                 (r) => PopupMenuItem<double>(
@@ -717,7 +721,7 @@ class _VideoSpeedButton extends StatelessWidget {
             ),
             child: Text(
               label,
-              style: AppTextStyles.role(context, color: Colors.white, fontSize: AppTheme.metrics.fontSize13),
+              style: AppTextStyles.role(context, color: s.onMedia, fontSize: AppTheme.metrics.fontSize13),
             ),
           ),
         );
@@ -735,12 +739,13 @@ class _VideoFitButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final isCover = currentFit == BoxFit.cover;
     return IconButton(
       tooltip: isCover ? '适应屏幕' : '填充屏幕',
       icon: Icon(
         isCover ? Icons.fit_screen_rounded : Icons.crop_rounded,
-        color: Colors.white,
+        color: s.onMedia,
         size: AppTheme.metrics.iconSize22,
       ),
       onPressed: onToggle,
@@ -766,13 +771,14 @@ class _VideoVolumeButton extends StatelessWidget {
       stream: player.stream.volume,
       initialData: player.state.volume,
       builder: (context, snapshot) {
+        final s = AppSemantic.of(context);
         final vol = snapshot.data ?? 100.0;
         final icon = vol == 0
             ? Icons.volume_off_rounded
             : (vol < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded);
         return IconButton(
           tooltip: '音量',
-          icon: Icon(icon, color: Colors.white, size: AppTheme.metrics.iconSize22),
+          icon: Icon(icon, color: s.onMedia, size: AppTheme.metrics.iconSize22),
           onPressed: onTogglePanel,
           color: panelOpen ? AppSemantic.of(context).info.color : null,
         );
@@ -790,6 +796,7 @@ class _VolumePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     return ClipRRect(
       borderRadius: AppTheme.metrics.radius12,
       child: BackdropFilter(
@@ -800,7 +807,7 @@ class _VolumePanel extends StatelessWidget {
             horizontal: AppTheme.metrics.kSpace12,
             vertical: AppTheme.metrics.kSpace8,
           ),
-          color: Colors.black.withValues(alpha: 0.62),
+          color: s.mediaStage.withValues(alpha: 0.62),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -811,7 +818,7 @@ class _VolumePanel extends StatelessWidget {
                     padding: EdgeInsets.zero,
                     icon: Icon(
                       Icons.volume_up_rounded,
-                      color: Colors.white70,
+                      color: s.onMediaSecondary,
                       size: AppTheme.metrics.iconSize20,
                     ),
                     onPressed: () => player.setVolume(100.0),
@@ -837,7 +844,7 @@ class _VolumePanel extends StatelessWidget {
                     onTap: onClose,
                     child: Icon(
                       Icons.close_rounded,
-                      color: Colors.white54,
+                      color: s.onMediaTertiary,
                       size: AppTheme.metrics.iconSize20,
                     ),
                   ),
@@ -854,7 +861,7 @@ class _VolumePanel extends StatelessWidget {
                       '$vol%',
                       style: AppTextStyles.role(
                         context,
-                        color: Colors.white70,
+                        color: s.onMediaSecondary,
                         fontSize: AppTheme.metrics.fontSize13,
                       ),
                     );

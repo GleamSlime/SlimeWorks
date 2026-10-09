@@ -10,6 +10,7 @@ import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -40,7 +41,8 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   late final NovelReaderViewModel controller;
   Timer? _immersiveTimer;
   // 阅读页正文背景色：由用户在阅读设置里选，属于内容主题而非界面语义色，不进 AppSemantic
-  Color _readerBgColor = const Color(0xFFF6F0E7);
+  // 默认值与整排预设都收口在 AppReaderPaper（两处阅读器共用）
+  Color _readerBgColor = AppReaderPaper.parchment;
 
   /// 本地沉浸模式状态（替代全局 DesktopScreenProvider.mobileImmersiveMode）
   final RxBool _isImmersive = false.obs;
@@ -145,13 +147,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                     Wrap(
                       spacing: m.kSpace10,
                       children:
-                          [
-                                const Color(0xFFF6F0E7),
-                                const Color(0xFFFFFFFF),
-                                const Color(0xFFEAF4E8),
-                                const Color(0xFFEAF1F8),
-                                const Color(0xFF1F1F1F),
-                              ]
+                          AppReaderPaper.presets
                               .map(
                                 (color) => GestureDetector(
                                   onTap: () {

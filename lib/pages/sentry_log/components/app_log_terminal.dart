@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -41,7 +42,6 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
     final s = AppSemantic.of(context);
     // 终端内容区自带一套控制台配色（深色底 + 高饱和语法色），明暗两档由语义层
     // 判定后各取自己的色板；页面 chrome（工具条/筛选片/空态）一律走语义角色。
-    final isDark = s.isDark;
 
     return Obx(() {
       final vm = widget.viewModel;
@@ -80,7 +80,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
         children: [
           _buildToolbar(context, s, m),
           SizedBox(height: m.kSpace8),
-          Expanded(child: _buildTerminalView(context, s, m, isDark)),
+          Expanded(child: _buildTerminalView(context, s, m)),
         ],
       );
     });
@@ -296,15 +296,17 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
 
   /// 终端内容区
   ///
-  /// 底色/边框/标题栏与正文语法色保留字面量：这是一套刻意的控制台配色
-  /// （深底 + 高饱和语法色），换成 `textSecondary`/`surface` 会让语法高亮失去
-  /// 层次，也让这块区域不再像终端。等级色已经收敛进 [AppStatusRole]。
+  /// 这套控制台配色（深底 + 高饱和语法色）是独立的 token 集 [AppTerminalPalette]，
+  /// 经 `s.terminal` 按明暗成套取用，而不是并进 `surface`/`textSecondary` 这类界面
+  /// 语义角色：语义色一改（比如 textSecondary 调灰），日志正文的语法高亮就会失去
+  /// 层次，这块区域也不再像终端。成套关系集中在主题层定义，widget 里不留字面量。
+  /// 等级色仍归 [AppStatusRole]。
   Widget _buildTerminalView(
     BuildContext context,
     AppSemantic s,
     ThemeMetrics m,
-    bool isDark,
   ) {
+    final t = s.terminal;
     final vm = widget.viewModel;
     final entries = vm.entries;
 
@@ -315,10 +317,10 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: m.kSpace16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0A0E14) : const Color(0xFFFAFAFA),
+        color: t.screen,
         borderRadius: m.radius12,
         border: Border.all(
-          color: isDark ? const Color(0xFF1A1F29) : const Color(0xFFE0E0E0),
+          color: t.chromeBorder,
           width: scaleW(1),
         ),
         boxShadow: s.elevation(Elevation.card),
@@ -330,7 +332,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
             Container(
               padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace6),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1A1F29) : const Color(0xFFE8E8E8),
+                color: t.titleBar,
                 borderRadius: BorderRadius.only(
                   topLeft: m.radius12.topLeft,
                   topRight: m.radius12.topRight,
@@ -338,12 +340,13 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
               ),
               child: Row(
                 children: [
-                  // 标题栏的三颗灯是仿终端窗饰，恒为红/黄/绿，不跟主题反相
+                  // 仿终端窗饰的三颗灯恒为红/黄/绿、不随主题反相，所以在
+                  // AppTerminalPalette 上是单一静态常量，而不是明暗两档的字段
                   Container(
                     width: scaleW(10),
                     height: scaleW(10),
                     decoration: const BoxDecoration(
-                      color: Color(0xFFFF5F56),
+                      color: AppTerminalPalette.windowDotClose,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -352,7 +355,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                     width: scaleW(10),
                     height: scaleW(10),
                     decoration: const BoxDecoration(
-                      color: Color(0xFFFFBD2E),
+                      color: AppTerminalPalette.windowDotMinimize,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -361,7 +364,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                     width: scaleW(10),
                     height: scaleW(10),
                     decoration: const BoxDecoration(
-                      color: Color(0xFF27C93F),
+                      color: AppTerminalPalette.windowDotZoom,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -369,10 +372,8 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                   Expanded(
                     child: Text(
                       'slime_works — log terminal',
-                      style: AppTextStyles.mono(context, size: m.fontSize11).copyWith(
-                        height: 1.4,
-                        color: isDark ? const Color(0xFF6C7A89) : const Color(0xFF888888),
-                      ),
+                      style: AppTextStyles.mono(context, size: m.fontSize11, color: t.titleText)
+                          .copyWith(height: 1.4),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -396,7 +397,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
                   itemCount: entries.length,
                   itemBuilder: (ctx, i) {
                     final entry = entries[i];
-                    return _buildLogLine(context, s, entry, m, isDark);
+                    return _buildLogLine(context, s, entry, m);
                   },
                 ),
               ),
@@ -412,17 +413,16 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
     AppSemantic s,
     AppLogEntry entry,
     ThemeMetrics m,
-    bool isDark,
   ) {
+    final t = s.terminal;
     // 等级色走状态角色：danger/warning/info/success 的明暗两档本身就够了压住
     // 深底和浅底，不需要再手写一套等级色板。
     final levelColor = _levelRole(s, entry.level).color;
-    // 来源标记与正文/时间戳属于控制台语法色，跟着底色成套，保留字面量。
-    final sourceColor = entry.source == 'rust'
-        ? (isDark ? const Color(0xFFE06C75) : const Color(0xFFBE5046))
-        : (isDark ? const Color(0xFF61AFEF) : const Color(0xFF4078F2));
-    final timestampColor = isDark ? const Color(0xFF5C6370) : const Color(0xFFA0A0A0);
-    final messageColor = isDark ? const Color(0xFFABB2BF) : const Color(0xFF383A42);
+    // 来源标记/时间戳/正文属于控制台语法色，与终端底色成套，因此取自
+    // AppTerminalPalette（s.terminal），而不是通用 surface/text 语义角色。
+    final sourceColor = entry.source == 'rust' ? t.sourceRust : t.sourceDart;
+    final timestampColor = t.timestamp;
+    final messageColor = t.body;
 
     final keywords = _extractKeywords(entry.message);
 
@@ -432,10 +432,8 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
       // 行内也没有固定宽度容器，字号滑杆拉大只会让行更高。
       child: RichText(
         text: TextSpan(
-          style: AppTextStyles.mono(context, size: m.fontSize11).copyWith(
-            height: 1.6,
-            color: messageColor,
-          ),
+          style: AppTextStyles.mono(context, size: m.fontSize11, color: messageColor)
+              .copyWith(height: 1.6),
           children: [
             // 子 span 只写颜色：TextSpan 的样式与父 span 合并，字族仍然继承上面的等宽
             TextSpan(
@@ -466,7 +464,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
               text: ' ',
               style: TextStyle(color: timestampColor),
             ),
-            ..._buildMessageSpans(entry.message, keywords, messageColor, isDark),
+            ..._buildMessageSpans(entry.message, keywords, t),
           ],
         ),
       ),
@@ -476,14 +474,13 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
   List<TextSpan> _buildMessageSpans(
     String message,
     Set<String> keywords,
-    Color baseColor,
-    bool isDark,
+    AppTerminalPalette t,
   ) {
     if (keywords.isEmpty) {
       return [
         TextSpan(
           text: message,
-          style: TextStyle(color: baseColor),
+          style: TextStyle(color: t.body),
         ),
       ];
     }
@@ -498,17 +495,18 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
     final matches = pattern.allMatches(message);
     int lastEnd = 0;
 
-    // 关键词/路径/数字三类语法高亮：与终端底色成套，保留字面量
-    final kwColor = isDark ? const Color(0xFFE5C07B) : const Color(0xFF986801);
-    final pathColor = isDark ? const Color(0xFF98C379) : const Color(0xFF50A14F);
-    final numColor = isDark ? const Color(0xFFD19A66) : const Color(0xFFA45200);
+    // 关键词/路径/数字三类语法高亮与终端底色成套，同样取自 AppTerminalPalette：
+    // 它们是编辑器配色，换成界面 text 角色会随主题串味，故单列 token 集而非角色
+    final kwColor = t.keyword;
+    final pathColor = t.path;
+    final numColor = t.number;
 
     for (final match in matches) {
       if (match.start > lastEnd) {
         spans.add(
           TextSpan(
             text: message.substring(lastEnd, match.start),
-            style: TextStyle(color: baseColor),
+            style: TextStyle(color: t.body),
           ),
         );
       }
@@ -536,7 +534,7 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
       spans.add(
         TextSpan(
           text: message.substring(lastEnd),
-          style: TextStyle(color: baseColor),
+          style: TextStyle(color: t.body),
         ),
       );
     }

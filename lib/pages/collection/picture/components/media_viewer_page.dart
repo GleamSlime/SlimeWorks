@@ -370,7 +370,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
       return Center(
         child: Text('无法加载图片', style: AppTextStyles.role(
           context,
-          color: Colors.white,
+          color: AppSemantic.of(context).onMedia,
           fontSize: AppTheme.metrics.fontSize13,
         )),
       );
@@ -453,6 +453,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
 
   @override
   Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
     final size = MediaQuery.sizeOf(context);
     final isMobile = Platform.isAndroid || Platform.isIOS;
     final item = widget.items[_currentIndex];
@@ -514,7 +515,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
 
     return Scaffold(
       // 查看器是沉浸式深色画布：黑底固定，不跟随明暗主题
-      backgroundColor: Colors.black,
+      backgroundColor: s.mediaStage,
       body: Focus(
         autofocus: true,
         onKeyEvent: (node, event) {
@@ -663,12 +664,12 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
                                 vertical: appMetrics.kSpace10,
                               ),
                               // 深色玻璃标题条上的白字不随明暗翻转
-                              color: Colors.black.withValues(alpha: 0.42),
+                              color: s.immersivePanel,
                               child: Text(
                                 widget.items[_currentIndex].title,
                                 style: AppTextStyles.role(
                                   context,
-                                  color: Colors.white,
+                                  color: s.onMedia,
                                   fontSize: AppTheme.metrics.fontSize13,
                                   weight: FontWeight.w500,
                                 ),

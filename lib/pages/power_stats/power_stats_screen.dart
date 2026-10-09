@@ -9,8 +9,9 @@ import 'package:slime_works/components/node/node_switcher_button.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
-import 'package:slime_works/core/theme/app_colors.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/theme/app_viz.dart';
 import 'package:slime_works/core/utils/size_utils.dart' show PlatformUtil;
 import 'package:slime_works/view_models/power_stats_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -151,6 +152,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
   }
 
   Widget _buildFetchButton(BuildContext context, ThemeData theme, ThemeMetrics m) {
+    final s = AppSemantic.of(context);
     return Obx(
       () => Material(
         color: Colors.transparent,
@@ -163,9 +165,9 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
             height: m.kSpace32,
             padding: EdgeInsets.symmetric(horizontal: m.kSpace12),
             decoration: BoxDecoration(
-              color: LightColors.yellow.withAlpha(30),
+              color: s.warning.color.withAlpha(30),
               borderRadius: m.radius20,
-              border: Border.all(color: LightColors.yellow.withAlpha(80), width: 1),
+              border: Border.all(color: s.warning.color.withAlpha(80), width: 1),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -178,7 +180,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                       )
                     : DrawIcon(StrokeIcons.bolt,
                         size: m.iconSize14,
-                        color: LightColors.orange,
+                        color: s.warning.color,
                       ),
                 SizedBox(width: m.kSpace6),
                 Text(
@@ -186,7 +188,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                   style: TextStyle(
                     fontSize: m.fontSize12,
                     fontWeight: FontWeight.w600,
-                    color: LightColors.orange,
+                    color: s.warning.onContainer,
                   ),
                 ),
               ],
@@ -199,6 +201,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
 
   // ── 顶部状态横幅 ────────────────────────────────────────────────────────
   Widget _buildHeaderBanner(BuildContext context, ThemeData theme, ThemeMetrics m) {
+    final s = AppSemantic.of(context);
     return Obx(() {
       final enabled = _viewModel.isEnabled.value;
       final polling = _viewModel.isPolling.value;
@@ -211,8 +214,8 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
             end: Alignment.bottomRight,
             colors: enabled
                 ? [
-                    LightColors.yellow.withAlpha(25),
-                    LightColors.orange.withAlpha(15),
+                    s.warning.color.withAlpha(25),
+                    s.warning.color.withAlpha(15),
                   ]
                 : [
                     theme.colorScheme.surfaceContainerHighest.withAlpha(60),
@@ -222,7 +225,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           borderRadius: m.radius12,
           border: Border.all(
             color: enabled
-                ? LightColors.yellow.withAlpha(60)
+                ? s.warning.color.withAlpha(60)
                 : theme.colorScheme.outlineVariant.withAlpha(60),
           ),
         ),
@@ -234,13 +237,13 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
               height: m.kSpace44,
               decoration: BoxDecoration(
                 color: enabled
-                    ? LightColors.yellow.withAlpha(30)
+                    ? s.warning.color.withAlpha(30)
                     : theme.colorScheme.onSurface.withAlpha(8),
                 borderRadius: m.radius10,
               ),
               child: DrawIcon(StrokeIcons.electricBolt,
                 size: m.iconSize24,
-                color: enabled ? LightColors.orange : theme.colorScheme.onSurface.withAlpha(50),
+                color: enabled ? s.warning.color : theme.colorScheme.onSurface.withAlpha(50),
               ),
             ),
             SizedBox(width: m.kSpace14),
@@ -266,7 +269,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                             vertical: m.kSpace2,
                           ),
                           decoration: BoxDecoration(
-                            color: LightColors.green.withAlpha(20),
+                            color: s.success.color.withAlpha(20),
                             borderRadius: m.radius4,
                           ),
                           child: Row(
@@ -276,11 +279,11 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                                 width: m.kSpace4,
                                 height: m.kSpace4,
                                 decoration: BoxDecoration(
-                                  color: LightColors.green,
+                                  color: s.success.color,
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: LightColors.green.withAlpha(80),
+                                      color: s.success.color.withAlpha(80),
                                       blurRadius: 4,
                                     ),
                                   ],
@@ -291,7 +294,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                                 '轮询中',
                                 style: TextStyle(
                                   fontSize: m.fontSize10,
-                                  color: LightColors.green,
+                                  color: s.success.onContainer,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -319,7 +322,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
               Switch(
                 value: enabled,
                 onChanged: (v) => _viewModel.toggleEnabled(v),
-                activeThumbColor: LightColors.orange,
+                activeThumbColor: s.warning.color,
               ),
           ],
         ),
@@ -334,6 +337,8 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     ThemeMetrics m,
     bool isNarrow,
   ) {
+    // 图表维度（耗电量/余额/电费）的身份色走 viz，不当状态色用
+    final viz = AppVizSet.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -383,21 +388,21 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                   m,
                   '耗电量',
                   PowerChartMetric.consumption,
-                  LightColors.orange,
+                  viz.amber.base,
                 ),
                 _buildMetricChip(
                   theme,
                   m,
                   '余额',
                   PowerChartMetric.balance,
-                  LightColors.blue,
+                  viz.sky.base,
                 ),
                 _buildMetricChip(
                   theme,
                   m,
                   '电费',
                   PowerChartMetric.cost,
-                  LightColors.red,
+                  viz.coral.base,
                 ),
               ],
             ),
@@ -433,7 +438,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                   ),
                 ),
                 ...PowerUnit.values.map(
-                  (u) => _buildUnitChip(theme, m, u),
+                  (u) => _buildUnitChip(context, theme, m, u),
                 ),
               ],
             ),
@@ -443,7 +448,13 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     );
   }
 
-  Widget _buildUnitChip(ThemeData theme, ThemeMetrics m, PowerUnit unit) {
+  Widget _buildUnitChip(
+    BuildContext context,
+    ThemeData theme,
+    ThemeMetrics m,
+    PowerUnit unit,
+  ) {
+    final s = AppSemantic.of(context);
     final selected = _viewModel.selectedUnit.value == unit;
     return Material(
       color: Colors.transparent,
@@ -457,12 +468,12 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           ),
           decoration: BoxDecoration(
             color: selected
-                ? LightColors.yellow.withAlpha(25)
+                ? s.warning.color.withAlpha(25)
                 : Colors.transparent,
             borderRadius: m.radius8,
             border: Border.all(
               color: selected
-                  ? LightColors.yellow.withAlpha(90)
+                  ? s.warning.color.withAlpha(90)
                   : theme.dividerColor.withAlpha(40),
             ),
           ),
@@ -472,7 +483,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
               fontSize: m.fontSize12,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               color: selected
-                  ? LightColors.orange
+                  ? s.warning.onContainer
                   : theme.colorScheme.onSurface.withAlpha(120),
               fontFamily: 'monospace',
             ),
@@ -587,6 +598,8 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     bool isNarrow,
   ) {
     final crossCount = isNarrow ? 2 : 3;
+    // 三张并排卡片是"并列数据身份"，走 viz 而不是状态角色
+    final viz = AppVizSet.of(context);
     return Obx(() {
       final unit = _viewModel.selectedUnit.value;
       final summaryKwh = (_viewModel.summary['current_kwh'] as num?)?.toDouble() ?? 0.0;
@@ -609,21 +622,22 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           label: '剩余电量',
           value: unit.format(kwh),
           unit: unit.label,
-          color: LightColors.yellow,
+          // 原值 #FFCB3A 正是 amber 这组身份的渐变终点档，两档主题下同值
+          color: viz.amber.to,
         ),
         _SummaryCardData(
           icon: StrokeIcons.accountBalanceWallet,
           label: '剩余金额',
           value: yuan.toStringAsFixed(2),
           unit: '元',
-          color: LightColors.blue,
+          color: viz.sky.base,
         ),
         _SummaryCardData(
           icon: StrokeIcons.timer,
           label: '分钟耗电',
           value: unit.format(minuteCons),
           unit: unit.label,
-          color: LightColors.green,
+          color: viz.mint.base,
         ),
       ];
 
@@ -730,6 +744,8 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     ThemeMetrics m,
     bool isNarrow,
   ) {
+    // 折线颜色即"这条线画的是哪个维度"的身份，与上面的维度切换 chip 同源
+    final viz = AppVizSet.of(context);
     return Obx(() {
       final buckets = _viewModel.buckets;
       final metric = _viewModel.selectedMetric.value;
@@ -753,14 +769,14 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           title = '耗电量趋势';
           unit = powerUnit.label;
           unitScale = powerUnit.factor;
-          color = LightColors.orange;
+          color = viz.amber.base;
           // 耗电量：所有桶累加
           sumValue = buckets.fold<double>(0, (s, b) => s + b.consumptionKwh);
           sumText = '${powerUnit.format(sumValue)}${powerUnit.label}';
         case PowerChartMetric.balance:
           title = '余额变化';
           unit = '元';
-          color = LightColors.blue;
+          color = viz.sky.base;
           // 余额：末值 - 首值（区间变化量）
           if (buckets.length >= 2) {
             sumValue = buckets.last.balanceYuan - buckets.first.balanceYuan;
@@ -772,7 +788,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
         case PowerChartMetric.cost:
           title = '电费趋势';
           unit = '元';
-          color = LightColors.red;
+          color = viz.coral.base;
           sumValue = buckets.fold<double>(0, (s, b) => s + b.costYuan);
           sumText = '${sumValue.toStringAsFixed(2)}$unit';
       }
@@ -989,7 +1005,8 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
               childAspectRatio: isNarrow ? 1.5 : 1.8,
             ),
             itemCount: dims.length,
-            itemBuilder: (context, i) => _buildDimensionCard(theme, m, unit, dims[i]),
+            itemBuilder: (context, i) =>
+                _buildDimensionCard(context, theme, m, unit, dims[i]),
           ),
         ],
       );
@@ -997,11 +1014,14 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
   }
 
   Widget _buildDimensionCard(
+    BuildContext context,
     ThemeData theme,
     ThemeMetrics m,
     PowerUnit unit,
     _DimensionData data,
   ) {
+    // 这些卡片报的都是耗电量，沿用图表里"电量=amber"这一身份
+    final viz = AppVizSet.of(context);
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
       decoration: BoxDecoration(
@@ -1035,7 +1055,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                 style: TextStyle(
                   fontSize: m.fontSize18,
                   fontWeight: FontWeight.w700,
-                  color: LightColors.orange,
+                  color: viz.amber.base,
                   fontFamily: 'monospace',
                 ),
               ),
@@ -1223,6 +1243,9 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
 
   // ── 日志卡片 ────────────────────────────────────────────────────────────
   Widget _buildLogCard(BuildContext context, ThemeData theme, ThemeMetrics m) {
+    final s = AppSemantic.of(context);
+    // 抓到的小时读数沿用"电量=amber"这套身份，跟上面的卡片与图表对齐
+    final viz = AppVizSet.of(context);
     return Obx(() {
       final logs = _viewModel.logs;
       return Container(
@@ -1296,7 +1319,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                             width: m.kSpace6,
                             height: m.kSpace6,
                             decoration: BoxDecoration(
-                              color: success ? LightColors.green : LightColors.red,
+                              color: success ? s.success.color : s.danger.color,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -1320,7 +1343,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                                 fontSize: m.fontSize12,
                                 color: success
                                     ? theme.colorScheme.onSurface.withAlpha(180)
-                                    : LightColors.red,
+                                    : s.danger.color,
                               ),
                             ),
                           ),
@@ -1330,7 +1353,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                               '${kwh.toStringAsFixed(2)} kWh',
                               style: TextStyle(
                                 fontSize: m.fontSize11,
-                                color: LightColors.yellow,
+                                color: viz.amber.to,
                                 fontFamily: 'monospace',
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1475,6 +1498,7 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1506,7 +1530,10 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
                     metric: widget.metric,
                     color: widget.color,
                     textColor:
-                        theme.textTheme.bodySmall?.color ?? Colors.grey,
+                        theme.textTheme.bodySmall?.color ?? s.textTertiary,
+                    // 数据点外圈要挖出卡片表面那层底，不能写死白：暗色下白圈会
+                    // 在深灰卡上变成一圈"亮斑"
+                    surfaceColor: s.surface,
                     gridColor: theme.dividerColor.withAlpha(40),
                     hoverIndex: _hoverIndex,
                     unitScale: widget.unitScale,
@@ -1536,6 +1563,7 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
     ThemeData theme,
     ThemeMetrics m,
   ) {
+    final s = AppSemantic.of(context);
     final idx = _hoverIndex!;
     final (minV, maxV) = _computeRange();
     final points = _computePoints(size, minV, maxV);
@@ -1574,24 +1602,25 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
 
     // 环比百分比
     String? changeText;
-    Color? changeColor;
+    // 环比是一枚状态徽标：整条角色（水洗底 + 底上字）一起给，别只挑个色值
+    AppStatusRole? changeRole;
     if (prevValue != null && prevValue.abs() > 0.0001) {
       final change = currentValue - prevValue;
       final pct = (change / prevValue.abs()) * 100;
       if (pct.abs() < 0.01) {
         changeText = '持平';
-        changeColor = theme.colorScheme.onSurface.withAlpha(140);
+        changeRole = s.neutral;
       } else {
         final arrow = pct > 0 ? '↑' : '↓';
         changeText = '$arrow ${pct.abs().toStringAsFixed(1)}%';
-        // 上升且上升为好 → 绿；上升且上升为坏 → 红
+        // 上升且上升为好 → 成功色；上升且上升为坏 → 危险色
         final isUp = pct > 0;
         final isGood = isUp == isUpGood;
-        changeColor = isGood ? LightColors.green : LightColors.red;
+        changeRole = isGood ? s.success : s.danger;
       }
     } else if (prevValue != null && prevValue.abs() <= 0.0001) {
       changeText = '新增';
-      changeColor = LightColors.blue;
+      changeRole = s.info;
     }
 
     // 不再用 TextPainter 估宽：估少一点，数值就被行内的压缩规则挤成 "0.0…"，
@@ -1616,7 +1645,7 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
                 border: Border.all(color: widget.color.withAlpha(120), width: 1),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withAlpha(60),
+                    color: s.shadowKey.withAlpha(60),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   ),
@@ -1658,7 +1687,7 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
                           fontFamily: 'monospace',
                         ),
                       ),
-                      if (changeText != null && changeColor != null) ...[
+                      if (changeText != null && changeRole != null) ...[
                         SizedBox(width: m.kSpace8),
                         Container(
                           padding: EdgeInsets.symmetric(
@@ -1666,7 +1695,7 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
                             vertical: m.kSpace2,
                           ),
                           decoration: BoxDecoration(
-                            color: changeColor.withAlpha(20),
+                            color: changeRole.color.withAlpha(20),
                             borderRadius: m.radius4,
                           ),
                           child: Text(
@@ -1674,7 +1703,7 @@ class _InteractivePowerChartState extends State<_InteractivePowerChart> {
                             style: TextStyle(
                               fontSize: m.fontSize10,
                               fontWeight: FontWeight.w700,
-                              color: changeColor,
+                              color: changeRole.onContainer,
                               fontFamily: 'monospace',
                             ),
                           ),
@@ -1736,6 +1765,9 @@ class _ChartCanvas extends CustomPainter {
   final Color color;
   final Color textColor;
   final Color gridColor;
+
+  /// 卡片表面色：数据点那圈"挖空"要用它，写死白在暗色下就是一圈亮斑
+  final Color surfaceColor;
   final int? hoverIndex;
   /// kWh → 展示单位的换算系数（余额/电费恒为 1）
   final double unitScale;
@@ -1746,6 +1778,7 @@ class _ChartCanvas extends CustomPainter {
     required this.color,
     required this.textColor,
     required this.gridColor,
+    required this.surfaceColor,
     this.hoverIndex,
     this.unitScale = 1.0,
   });
@@ -1870,7 +1903,7 @@ class _ChartCanvas extends CustomPainter {
     // 数据点（默认小点）
     final dotPaint = Paint()..color = color;
     final ringPaint = Paint()
-      ..color = Colors.white
+      ..color = surfaceColor
       ..style = PaintingStyle.fill;
     for (final p in points) {
       canvas.drawCircle(p, 3, ringPaint);
@@ -1919,6 +1952,7 @@ class _ChartCanvas extends CustomPainter {
       old.buckets != buckets ||
       old.metric != metric ||
       old.color != color ||
+      old.surfaceColor != surfaceColor ||
       old.hoverIndex != hoverIndex ||
       old.unitScale != unitScale;
 }

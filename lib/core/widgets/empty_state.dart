@@ -170,9 +170,11 @@ class SkeletonBox extends StatefulWidget {
 }
 
 class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStateMixin {
+  // 骨架屏呼吸取循环档 pulse（1200ms 一次单程，reverse 后一整回合 2.4s）：
+  // 循环动效不能拿一次性过渡时长顶，否则加载中会抖得像在报错。
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1400),
+    duration: AppMotion.pulse,
   )..repeat(reverse: true);
 
   @override

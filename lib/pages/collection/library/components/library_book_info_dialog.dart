@@ -155,14 +155,14 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // 封面是恒深的 art，压在它上面的白不参与明暗反转
-                    DrawIcon(StrokeIcons.edit, color: Colors.white, size: AppTheme.metrics.iconSize28),
+                    DrawIcon(StrokeIcons.edit, color: s.onMedia, size: AppTheme.metrics.iconSize28),
                     SizedBox(height: AppTheme.metrics.kSpace4),
                     Text(
                       '更换封面',
                       style: AppTextStyles.role(
                         context,
                         fontSize: AppTheme.metrics.fontSize11,
-                        color: Colors.white,
+                        color: s.onMedia,
                       ),
                     ),
                   ],

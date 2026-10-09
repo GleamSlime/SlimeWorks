@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
 
 /// 唱片本体的质感色
 ///
@@ -34,8 +36,8 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
   @override
   void initState() {
     super.initState();
-    // 唱片旋转动画
-    _spinController = AnimationController(vsync: this, duration: const Duration(seconds: 8));
+    // 唱片旋转动画：一整圈自转走 AppMotion.spin（转得出来但不至于晕）
+    _spinController = AnimationController(vsync: this, duration: AppMotion.spin);
 
     // 唱臂动画
     _toneArmController = AnimationController(
@@ -98,6 +100,8 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
 
   /// 黑胶唱片
   Widget _buildDisc(double discSize, double coverSize) {
+    // 盘面上的投影与沟槽高光都是"压在 art 上的墨"，走媒体令牌（恒白/恒黑，不随明暗）
+    final s = AppSemantic.of(context);
     return Container(
       width: discSize,
       height: discSize,
@@ -115,7 +119,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
+            color: s.mediaStage.withValues(alpha: 0.5),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -133,7 +137,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.05 + (i % 2) * 0.03),
+                  color: s.onMedia.withValues(alpha: 0.05 + (i % 2) * 0.03),
                   width: 0.5,
                 ),
               ),
@@ -149,7 +153,7 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
               // surfaceContainerHighest，亮色模式下会在黑胶上挖出一个白圆盘，
               // 和下面 _buildDefaultCover 的深灰占位也对不上。
               color: _discPlaceholderColor,
-              border: Border.all(color: Colors.black.withValues(alpha: 0.3), width: 1),
+              border: Border.all(color: s.mediaStage.withValues(alpha: 0.3), width: 1),
             ),
             child: ClipOval(
               child: widget.coverPath != null && File(widget.coverPath!).existsSync()
@@ -179,11 +183,13 @@ class _VinylDiscAnimationState extends State<VinylDiscAnimation> with TickerProv
   }
 
   Widget _buildDefaultCover(double size) {
+    // 无封面时的占位是深色盘面，音符图标是盘面之上的墨字（恒白）
+    final s = AppSemantic.of(context);
     return Container(
       color: _discPlaceholderColor,
       child: DrawIcon(StrokeIcons.musicNote,
         size: size * 0.4,
-        color: Colors.white.withValues(alpha: 0.5),
+        color: s.onMedia.withValues(alpha: 0.5),
       ),
     );
   }

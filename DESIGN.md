@@ -191,6 +191,47 @@ ambient 层自动取 `blur×2`、`y×2`。停靠类控件（如底部播放条�
 
 ---
 
+### 2.7 媒体层 chrome：唯一一族**故意不跟主题走**的取色
+
+封面卡、看图器、播放器、朗读页压的是照片/视频/专辑图，底色由内容自己决定。
+这里的字必须与任意画面对抗，所以暗色下是白、亮色下**还是白**——拿 `textPrimary` 去顶封面，
+切到亮色主题就变成白字白底。历史上这族色一直写成 `Colors.white70` / `Color(0x18000000)`
+散在 widget 里，现在一律走 `AppSemantic` 上的 getter（底层是 `app_colors.dart` 的
+`AppMediaChrome`，全是 `const`，不参与 `lerp`，也不给"顺手调暗"留口子）：
+
+| 角色 | 值 | 顶替掉的写法 |
+|---|---|---|
+| `s.onMedia` | `#FFFFFFFF` | `Colors.white` |
+| `s.onMediaSecondary` | `#B3FFFFFF` | `Colors.white70` |
+| `s.onMediaTertiary` | `#99FFFFFF` | `Colors.white60`、`Colors.white54`（两档已并成一条，5 个透明度单位分不出） |
+| `s.onMediaFaint` | `#61FFFFFF` | `Colors.white38` |
+| `s.onMediaWash` | `#1FFFFFFF` | `Colors.white12`（悬停/选中水洗） |
+| `s.onMediaInk` | `#FF0A0A0A` | 恒白底上的深墨字：看图器改名框、白实心按钮、白色磨砂工具条。原 `Colors.black87` 那一档要保浓度就写算式 `s.onMediaInk.withValues(alpha: .87)` |
+| `s.mediaStage` | `#FF000000` | 看图/播放舞台底、`Colors.black.withAlpha(n)` 的基准 |
+| `s.mediaScrimTrace/Soft/Medium/Strong/Foot/Veil` | `#18/#22/#8A/#DE/#AA/#BB` 前缀 | 封面遮罩渐变、`black54`≈Medium、`black87`≈Strong |
+| `s.immersivePanel` / `s.immersiveBorder` | `#6B000000` / `#26FFFFFF` | 沉浸式黑玻璃浮层与其白 15% 描边 |
+| `s.onStatusBadge` | `#FFFFFFFF` | **实心**状态底上的字/图标；半透明容器底仍用 `AppStatusRole.onContainer` |
+
+自定义透明度不许往邻近档上靠，走算式形式保像素一致：`s.onMedia.withAlpha(220)`、
+`s.mediaStage.withValues(alpha: .35)`。**取色入口仍然是 `s.`**——业务不需要知道它不跟主题走。
+
+⚠️ **chrome 要成对换，不能只换底**：一处底色落进这一族（恒白输入框、白实心按钮、
+白色磨砂条），它的**字/图标也必须同时落进 `onMediaInk`**——底恒白而字取 `textPrimary`，
+切到暗色主题就是白字白底。这一类是收编时最容易漏的半个转换，判据只看"底跟不跟主题翻"。
+
+### 2.8 成套但不进语义层的三块
+
+同一批迁移里冒出来的另两类：一处一处看像噪音，成套看才发现是"一整套"。
+
+- `s.iconWashAccent` / `s.bubbleSelf` + `s.bubbleSelfOn`（`AppBrandWash`）：品牌紫的图标底水洗与
+  我方聊天气泡。这两族**必须按主题分档**——同一条 12% 紫洗压白卡刚好、压暗面几乎看不见。
+- `s.terminal`（`AppTerminalPalette`，11 对亮暗 + 3 颗恒亮窗饰灯）：日志控制台是一整套代码编辑器
+  配色。不走 `surface/textSecondary`：界面语义色一改，日志正文跟着失层次，那格也不再像终端。
+- `AppReaderPaper`（5 档纸张）：阅读页正文底色是**用户选的**内容主题，选了羊皮纸就一直是羊皮纸，
+  不跟明暗翻。两处阅读器共用这一份清单，预设与默认值只有一处出处。
+
+---
+
 ## 3. 尺寸令牌：`AppTheme.metrics`
 
 ```dart
@@ -209,6 +250,10 @@ double sp = m.kSpace16;
   ⚠️ **没有 `kSpace26/36/96`**，超出档位用 `scaleW(n)`
 - **字号**：`fontSize9/10/11/12/13/14/15/16/17/18/20/22/24/28/32/36/48/72`
 - **图标**：`iconSize12/13/14/15/16/18/20/22/24/28/32/40/44/48/64/96`（**没有 38**）
+- **描边宽度**：`strokeUltraThin`(0.5) · `strokeHairline`(1.0) · `strokeThin`(1.5) ·
+  `strokeRegular`(2.0) · `strokeEmphasis`(2.5) · `strokeBold`(3.0)——这六档是**固定值，
+  不吃 `scaleW`**（原因见 §3.3），别在调用点裸写 `width: 0.5` / `strokeWidth: 2.5`。
+  `strokeEmphasis` 是给"2.0 压在封面上细成一条线、3.0 又太笨"那档进度环/选中环的
 
 ### 3.1 两族尺寸：宽度族 vs 字号族（最贵的一个坑）
 
@@ -245,7 +290,8 @@ double sp = m.kSpace16;
 
 1. **物理 DPI**（1× / 2× Retina / 4K）：Flutter 的 `devicePixelRatio` 已经把逻辑像素
    折算成物理像素，**这一层不需要项目做任何事**。要防的是"1 物理像素"的东西被抗锯齿
-   冲淡——发丝线一律 `width: 1` 固定值，**不要写 `1.w`**（缩放后不足 1 物理像素就糊成灰边）。
+   冲淡——发丝线一律 `width: 1` 固定值（写成 `m.strokeHairline`，别写 `scaleW(1)`，
+   主题构建器里那批 `scaleW(1)` 是历史遗留、已收编），**不要写 `1.w`**（缩放后不足 1 物理像素就糊成灰边）。
 2. **窗口尺寸**（同一台机器把窗口拖大拖小）：由 `_adaptiveScaleFactor()` 处理，
    它按 `ScreenUtil().screenWidth` 分档给 `scaleW` 一个 0.94–1.14 的放大系数，
    窄窗（<600）反过来收到 0.94–1.0。字号族再叠一档 `_adaptiveFontScaleFactor()`，
@@ -298,12 +344,22 @@ double sp = m.kSpace16;
 `rowTitle` 与 `cardTitle` 只差一档字重：整页卡片标题要撑住区块，列表行里几十条同名行
 用 w600 会糊成一片黑。
 
-⚠️ `mono` 的 Menlo 是 **macOS 字体**，跨平台的列表行不要用（移动端/Windows 回退不可控）。
+⚠️ `mono` 的 Menlo 是 **macOS 字体**，但整块终端/日志区是跨平台成套的：`AppTheme._monoFontFamilyFallback`
+已排好 `Consolas`(Win) → `DejaVu Sans Mono`/`Liberation Mono`(Linux) → `monospace`，
+字族名单收口在这一处。**不要在调用点手写 `fontFamily: 'Menlo'`**，那等于绕过回退清单。
 
 ⚠️ **`TextStyle` 在组件主题里是整条替换，不是叠加**。`ButtonStyle.textStyle`、
 `dialogTheme.titleTextStyle`、`popupMenuTheme.textStyle`… 一共 20 处，裸写就会把
 主题字阶的 `fontFamily` 丢掉（表现是：只有按钮和菜单里的中文是豆腐块，其余正常）。
 统一走 `AppTheme._font(...)` 和 `_buttonTextStyle()`。
+
+⚠️ 反过来说，**裸 `TextStyle(...)` 在 `Text` 里且 `inherit: true`（默认）时是安全的**：
+它会和 `DefaultTextStyle` 合并，字族能继承下来。所以日志终端那种"整段继承等宽、
+子 span 只改颜色"的写法是合法的——`RichText` 的子 span 千万不要重复写 `fontFamily`。
+
+`AppTextStyles.role(...)` 逃生口除 `fontSize`/`color`/`weight` 外还吃 `decoration`：
+"划掉/下划线"这类只改修饰的调用点以前只能 `role(...).copyWith(decoration: …)`，
+多一次 `copyWith` 就多一个能跑偏的地方。
 
 ---
 
@@ -342,14 +398,26 @@ double sp = m.kSpace16;
 | `base` | 220ms | fast(250) 减一档 | 状态类：展开/收起/选中/切换 |
 | `slow` | 320ms | medium(350) | 空间类：页面转场、抽屉、弹窗进场 |
 | `emphasis` | 460ms | very-slow(500) | 一次性的重头动作（启动入场） |
-| `stagger` | 45ms | 参考库取 40–90 | 列表逐条入场间隔 |
-| `entrance`/`cascade` | 600/900ms | — | 开机整块面板入场，只播一次 |
+| `stagger` | 45ms | 参考库取 40–90 | 会反复触发的列表逐条入场间隔 |
+| `entrance`/`entranceGap` | 600/80ms | — | 开机整块面板入场，只播一次 |
+| `cascade` | 900ms | — | 入场级联的**主控轴**（每张卡按 0~1 的 `Interval` 摊在这条轴上，不是单条时长） |
 
 **反馈类必须 ≤160ms**。悬停超过这个值就不叫"跟手"，叫"卡了一下才理你"。
 
 **退场一律比进场快**：进场要给"落位感"，退场只要"别挡路"。同一动作的开/收取**相邻两档**
 （开 `base` → 收 `fast`；开 `slow` → 收 `base`），曲线跟着换
 （`decelerate` 进 / `accelerate` 出）。倒放同一条时间轴是省事，不是正确。
+
+**循环动画和浮层驻留不吃上面这套档位**——它们根本不是 A→B 的过渡，拿 `base`/`slow`
+去顶"常驻呼吸"会得到抖得发慌的效果：
+
+| 档 | 值 | 用在 |
+|---|---|---|
+| `beat` | 800ms | 快节奏循环：打点、节拍、唱盘纹动 |
+| `pulse` | 1200ms | 中速循环：加载脉冲、骨架屏呼吸 |
+| `ambient` | 1600ms | 慢速常驻环境动效：在线状态点、缓慢呼吸的图标底 |
+| `spin` | 8s | 一整圈自转（黑胶那类"要看出在转但不能晕"） |
+| `dwell` / `dwellLong` | 2s / 3s | SnackBar·Toast 驻留；带操作入口或信息量大的那条用 `dwellLong` |
 
 ### 5.3 曲线与弹簧
 
@@ -773,6 +841,18 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
     留着是为了保资产的多色。
 13. 系统平台自带的控件外观**不为了统一而动**：macOS 三颗窗口灯仍是红黄绿实心圆，
     符号只在悬停时描出来（`_MacLight`，走 `manual` 由悬停驱动）——平台约定优先于组件统一。
+14. **第 1 条的唯一例外是媒体层 chrome**（§2.7）：压在图片/视频/播放器上的白黑族
+    （`s.onMedia*`、`s.mediaStage*`、`s.mediaScrim*`、`s.immersive*`）**故意不跟主题走**，
+    收口在 `AppMediaChrome`/`AppTerminalPalette`/`AppReaderPaper`。判据是"这层颜色挂在
+    什么底上"：挂内容图上→永远走 chrome 族，跟主题走会在浅色封面上直接消失；
+    挂窗口底上→必须跟主题。终端语法色是**例外中的例外**：它压的是自己的深/浅底，
+    按 `s.terminal` 成套取，不许逐色判主题。
+15. **描边粗细走 `m.strokeUltraThin/strokeHairline/strokeThin/strokeRegular/strokeEmphasis/strokeBold`**
+    （§3.3）：发丝线是**固定 1**，写成 `1.w`/`scaleW(1)` 会在高分屏上被缩成糊线。
+    这五档是固定值、不吃 `scaleW`，别当"漏改的裸数字"收掉。
+16. **收编字面色到令牌时必须字节等价**：只有精确对上命名档位才换 token，对不上就写算式
+    （`s.onMedia.withAlpha(0x5C)`、`s.mediaStage.withValues(alpha: .35)`），
+    **不许往邻近档上靠**。收编是治理，不是重新设计——规范化的同时改了渲染像素就算失败。
 
 ---
 
@@ -1456,6 +1536,17 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 - **动效实验室**（§12）：44 格参考案例全部落地，一格一个组件、零全局主题耦合，
   132 张 golden（每格静止/途中/终态）可复现；途中帧哈希比对证明 44 格**全部**在动
 
+- **媒体层 chrome 整族收编**（§2.7）：封面卡/看图器/播放器/朗读页/漫画阅读器的
+  `Colors.white*`·`Colors.black*`·`Color(0x…)` 遮罩全部落进 `AppMediaChrome`（经 `s.` 暴露），
+  并补齐"底恒白则字恒深"的配对（改名框、白实心按钮、白色磨砂工具条）；日志控制台整块
+  换 `s.terminal`（`AppTerminalPalette`），两处阅读器纸张底色换 `AppReaderPaper` 单一出处。
+- **动效档位补齐**（§5.2）：循环动画（`beat/pulse/ambient/spin`）与浮层驻留（`dwell/dwellLong`）
+  从过渡档位里分出来——它们不是 A→B 的时长，以前一律拿 `base/slow` 顶，常驻呼吸就抖得发慌。
+- **描边宽度成阶梯**（§3.3）：`strokeUltraThin/Hairline/Thin/Regular/Emphasis/Bold` 六档固定值、
+  不吃 `scaleW`；主题自身的 11 处发丝线已从 `scaleW(1)` 换成 `m.strokeHairline`。
+- **等宽字族单一出处**：`AppTheme._monoFontFamily` + `_monoFontFamilyFallback`（Menlo → Consolas →
+  DejaVu/Liberation → monospace），调用点只走 `AppTextStyles.mono(context, …)`。
+
 ### 未完成（按可见度排序）
 
 | 缺口 | 现状 | 复测方式 |
@@ -1463,7 +1554,8 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 | 📐 外壳 logo / 面包屑 / 子项连接线 | 代码与出图都已就位（§6.2/§6.3/§6.5：`sidebar_expanded_*` / `sidebar_tree_light` / `shell_topbar_*`）；剩连接线"自上而下描出 + 横枝 stagger"和面包屑末端换脸两组动效未做 | §5.5 的 3、5，§6.5 |
 | 🔧 弹簧档已有、调用点未接线 | `AppMotion.spring` / `springCurve` 已落地，全站 `AnimatedX` 仍挂 `Cubic` | §5.3、§5.5 的 1/3/7/10/11/12 |
 | 🔧 DPI 档位偏少 | `_adaptiveScaleFactor()` 只四档、上限 1.14 | §3.3 |
-| 全站历史取色未收敛 | `lib/`（不含 `core/theme/`）`LightColors.`/`DarkColors.` 385 行、裸 `Colors.{green,red,…}` 276 行；约 30 处 `brandColor` | `grep -rn "LightColors\.\|DarkColors\." lib/ \| grep -v "lib/core/theme/" \| wc -l` |
+| 全站历史取色未收敛 | `lib/`（不含 `core/theme/`）`LightColors.`/`DarkColors.` 26 行、裸 `Colors.*`（去掉 `transparent` 与 lab/展示页）57 处、裸 `Color(0x…)` 41 处（多数是"恒定材质/色板"族：黑胶盘面、专辑封面 chrome 的 `_OnArt`、搜索高亮笔）；`brandColor` 只剩 2 处。里面还有一成是**注释里点名旧写法**，不是活代码 | `rg -c 'LightColors\\.\|DarkColors\\.' lib --glob '!lib/core/theme/**'`；`rg -o 'Color\\(0x[0-9A-Fa-f]{8}\\)' lib \\| grep -Ev 'core/theme\|lib/gen\|_lab\|/demo/\|/backup/' \| wc -l` |
+| 死文件待清 | `lib/pages/novel_library_page.dart`（根级，10KB，路由实际指向 `pages/novel_library/novel_library_page.dart`，全仓零引用）带着 9 处裸 `Colors.*`，收编时按"死代码"跳过 | `rg -n 'pages/novel_library_page' lib/ test/` 应为空 |
 | 其余 ~29 个页面仍是旧语言 | 和新外壳并排看会明显不一致（这是**预期中的中间态**） | 逐模块迁移，见任务 Stage 4–10 |
 | 共享组件库未铺满 | 大量页面仍手搓卡片/空状态/小节标题（~25 套卡片、`_GlassCard` 两处重复、`EmptyState` 两套打架） | 见 §9 右列 |
 | 动效体系未铺满 | 除歌词行与 `Hoverable` 外多数页面仍是各自的手写时长；`StateTransitionAnimation` 已随图标迁移换签名（`icon`/`hoverIcon` 现为 `StrokeIcon?`），图标固定 `StrokeTrigger.none`（§9.1 的"一个主角"） | §5.5 逐面 + §5.6 逐输入，`grep -rn "Duration(milliseconds:" lib/pages/` |

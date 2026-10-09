@@ -23,11 +23,11 @@ class LostBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           // 实心状态色底上的反相文字：状态色两档同值，白字不随明暗翻转
-          DrawIcon(StrokeIcons.linkOff, size: AppTheme.metrics.iconSize12, color: Colors.white),
+          DrawIcon(StrokeIcons.linkOff, size: AppTheme.metrics.iconSize12, color: s.onStatusBadge),
           SizedBox(width: AppTheme.metrics.kSpace4),
           Text('丢失', style: AppTextStyles.role(context,
             fontSize: AppTheme.metrics.fontSize10,
-            color: Colors.white,
+            color: s.onStatusBadge,
             weight: FontWeight.w600,
           )),
         ],

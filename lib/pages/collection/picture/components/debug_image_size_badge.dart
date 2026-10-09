@@ -78,7 +78,7 @@ class _DebugImageSizeBadgeState extends State<DebugImageSizeBadge> {
         // debug 徽标：实心状态色底上的白字不随明暗翻转
         style: AppTextStyles.role(context,
           fontSize: AppTheme.metrics.fontSize9,
-          color: Colors.white,
+          color: s.onStatusBadge,
           weight: FontWeight.w700,
           letterSpacing: 0.2,
         ),

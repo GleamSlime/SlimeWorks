@@ -271,7 +271,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                   }
                                   return Expanded(
                                     child: Container(
-                                      color: Color.alphaBlend(Colors.white.withAlpha(200), accent),
+                                      // 空位格用封面 chrome 的白洗在强调底上做混合
+                                      color: Color.alphaBlend(s.onMedia.withAlpha(200), accent),
                                     ),
                                   );
                                 }),
@@ -295,7 +296,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                   }
                                   return Expanded(
                                     child: Container(
-                                      color: Color.alphaBlend(Colors.white.withAlpha(200), accent),
+                                      // 空位格用封面 chrome 的白洗在强调底上做混合
+                                      color: Color.alphaBlend(s.onMedia.withAlpha(200), accent),
                                     ),
                                   );
                                 }),
@@ -349,7 +351,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                 ),
                                 child: DrawIcon(StrokeIcons.lockOutline,
                                   size: AppTheme.metrics.iconSize16,
-                                  color: Colors.white70,
+                                  // 锁徽标压在封面 blur 上的深色圆底里，白档不随主题反转
+                                  color: s.onMediaSecondary,
                                 ),
                               ),
                             ),
@@ -372,7 +375,10 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                     // 文件夹图标
                     DrawIcon(StrokeIcons.folder,
                       size: scaleW(56),
-                      color: widget.isBookHover ? dropTint.withAlpha(220) : Colors.white.withAlpha(220),
+                      // 常态白压在封面九宫格上，属媒体 chrome；悬停态仍走主题 info
+                      color: widget.isBookHover
+                          ? dropTint.withAlpha(220)
+                          : s.onMedia.withAlpha(220),
                     ),
                     SizedBox(height: appMetrics.kSpace8),
                     // 文件夹名称 / 拖放提示
@@ -387,12 +393,14 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                 context,
                                 fontSize: appMetrics.fontSize11,
                                 weight: FontWeight.w600,
-                                color: s.textPrimary,
+                                // 底恒白，字就必须恒深：吃主题字色会在暗档变成白字白底
+                                color: s.onMediaInk,
                               ),
                               decoration: InputDecoration(
                                 isDense: true,
                                 filled: true,
-                                fillColor: Colors.white,
+                                // 就地改名框恒为白底（压在封面上），不随主题反转
+                                fillColor: s.onMedia,
                                 border: OutlineInputBorder(
                                   borderRadius: appMetrics.radius4,
                                   borderSide: BorderSide.none,
@@ -418,7 +426,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                   context,
                                   fontSize: appMetrics.fontSize11,
                                   weight: FontWeight.w600,
-                                  color: widget.isBookHover ? dropTint : Colors.white,
+                                  // 悬停提示走主题 info，常态名压在封面上走恒白 chrome
+                                  color: widget.isBookHover ? dropTint : s.onMedia,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -433,7 +442,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                         style: AppTextStyles.role(
                           context,
                           fontSize: appMetrics.fontSize9,
-                          color: Colors.white.withAlpha(220),
+                          color: s.onMedia.withAlpha(220),
                         ),
                       ),
                     ],
@@ -462,7 +471,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                       child: DrawIcon(StrokeIcons.moreVert,
                         // 圆盒是宽度族固定尺寸，符号也跟着走宽度族，否则字号滑杆一拉就顶出去
                         size: scaleW(13),
-                        color: Colors.white,
+                        // 按钮底是封面之上的深色磨砂圈，图标走恒白 chrome
+                        color: s.onMedia,
                       ),
                     ),
                   ),
@@ -479,7 +489,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                     decoration: BoxDecoration(
                       color: widget.isSelected ? accent : s.scrim.withAlpha(60),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: scaleW(2)),
+                      // 选中环压在封面 art 上，白环不随主题反转
+                      border: Border.all(color: s.onMedia, width: scaleW(2)),
                     ),
                     child: widget.isSelected
                         // 勾压在强调底上，明暗两档要跟着反相
@@ -488,9 +499,9 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                   ),
                 ),
 
-              // Hover 遮罩
+              // Hover 遮罩（封面图上的白色水洗提亮，不随主题反转）
               if (_hovering && !widget.isSelecting && !widget.isBookHover)
-                Container(decoration: BoxDecoration(color: Colors.white.withAlpha(10))),
+                Container(decoration: BoxDecoration(color: s.onMedia.withAlpha(10))),
 
               // 拖放入文件夹时的半透明高亮遮罩
               if (widget.isBookHover)

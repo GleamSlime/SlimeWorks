@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -210,7 +211,8 @@ class _PlayingIndicatorState extends State<_PlayingIndicator> with SingleTickerP
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))
+    // 播放指示器（三条竖线）是节拍类循环，取 beat 档，值与原本一致
+    _controller = AnimationController(vsync: this, duration: AppMotion.beat)
       ..repeat(reverse: true);
   }
 

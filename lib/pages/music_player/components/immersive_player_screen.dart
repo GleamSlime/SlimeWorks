@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -17,36 +18,66 @@ import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 
-/// 沉浸式页面画在封面模糊层上，底色恒为深色，所以这一页的文字/轨道色不走语义色：
+/// 沉浸式页面画在封面模糊层上，底色恒为深色，所以这一页的文字/轨道色不走主题语义色：
 /// 语义色（textSecondary 等）是按"压在浅色表面上"设计的，放到深色 art 上会直接看不见。
 /// 这里把原先散落的二十多处 `Colors.white.withValues(alpha: x)` 收成一套档位，
 /// 保证同一层信息在页面各处是同一个白度。
-abstract final class _OnArt {
-  static const Color primary = Colors.white;
-  static const Color secondary = Color(0xCCFFFFFF); // 80%，图标与需要分量的文字
-  static const Color muted = Color(0xB3FFFFFF); // 70%，说明文字与未选中态
-  static const Color faint = Color(0x66FFFFFF); // 40%，歌词的未播放行
-  static const Color track = Color(0xE6FFFFFF); // 90%
-  static const Color trackDim = Color(0x4DFFFFFF); // 30%
-  static const Color hairline = Color(0x26FFFFFF); // 15%
-  static const Color panel = Color(0xB3000000); // 70% 黑，浮层底
+///
+/// 档位全部从媒体 chrome 令牌取（DESIGN §2.7）：逐字节对上命名档的就用命名档
+/// （primary→`onMedia`、muted→`onMediaSecondary`、hairline→`immersiveBorder`、
+/// panel→`scrim`），对不上的（80%/40%/90%/30% 白）按原像素写算式，
+/// 不往邻近档靠——收编是治理，改了渲染像素就算失败。
+/// 之所以是"由 [AppSemantic] 构造出来的实例"而不是 static const 一族：
+/// 取色入口必须留在 `s.` 上，业务侧不需要知道这族不跟主题走。
+final class _OnArt {
+  const _OnArt(this._s);
+
+  final AppSemantic _s;
+
+  /// 主字/主图标（恒白）
+  Color get primary => _s.onMedia;
+
+  /// 80%，图标与需要分量的文字
+  Color get secondary => _s.onMedia.withValues(alpha: .8);
+
+  /// 70%，说明文字与未选中态
+  Color get muted => _s.onMediaSecondary;
+
+  /// 40%，歌词的未播放行
+  Color get faint => _s.onMedia.withValues(alpha: .4);
+
+  /// 90%，滑块与波形的已走段
+  Color get track => _s.onMedia.withValues(alpha: .9);
+
+  /// 30%，滑块与波形的未走段
+  Color get trackDim => _s.onMedia.withValues(alpha: .3);
+
+  /// 白 15% 发丝描边（沉浸式黑玻璃浮层那一档）
+  Color get hairline => _s.immersiveBorder;
+
+  /// 70% 黑，浮层底
+  Color get panel => _s.scrim;
 }
 
+/// 当前主题解析出来的 art 档位表
+_OnArt _onArt(BuildContext context) => _OnArt(AppSemantic.of(context));
+
 /// 压在 art 上的滑块：进度条和音量浮层用同一份轨道口径
-SliderThemeData _onArtSliderTheme() {
+SliderThemeData _onArtSliderTheme(AppSemantic s) {
+  final art = _OnArt(s);
   return SliderThemeData(
     trackHeight: scaleW(3),
     thumbShape: RoundSliderThumbShape(enabledThumbRadius: scaleW(6)),
     overlayShape: RoundSliderOverlayShape(overlayRadius: scaleW(12)),
-    activeTrackColor: _OnArt.track,
-    inactiveTrackColor: _OnArt.trackDim,
-    thumbColor: _OnArt.primary,
+    activeTrackColor: art.track,
+    inactiveTrackColor: art.trackDim,
+    thumbColor: art.primary,
   );
 }
 
 /// art 上的小号说明文字：进度时间、按钮标签、歌词行标签共用一档
 TextStyle _artCaption(BuildContext context) =>
-    AppTextStyles.caption(context).copyWith(color: _OnArt.muted);
+    AppTextStyles.caption(context).copyWith(color: _onArt(context).muted);
 
 /// 沉浸式播放器页面（全屏唱片机）
 ///
@@ -93,6 +124,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
   /// 顶部工具栏
   Widget _buildTopBar(BuildContext context) {
     final m = AppTheme.metrics;
+    final art = _onArt(context);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace4),
       child: Row(
@@ -102,7 +134,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
             onPressed: viewModel.exitImmersiveMode,
             icon: DrawIcon(StrokeIcons.keyboardArrowDown),
             iconSize: m.iconSize28,
-            color: _OnArt.primary,
+            color: art.primary,
             tooltip: '收起',
           ),
           const Spacer(),
@@ -112,7 +144,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
               _showMoreOptions(context);
             },
             icon: DrawIcon(StrokeIcons.moreVert),
-            color: _OnArt.primary,
+            color: art.primary,
             tooltip: '更多',
           ),
         ],
@@ -138,7 +170,8 @@ class ImmersivePlayerScreen extends StatelessWidget {
           decoration: BoxDecoration(
             // 白色唱片垫是有意跨明暗保持不变的：黑胶本体是深色物理质感，
             // 换成主题表面色后暗色模式下盘面会糊进背景里。
-            color: _OnArt.primary,
+            // 这一档正是媒体 chrome 的恒白（`onMedia`），不参与明暗解析。
+            color: s.onMedia,
             borderRadius: m.radiusOverlay,
             boxShadow: s.elevation(Elevation.card),
           ),
@@ -157,6 +190,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
   /// 底部信息 + 控制区
   Widget _buildBottomArea(BuildContext context, String title, String? artist, String? album) {
     final m = AppTheme.metrics;
+    final art = _onArt(context);
     return Container(
       padding: EdgeInsets.symmetric(horizontal: m.kSpace24),
       child: Column(
@@ -165,7 +199,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
           // 歌曲信息
           Text(
             title.isEmpty ? '未选择歌曲' : title,
-            style: AppTextStyles.pageTitle(context).copyWith(color: _OnArt.primary),
+            style: AppTextStyles.pageTitle(context).copyWith(color: art.primary),
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -175,7 +209,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
               padding: EdgeInsets.only(top: m.kSpace8),
               child: Text(
                 [?artist, ?album].join(' · '),
-                style: AppTextStyles.body(context).copyWith(color: _OnArt.muted),
+                style: AppTextStyles.body(context).copyWith(color: art.muted),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -186,7 +220,7 @@ class ImmersivePlayerScreen extends StatelessWidget {
           _buildProgressBar(context),
           SizedBox(height: m.kSpace16),
           // 播放控制（紧凑模式：仅上一首/播放/下一首，白色图标）
-          PlayerControls(viewModel: viewModel, compact: true, color: _OnArt.primary),
+          PlayerControls(viewModel: viewModel, compact: true, color: art.primary),
           SizedBox(height: m.kSpace16),
           // 底部功能按钮
           _buildBottomActions(context),
@@ -199,6 +233,8 @@ class ImmersivePlayerScreen extends StatelessWidget {
   /// 进度条（普通模式或波形模式）
   Widget _buildProgressBar(BuildContext context) {
     final m = AppTheme.metrics;
+    final s = AppSemantic.of(context);
+    final art = _OnArt(s);
     return Obx(() {
       final position = viewModel.currentPositionMs.value;
       final duration = viewModel.durationMs.value;
@@ -216,14 +252,14 @@ class ImmersivePlayerScreen extends StatelessWidget {
               positionMs: position,
               durationMs: duration,
               onSeek: viewModel.seekTo,
-              activeColor: _OnArt.track,
-              inactiveColor: _OnArt.trackDim,
+              activeColor: art.track,
+              inactiveColor: art.trackDim,
               isLoading: isLoading,
             )
           else
             // 普通进度条
             SliderTheme(
-              data: _onArtSliderTheme(),
+              data: _onArtSliderTheme(s),
               child: Slider(
                 value: duration > 0 ? position.clamp(0, duration).toDouble() : 0,
                 min: 0,
@@ -351,7 +387,11 @@ class _BlurredBackground extends StatelessWidget {
         // 封面模糊层（如果有封面）
         if (coverPath != null && File(coverPath!).existsSync())
           ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+            // 压成"化成一团"的重模糊，量级超出 AppGlass 的三档玻璃，走 blurArtwork
+            imageFilter: ImageFilter.blur(
+              sigmaX: AppGlass.blurArtwork,
+              sigmaY: AppGlass.blurArtwork,
+            ),
             child: Image.file(
               File(coverPath!),
               fit: BoxFit.cover,
@@ -387,7 +427,8 @@ class _ActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     // 选中用纯白、未选中用 70% 白：这页压在深色 art 上，
     // 语义强调色在亮色模式下是深色，选中态会变成"看不见的那一档"。
-    final color = active ? _OnArt.primary : _OnArt.muted;
+    final art = _onArt(context);
+    final color = active ? art.primary : art.muted;
     final m = AppTheme.metrics;
 
     return Column(
@@ -412,6 +453,7 @@ class _VolumeSlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final art = _onArt(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -428,7 +470,7 @@ class _VolumeSlider extends StatelessWidget {
               size: m.iconSize24,
             );
           }),
-          color: _OnArt.muted,
+          color: art.muted,
         ),
         Text('音量', style: _artCaption(context)),
       ],
@@ -472,6 +514,7 @@ class _VolumePopupOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppSemantic.of(context);
+    final art = _OnArt(s);
     final m = AppTheme.metrics;
     final popupWidth = scaleW(200);
     final popupHeight = scaleW(48);
@@ -500,9 +543,9 @@ class _VolumePopupOverlay extends StatelessWidget {
               width: popupWidth,
               height: popupHeight,
               decoration: BoxDecoration(
-                color: _OnArt.panel,
+                color: art.panel,
                 borderRadius: m.radiusPill,
-                border: Border.all(color: _OnArt.hairline, width: scaleW(1)),
+                border: Border.all(color: art.hairline, width: scaleW(1)),
                 boxShadow: s.elevation(Elevation.overlay),
               ),
               child: Padding(
@@ -521,7 +564,7 @@ class _VolumePopupOverlay extends StatelessWidget {
                                   ? StrokeIcons.volumeDown
                                   : StrokeIcons.volumeUp,
                           size: m.iconSize20,
-                          color: _OnArt.secondary,
+                          color: art.secondary,
                         ),
                       );
                     }),
@@ -531,7 +574,7 @@ class _VolumePopupOverlay extends StatelessWidget {
                       child: Obx(() {
                         final vol = viewModel.volume.value;
                         return SliderTheme(
-                          data: _onArtSliderTheme(),
+                          data: _onArtSliderTheme(s),
                           child: Slider(
                             value: vol.toDouble(),
                             min: 0,
@@ -588,6 +631,7 @@ class _LyricsPanelState extends State<_LyricsPanel> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
+    final art = _onArt(context);
     return Obx(() {
       final lyrics = widget.viewModel.currentLyrics;
       final currentIndex = widget.viewModel.currentLyricIndex.value;
@@ -604,7 +648,7 @@ class _LyricsPanelState extends State<_LyricsPanel> {
         return Center(
           child: Text(
             '暂无歌词',
-            style: AppTextStyles.body(context).copyWith(color: _OnArt.muted),
+            style: AppTextStyles.body(context).copyWith(color: art.muted),
           ),
         );
       }
@@ -625,7 +669,7 @@ class _LyricsPanelState extends State<_LyricsPanel> {
                       height: m.iconSize14,
                       child: CircularProgressIndicator(
                         strokeWidth: scaleW(2),
-                        color: _OnArt.muted,
+                        color: art.muted,
                       ),
                     ),
                   ),
@@ -635,7 +679,7 @@ class _LyricsPanelState extends State<_LyricsPanel> {
                   // 亮色主题的 accent 是深色，落在 art 上等于把按钮关掉。
                   icon: DrawIcon(StrokeIcons.translate,
                     size: m.iconSize16,
-                    color: hasTranslation ? _OnArt.primary : _OnArt.muted,
+                    color: hasTranslation ? art.primary : art.muted,
                   ),
                   label: Text(
                     hasTranslation ? '显示原文' : '翻译为中文',
@@ -645,7 +689,7 @@ class _LyricsPanelState extends State<_LyricsPanel> {
                       context,
                       fontSize: m.fontSize12,
                       height: 1.2,
-                      color: hasTranslation ? _OnArt.primary : _OnArt.muted,
+                      color: hasTranslation ? art.primary : art.muted,
                     ),
                   ),
                   style: TextButton.styleFrom(
@@ -683,7 +727,7 @@ class _LyricsPanelState extends State<_LyricsPanel> {
                         duration: AppMotion.base,
                         curve: AppMotion.standard,
                         style: AppTextStyles.body(context).copyWith(
-                          color: isCurrent ? _OnArt.primary : _OnArt.faint,
+                          color: isCurrent ? art.primary : art.faint,
                           fontSize: isCurrent ? m.fontSize18 : m.fontSize15,
                           fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
                         ),

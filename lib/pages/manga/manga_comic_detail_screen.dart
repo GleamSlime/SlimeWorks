@@ -687,9 +687,13 @@ class _MangaComicDetailScreenState
     return '$count';
   }
 
-  void _showDownloadSheet(BuildContext context) {
+  Future<void> _showDownloadSheet(BuildContext context) async {
     final comic = viewModel.comic;
     if (comic == null || viewModel.eps.isEmpty) return;
+    // 章节上游是分页给的（每页 20 章），先把剩余页补齐再开弹层：
+    // 否则"全选"只选得到第一页那 20 章，用户以为在下整本，实际只排了个头。
+    await viewModel.ensureAllEps();
+    if (!context.mounted) return;
 
     final dl = getIt<MangaDownloadService>();
     final messenger = ScaffoldMessenger.of(context);
@@ -1291,9 +1295,9 @@ class _ComicDetailSkeletonState extends State<_ComicDetailSkeleton>
   @override
   void initState() {
     super.initState();
-    // 骨架屏的呼吸周期：一次往返比常规转场长得多，故意不套 AppMotion 的档位，
+    // 骨架屏的呼吸周期走循环档 pulse：呼吸类一律不拿一次性过渡时长（base/slow）顶，
     // 否则加载中会闪得像在报错。曲线取通用档，正反面同形。
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
+    _ctrl = AnimationController(vsync: this, duration: AppMotion.pulse)
       ..repeat(reverse: true);
     _fade = CurvedAnimation(parent: _ctrl, curve: AppMotion.standard);
   }
