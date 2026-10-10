@@ -27,6 +27,7 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/core/widgets/app_toast.dart';
+import 'package:slime_works/pages/manga/components/image_viewer/manga_image_viewer_page.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_reader_viewmodel.dart';
@@ -1142,6 +1143,30 @@ class _MangaReaderScreenState
     );
   }
 
+  /// 放大预览某一页：推入全屏查看器，交互对齐媒体库图片预览
+  /// （fade+scale 转场、rootNavigator、可缩放/平移并前后翻页）。
+  void _openZoomViewer(int index) {
+    final route = PageRouteBuilder<void>(
+      opaque: true,
+      barrierColor: AppSemantic.of(context).scrim,
+      pageBuilder: (_, _, _) => MangaImageViewerPage(
+        pages: viewModel.pages.toList(),
+        initialIndex: index,
+        chapterTitle: widget.epsTitle.isNotEmpty ? widget.epsTitle : '第 ${widget.epsOrder} 话',
+      ),
+      transitionDuration: AppMotion.slow,
+      transitionsBuilder: (_, animation, _, child) => FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: AppMotion.accelerate),
+        child: ScaleTransition(
+          scale: Tween(begin: AppMotion.scaleStage, end: 1.0)
+              .animate(CurvedAnimation(parent: animation, curve: AppMotion.decelerate)),
+          child: child,
+        ),
+      ),
+    );
+    Navigator.of(context, rootNavigator: true).push(route);
+  }
+
   /// 阅读器主视图
   /// [Fix] cacheExtent 加大到 2000，防止上滑时因 item 被回收/重建触发布局抖动
   /// [Fix] 使用 ClampingScrollPhysics，去掉 Bouncing 弹性边界减少位置重算
@@ -1193,6 +1218,7 @@ class _MangaReaderScreenState
                 pageIndex: i + 1,
                 initialHeight: _pageHeights[i],
                 onImageLoaded: (h) => _pageHeights[i] = h,
+                onTap: () => _openZoomViewer(i),
               ),
             ),
           );
@@ -1342,6 +1368,7 @@ class _ComicPageImage extends StatefulWidget {
     required this.pageIndex,
     this.initialHeight,
     this.onImageLoaded,
+    this.onTap,
   });
 
   final MangaImage image;
@@ -1352,6 +1379,9 @@ class _ComicPageImage extends StatefulWidget {
 
   /// 图片成功渲染后回调实际高度
   final ValueChanged<double>? onImageLoaded;
+
+  /// 点击本页图片（放大预览）
+  final VoidCallback? onTap;
 
   @override
   State<_ComicPageImage> createState() => _ComicPageImageState();
@@ -1377,7 +1407,7 @@ class _ComicPageImageState extends State<_ComicPageImage> {
     final placeholderHeight = widget.initialHeight ?? scaleW(400);
     // 页面四周的 letterbox 是恒黑舞台，占位/报错的字色都属媒体 chrome
     final s = AppSemantic.of(context);
-    return ColoredBox(
+    final page = ColoredBox(
       key: _containerKey,
       color: s.mediaStage,
       child: MangaImageView(
@@ -1432,6 +1462,9 @@ class _ComicPageImageState extends State<_ComicPageImage> {
         ),
       ),
     );
+    // 点击整页（含 letterbox）进入放大预览；纵向滚动仍由外层 ListView 赢下手势，
+    // 因此不会干扰原本的滑动阅读。
+    return GestureDetector(onTap: widget.onTap, child: page);
   }
 }
 
