@@ -17,6 +17,7 @@ import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/core/widgets/glass_menu.dart';
 import 'package:slime_works/pages/manga/components/manga_comic_card.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
@@ -193,7 +194,6 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
 
   /// 搜索结果区域（使用 Obx 监听 RxList 变化，修复 loadMore 后列表不更新的问题）
   Widget _buildResults(BuildContext context) {
-    final s = AppSemantic.of(context);
     final metrics = appMetrics;
 
     /// isLoading / errorMessage 由基类 GetBuilder 触发重建，此处直接读取
@@ -201,10 +201,14 @@ class _MangaSearchScreenState extends BasePageState<MangaSearchViewModel, MangaS
       return const Center(child: CircularProgressIndicator());
     }
     if (viewModel.errorMessage != null) {
-      return Center(
-        child: Text(
-          viewModel.errorMessage!,
-          style: AppTextStyles.body(context).copyWith(color: s.danger.color),
+      return EmptyState(
+        icon: StrokeIcons.cloudOff,
+        title: '搜索失败',
+        description: viewModel.errorMessage,
+        action: FilledButton.icon(
+          icon: DrawIcon(StrokeIcons.refresh),
+          label: const Text('重试'),
+          onPressed: () => viewModel.search(keyword: viewModel.keyword),
         ),
       );
     }

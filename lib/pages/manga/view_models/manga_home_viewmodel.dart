@@ -2,6 +2,7 @@
 
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/manga_error_text.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
@@ -42,7 +43,7 @@ class MangaHomeViewModel extends BaseViewModel {
       clearError();
       _prefetchCovers();
     } catch (e) {
-      setError(e.toString());
+      setError(MangaErrorText.describe(e));
     } finally {
       setLoading(false);
     }

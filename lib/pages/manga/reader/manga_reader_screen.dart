@@ -26,6 +26,7 @@ import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/core/widgets/app_toast.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_reader_viewmodel.dart';
@@ -77,6 +78,12 @@ class _MangaReaderScreenState
   /// 历导当前章节已加载图片的高度缓存，防止 ListView 回收 Widget 后高度抖动
   final Map<int, double> _pageHeights = {};
 
+  /// 章节加载失败的轻提示监听
+  ///
+  /// 阅读器故意不走 BasePage 的 errorMessage 通道（见 MangaReaderViewModel.readerError），
+  /// 免得一报错就被基类清掉状态，所以 toast 也得自己接。
+  Worker? _errorToastWorker;
+
   static const double _kImmersiveScrollThreshold = 100;
   static const double _kExitImmersiveScrollUp = 60;
 
@@ -101,6 +108,10 @@ class _MangaReaderScreenState
   @override
   Future<void> onPageInit() async {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // 先挂监听再加载：首话就失败也要有提示，不能等加载回来才接上
+    _errorToastWorker = ever<String?>(viewModel.readerError, (message) {
+      if (message != null && mounted) AppToast.error(context, message);
+    });
     await viewModel.loadPages(widget.comicId, widget.epsOrder);
     _scrollController.addListener(_onScroll);
     _scheduleAutoImmersive();
@@ -121,6 +132,7 @@ class _MangaReaderScreenState
   @override
   void dispose() {
     _isImmersive.close();
+    _errorToastWorker?.dispose();
     _autoImmersiveTimer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _scrollController.dispose();
@@ -178,8 +190,7 @@ class _MangaReaderScreenState
             behavior: HitTestBehavior.translucent,
             onTap: () => _isImmersive.value = !_isImmersive.value,
             child: Obx(() {
-              final error = viewModel.readerError.value;
-              if (error != null) return _buildErrorView(context, error);
+              if (viewModel.readerError.value != null) return _buildErrorView(context);
               return _buildReaderView(context);
             }),
           ),
@@ -1094,45 +1105,38 @@ class _MangaReaderScreenState
     ).whenComplete(() => _isBottomSheetOpen = false);
   }
 
-  /// 错误页面（支持重试）
-  Widget _buildErrorView(BuildContext context, String error) {
-    // 错误页整块铺在黑舞台上，字色属媒体 chrome，不随主题反转
+  /// 错误页（支持重试）
+  ///
+  /// 异常原文不铺在这一屏（读不下去，还盖住正文），它走 AppToast；这里只留一个重试入口。
+  Widget _buildErrorView(BuildContext context) {
     final s = AppSemantic.of(context);
     return SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          padding: EdgeInsets.all(AppTheme.metrics.kSpace24),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: constraints.maxHeight - AppTheme.metrics.kSpace48,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DrawIcon(StrokeIcons.errorOutline,
+              color: s.onMediaSecondary,
+              size: AppTheme.metrics.iconSize48,
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                DrawIcon(StrokeIcons.errorOutline,
-                  color: s.onMediaSecondary,
-                  size: AppTheme.metrics.iconSize48,
-                ),
-                SizedBox(height: AppTheme.metrics.kSpace16),
-                SelectableText(
-                  error,
-                  // 舞台底色固定为黑，报错文字恒用白色；字号沿用原来的正文档
-                  style: AppTextStyles.role(
-                    context,
-                    fontSize: AppTheme.metrics.fontSize13,
-                    color: s.onMedia,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: AppTheme.metrics.kSpace16),
-                FilledButton(
-                  onPressed: () =>
-                      viewModel.loadPages(widget.comicId, widget.epsOrder),
-                  child: const Text('重试'),
-                ),
-              ],
+            SizedBox(height: AppTheme.metrics.kSpace16),
+            Text(
+              '这一话加载失败',
+              // 舞台底色固定为黑，字色恒用媒体 chrome 的白，不随主题反转
+              style: AppTextStyles.role(
+                context,
+                fontSize: AppTheme.metrics.fontSize13,
+                color: s.onMedia,
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
+            SizedBox(height: AppTheme.metrics.kSpace16),
+            FilledButton(
+              onPressed: () =>
+                  viewModel.loadPages(widget.comicId, widget.epsOrder),
+              child: const Text('重试'),
+            ),
+          ],
         ),
       ),
     );

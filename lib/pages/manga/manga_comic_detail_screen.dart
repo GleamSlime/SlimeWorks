@@ -12,6 +12,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/manga_download_service.dart';
+import 'package:slime_works/core/services/manga_error_text.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
@@ -19,6 +20,7 @@ import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/pages/manga/components/manga_comic_card.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
@@ -112,33 +114,27 @@ class _MangaComicDetailScreenState
           if (viewModel.isLoading) {
             return const _ComicDetailSkeleton();
           }
-          if (viewModel.errorMessage != null) {
-            return Center(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      viewModel.errorMessage!,
-                      style: AppTextStyles.body(context).copyWith(
-                        color: AppSemantic.of(context).danger.color,
-                      ),
-                      maxLines: 10,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    SizedBox(height: AppTheme.metrics.kSpace16),
-                    FilledButton(
-                      onPressed: () => viewModel.loadDetail(widget.comicId),
-                      child: const Text('重试'),
-                    ),
-                  ],
-                ),
+          if (viewModel.comic == null) {
+            // 接口原文不铺在页面上：读不下去、还盖住位置，报错由基类的轻提示带出
+            return EmptyState(
+              icon: StrokeIcons.cloudOff,
+              title: '漫画加载失败',
+              description: '连不上服务器或登录已过期，重试一下',
+              action: FilledButton.icon(
+                icon: DrawIcon(StrokeIcons.refresh),
+                label: const Text('重试'),
+                onPressed: () => viewModel.loadDetail(widget.comicId),
               ),
             );
           }
-          if (viewModel.comic == null) return const SizedBox.shrink();
-          return _buildDetail(context, viewModel);
+          return NotificationListener<ScrollUpdateNotification>(
+            onNotification: (n) {
+              // 章节表滚到尾部就自动补下一页：看全章节不该有个"加载更多"按钮
+              if (n.metrics.extentAfter < scaleW(300)) viewModel.loadMoreEps();
+              return false;
+            },
+            child: _buildDetail(context, viewModel),
+          );
         },
       ),
     );
@@ -149,6 +145,8 @@ class _MangaComicDetailScreenState
     final s = AppSemantic.of(context);
     final viz = AppVizSet.of(context);
     final metrics = appMetrics;
+    // 展示序在整页里只取一次：SliverGrid 的每个子项都反推一遍会白算一整表
+    final chapters = vm.epsDesc;
 
     return CustomScrollView(
       slivers: [
@@ -544,7 +542,7 @@ class _MangaComicDetailScreenState
           padding: EdgeInsets.symmetric(horizontal: metrics.kSpace16),
           sliver: SliverGrid(
             delegate: SliverChildBuilderDelegate((ctx, i) {
-              final ep = vm.eps[i];
+              final ep = chapters[i];
               return Obx(() {
                 final dl = getIt<MangaDownloadService>();
                 final info = dl.entries[comic.id]?.episodes[ep.order];
@@ -565,7 +563,7 @@ class _MangaComicDetailScreenState
                   label: Text(ep.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                 );
               });
-            }, childCount: vm.eps.length),
+            }, childCount: chapters.length),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: PlatformUtil.isDesktop ? 4 : 2,
               mainAxisSpacing: metrics.kSpace8,
@@ -575,6 +573,24 @@ class _MangaComicDetailScreenState
             ),
           ),
         ),
+
+        // 章节分页还在补：给一条尾巴，免得用户以为"就这 20 章"
+        if (vm.isLoadingEpsPage)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: metrics.kSpace16),
+              child: Center(
+                child: SizedBox(
+                  width: metrics.iconSize16,
+                  height: metrics.iconSize16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: AppTheme.metrics.strokeRegular,
+                    color: s.accent,
+                  ),
+                ),
+              ),
+            ),
+          ),
 
         SliverToBoxAdapter(child: SizedBox(height: metrics.kSpace24)),
       ],
@@ -692,7 +708,33 @@ class _MangaComicDetailScreenState
     if (comic == null || viewModel.eps.isEmpty) return;
     // 章节上游是分页给的（每页 20 章），先把剩余页补齐再开弹层：
     // 否则"全选"只选得到第一页那 20 章，用户以为在下整本，实际只排了个头。
+    // 补齐是十几跳串行的网络请求，几百章的本子要等几秒，先挂个常驻进度框再等。
+    final needFill = viewModel.hasMoreEps;
+    final navigator = needFill ? Navigator.of(context, rootNavigator: true) : null;
+    if (needFill) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: AppTheme.metrics.iconSize16,
+                height: AppTheme.metrics.iconSize16,
+                child: CircularProgressIndicator(
+                  strokeWidth: AppTheme.metrics.strokeRegular,
+                ),
+              ),
+              SizedBox(width: AppTheme.metrics.kSpace12),
+              const Text('正在补齐章节…'),
+            ],
+          ),
+        ),
+      );
+    }
     await viewModel.ensureAllEps();
+    if (needFill && navigator!.canPop()) navigator.pop();
     if (!context.mounted) return;
 
     final dl = getIt<MangaDownloadService>();
@@ -852,6 +894,8 @@ class _MangaComicDetailScreenState
               initialChildSize: 0.6,
               maxChildSize: 0.9,
               builder: (_, controller) {
+                // 与章节列表同一份展示序：弹层里也最新一章在前
+                final chapters = viewModel.epsDesc;
                 return Column(
                   children: [
                     Padding(
@@ -1047,9 +1091,9 @@ class _MangaComicDetailScreenState
                           crossAxisSpacing: m.kSpace8,
                           childAspectRatio: 2.5,
                         ),
-                        itemCount: viewModel.eps.length,
+                        itemCount: chapters.length,
                         itemBuilder: (_, i) {
-                          final ep = viewModel.eps[i];
+                          final ep = chapters[i];
                           final info = dl.entries[comic.id]?.episodes[ep.order];
                           final isDownloaded = info?.isCompleted == true;
                           final isSelected = selected.contains(ep.order);
@@ -1517,7 +1561,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = MangaErrorText.describe(e));
     }
   }
 
@@ -1555,7 +1599,17 @@ class _CommentsSheetState extends State<_CommentsSheet> {
           ),
           Expanded(
             child: _error != null
-                ? Center(child: Text(_error!))
+                ? EmptyState(
+                    icon: StrokeIcons.cloudOff,
+                    title: '评论加载失败',
+                    description: _error!,
+                    compact: true,
+                    action: FilledButton.icon(
+                      icon: DrawIcon(StrokeIcons.refresh),
+                      label: const Text('重试'),
+                      onPressed: _load,
+                    ),
+                  )
                 : _comments == null
                 ? const Center(child: CircularProgressIndicator())
                 : _comments!.isEmpty

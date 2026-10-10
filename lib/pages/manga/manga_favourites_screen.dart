@@ -11,6 +11,7 @@ import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/pages/manga/components/manga_comic_card.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_favourites_viewmodel.dart';
@@ -64,27 +65,14 @@ class _MangaFavouritesScreenState
       return const Center(child: CircularProgressIndicator());
     }
     if (viewModel.errorMessage != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DrawIcon(StrokeIcons.cloudOff,
-              size: metrics.iconSize48,
-              color: s.textDisabled,
-            ),
-            SizedBox(height: metrics.kSpace12),
-            Text(
-              viewModel.errorMessage!,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.body(context).copyWith(color: s.danger.color),
-            ),
-            SizedBox(height: metrics.kSpace12),
-            FilledButton.icon(
-              icon: DrawIcon(StrokeIcons.refresh),
-              label: const Text('重试'),
-              onPressed: viewModel.refresh,
-            ),
-          ],
+      return EmptyState(
+        icon: StrokeIcons.cloudOff,
+        title: '收藏夹读不到',
+        description: viewModel.errorMessage,
+        action: FilledButton.icon(
+          icon: DrawIcon(StrokeIcons.refresh),
+          label: const Text('重试'),
+          onPressed: viewModel.refresh,
         ),
       );
     }

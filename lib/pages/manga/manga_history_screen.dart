@@ -14,6 +14,7 @@ import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_history_viewmodel.dart';
@@ -70,10 +71,14 @@ class _MangaHistoryScreenState extends BasePageState<MangaHistoryViewModel, Mang
       return const Center(child: CircularProgressIndicator());
     }
     if (viewModel.errorMessage != null) {
-      return Center(
-        child: Text(
-          viewModel.errorMessage!,
-          style: AppTextStyles.body(context).copyWith(color: s.danger.color),
+      return EmptyState(
+        icon: StrokeIcons.cloudOff,
+        title: '阅读记录读不到',
+        description: viewModel.errorMessage,
+        action: FilledButton.icon(
+          icon: DrawIcon(StrokeIcons.refresh),
+          label: const Text('重试'),
+          onPressed: viewModel.loadHistory,
         ),
       );
     }

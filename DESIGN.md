@@ -791,6 +791,7 @@ shadow:  isSelected ? s.elevation(Elevation.raised) : const []
 | `ToolIconButton(icon, onPressed, tooltip, selected, size, color)` | `app_chips.dart` | 工具栏小按钮的尺寸/悬停态 |
 | `EmptyState(title, description, icon, action, compact, padding)` | `empty_state.dart` | 10 份各写各的空状态 |
 | `AppLoading` / `Scrim` / `SkeletonBox` | `empty_state.dart` | 写死的 `Colors.black.withValues(alpha:.3)` 遮罩 |
+| `AppToast.error(context, message)` / `AppToast.errorBar(s, message, {duration, action})` | `app_toast.dart` | 39 个文件里 111 处手写 `showSnackBar`（时长、图标、颜色各写一套）+ 报错原文铺界面 |
 | `SectionHeader` / `OverlineLabel` | `section_header.dart` | 约 12 份小节标题（仅设置模块就 7 份） |
 | `ContentContainer` / `AppSplitView` | `page_container.dart` | 18 种不同 `maxWidth`、各页 `Row + SizedBox(魔数) + Expanded` |
 | `GlassSurface` / `GlassAppBar` / `GlassFloat` / `GlassMenuItem` | `glass_surface.dart` / `glass_menu.dart` | 见 §7 |
@@ -891,6 +892,12 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
     `decelerate`、`sigmaX: 8` 换成 `blurSoft` 是这套语言的落位，不是回归失败（映射见 §5.3）。
     代价必须**当场列出来报给用户**，并且出图的用例要跟着重跑基线。
     颜色不许靠、动效许靠，是同一枚硬币的两面：颜色错了是缺陷，节奏差了是风格。
+18. **接口报错一律走 `AppToast` 或干净空态，禁止把异常原文铺在界面上**：`e.toString()` 带着
+    FRB 前缀和 ` caused by: …` 链，用户读不下去，还会把正常内容整页盖掉。过一遍
+    `MangaErrorText.describe()`：压成一句话、命中关键字表就翻成可行动的中文（"登录已过期，
+    请重新登录"），没命中也只截到一行。**弹层（Dialog/Sheet）里走行内提示**——SnackBar 画在
+    页面 Scaffold 上，会被整个弹层挡住；弹层内保留行内错误文案（同样过 `describe()`），
+    整块列表的失败态用 `EmptyState(compact: true)` 承载，别自己铺一段红字。
 
 ---
 

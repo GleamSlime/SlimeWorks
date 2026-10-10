@@ -13,6 +13,7 @@ import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/pages/manga/components/manga_block_words_dialog.dart';
 import 'package:slime_works/pages/manga/components/manga_comic_card.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
@@ -190,7 +191,6 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
 
   /// 主页内容（已登录）
   Widget _buildHomeContent(BuildContext context, MangaHomeViewModel vm) {
-    final s = AppSemantic.of(context);
     final metrics = appMetrics;
 
     return Stack(
@@ -211,22 +211,15 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
               /// 错误提示
               else if (vm.errorMessage != null)
                 SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        DrawIcon(StrokeIcons.cloudOff,
-                          size: metrics.iconSize48,
-                          color: s.textDisabled,
-                        ),
-                        SizedBox(height: metrics.kSpace12),
-                        Text(
-                          vm.errorMessage!,
-                          style: AppTextStyles.body(context).copyWith(color: s.danger.color),
-                        ),
-                        SizedBox(height: metrics.kSpace12),
-                        FilledButton(onPressed: vm.loadHomeData, child: const Text('重新加载')),
-                      ],
+                  hasScrollBody: false,
+                  child: EmptyState(
+                    icon: StrokeIcons.cloudOff,
+                    title: '内容加载失败',
+                    description: vm.errorMessage,
+                    action: FilledButton.icon(
+                      icon: DrawIcon(StrokeIcons.refresh),
+                      label: const Text('重新加载'),
+                      onPressed: vm.loadHomeData,
                     ),
                   ),
                 )

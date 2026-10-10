@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/manga_error_text.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
@@ -104,24 +105,8 @@ class MangaReaderViewModel extends BaseViewModel {
   /// 当前章节序号
   int get currentEpsOrder => _epsOrder;
 
-  /// 格式化错误信息，截断过长的堆栈
-  String _formatReaderError(Object error) {
-    final raw = error.toString().replaceAll('\r\n', '\n').trim();
-    if (raw.isEmpty) return '章节加载失败';
-
-    final lines = raw
-        .split('\n')
-        .map((line) => line.trimRight())
-        .where((line) => line.trim().isNotEmpty)
-        .toList();
-    if (lines.isEmpty) return '章节加载失败';
-
-    final shortened = lines.take(6).join('\n');
-    final wasTruncated = lines.length > 6 || raw.length > 600;
-    if (!wasTruncated) return shortened;
-
-    return '$shortened\n\n错误详情已截断，请重试或切换分流节点。';
-  }
+  /// 章节加载失败时给界面/toast 用的一句话文案
+  String _formatReaderError(Object error) => MangaErrorText.describe(error);
 
   /// 加载章节图片（第一页）兼加载章节列表
   Future<void> loadPages(String comicId, int epsOrder) async {

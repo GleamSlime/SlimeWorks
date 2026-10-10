@@ -10,6 +10,7 @@ import 'base_viewmodel.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/core/widgets/app_toast.dart';
 import 'package:slime_works/core/widgets/empty_state.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -299,19 +300,16 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
       builder: (_) {
         // 显示 ViewModel 的错误信息（通过 SnackBar）
         if (viewModel.errorMessage != null) {
+          // 提示条本体在下一帧之前就组好：语义色和 messenger 都要在还有 context 时取
+          final bar = AppToast.errorBar(
+            AppSemantic.of(context),
+            viewModel.errorMessage!,
+            action: SnackBarAction(label: '关闭', onPressed: viewModel.clearError),
+          );
+          final messenger = ScaffoldMessenger.of(context);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(viewModel.errorMessage!),
-                  action: SnackBarAction(
-                    label: '关闭',
-                    onPressed: () {
-                      viewModel.clearError();
-                    },
-                  ),
-                ),
-              );
+              messenger.showSnackBar(bar);
               viewModel.clearError();
             }
           });

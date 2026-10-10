@@ -4,6 +4,7 @@ library;
 
 import 'package:get/get.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/manga_error_text.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
@@ -48,7 +49,7 @@ class MangaFavouritesViewModel extends BaseViewModel {
       pagination.value = result.pagination;
       clearError();
     } catch (e) {
-      setError(e.toString());
+      setError(MangaErrorText.describe(e));
     } finally {
       setLoading(false);
       _isRefreshing = false;

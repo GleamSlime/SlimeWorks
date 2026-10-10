@@ -5,6 +5,7 @@ library;
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/manga_error_text.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
@@ -144,7 +145,7 @@ class MangaSearchViewModel extends BaseViewModel {
       pagination.value = list.pagination;
       clearError();
     } catch (e) {
-      setError(e.toString());
+      setError(MangaErrorText.describe(e));
     } finally {
       setLoading(false);
     }

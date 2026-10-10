@@ -251,8 +251,11 @@ void main() {
   });
 
   // ── MangaReaderViewModel._formatReaderError（经 readerError 观测） ───────
+  //
+  // 旧契约是"保留多行、截到 6 行再补一句截断说明"，界据此铺了一整屏堆栈；
+  // 现在一律翻成一句话（MangaErrorText），原文只进日志，所以断言换成"单行 + 可行动"。
 
-  group('MangaReaderViewModel 错误格式化（loadPages/switchEps 失败路径）', () {
+  group('MangaReaderViewModel 错误文案（loadPages/switchEps 失败路径）', () {
     Future<String?> runLoadPages(Object error) async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       getIt.registerSingleton<MangaService>(_ThrowingMangaService(error));
@@ -266,32 +269,31 @@ void main() {
       }
     }
 
-    test('空错误文案回落为「章节加载失败」', () async {
-      expect(await runLoadPages(const _BlankError()), '章节加载失败');
+    test('空错误文案回落为兜底短句', () async {
+      expect(await runLoadPages(const _BlankError()), '操作失败，请稍后重试');
     });
 
-    test('短错误原样透传（≤6 行且 ≤600 字符不截断）', () async {
+    test('多行错误压成一行', () async {
       final Object e = const _RawError('第1行\n第2行\n第3行');
-      expect(await runLoadPages(e), '第1行\n第2行\n第3行');
+      expect(await runLoadPages(e), '第1行 第2行 第3行');
     });
 
-    test('超过 6 行时截断到前 6 行并追加截断提示', () async {
-      final String eight = List<String>.generate(8, (int i) => 'L$i').join('\n');
-      final String? out = await runLoadPages(_RawError(eight));
-      expect(out, contains('L5'));
-      expect(out, isNot(contains('L6')));
-      expect(out, endsWith('错误详情已截断，请重试或切换分流节点。'));
-    });
-
-    test('单行超 600 字符同样触发截断提示', () async {
-      final String? out = await runLoadPages(_RawError('x' * 700));
-      expect(out, startsWith('x' * 600));
-      expect(out, endsWith('错误详情已截断，请重试或切换分流节点。'));
-    });
-
-    test('CRLF 换行被归一化、行尾空白被清理', () async {
+    test('CRLF 与行尾空白一起被压平', () async {
       final String? out = await runLoadPages(const _RawError('A  \r\nB\t\r\n'));
-      expect(out, 'A\nB');
+      expect(out, 'A B');
+    });
+
+    test('网络错误翻成中文短句，caused by 链不上界面', () async {
+      final String? out = await runLoadPages(
+        const _RawError('网络错误: error sending request caused by: tcp connect error'),
+      );
+      expect(out, '连不上服务器，试试切换分流节点');
+    });
+
+    test('超长错误截断成一行', () async {
+      final String? out = await runLoadPages(_RawError('x' * 700));
+      expect(out!.length, lessThanOrEqualTo(60));
+      expect(out, endsWith('…'));
     });
 
     test('switchEps 失败路径同样写入格式化后的 readerError', () async {

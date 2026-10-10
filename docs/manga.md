@@ -106,6 +106,21 @@ lib/pages/manga/
 
 > **注意**：`loadMore()` 通过 `RxList.addAll()` 追加数据，新条目依赖 `Obx` 检测变化并刷新 UI；**不要**在 `loadMore()` 中调用 `setLoading()`（会触发全局加载遮罩），改用 `isLoadingMore`。
 
+### 章节列表的分页语义（详情页）
+
+上游章节接口每页只给 20 章，**页内按 `order` 倒序**返回，页与页之间仍是倒序。详情页不吃这个顺序：
+
+- `eps` 是规范序（`order` **升序**）——阅读器的上一话/下一话靠 `indexWhere(order==x)` 再取 `list[i±1]`，下载队列也按它排队，所以这一份必须升序。
+- `epsDesc`（`eps.reversed`）才是界面读的展示序（最新一章在最前）。章节网格与下载弹层的章节网格都用这一份，两边看到的是同一个顺序。
+- 补页只做**尾部追加再重排**（`_ascending([...eps, ...next.eps])`），因此首屏那 20 章的位置在补齐过程中不会变；翻车的写法是把补齐后的升序整表直接给界面——用户会看到"加载完突然整表翻面"。
+- 触发方式是滚动到章节表尾部自动补下一页（`extentAfter < scaleW(300)`），没有"加载更多"按钮；`_epsPageLoading` 让并发触发共用同一页请求，重复滚动只发一跳。
+- `loadDetail` **不**抢跑补齐：几百章的本子不该开机就连发十几个请求。
+- 只有下载弹层需要全量（全选与章节计数），走 `ensureAllEps()` 循环补页，并先挂一个"正在补齐章节…"的常驻进度框；某页拉失败就停止循环，否则原地打转。
+- 补页失败只 `setError` 一句提示，**不**把已渲染的整页打成错误页。
+- 阅读器仍是一次性 `getComicEpsAll()` 拿全量（跨章导航要全局下标），与详情页的增量策略不同。
+
+守这条的 test：`test/manga_chapter_list_test.dart`。
+
 ---
 
 ## 阅读器设计说明（MangaReaderScreen）
@@ -137,6 +152,13 @@ lib/pages/manga/
 ### 错误处理
 阅读器使用独立的 `readerError: Rx<String?>` 而非基类的 `setError()`，原因是基类 `_buildBody` 的 GetBuilder 在检测到 `errorMessage != null` 时会异步调用 `clearError()`（通过 SnackBar 回调），导致自定义错误页面一帧后消失。`readerError` 不走基类清除机制，生命周期完全由阅读器自身管理。
 
+因为不走基类，toast 也得自己接：`_errorToastWorker = ever(viewModel.readerError, …)` 在 `onPageInit` **加载之前**就挂上监听，首话就失败也能有提示；`dispose` 里 `worker.dispose()`。
+
+### 报错文案：一律一句话（`MangaErrorText.describe`）
+Rust 侧的 `MangaError` 会带 `网络错误: … caused by: client error (Connect) caused by: tcp connect error` 这种链，FRB 到 Dart 又套一层 `Exception: ` 前缀。整段铺在界面上既读不下去，又会把正常内容盖掉，所以所有漫画报错都过 `MangaErrorText.describe()`：剥前缀、把换行/制表压成空格、命中关键字表翻成可行动的中文（401→"登录已过期，请重新登录"、超时→"请求超时，可切换分流节点后重试"），没命中也只截到一行。规则表按顺序匹配，超时排在连接类前面才不会把 timeout 报成"连不上服务器"。
+
+展示层：页面级报错走 `AppToast.errorBar`（`BasePage` 的自动错误条已换成它，`AppMotion.dwellLong` 驻留 + 语义图标），阅读器走 `AppToast.error`，整块内容读不到时用 `EmptyState` 的重试空态。**Dialog/Sheet 里只能走行内提示**——SnackBar 画在页面 Scaffold 上，会被弹层挡住。
+
 ---
 
 ## 图片加载（MangaImageView）
@@ -151,7 +173,7 @@ lib/pages/manga/
 
 ## 已知限制
 
-- 章节列表仅加载第一页 eps（`getComicEps(comicId, page: 1)`），大量章节的漫画不会自动翻页载入更多章节
+- 章节列表由详情页滚动到尾部时逐页补齐（见"章节列表的分页语义"）；只有阅读器仍是一次性拉全量，几百章的本子进阅读器会连发十几个分页请求
 - 图片拉取完全依赖 Rust 侧节点代理，节点不可用时所有图片均加载失败
 
 ---
@@ -166,6 +188,8 @@ lib/pages/manga/
 | 修改图片加载策略 | `lib/pages/manga/components/manga_image_view.dart` |
 | 修改搜索逻辑 | `lib/pages/manga/view_models/manga_search_viewmodel.dart` |
 | 修改观看记录逻辑 | `lib/pages/manga/view_models/manga_history_viewmodel.dart` |
+| 修改章节列表加载策略 | `lib/pages/manga/view_models/manga_comic_detail_viewmodel.dart` |
+| 修改报错文案/新增错误关键字规则 | `lib/core/services/manga_error_text.dart` |
 | 修改屏蔽词管理 | `lib/pages/manga/components/manga_block_words_dialog.dart` |
 | 修改 Rust 侧接口 | `rust/manga_module/src/` |
 

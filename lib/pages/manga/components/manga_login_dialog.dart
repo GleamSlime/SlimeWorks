@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/manga_error_text.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -83,7 +84,8 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        // 对话框压在 SnackBar 之上，报错只能走行内提示，但原文太长会撑破卡片，先翻成一句话
+        _errorMessage = MangaErrorText.describe(e);
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -197,7 +199,7 @@ class _MangaLoginDialogState extends State<_MangaLoginDialog> {
                       borderRadius: AppTheme.metrics.radius8,
                       border: Border.all(
                         color: s.danger.containerBorder,
-                        width: scaleW(1),
+                        width: AppTheme.metrics.strokeHairline,
                       ),
                     ),
                     child: Row(
