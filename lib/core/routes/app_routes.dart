@@ -27,6 +27,7 @@ import 'package:slime_works/pages/novel_reader/novel_reader_page.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/core/widgets/breadcrumb.dart';
 import 'package:slime_works/core/widgets/binding_widget.dart';
+import 'package:slime_works/core/widgets/escape_back_boundary.dart';
 import 'package:slime_works/core/routes/role_manager.dart';
 import 'package:slime_works/pages/theme_preview_screen.dart';
 import 'package:slime_works/pages/style_showcase_screen.dart';
@@ -353,7 +354,7 @@ class AppRoutes {
         key: state.pageKey,
         child: ColoredBox(
           color: AppSemantic.of(context).canvas,
-          child: BindingWidget(child: child),
+          child: BindingWidget(child: EscapeBackBoundary(child: child)),
         ),
       );
     }
@@ -361,7 +362,7 @@ class AppRoutes {
       key: state.pageKey,
       transitionDuration: kTransitionDuration,
       reverseTransitionDuration: kReverseTransitionDuration,
-      child: BindingWidget(child: child),
+      child: BindingWidget(child: EscapeBackBoundary(child: child)),
       transitionsBuilder: _defaultTransitionsBuilder,
     );
   }
@@ -372,7 +373,7 @@ class AppRoutes {
         key: state.pageKey,
         child: ColoredBox(
           color: AppSemantic.of(context).canvas,
-          child: BindingWidget(child: child),
+          child: BindingWidget(child: EscapeBackBoundary(child: child)),
         ),
       );
     }
@@ -380,7 +381,7 @@ class AppRoutes {
       key: state.pageKey,
       transitionDuration: kSlowTransitionDuration,
       reverseTransitionDuration: kSlowReverseTransitionDuration,
-      child: BindingWidget(child: child),
+      child: BindingWidget(child: EscapeBackBoundary(child: child)),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return ColoredBox(
           color: AppSemantic.of(context).canvas,

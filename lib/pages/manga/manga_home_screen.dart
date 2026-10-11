@@ -14,6 +14,7 @@ import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/core/widgets/empty_state.dart';
+import 'package:slime_works/core/widgets/escape_back_boundary.dart';
 import 'package:slime_works/pages/manga/components/manga_block_words_dialog.dart';
 import 'package:slime_works/pages/manga/components/manga_comic_card.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
@@ -477,7 +478,13 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
                 Navigator.of(ctx).pop();
                 Navigator.of(
                   context,
-                ).push(MaterialPageRoute(builder: (_) => const MangaFavouritesScreen()));
+                ).push(
+                  MaterialPageRoute(
+                    // 收藏页是裸 MaterialPageRoute 推进来的，进不了路由层那圈
+                    // EscapeBackBoundary，所以这里单独补一层，ESC 才和别的漫画页一致
+                    builder: (_) => const EscapeBackBoundary(child: MangaFavouritesScreen()),
+                  ),
+                );
               },
             ),
             _MenuTile(

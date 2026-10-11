@@ -28,9 +28,25 @@ import 'package:slime_works/core/widgets/tree_connector.dart';
 /// 子项行高：`TreeConnector` 要按它算每枝的中心线，必须是确定值
 double get _kChildRowHeight => AppTheme.metrics.kSpace40;
 
+/// 侧栏导航图标的尺寸：收起态和展开态必须同一档
+///
+/// 展开态走 `AppTheme.metrics.fontSize18`，收起态原先写 `scaleW(22)`，两族在
+/// 字号比例 1 时相差 25%：窗口越大这个绝对差值越扎眼，4K 下图标条那一列就是
+/// 靠这一档撑肥的。这里取 `scaleW(18)`——数值和 `fontSize18` 对齐（字号族的
+/// 阻尼系数 1.056 对宽度族 1.08，差约 2%，肉眼看不出），但坚持吃宽度族：
+/// 图标条只有 75 设计像素宽，一旦吃用户在设置里调的字号比例，栏宽不动而图标
+/// 独长，比例拉到 2 就把那一行顶破。
+double get _kSidebarIconSize => scaleW(18);
+
+/// 子项图标尺寸：展开态和收起态同一档，都比顶层项小一号
+///
+/// 收起态原先和顶层项一样吃 `scaleW(22)`，父子在这一列里读不出层级；
+/// 而且子项比顶层项多套了一层 kSpace12 内衬，22 那档几乎贴边。
+double get _kSidebarChildIconSize => scaleW(16);
+
 /// 侧栏行图标的描边时长
 ///
-/// 缺省的 `AppMotion.slow` 压在 22 设计像素的图标上一闪而过，笔顺根本走不完一遍，
+/// 缺省的 `AppMotion.slow` 压在侧栏这一列小图标上一闪而过，笔顺根本走不完一遍，
 /// hover 那一下读起来像抖了一下而不是"这行被指到了"。提到 emphasis 档才看得清。
 const Duration _kRowStrokeDuration = AppMotion.emphasis;
 
@@ -894,7 +910,7 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                       duration: AppMotion.base,
                                       curve: AppMotion.standard,
                                       // 内边距只到 kSpace4：这一格横向只余 32 设计像素，
-                                      // 图标 22 再加两侧各 6 就已经撑破
+                                      // 图标 18 再加两侧各 4 就已经贴边，再给就撑破
                                       padding: EdgeInsets.all(AppTheme.metrics.kSpace4),
                                       decoration: BoxDecoration(
                                         color: isSelected && isExpanded
@@ -904,10 +920,11 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                                       ),
                                       child: DrawIcon(
                                         item.route.sidebarIcon!,
-                                        // 图标必须和这条栏同一个缩放族：fontSize22 走的是
-                                        // 字号族，还要再乘用户调的字号比例——栏宽不动、
-                                        // 图标跟着字体长，比例不是 1 就把这一行顶破
-                                        size: scaleW(22),
+                                        // 和展开态同一档，且必须留在宽度族：
+                                        // fontSize22 走的是字号族，还要再乘用户调的
+                                        // 字号比例——栏宽不动、图标跟着字体长，
+                                        // 比例不是 1 就把这一行顶破
+                                        size: _kSidebarIconSize,
                                         color: isSelected ? s.accent : s.textTertiary,
                                         duration: _kRowStrokeDuration,
                                       ),
@@ -1094,7 +1111,9 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
                 message: item.route.sidebarLabel,
                 child: DrawIcon(
                   item.route.sidebarIcon!,
-                  size: scaleW(22),
+                  // 和展开态的子项同一档：这一列上下吃的都是外层 kSpace12 + 内层 kSpace12，
+                  // 图标 22 时子项比顶层还贴边，收到 16 才留得住呼吸
+                  size: _kSidebarChildIconSize,
                   color: isSelected ? s.accent : null,
                   // auto：悬停进这一格和按下都描一次，事件源是包住整行的 StrokeZone
                   trigger: StrokeTrigger.auto,
@@ -1247,7 +1266,7 @@ class _SidebarChildItemState extends State<_SidebarChildItem> {
                   DrawIcon(
                     icon,
                     // 宽度族：这一行不吃用户字号比例，理由和图标条一样
-                    size: scaleW(16),
+                    size: _kSidebarChildIconSize,
                     color: widget.selected ? s.accent : s.textSecondary,
                     trigger: StrokeTrigger.auto,
                     duration: _kRowStrokeDuration,
