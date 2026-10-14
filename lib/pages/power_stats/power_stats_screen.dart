@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -13,13 +11,27 @@ import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_viz.dart';
-import 'package:slime_works/core/utils/size_utils.dart' show PlatformUtil;
+import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/view_models/power_stats_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/core/widgets/app_text_field.dart';
+import 'package:slime_works/pages/power_stats/power_stats_theme.dart';
+import 'package:slime_works/pages/power_stats/components/power_stats_widgets.dart';
+import 'package:slime_works/pages/power_stats/components/power_stats_chart.dart';
+import 'package:slime_works/pages/power_stats/components/power_stats_hero.dart';
+import 'package:slime_works/pages/power_stats/components/power_stats_live_card.dart';
+import 'package:slime_works/pages/power_stats/components/power_stats_tape.dart';
 
+/// 电力统计页
+///
+/// 版式是"柔彩渐变底 + 玻璃卡"这一套：页面底负责颜色，卡片只负责承载数据，
+/// 所有动画都由**数据到达**那一刻驱动（滚动数字 / 事件横幅 / 柱状带生长），
+/// 数据没变就静止，不做持续的假跳变。
+///
+/// 配色分工：表面、渐变、动效色走本页试验色板 [PowerStatsPalette]；
+/// "这条线/这张卡报的是哪个维度"的身份色仍走全局 [AppVizSet]，两处同源才认得出是同一档。
 class PowerStatsScreen extends StatefulWidget {
   const PowerStatsScreen({super.key});
 
@@ -39,7 +51,15 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
   StreamSubscription? _nodeListSub;
   StreamSubscription? _nodeConnectivitySub;
   StreamSubscription? _currentNodeSub;
+  StreamSubscription? _lastFetchSub;
   Timer? _realtimeRefreshTimer;
+
+  /// 抓取事件：只有真的拿到一条新读数才推一个自增 id，动画跟着数据走。
+  /// 组件按 id 变化起钟，同 id 的重复 rebuild 不会重播。
+  PsFetchEvent? _fetchEvent;
+  int _eventId = 0;
+  String _lastEventKey = '';
+  double? _prevYuan;
 
   @override
   void initState() {
@@ -65,6 +85,9 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     _currentNodeSub = _viewModel.currentNodeId.listen((_) {
       if (mounted) setState(() {});
     });
+    _lastFetchSub = _viewModel.lastFetch.listen((_) {
+      if (mounted) _emitFetchEvent();
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _viewModel.refreshAll();
@@ -85,6 +108,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     _nodeListSub?.cancel();
     _nodeConnectivitySub?.cancel();
     _currentNodeSub?.cancel();
+    _lastFetchSub?.cancel();
     _entranceController.dispose();
     _meterIdController.dispose();
     try {
@@ -96,53 +120,83 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
-    final theme = Theme.of(context);
+    final p = PowerStatsPalette.of(context);
     final isNarrow = PlatformUtil.isMobile || MediaQuery.of(context).size.width < 720;
 
     return ScreenChrome(
       data: ScreenChromeData(
         title: '电力统计',
         actions: [
-          _buildNodeSwitcher(context, theme, m),
+          _buildNodeSwitcher(context),
           SizedBox(width: m.kSpace8),
-          _buildFetchButton(context, theme, m),
+          _buildFetchButton(context),
           SizedBox(width: m.kSpace8),
         ],
       ),
-      child: FadeTransition(
-        opacity: _entranceAnimation,
-        child: Obx(() {
-          if (!_viewModel.isConfigLoaded.value) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return SingleChildScrollView(
-            padding: EdgeInsets.all(m.kSpace16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeaderBanner(context, theme, m),
-                SizedBox(height: m.kSpace16),
-                _buildRangeSelector(context, theme, m, isNarrow),
-                SizedBox(height: m.kSpace16),
-                _buildSummaryGrid(context, theme, m, isNarrow),
-                SizedBox(height: m.kSpace16),
-                _buildChartCard(context, theme, m, isNarrow),
-                SizedBox(height: m.kSpace16),
-                _buildDimensionGrid(context, theme, m, isNarrow),
-                SizedBox(height: m.kSpace16),
-                _buildConfigCard(context, theme, m),
-                SizedBox(height: m.kSpace16),
-                _buildLogCard(context, theme, m),
-              ],
+      child: Stack(
+        children: [
+          Positioned.fill(child: _buildBackground(p)),
+          Positioned.fill(
+            child: FadeTransition(
+              opacity: _entranceAnimation,
+              child: Obx(() {
+                if (!_viewModel.isConfigLoaded.value) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                return SingleChildScrollView(
+                  padding: EdgeInsets.all(m.kSpace16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      PsStagger(
+                        index: 0,
+                        child: PsGlassCard(child: _buildHero(context)),
+                      ),
+                      SizedBox(height: m.kSpace12),
+                      PsStagger(index: 1, child: _buildStatusStrip(m, isNarrow)),
+                      SizedBox(height: m.kSpace12),
+                      PsStagger(index: 2, child: _buildLiveCard(m, isNarrow)),
+                      SizedBox(height: m.kSpace12),
+                      PsStagger(index: 3, child: _buildTape(m, isNarrow)),
+                      SizedBox(height: m.kSpace12),
+                      PsStagger(index: 4, child: _buildTopSlots()),
+                      SizedBox(height: m.kSpace16),
+                      PsStagger(
+                        index: 5,
+                        child: _buildDimensionGrid(context, m),
+                      ),
+                      SizedBox(height: m.kSpace16),
+                      PsStagger(index: 6, child: _buildConfigCard(context, m)),
+                      SizedBox(height: m.kSpace12),
+                      PsStagger(index: 7, child: _buildLogCard(context, m)),
+                      SizedBox(height: m.kSpace8),
+                    ],
+                  ),
+                );
+              }),
             ),
-          );
-        }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 页面底：对角柔彩基色 + 四角色团。色板只交分层数据
+  /// （见 [PowerStatsPalette.backgroundLayers]），叠放这件事留在这儿。
+  /// IgnorePointer 保证这层纯装饰永远不参与命中。
+  Widget _buildBackground(PowerStatsPalette p) {
+    return IgnorePointer(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          for (final d in p.backgroundLayers) DecoratedBox(decoration: d),
+        ],
       ),
     );
   }
 
   // ── 顶部节点切换 ────────────────────────────────────────────────────────
-  Widget _buildNodeSwitcher(BuildContext context, ThemeData theme, ThemeMetrics m) {
+  Widget _buildNodeSwitcher(BuildContext context) {
     if (_nodeService == null) return const SizedBox.shrink();
     return NodeSwitcherButton(
       nodeService: _nodeService!,
@@ -152,8 +206,9 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     );
   }
 
-  Widget _buildFetchButton(BuildContext context, ThemeData theme, ThemeMetrics m) {
+  Widget _buildFetchButton(BuildContext context) {
     final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
     return Obx(
       () => Material(
         color: Colors.transparent,
@@ -161,14 +216,22 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           borderRadius: m.radius20,
           onTap: _viewModel.isFetching.value
               ? null
-              : () => _viewModel.fetchOnce(),
+              : () async {
+                  await _viewModel.fetchOnce();
+                  // 手动抓取后补推一次：失败时 last_fetch 可能压根没动，
+                  // 只靠监听会让人点了却没有任何交代
+                  if (mounted) _emitFetchEvent();
+                },
           child: Container(
             height: m.kSpace32,
             padding: EdgeInsets.symmetric(horizontal: m.kSpace12),
             decoration: BoxDecoration(
               color: s.warning.color.withAlpha(30),
               borderRadius: m.radius20,
-              border: Border.all(color: s.warning.color.withAlpha(80), width: AppTheme.metrics.strokeHairline),
+              border: Border.all(
+                color: s.warning.color.withAlpha(80),
+                width: AppTheme.metrics.strokeHairline,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -177,9 +240,12 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                     ? SizedBox(
                         width: m.iconSize14,
                         height: m.iconSize14,
-                        child: CircularProgressIndicator(strokeWidth: AppTheme.metrics.strokeRegular),
+                        child: CircularProgressIndicator(
+                          strokeWidth: AppTheme.metrics.strokeRegular,
+                        ),
                       )
-                    : DrawIcon(StrokeIcons.bolt,
+                    : DrawIcon(
+                        StrokeIcons.bolt,
                         size: m.iconSize14,
                         color: s.warning.color,
                       ),
@@ -200,690 +266,243 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     );
   }
 
-  // ── 顶部状态横幅 ────────────────────────────────────────────────────────
-  Widget _buildHeaderBanner(BuildContext context, ThemeData theme, ThemeMetrics m) {
-    final s = AppSemantic.of(context);
+  // ── Hero：账户余额 + 迷你趋势 + 时间范围滑轨 ──────────────────────────
+  Widget _buildHero(BuildContext context) {
+    final buckets = _viewModel.buckets;
+    final yuan = _balanceYuan;
+    // 余额是"越用越少"的存量，区间变化取末值减初值；单桶谈不上变化
+    final delta = buckets.length >= 2
+        ? buckets.last.balanceYuan - buckets.first.balanceYuan
+        : 0.0;
+    final dayCost = _viewModel.getSummaryCost('day_cost');
+    return PsHeroPanel(
+      balanceYuan: yuan,
+      deltaYuan: delta,
+      // 按日均电费折算可用天数；日花费为 0（还没攒够样本）时不编造天数
+      daysLeft: dayCost > 0 ? yuan / dayCost : null,
+      sparkline: [
+        for (final b in buckets)
+          PsSparkPoint(psTooltipLabel(b.label, b.timestamp), b.balanceYuan),
+      ],
+      ranges: PowerStatsRange.all,
+      selectedRange: _viewModel.selectedRange.value,
+      onRangeChanged: (key) => _viewModel.setRange(key),
+      liveLabel: _clockOf(_viewModel.lastFetch.value),
+      isLive: _viewModel.isPolling.value,
+      // 换区间换的是整条线，也要重画一次；轮询补一个点同样重走一遍入场
+      rolledTrigger: '${_viewModel.selectedRange.value}|${_viewModel.lastFetch.value}',
+    );
+  }
+
+  // ── 状态条：持久化说明 + 三个常驻小指标 ────────────────────────────────
+  Widget _buildStatusStrip(ThemeMetrics m, bool isNarrow) {
+    // 小指标是并列数据身份，沿用全局 viz 色板；页面底和玻璃面才走本页色板
+    final viz = AppVizSet.of(context);
+    final p = PowerStatsPalette.of(context);
     return Obx(() {
       final enabled = _viewModel.isEnabled.value;
-      final polling = _viewModel.isPolling.value;
+      final unit = _viewModel.selectedUnit.value;
+      final desc = _viewModel.isLocal
+          ? (enabled
+                ? '本地定时统计 - 每${_viewModel.intervalSecs.value}秒抓取一次'
+                : '本地模式 - 数据持久化到数据库')
+          : '远程节点模式 - 数据由节点服务持久化';
 
-      return Container(
-        padding: EdgeInsets.all(m.kSpace16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: enabled
-                ? [
-                    s.warning.color.withAlpha(25),
-                    s.warning.color.withAlpha(15),
-                  ]
-                : [
-                    theme.colorScheme.surfaceContainerHighest.withAlpha(60),
-                    theme.colorScheme.surfaceContainerHighest.withAlpha(30),
-                  ],
-          ),
-          borderRadius: m.radius12,
-          border: Border.all(
-            color: enabled
-                ? s.warning.color.withAlpha(60)
-                : theme.colorScheme.outlineVariant.withAlpha(60),
-          ),
+      final items = <_SummaryCardData>[
+        _SummaryCardData(
+          icon: StrokeIcons.timer,
+          label: '分钟耗电',
+          value: _viewModel.getSummaryConsumption('minute_consumption'),
+          unit: unit.label,
+          // 电量这一档的身份色与下面的维度网格、图表折线同源
+          color: viz.mint.base,
+          format: unit.format,
         ),
-        child: Row(
-          children: [
-            // 闪电图标
-            Container(
-              width: m.kSpace44,
-              height: m.kSpace44,
-              decoration: BoxDecoration(
-                color: enabled
-                    ? s.warning.color.withAlpha(30)
-                    : theme.colorScheme.onSurface.withAlpha(8),
-                borderRadius: m.radius10,
-              ),
-              child: DrawIcon(StrokeIcons.electricBolt,
-                size: m.iconSize24,
-                color: enabled ? s.warning.color : theme.colorScheme.onSurface.withAlpha(50),
-              ),
-            ),
-            SizedBox(width: m.kSpace14),
-            Expanded(
-              child: Column(
+        _SummaryCardData(
+          icon: StrokeIcons.money,
+          label: '单价',
+          value: _viewModel.price.value,
+          unit: '元/度',
+          color: viz.sky.base,
+          format: (v) => v.toStringAsFixed(3),
+        ),
+        _SummaryCardData(
+          icon: StrokeIcons.barChart,
+          label: '采样条数',
+          value: _viewModel.sampleCount.value.toDouble(),
+          unit: '条',
+          color: viz.lilac.base,
+          format: (v) => v.toStringAsFixed(0),
+        ),
+      ];
+
+      final stats = <Widget>[
+        for (final d in items) _buildMiniStat(m, d),
+      ];
+
+      return PsGlassCard(
+        padding: EdgeInsets.symmetric(
+          horizontal: m.kSpace14,
+          vertical: m.kSpace12,
+        ),
+        child: isNarrow
+            ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        _viewModel.meterName.value.isEmpty
-                            ? '未配置电表'
-                            : _viewModel.meterName.value,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (polling) ...[
-                        SizedBox(width: m.kSpace8),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: m.kSpace6,
-                            vertical: m.kSpace2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: s.success.color.withAlpha(20),
-                            borderRadius: m.radius4,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: m.kSpace4,
-                                height: m.kSpace4,
-                                decoration: BoxDecoration(
-                                  color: s.success.color,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: s.success.color.withAlpha(80),
-                                      blurRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(width: m.kSpace4),
-                              Text(
-                                '轮询中',
-                                style: TextStyle(
-                                  fontSize: m.fontSize10,
-                                  color: s.success.onContainer,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  SizedBox(height: m.kSpace2),
-                  Text(
-                    _viewModel.isLocal
-                        ? (enabled
-                              ? '本地定时统计 - 每${_viewModel.intervalSecs.value}秒抓取一次'
-                              : '本地模式 - 数据持久化到数据库')
-                        : '远程节点模式 - 数据由节点服务持久化',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(120),
-                    ),
+                  _buildDescText(p, desc),
+                  SizedBox(height: m.kSpace10),
+                  Wrap(
+                    spacing: m.kSpace14,
+                    runSpacing: m.kSpace8,
+                    children: stats,
                   ),
                 ],
+              )
+            : Row(
+                children: [
+                  Expanded(child: _buildDescText(p, desc)),
+                  SizedBox(width: m.kSpace14),
+                  ...stats,
+                ],
               ),
-            ),
-            if (_viewModel.isLocal)
-              Switch(
-                value: enabled,
-                onChanged: (v) => _viewModel.toggleEnabled(v),
-                activeThumbColor: s.warning.color,
-              ),
-          ],
-        ),
       );
     });
   }
 
-  // ── 时间范围 + 维度切换 ────────────────────────────────────────────────
-  Widget _buildRangeSelector(
-    BuildContext context,
-    ThemeData theme,
-    ThemeMetrics m,
-    bool isNarrow,
-  ) {
-    // 图表维度（耗电量/余额/电费）的身份色走 viz，不当状态色用
-    final viz = AppVizSet.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildDescText(PowerStatsPalette p, String desc) {
+    final m = AppTheme.metrics;
+    return Text(
+      desc,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: m.fontSize12, color: p.ink.withAlpha(150)),
+    );
+  }
+
+  Widget _buildMiniStat(ThemeMetrics m, _SummaryCardData data) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        // 时间范围筛选
-        Obx(
-          () => Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: m.kSpace6,
-              vertical: m.kSpace6,
-            ),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: m.radius12,
-              border: Border.all(color: theme.dividerColor.withAlpha(40)),
-            ),
-            child: Wrap(
-              spacing: m.kSpace4,
-              runSpacing: m.kSpace4,
-              children: PowerStatsRange.all.map((r) {
-                final selected = _viewModel.selectedRange.value == r.key;
-                return _buildRangeChip(theme, m, r.label, selected, () {
-                  _viewModel.setRange(r.key);
-                });
-              }).toList(),
-            ),
-          ),
-        ),
-        SizedBox(height: m.kSpace8),
-        // 维度切换（耗电量/余额/电费）
-        Obx(
-          () => Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: m.kSpace6,
-              vertical: m.kSpace6,
-            ),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: m.radius12,
-              border: Border.all(color: theme.dividerColor.withAlpha(40)),
-            ),
-            child: Wrap(
-              spacing: m.kSpace4,
-              runSpacing: m.kSpace4,
+        DrawIcon(data.icon, size: m.iconSize12, color: data.color),
+        SizedBox(width: m.kSpace6),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            PsSectionLabel(data.label, color: data.color.withAlpha(200)),
+            SizedBox(height: m.kSpace2),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
               children: [
-                _buildMetricChip(
-                  theme,
-                  m,
-                  '耗电量',
-                  PowerChartMetric.consumption,
-                  viz.amber.base,
+                PsRollingNumber(
+                  value: data.value,
+                  majorStyle: TextStyle(
+                    fontSize: m.fontSize16,
+                    fontWeight: FontWeight.w800,
+                    color: data.color,
+                    height: 1.1,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                  formatMajor: data.format,
                 ),
-                _buildMetricChip(
-                  theme,
-                  m,
-                  '余额',
-                  PowerChartMetric.balance,
-                  viz.sky.base,
-                ),
-                _buildMetricChip(
-                  theme,
-                  m,
-                  '电费',
-                  PowerChartMetric.cost,
-                  viz.coral.base,
-                ),
-              ],
-            ),
-          ),
-        ),
-        SizedBox(height: m.kSpace8),
-        // 计量单位切换（Wh / kWh / MWh），统一作用于卡片与图表
-        Obx(
-          () => Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: m.kSpace6,
-              vertical: m.kSpace6,
-            ),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: m.radius12,
-              border: Border.all(color: theme.dividerColor.withAlpha(40)),
-            ),
-            child: Wrap(
-              spacing: m.kSpace4,
-              runSpacing: m.kSpace4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: m.kSpace8),
-                  child: Text(
-                    '计量单位',
-                    style: TextStyle(
-                      fontSize: m.fontSize12,
-                      color: theme.colorScheme.onSurface.withAlpha(120),
-                      fontWeight: FontWeight.w500,
-                    ),
+                SizedBox(width: m.kSpace4),
+                Text(
+                  data.unit,
+                  style: TextStyle(
+                    fontSize: m.fontSize10,
+                    color: data.color.withAlpha(160),
                   ),
                 ),
-                ...PowerUnit.values.map(
-                  (u) => _buildUnitChip(context, theme, m, u),
-                ),
               ],
             ),
-          ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildUnitChip(
-    BuildContext context,
-    ThemeData theme,
-    ThemeMetrics m,
+  // ── 实时电表卡：主曲线 + 已用进度 + 抓取事件横幅 ───────────────────────
+  Widget _buildLiveCard(ThemeMetrics m, bool isNarrow) {
+    // 折线颜色即"这条线画的是哪个维度"的身份，与卡内维度切换 chip 同源
+    final viz = AppVizSet.of(context);
+    final metric = _viewModel.selectedMetric.value;
+    final unit = _viewModel.selectedUnit.value;
+    final buckets = _viewModel.buckets;
+    final sumText = _metricSummary(metric, buckets, unit);
+
+    // 图表只画有值的采样桶：这类"流量"型指标（耗电量/电费）绝大多数桶是 0，
+    // 留着会把曲线压成一地锯齿，也撑不满纵轴。余额是"存量"，0 也是有效读数，不过滤。
+    // 上面的合计/区间变化仍用完整 buckets，过滤不能影响它们。
+    final chartBuckets = switch (metric) {
+      PowerChartMetric.balance => buckets,
+      // 全是 0 时退回原始桶：空图比一条 0 平线更难读
+      _ => _withoutZeroBuckets(buckets, metric),
+    };
+
+    final startBalance = buckets.isEmpty ? 0.0 : buckets.first.balanceYuan;
+    final used = startBalance - _balanceYuan;
+
+    return PsLiveMeterCard(
+      meterName: _viewModel.meterName.value,
+      isLocal: _viewModel.isLocal,
+      buckets: chartBuckets,
+      metric: metric,
+      onMetricChanged: (v) => _viewModel.setMetric(v),
+      unit: unit,
+      onUnitChanged: (v) => _viewModel.setUnit(v),
+      metricColor: switch (metric) {
+        PowerChartMetric.consumption => viz.amber.base,
+        PowerChartMetric.balance => viz.sky.base,
+        PowerChartMetric.cost => viz.coral.base,
+      },
+      // 已用占比按"这个区间开头还有多少钱"算，和折线画的是同一件事
+      usedRatio: startBalance > 0 ? (used / startBalance).clamp(0.0, 1.0) : 0.0,
+      headlineValue: unit.fromKwh(_balanceKwh),
+      headlineLabel: '剩余电量 · ${_rangeLabel()}',
+      headlineUnit: unit.label,
+      subTitle: '区间合计',
+      subValue: sumText,
+      event: _fetchEvent,
+      emptyState: _buildEmptyChart(),
+      chartTrigger: _shapeTick(metric),
+      chartHeight: isNarrow ? scaleW(196) : scaleW(252),
+    );
+  }
+
+  /// 区间合计的文案：只有电量维度吃用户选的计量单位，余额/电费固定按元展示
+  String _metricSummary(
+    PowerChartMetric metric,
+    List<PowerStatBucket> buckets,
     PowerUnit unit,
   ) {
-    final s = AppSemantic.of(context);
-    final selected = _viewModel.selectedUnit.value == unit;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: m.radius8,
-        onTap: () => _viewModel.setUnit(unit),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: m.kSpace12,
-            vertical: m.kSpace6,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? s.warning.color.withAlpha(25)
-                : Colors.transparent,
-            borderRadius: m.radius8,
-            border: Border.all(
-              color: selected
-                  ? s.warning.color.withAlpha(90)
-                  : theme.dividerColor.withAlpha(40),
-            ),
-          ),
-          child: Text(
-            unit.label,
-            style: TextStyle(
-              fontSize: m.fontSize12,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected
-                  ? s.warning.onContainer
-                  : theme.colorScheme.onSurface.withAlpha(120),
-              fontFamily: 'monospace',
-            ),
-          ),
-        ),
-      ),
+    switch (metric) {
+      case PowerChartMetric.consumption:
+        // 耗电量：所有桶累加
+        final sum = buckets.fold<double>(0, (s, b) => s + b.consumptionKwh);
+        return '${unit.format(sum)}${unit.label}';
+      case PowerChartMetric.balance:
+        // 余额：末值 - 首值（区间变化量）
+        if (buckets.length >= 2) {
+          final d = buckets.last.balanceYuan - buckets.first.balanceYuan;
+          return '${d >= 0 ? '+' : ''}${d.toStringAsFixed(2)}元';
+        }
+        if (buckets.length == 1) {
+          return '${buckets.first.balanceYuan.toStringAsFixed(2)}元';
+        }
+        return '0.00元';
+      case PowerChartMetric.cost:
+        final sum = buckets.fold<double>(0, (s, b) => s + b.costYuan);
+        return '${sum.toStringAsFixed(2)}元';
+    }
+  }
+
+  String _rangeLabel() {
+    final r = PowerStatsRange.all.firstWhere(
+      (e) => e.key == _viewModel.selectedRange.value,
+      orElse: () => const PowerStatsRange('1day', '1天'),
     );
-  }
-
-  Widget _buildRangeChip(
-    ThemeData theme,
-    ThemeMetrics m,
-    String label,
-    bool selected,
-    VoidCallback onTap,
-  ) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: m.radius8,
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: m.kSpace14,
-            vertical: m.kSpace8,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? theme.colorScheme.primary.withAlpha(20)
-                : Colors.transparent,
-            borderRadius: m.radius8,
-            border: Border.all(
-              color: selected
-                  ? theme.colorScheme.primary.withAlpha(80)
-                  : Colors.transparent,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: m.fontSize12,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurface.withAlpha(120),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMetricChip(
-    ThemeData theme,
-    ThemeMetrics m,
-    String label,
-    PowerChartMetric metric,
-    Color color,
-  ) {
-    final selected = _viewModel.selectedMetric.value == metric;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: m.radius8,
-        onTap: () => _viewModel.setMetric(metric),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: m.kSpace14,
-            vertical: m.kSpace8,
-          ),
-          decoration: BoxDecoration(
-            color: selected ? color.withAlpha(20) : Colors.transparent,
-            borderRadius: m.radius8,
-            border: Border.all(
-              color: selected ? color.withAlpha(80) : Colors.transparent,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: m.kSpace6,
-                height: m.kSpace6,
-                decoration: BoxDecoration(
-                  color: selected ? color : theme.colorScheme.onSurface.withAlpha(40),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              SizedBox(width: m.kSpace6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: m.fontSize12,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected
-                      ? color
-                      : theme.colorScheme.onSurface.withAlpha(120),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── 汇总卡片网格 ────────────────────────────────────────────────────────
-  Widget _buildSummaryGrid(
-    BuildContext context,
-    ThemeData theme,
-    ThemeMetrics m,
-    bool isNarrow,
-  ) {
-    final crossCount = isNarrow ? 2 : 3;
-    // 三张并排卡片是"并列数据身份"，走 viz 而不是状态角色
-    final viz = AppVizSet.of(context);
-    return Obx(() {
-      final unit = _viewModel.selectedUnit.value;
-      final summaryKwh = (_viewModel.summary['current_kwh'] as num?)?.toDouble() ?? 0.0;
-      final summaryYuan = (_viewModel.summary['current_yuan'] as num?)?.toDouble() ?? 0.0;
-      // 远程节点进程重启后 status 的内存态会归零，而 summary 走节点数据库仍有值；
-      // 谁有值用谁，免得卡片停在 0.000 而下面图表却有数据
-      final kwh = _viewModel.currentKwh.value > 0
-          ? _viewModel.currentKwh.value
-          : summaryKwh;
-      final yuan = _viewModel.currentYuan.value > 0
-          ? _viewModel.currentYuan.value
-          : summaryYuan;
-      final lastUpdate = _viewModel.summary['last_update'] as String? ??
-          _viewModel.lastFetch.value;
-      final minuteCons = _viewModel.getSummaryConsumption('minute_consumption');
-
-      final cards = <_SummaryCardData>[
-        _SummaryCardData(
-          icon: StrokeIcons.bolt,
-          label: '剩余电量',
-          value: unit.format(kwh),
-          unit: unit.label,
-          // 原值 #FFCB3A 正是 amber 这组身份的渐变终点档，两档主题下同值
-          color: viz.amber.to,
-        ),
-        _SummaryCardData(
-          icon: StrokeIcons.accountBalanceWallet,
-          label: '剩余金额',
-          value: yuan.toStringAsFixed(2),
-          unit: '元',
-          color: viz.sky.base,
-        ),
-        _SummaryCardData(
-          icon: StrokeIcons.timer,
-          label: '分钟耗电',
-          value: unit.format(minuteCons),
-          unit: unit.label,
-          color: viz.mint.base,
-        ),
-      ];
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (lastUpdate.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(left: m.kSpace4, bottom: m.kSpace8),
-              child: Text(
-                '上次更新: $lastUpdate',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withAlpha(100),
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossCount,
-              crossAxisSpacing: m.kSpace12,
-              mainAxisSpacing: m.kSpace12,
-              childAspectRatio: isNarrow ? 1.1 : 1.4,
-            ),
-            itemCount: cards.length,
-            itemBuilder: (context, i) => _buildSummaryCard(theme, m, cards[i]),
-          ),
-        ],
-      );
-    });
-  }
-
-  Widget _buildSummaryCard(ThemeData theme, ThemeMetrics m, _SummaryCardData data) {
-    return Container(
-      padding: EdgeInsets.all(m.kSpace14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: m.radius12,
-        border: Border.all(color: theme.dividerColor.withAlpha(40)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: m.kSpace24,
-                height: m.kSpace24,
-                decoration: BoxDecoration(
-                  color: data.color.withAlpha(20),
-                  borderRadius: m.radius6,
-                ),
-                child: DrawIcon(data.icon, size: m.iconSize12, color: data.color),
-              ),
-              SizedBox(width: m.kSpace8),
-              Expanded(
-                child: Text(
-                  data.label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withAlpha(120),
-                    fontWeight: FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: m.kSpace8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                data.value,
-                style: TextStyle(
-                  fontSize: m.fontSize22,
-                  fontWeight: FontWeight.w700,
-                  color: data.color,
-                  height: 1.1,
-                  fontFamily: 'monospace',
-                ),
-              ),
-              SizedBox(width: m.kSpace4),
-              Text(
-                data.unit,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withAlpha(100),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── 主图表卡片 ──────────────────────────────────────────────────────────
-  Widget _buildChartCard(
-    BuildContext context,
-    ThemeData theme,
-    ThemeMetrics m,
-    bool isNarrow,
-  ) {
-    // 折线颜色即"这条线画的是哪个维度"的身份，与上面的维度切换 chip 同源
-    final viz = AppVizSet.of(context);
-    return Obx(() {
-      final buckets = _viewModel.buckets;
-      final metric = _viewModel.selectedMetric.value;
-      final rangeLabel = PowerStatsRange.all
-          .firstWhere(
-            (r) => r.key == _viewModel.selectedRange.value,
-            orElse: () => const PowerStatsRange('1day', '1天'),
-          )
-          .label;
-
-      String title;
-      String unit;
-      Color color;
-      double sumValue = 0;
-      String sumText = '';
-      // 只有电量维度吃用户选的计量单位，余额/电费固定按元展示
-      double unitScale = 1;
-      switch (metric) {
-        case PowerChartMetric.consumption:
-          final powerUnit = _viewModel.selectedUnit.value;
-          title = '耗电量趋势';
-          unit = powerUnit.label;
-          unitScale = powerUnit.factor;
-          color = viz.amber.base;
-          // 耗电量：所有桶累加
-          sumValue = buckets.fold<double>(0, (s, b) => s + b.consumptionKwh);
-          sumText = '${powerUnit.format(sumValue)}${powerUnit.label}';
-        case PowerChartMetric.balance:
-          title = '余额变化';
-          unit = '元';
-          color = viz.sky.base;
-          // 余额：末值 - 首值（区间变化量）
-          if (buckets.length >= 2) {
-            sumValue = buckets.last.balanceYuan - buckets.first.balanceYuan;
-            final sign = sumValue >= 0 ? '+' : '';
-            sumText = '$sign${sumValue.toStringAsFixed(2)}$unit';
-          } else if (buckets.length == 1) {
-            sumText = '${buckets.first.balanceYuan.toStringAsFixed(2)}$unit';
-          }
-        case PowerChartMetric.cost:
-          title = '电费趋势';
-          unit = '元';
-          color = viz.coral.base;
-          sumValue = buckets.fold<double>(0, (s, b) => s + b.costYuan);
-          sumText = '${sumValue.toStringAsFixed(2)}$unit';
-      }
-
-      // 图表只画有值的采样桶：这类"流量"型指标（耗电量/电费）绝大多数桶是 0，
-      // 留着会把曲线压成一地锯齿，也撑不满纵轴。余额是"存量"，0 也是有效读数，不过滤。
-      // 上面的合计/区间变化仍用完整 buckets，过滤不能影响它们。
-      final chartBuckets = switch (metric) {
-        PowerChartMetric.balance => buckets,
-        // 全是 0 时退回原始桶：空图比一条 0 平线更难读
-        _ => _withoutZeroBuckets(buckets, metric),
-      };
-
-      return Container(
-        padding: EdgeInsets.all(m.kSpace16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: m.radius12,
-          border: Border.all(color: theme.dividerColor.withAlpha(40)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: m.kSpace24,
-                  height: m.kSpace24,
-                  decoration: BoxDecoration(
-                    color: color.withAlpha(20),
-                    borderRadius: m.radius6,
-                  ),
-                  child: DrawIcon(StrokeIcons.showChart, size: m.iconSize12, color: color),
-                ),
-                SizedBox(width: m.kSpace8),
-                Text(
-                  '$title · $rangeLabel',
-                  style: TextStyle(
-                    fontSize: m.fontSize15,
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-                if (sumText.isNotEmpty) ...[
-                  SizedBox(width: m.kSpace8),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: m.kSpace8,
-                      vertical: m.kSpace2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: color.withAlpha(15),
-                      borderRadius: m.radius6,
-                      border: Border.all(color: color.withAlpha(50), width: AppTheme.metrics.strokeUltraThin),
-                    ),
-                    child: Text(
-                      sumText,
-                      style: TextStyle(
-                        fontSize: m.fontSize12,
-                        fontWeight: FontWeight.w700,
-                        color: color,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ),
-                ],
-                const Spacer(),
-                if (buckets.isNotEmpty)
-                  Text(
-                    '采样 ${_viewModel.aggregatedSampleCount.value} 条',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(100),
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-              ],
-            ),
-            SizedBox(height: m.kSpace16),
-            SizedBox(
-              height: isNarrow ? 200 : 260,
-              child: chartBuckets.isEmpty
-                  ? _buildEmptyChart(theme, m)
-                  : _InteractivePowerChart(
-                      buckets: chartBuckets,
-                      metric: metric,
-                      color: color,
-                      unit: unit,
-                      unitScale: unitScale,
-                    ),
-            ),
-          ],
-        ),
-      );
-    });
+    return r.label;
   }
 
   /// 过滤掉数值为 0 的采样桶，让趋势线只反映真实发生的用量。
@@ -903,43 +522,93 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     return nonZero.isEmpty ? buckets : nonZero;
   }
 
-  Widget _buildEmptyChart(ThemeData theme, ThemeMetrics m) {
+  Widget _buildEmptyChart() {
+    final m = AppTheme.metrics;
+    final p = PowerStatsPalette.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          DrawIcon(StrokeIcons.insights,
+          DrawIcon(
+            StrokeIcons.insights,
             size: m.iconSize40,
-            color: theme.colorScheme.onSurface.withAlpha(30),
+            color: p.ink.withAlpha(50),
           ),
           SizedBox(height: m.kSpace8),
           Text(
             '暂无统计数据',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withAlpha(80),
-            ),
+            style: TextStyle(fontSize: m.fontSize12, color: p.ink.withAlpha(120)),
           ),
           SizedBox(height: m.kSpace4),
           Text(
             '点击右上角"抓取"开始采集',
-            style: TextStyle(
-              fontSize: m.fontSize11,
-              color: theme.colorScheme.onSurface.withAlpha(60),
-            ),
+            style: TextStyle(fontSize: m.fontSize11, color: p.ink.withAlpha(90)),
           ),
         ],
       ),
     );
   }
 
-  // ── 维度卡片网格（小时/1天/7天/15天/30天）────────────────────────────
-  Widget _buildDimensionGrid(
-    BuildContext context,
-    ThemeData theme,
-    ThemeMetrics m,
-    bool isNarrow,
-  ) {
-    final crossCount = isNarrow ? 2 : 3;
+  // ── 分时段柱状带 ────────────────────────────────────────────────────────
+  Widget _buildTape(ThemeMetrics m, bool isNarrow) {
+    final metric = _viewModel.selectedMetric.value;
+    return PsTapeCard(
+      buckets: _viewModel.buckets,
+      metric: metric,
+      unit: _viewModel.selectedUnit.value,
+      trigger: _shapeTick(metric),
+      height: isNarrow ? scaleW(126) : scaleW(152),
+    );
+  }
+
+  // ── 峰值时段 TOP5 ───────────────────────────────────────────────────────
+  Widget _buildTopSlots() {
+    final unit = _viewModel.selectedUnit.value;
+    final buckets = _viewModel.buckets;
+    // TOP5 的名次恒按"哪个时段最费电"排：换到余额/电费维度时占比语义会失真，
+    // 而"峰值时段"这个名字本身说的就是用量
+    final values = [for (final b in buckets) b.consumptionKwh * unit.factor];
+    final total = values.fold<double>(0, (s, v) => s + (v > 0 ? v : 0));
+    final ranked = <int>[
+      for (int i = 0; i < values.length; i++) i,
+    ]..sort((a, b) => values[b].compareTo(values[a]));
+
+    final slots = <PsTopSlot>[];
+    for (int i = 0; i < 5; i++) {
+      final idx = i < ranked.length ? ranked[i] : -1;
+      // 没数据的名次**不给占位对象**：卡片按"槽里没有 slot"渲染成带问号的空槽，
+      // 硬塞一个 label 为空的 PsTopSlot 会变成一张没有字的花玻璃
+      if (total <= 0 || idx < 0 || values[idx] <= 0) break;
+      slots.add(
+        PsTopSlot(
+          label: buckets[idx].label,
+          value: values[idx],
+          share: values[idx] / total,
+          unit: unit.label,
+        ),
+      );
+    }
+
+    return PsTopSlotsCard(
+      slots: slots,
+      total: total,
+      unit: unit.label,
+      trigger: _rangeTick(),
+    );
+  }
+
+  /// 图表"形状"变了就整条重播一次入场：换区间/换维度/换单位换的都是整套数据。
+  /// 故意不含 lastFetch —— 轮询往末尾补一段是"长出一根"，不是"全部重来"。
+  Object _shapeTick(PowerChartMetric metric) =>
+      '${_viewModel.selectedRange.value}|$metric|${_viewModel.selectedUnit.value.label}';
+
+  /// TOP5 的名次恒按用量排，只有区间和计量单位会动它的形状
+  Object _rangeTick() =>
+      '${_viewModel.selectedRange.value}|${_viewModel.selectedUnit.value.label}';
+
+  // ── 维度卡片网格（小时/1天/7天/15天/16天/30天）────────────────────────
+  Widget _buildDimensionGrid(BuildContext context, ThemeMetrics m) {
+    final p = PowerStatsPalette.of(context);
     return Obx(() {
       final unit = _viewModel.selectedUnit.value;
       final dims = <_DimensionData>[
@@ -987,27 +656,32 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
         children: [
           Padding(
             padding: EdgeInsets.only(left: m.kSpace4, bottom: m.kSpace8),
-            child: Text(
-              '耗电量维度统计',
-              style: TextStyle(
-                fontSize: m.fontSize13,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withAlpha(180),
-              ),
-            ),
+            child: PsSectionLabel('耗电量维度统计', color: p.ink.withAlpha(180)),
           ),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossCount,
-              crossAxisSpacing: m.kSpace12,
-              mainAxisSpacing: m.kSpace12,
-              childAspectRatio: isNarrow ? 1.5 : 1.8,
-            ),
-            itemCount: dims.length,
-            itemBuilder: (context, i) =>
-                _buildDimensionCard(context, theme, m, unit, dims[i]),
+          LayoutBuilder(
+            builder: (context, box) {
+              final spacing = m.kSpace12;
+              // 一张卡至少要够"数字 + 单位 + 那行约等于多少钱"，宽了就再塞一列。
+              // 上限是维度个数——六个维度摆七列只会多出一列空的。
+              int columns =
+                  ((box.maxWidth + spacing) / (scaleW(150) + spacing)).floor();
+              if (columns < 1) columns = 1;
+              if (columns > dims.length) columns = dims.length;
+              final itemW = (box.maxWidth - spacing * (columns - 1)) / columns;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  crossAxisSpacing: spacing,
+                  mainAxisSpacing: spacing,
+                  // 高度钉一档：列数变多时卡片变窄而不是变矮，省下的竖直空白才是真的
+                  childAspectRatio: itemW / scaleW(122),
+                ),
+                itemCount: dims.length,
+                itemBuilder: (context, i) => _buildDimensionCard(m, unit, dims[i]),
+              );
+            },
           ),
         ],
       );
@@ -1015,100 +689,144 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
   }
 
   Widget _buildDimensionCard(
-    BuildContext context,
-    ThemeData theme,
     ThemeMetrics m,
     PowerUnit unit,
     _DimensionData data,
   ) {
+    final p = PowerStatsPalette.of(context);
     // 这些卡片报的都是耗电量，沿用图表里"电量=amber"这一身份
     final viz = AppVizSet.of(context);
-    return Container(
-      padding: EdgeInsets.all(m.kSpace12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: m.radius12,
-        border: Border.all(color: theme.dividerColor.withAlpha(40)),
+    return PsGlassCard(
+      padding: EdgeInsets.fromLTRB(
+        m.kSpace12,
+        m.kSpace12,
+        m.kSpace12,
+        m.kSpace10,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      radius: m.radius14,
+      child: Stack(
         children: [
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              DrawIcon(data.icon, size: m.iconSize12, color: theme.colorScheme.primary),
-              SizedBox(width: m.kSpace6),
+              Row(
+                children: [
+                  DrawIcon(data.icon, size: m.iconSize12, color: p.violet),
+                  SizedBox(width: m.kSpace6),
+                  Text(
+                    data.title,
+                    style: TextStyle(
+                      fontSize: m.fontSize12,
+                      fontWeight: FontWeight.w700,
+                      color: p.ink,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  PsRollingNumber(
+                    value: data.consumption,
+                    majorStyle: TextStyle(
+                      fontSize: m.fontSize18,
+                      fontWeight: FontWeight.w800,
+                      color: viz.amber.base,
+                      height: 1.1,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                    formatMajor: unit.format,
+                  ),
+                  SizedBox(width: m.kSpace4),
+                  Text(
+                    unit.label,
+                    style: TextStyle(
+                      fontSize: m.fontSize10,
+                      color: p.ink.withAlpha(110),
+                    ),
+                  ),
+                ],
+              ),
+              // 没有电费可报的那一档也要把这一行占住：Column 是 spaceBetween，
+              // 少一个孩子就会把上面那排数字甩到底边上，一排六张卡片就它对不齐
               Text(
-                data.title,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface,
+                data.costHidden ? ' ' : '≈ ${data.cost.toStringAsFixed(2)} 元',
+                style: TextStyle(
+                  fontSize: m.fontSize11,
+                  color: p.ink.withAlpha(130),
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ],
           ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                unit.format(data.consumption),
-                style: TextStyle(
-                  fontSize: m.fontSize18,
-                  fontWeight: FontWeight.w700,
-                  color: viz.amber.base,
-                  fontFamily: 'monospace',
-                ),
-              ),
-              SizedBox(width: m.kSpace4),
-              Text(
-                unit.label,
-                style: TextStyle(
-                  fontSize: m.fontSize10,
-                  color: theme.colorScheme.onSurface.withAlpha(100),
-                ),
-              ),
-            ],
-          ),
-          if (!data.costHidden)
-            Text(
-              '≈ ${data.cost.toStringAsFixed(2)} 元',
-              style: TextStyle(
-                fontSize: m.fontSize11,
-                color: theme.colorScheme.onSurface.withAlpha(120),
-                fontFamily: 'monospace',
-              ),
+          // 底缘那条身份下划线：长度就是"这个窗口占 30 天总量的比例"
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: PsGradientBar(
+              value: _dimensionShare(data.consumption),
+              gradient: p.underline(),
+              height: m.strokeBold,
             ),
+          ),
         ],
       ),
     );
   }
 
+  /// 该维度相对 30 天总量的占比，只用来定下划线那根条的长度
+  double _dimensionShare(double consumption) {
+    final total = _viewModel.getSummaryConsumption('thirty_day_consumption');
+    if (total <= 0) return 0;
+    return (consumption / total).clamp(0.0, 1.0);
+  }
+
   // ── 配置卡片 ────────────────────────────────────────────────────────────
-  Widget _buildConfigCard(BuildContext context, ThemeData theme, ThemeMetrics m) {
+  Widget _buildConfigCard(BuildContext context, ThemeMetrics m) {
     if (!_viewModel.isLocal) return const SizedBox.shrink();
+    final s = AppSemantic.of(context);
+    final p = PowerStatsPalette.of(context);
     return Obx(() {
-      return Container(
-        padding: EdgeInsets.all(m.kSpace16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: m.radius12,
-          border: Border.all(color: theme.dividerColor.withAlpha(40)),
-        ),
+      final enabled = _viewModel.isEnabled.value;
+      return PsGlassCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                DrawIcon(StrokeIcons.tune, size: m.iconSize14, color: theme.colorScheme.primary),
+                // 定时统计总开关：页头横幅折进这张卡之后，它理当和其余采集项待在一起
+                Container(
+                  width: m.kSpace24,
+                  height: m.kSpace24,
+                  decoration: BoxDecoration(
+                    color: enabled
+                        ? s.warning.color.withAlpha(30)
+                        : p.ink.withAlpha(10),
+                    borderRadius: m.radius6,
+                  ),
+                  child: DrawIcon(
+                    StrokeIcons.electricBolt,
+                    size: m.iconSize12,
+                    color: enabled ? s.warning.color : p.ink.withAlpha(80),
+                  ),
+                ),
                 SizedBox(width: m.kSpace8),
                 Text(
                   '采集配置',
                   style: TextStyle(
                     fontSize: m.fontSize15,
                     fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
+                    color: p.ink,
                   ),
+                ),
+                const Spacer(),
+                Switch(
+                  value: enabled,
+                  onChanged: (v) => _viewModel.toggleEnabled(v),
+                  activeThumbColor: s.warning.color,
                 ),
               ],
             ),
@@ -1123,17 +841,21 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                       labelText: '电表号',
                       hintText: '输入电表号 (如 19501609994)',
                       isDense: true,
-                      prefixIcon: DrawIcon(StrokeIcons.numbers,
+                      prefixIcon: DrawIcon(
+                        StrokeIcons.numbers,
                         size: m.iconSize16,
                       ),
                     ),
-                    style: TextStyle(fontSize: m.fontSize13, fontFamily: 'monospace'),
+                    style: TextStyle(
+                      fontSize: m.fontSize13,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                     keyboardType: TextInputType.number,
                   ),
                 ),
                 SizedBox(width: m.kSpace8),
                 Material(
-                  color: theme.colorScheme.primary,
+                  color: p.accent,
                   borderRadius: m.radius8,
                   child: InkWell(
                     borderRadius: m.radius8,
@@ -1155,7 +877,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                         style: TextStyle(
                           fontSize: m.fontSize12,
                           fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onPrimary,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -1169,8 +891,9 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
               children: [
                 Text(
                   '轮询间隔',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withAlpha(140),
+                  style: TextStyle(
+                    fontSize: m.fontSize12,
+                    color: p.ink.withAlpha(150),
                   ),
                 ),
                 SizedBox(width: m.kSpace12),
@@ -1197,8 +920,8 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                     style: TextStyle(
                       fontSize: m.fontSize12,
                       fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.primary,
-                      fontFamily: 'monospace',
+                      color: p.accent,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                     textAlign: TextAlign.right,
                   ),
@@ -1222,7 +945,10 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                       onPressed: _viewModel.meterId.value.isEmpty
                           ? null
                           : () => _viewModel.startPolling(),
-                      icon: DrawIcon(StrokeIcons.playCircleOutline, size: m.iconSize14),
+                      icon: DrawIcon(
+                        StrokeIcons.playCircleOutline,
+                        size: m.iconSize14,
+                      ),
                       label: const Text('启动轮询'),
                     ),
                   ),
@@ -1243,40 +969,36 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
   }
 
   // ── 日志卡片 ────────────────────────────────────────────────────────────
-  Widget _buildLogCard(BuildContext context, ThemeData theme, ThemeMetrics m) {
+  Widget _buildLogCard(BuildContext context, ThemeMetrics m) {
     final s = AppSemantic.of(context);
+    final p = PowerStatsPalette.of(context);
     // 抓到的小时读数沿用"电量=amber"这套身份，跟上面的卡片与图表对齐
     final viz = AppVizSet.of(context);
     return Obx(() {
       final logs = _viewModel.logs;
-      return Container(
-        padding: EdgeInsets.all(m.kSpace16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: m.radius12,
-          border: Border.all(color: theme.dividerColor.withAlpha(40)),
-        ),
+      return PsGlassCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                DrawIcon(StrokeIcons.history, size: m.iconSize14, color: theme.colorScheme.primary),
+                DrawIcon(StrokeIcons.history, size: m.iconSize14, color: p.violet),
                 SizedBox(width: m.kSpace8),
                 Text(
                   '抓取日志',
                   style: TextStyle(
                     fontSize: m.fontSize15,
                     fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
+                    color: p.ink,
                   ),
                 ),
                 const Spacer(),
                 Text(
                   '${logs.length} 条',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withAlpha(100),
-                    fontFamily: 'monospace',
+                  style: TextStyle(
+                    fontSize: m.fontSize12,
+                    color: p.ink.withAlpha(110),
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ],
@@ -1288,8 +1010,9 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                   padding: EdgeInsets.symmetric(vertical: m.kSpace24),
                   child: Text(
                     '暂无日志',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withAlpha(80),
+                    style: TextStyle(
+                      fontSize: m.fontSize12,
+                      color: p.ink.withAlpha(100),
                     ),
                   ),
                 ),
@@ -1302,16 +1025,17 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: logs.length,
-                  separatorBuilder: (context, index) => Divider(
-                    height: 1,
-                    color: theme.dividerColor.withAlpha(30),
-                  ),
+                  separatorBuilder: (context, index) =>
+                      Divider(height: 1, color: p.ink.withAlpha(20)),
                   itemBuilder: (context, i) {
                     final log = logs[i];
                     final success = log['success'] as bool? ?? false;
                     final ts = log['timestamp'] as String? ?? '';
                     final msg = log['message'] as String? ?? '';
                     final kwh = (log['kwh'] as num?)?.toDouble() ?? 0.0;
+                    // 日志按时间正序存，读的人却要先看刚发生的那次，
+                    // 所以给最后一条加重一档字色，省得从头滚到尾找
+                    final isLatest = i == logs.length - 1;
                     return Padding(
                       padding: EdgeInsets.symmetric(vertical: m.kSpace6),
                       child: Row(
@@ -1331,8 +1055,8 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                               ts.split(' ').lastOrNull ?? ts,
                               style: TextStyle(
                                 fontSize: m.fontSize11,
-                                color: theme.colorScheme.onSurface.withAlpha(100),
-                                fontFamily: 'monospace',
+                                color: p.ink.withAlpha(isLatest ? 190 : 110),
+                                fontFeatures: const [FontFeature.tabularFigures()],
                               ),
                             ),
                           ),
@@ -1343,7 +1067,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                               style: TextStyle(
                                 fontSize: m.fontSize12,
                                 color: success
-                                    ? theme.colorScheme.onSurface.withAlpha(180)
+                                    ? p.ink.withAlpha(isLatest ? 230 : 170)
                                     : s.danger.color,
                               ),
                             ),
@@ -1355,7 +1079,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                               style: TextStyle(
                                 fontSize: m.fontSize11,
                                 color: viz.amber.to,
-                                fontFamily: 'monospace',
+                                fontFeatures: const [FontFeature.tabularFigures()],
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1371,21 +1095,99 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
       );
     });
   }
+
+  // ── 派生数据 ────────────────────────────────────────────────────────────
+
+  /// 远程节点进程重启后 status 的内存态会归零，而 summary 走节点数据库仍有值；
+  /// 谁有值用谁，免得卡片停在 0.000 而下面图表却有数据
+  double get _balanceYuan {
+    final live = _viewModel.currentYuan.value;
+    if (live > 0) return live;
+    return (_viewModel.summary['current_yuan'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  double get _balanceKwh {
+    final live = _viewModel.currentKwh.value;
+    if (live > 0) return live;
+    return (_viewModel.summary['current_kwh'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  String _clockOf(String ts) {
+    if (ts.isEmpty) return '尚未抓取';
+    return ts.split(' ').lastOrNull ?? ts;
+  }
+
+  /// 拿到一条新读数就推一个抓取事件：横幅擦入、曲线末端涟漪、卡外发光同步起。
+  ///
+  /// 判重键带上 last_result 而不只是时间戳——抓取失败时 Rust 不一定更新 last_fetch，
+  /// 但失败原因一定变，否则失败那一下没有任何视觉交代。
+  void _emitFetchEvent() {
+    final ts = _viewModel.lastFetch.value;
+    final result = _viewModel.lastResult.value;
+    if (ts.isEmpty && result.isEmpty) return;
+    final key = '$ts|$result';
+    if (key == _lastEventKey) return;
+    _lastEventKey = key;
+
+    // 失败判据走 last_result 的固定前缀：这个串是 Rust 侧 status.last_result
+    // 写死的两种格式之一，不是自由文本
+    final ok = !result.startsWith('抓取失败');
+    final yuan = _balanceYuan;
+
+    // 右侧那个大字报"这一次掉了多少钱"：电表余额只减不增，
+    // 第一次没有参照就退回显示当前余额
+    final prev = _prevYuan;
+    _prevYuan = yuan;
+    final String amount;
+    if (!ok) {
+      // 右侧那格报的是"这一次入账多少"，失败就是没有数额可报。
+      // 写"失败"和标题重一句话，写"未入账"才补出信息量
+      amount = '未入账';
+    } else if (prev == null) {
+      amount = '¥${yuan.toStringAsFixed(2)}';
+    } else {
+      final spent = prev - yuan;
+      amount = spent.abs() < 0.005
+          ? '±0'
+          : '${spent > 0 ? '-' : '+'}¥${spent.abs().toStringAsFixed(2)}';
+    }
+
+    setState(() {
+      _fetchEvent = PsFetchEvent(
+        id: ++_eventId,
+        title: ok ? '抓取成功' : '抓取失败',
+        // 成功时左侧报"什么时候抓的"就够了：last_result 的正文本身以
+        // "抓取成功"开头，再贴一遍就是和标题重复一句话。失败同理，
+        // 把 "抓取失败: " 剃掉只留原因
+        detail: ok
+            ? ts
+            : result.replaceFirst(RegExp(r'^抓取失败[:：]?\s*'), ''),
+        amount: amount,
+        ok: ok,
+      );
+    });
+  }
 }
 
 // ── 数据模型 ────────────────────────────────────────────────────────────────
 class _SummaryCardData {
   final StrokeIcon icon;
   final String label;
-  final String value;
+
+  /// 原始值：电量一律存 kWh，展示换算交给 [format]
+  final double value;
   final String unit;
   final Color color;
+
+  /// 滚动数字的取值→文本换算：单位切换后同一个数要换个写法，所以格式必须是纯函数
+  final String Function(double) format;
   const _SummaryCardData({
     required this.icon,
     required this.label,
     required this.value,
     required this.unit,
     required this.color,
+    required this.format,
   });
 }
 
@@ -1402,558 +1204,4 @@ class _DimensionData {
     required this.icon,
     this.costHidden = false,
   });
-}
-
-// ── 交互式图表（hover十字线 + tooltip）──────────────────────────────────────
-
-/// 图表数值的自适应小数位：数值越大位数越少，避免 Wh 下出现一长串无意义小数
-String _formatPowerValue(double v) {
-  final a = v.abs();
-  if (a >= 1000) return v.toStringAsFixed(0);
-  if (a >= 100) return v.toStringAsFixed(1);
-  if (a >= 1) return v.toStringAsFixed(2);
-  return v.toStringAsFixed(3);
-}
-
-class _InteractivePowerChart extends StatefulWidget {
-  final List<PowerStatBucket> buckets;
-  final PowerChartMetric metric;
-  final Color color;
-  final String unit;
-  /// kWh → 展示单位的换算系数（余额/电费恒为 1）
-  final double unitScale;
-
-  const _InteractivePowerChart({
-    required this.buckets,
-    required this.metric,
-    required this.color,
-    required this.unit,
-    this.unitScale = 1.0,
-  });
-
-  @override
-  State<_InteractivePowerChart> createState() => _InteractivePowerChartState();
-}
-
-class _InteractivePowerChartState extends State<_InteractivePowerChart> {
-  // 图表内边距，需与 _ChartCanvas 保持一致
-  static const double _padLeft = 44.0;
-  static const double _padRight = 14.0;
-
-  int? _hoverIndex;
-
-  double _value(PowerStatBucket b) {
-    switch (widget.metric) {
-      case PowerChartMetric.consumption:
-        return b.consumptionKwh * widget.unitScale;
-      case PowerChartMetric.balance:
-        return b.balanceYuan;
-      case PowerChartMetric.cost:
-        return b.costYuan;
-    }
-  }
-
-  // 根据横坐标定位最近的数据点索引
-  int _findNearestIndex(double localX, Size size) {
-    final n = widget.buckets.length;
-    if (n == 0) return -1;
-    if (n == 1) return 0;
-    final chartW = size.width - _padLeft - _padRight;
-    final ratio = ((localX - _padLeft) / chartW).clamp(0.0, 1.0);
-    return (ratio * (n - 1)).round();
-  }
-
-  // 计算数据点屏幕坐标（用于定位 tooltip）
-  List<Offset> _computePoints(Size size, double minV, double maxV) {
-    final padTop = 12.0;
-    final padBottom = 26.0;
-    final chartW = size.width - _padLeft - _padRight;
-    final chartH = size.height - padTop - padBottom;
-    final range = maxV - minV;
-    final n = widget.buckets.length;
-    final points = <Offset>[];
-    for (int i = 0; i < n; i++) {
-      final x = _padLeft + (n == 1 ? chartW / 2 : chartW * i / (n - 1));
-      final normalized = range == 0 ? 0.5 : (maxV - _value(widget.buckets[i])) / range;
-      points.add(Offset(x, padTop + chartH * normalized));
-    }
-    return points;
-  }
-
-  (double, double) _computeRange() {
-    final values = widget.buckets.map(_value).toList();
-    double maxV = values.reduce(math.max);
-    double minV = values.reduce(math.min);
-    if (widget.metric == PowerChartMetric.balance) {
-      if (maxV == minV) {
-        maxV = maxV + 1;
-        minV = (minV - 1).clamp(0.0, double.infinity);
-      }
-    } else {
-      minV = 0;
-      if (maxV <= 0) maxV = 1;
-    }
-    return (minV, maxV);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final s = AppSemantic.of(context);
-    final m = AppTheme.metrics;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = Size(constraints.maxWidth, constraints.maxHeight);
-        return MouseRegion(
-          onHover: (event) {
-            final idx = _findNearestIndex(event.localPosition.dx, size);
-            if (idx >= 0 && idx != _hoverIndex) {
-              setState(() => _hoverIndex = idx);
-            }
-          },
-          onExit: (_) {
-            if (_hoverIndex != null) {
-              setState(() => _hoverIndex = null);
-            }
-          },
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanStart: (d) => _updateHover(d.localPosition.dx, size),
-            onPanUpdate: (d) => _updateHover(d.localPosition.dx, size),
-            onTapDown: (d) => _updateHover(d.localPosition.dx, size),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                CustomPaint(
-                  size: size,
-                  painter: _ChartCanvas(
-                    buckets: widget.buckets,
-                    metric: widget.metric,
-                    color: widget.color,
-                    textColor:
-                        theme.textTheme.bodySmall?.color ?? s.textTertiary,
-                    // 数据点外圈要挖出卡片表面那层底，不能写死白：暗色下白圈会
-                    // 在深灰卡上变成一圈"亮斑"
-                    surfaceColor: s.surface,
-                    gridColor: theme.dividerColor.withAlpha(40),
-                    hoverIndex: _hoverIndex,
-                    unitScale: widget.unitScale,
-                  ),
-                ),
-                if (_hoverIndex != null &&
-                    _hoverIndex! < widget.buckets.length)
-                  _buildTooltip(context, size, theme, m),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _updateHover(double localX, Size size) {
-    final idx = _findNearestIndex(localX, size);
-    if (idx >= 0 && idx != _hoverIndex) {
-      setState(() => _hoverIndex = idx);
-    }
-  }
-
-  Widget _buildTooltip(
-    BuildContext context,
-    Size size,
-    ThemeData theme,
-    ThemeMetrics m,
-  ) {
-    final s = AppSemantic.of(context);
-    final idx = _hoverIndex!;
-    final (minV, maxV) = _computeRange();
-    final points = _computePoints(size, minV, maxV);
-    final p = points[idx];
-    final bucket = widget.buckets[idx];
-
-    String metricLabel;
-    String valueText;
-    double currentValue;
-    double? prevValue;
-    bool isUpGood = true; // 上升为正面（绿）还是负面（红）
-    switch (widget.metric) {
-      case PowerChartMetric.consumption:
-        metricLabel = '耗电量';
-        currentValue = _value(bucket);
-        valueText = '${_formatPowerValue(currentValue)} ${widget.unit}';
-        // 耗电量上升=多用电=负面（红），下降=省电=正面（绿）
-        isUpGood = false;
-      case PowerChartMetric.balance:
-        metricLabel = '余额';
-        currentValue = _value(bucket);
-        valueText = '${_formatPowerValue(currentValue)} ${widget.unit}';
-        // 余额上升=正面（绿），下降=负面（红）
-        isUpGood = true;
-      case PowerChartMetric.cost:
-        metricLabel = '电费';
-        currentValue = _value(bucket);
-        valueText = '${_formatPowerValue(currentValue)} ${widget.unit}';
-        // 电费上升=负面（红），下降=正面（绿）
-        isUpGood = false;
-    }
-    // 取上一个数据点对比
-    if (idx > 0) {
-      prevValue = _value(widget.buckets[idx - 1]);
-    }
-
-    // 环比百分比
-    String? changeText;
-    // 环比是一枚状态徽标：整条角色（水洗底 + 底上字）一起给，别只挑个色值
-    AppStatusRole? changeRole;
-    if (prevValue != null && prevValue.abs() > 0.0001) {
-      final change = currentValue - prevValue;
-      final pct = (change / prevValue.abs()) * 100;
-      if (pct.abs() < 0.01) {
-        changeText = '持平';
-        changeRole = s.neutral;
-      } else {
-        final arrow = pct > 0 ? '↑' : '↓';
-        changeText = '$arrow ${pct.abs().toStringAsFixed(1)}%';
-        // 上升且上升为好 → 成功色；上升且上升为坏 → 危险色
-        final isUp = pct > 0;
-        final isGood = isUp == isUpGood;
-        changeRole = isGood ? s.success : s.danger;
-      }
-    } else if (prevValue != null && prevValue.abs() <= 0.0001) {
-      changeText = '新增';
-      changeRole = s.info;
-    }
-
-    // 不再用 TextPainter 估宽：估少一点，数值就被行内的压缩规则挤成 "0.0…"，
-    // 而 monospace 的真实字宽还受 textScaler/字体回退影响，估算注定不准。
-    // 改成让内容按自然宽度排布，定位交给 CustomSingleChildLayout 用实测尺寸夹紧。
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: CustomSingleChildLayout(
-          delegate: _TooltipLayoutDelegate(anchor: p),
-          child: ConstrainedBox(
-            // 太短的读数（如 "0.000 kWh"）也给 tooltip 一个体面的最小宽度，
-            // 免得只剩一枚孤零零的小标签。
-            constraints: const BoxConstraints(minWidth: 96.0),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: m.kSpace10,
-                vertical: m.kSpace8,
-              ),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withAlpha(248),
-                borderRadius: m.radius8,
-                border: Border.all(color: widget.color.withAlpha(120), width: AppTheme.metrics.strokeHairline),
-                boxShadow: [
-                  BoxShadow(
-                    color: s.shadowKey.withAlpha(60),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    bucket.label,
-                    style: TextStyle(
-                      fontSize: m.fontSize11,
-                      color: theme.colorScheme.onSurface.withAlpha(160),
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                  SizedBox(height: m.kSpace4),
-                  // 不收 Expanded/Flexible：父约束是无界的，flex 子项在无限宽下会
-                  // 直接断言失败；自然宽度下也不会有任何东西被截断。
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: m.kSpace8,
-                        height: m.kSpace8,
-                        decoration: BoxDecoration(
-                          color: widget.color,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      SizedBox(width: m.kSpace8),
-                      Text(
-                        valueText,
-                        style: TextStyle(
-                          fontSize: m.fontSize13,
-                          fontWeight: FontWeight.w700,
-                          color: widget.color,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                      if (changeText != null && changeRole != null) ...[
-                        SizedBox(width: m.kSpace8),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: m.kSpace6,
-                            vertical: m.kSpace2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: changeRole.color.withAlpha(20),
-                            borderRadius: m.radius4,
-                          ),
-                          child: Text(
-                            changeText,
-                            style: TextStyle(
-                              fontSize: m.fontSize10,
-                              fontWeight: FontWeight.w700,
-                              color: changeRole.onContainer,
-                              fontFamily: 'monospace',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  SizedBox(height: m.kSpace4),
-                  Text(
-                    metricLabel,
-                    style: TextStyle(
-                      fontSize: m.fontSize10,
-                      color: theme.colorScheme.onSurface.withAlpha(120),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 把 tooltip 摆到锚点上方，越界时翻转或夹紧。
-///
-/// 尺寸由 child 自己量出来（getConstraintsForChild 松绑约束），所以这里的
-/// childSize 就是真实渲染尺寸，不存在"估宽估少了把文字挤断"的可能。
-class _TooltipLayoutDelegate extends SingleChildLayoutDelegate {
-  const _TooltipLayoutDelegate({required this.anchor});
-
-  final Offset anchor;
-
-  @override
-  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
-      constraints.loosen();
-
-  @override
-  Offset getPositionForChild(Size size, Size childSize) {
-    double left = anchor.dx - childSize.width / 2;
-    if (left < 2) left = 2;
-    if (left + childSize.width > size.width - 2) {
-      left = size.width - childSize.width - 2;
-    }
-    double top = anchor.dy - childSize.height - 10;
-    if (top < 2) top = anchor.dy + 10;
-    return Offset(left, top);
-  }
-
-  @override
-  bool shouldRelayout(_TooltipLayoutDelegate oldDelegate) =>
-      oldDelegate.anchor != anchor;
-}
-
-class _ChartCanvas extends CustomPainter {
-  final List<PowerStatBucket> buckets;
-  final PowerChartMetric metric;
-  final Color color;
-  final Color textColor;
-  final Color gridColor;
-
-  /// 卡片表面色：数据点那圈"挖空"要用它，写死白在暗色下就是一圈亮斑
-  final Color surfaceColor;
-  final int? hoverIndex;
-  /// kWh → 展示单位的换算系数（余额/电费恒为 1）
-  final double unitScale;
-
-  _ChartCanvas({
-    required this.buckets,
-    required this.metric,
-    required this.color,
-    required this.textColor,
-    required this.gridColor,
-    required this.surfaceColor,
-    this.hoverIndex,
-    this.unitScale = 1.0,
-  });
-
-  double _value(PowerStatBucket b) {
-    switch (metric) {
-      case PowerChartMetric.consumption:
-        return b.consumptionKwh * unitScale;
-      case PowerChartMetric.balance:
-        return b.balanceYuan;
-      case PowerChartMetric.cost:
-        return b.costYuan;
-    }
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (buckets.isEmpty) return;
-
-    const padLeft = 44.0;
-    const padRight = 14.0;
-    const padTop = 12.0;
-    const padBottom = 26.0;
-    final chartW = size.width - padLeft - padRight;
-    final chartH = size.height - padTop - padBottom;
-    if (chartW <= 0 || chartH <= 0) return;
-
-    final values = buckets.map(_value).toList();
-    double maxV = values.reduce(math.max);
-    double minV = values.reduce(math.min);
-    if (metric == PowerChartMetric.balance) {
-      // 余额范围按数据自适应
-      if (maxV == minV) {
-        maxV = maxV + 1;
-        minV = (minV - 1).clamp(0.0, double.infinity);
-      }
-    } else {
-      // 耗电量/电费从0开始
-      minV = 0;
-      if (maxV <= 0) maxV = 1;
-    }
-    final range = maxV - minV;
-
-    // 网格 + Y轴标签
-    final gridPaint = Paint()
-      ..color = gridColor
-      ..strokeWidth = AppTheme.metrics.strokeUltraThin;
-    for (int i = 0; i <= 4; i++) {
-      final y = padTop + chartH * i / 4;
-      canvas.drawLine(Offset(padLeft, y), Offset(padLeft + chartW, y), gridPaint);
-      final v = maxV - range * i / 4;
-      _drawText(
-        canvas,
-        _formatPowerValue(v),
-        Offset(2, y - 6),
-        TextStyle(color: textColor.withAlpha(120), fontSize: AppTheme.metrics.fontSize9),
-      );
-    }
-
-    // 计算坐标点
-    final points = <Offset>[];
-    for (int i = 0; i < buckets.length; i++) {
-      final x = padLeft +
-          (buckets.length == 1 ? chartW / 2 : chartW * i / (buckets.length - 1));
-      final normalized = range == 0 ? 0.5 : (maxV - values[i]) / range;
-      final y = padTop + chartH * normalized;
-      points.add(Offset(x, y));
-    }
-
-    // X轴标签（最多8个）
-    final labelCount = math.min(buckets.length, 8);
-    final step =
-        buckets.length > 1 ? (buckets.length - 1) / (labelCount - 1) : 0.0;
-    for (int i = 0; i < labelCount; i++) {
-      final idx = buckets.length > 1 ? (i * step).round() : 0;
-      final x = buckets.length > 1
-          ? padLeft + chartW * i / (labelCount - 1)
-          : padLeft + chartW / 2;
-      _drawText(
-        canvas,
-        buckets[idx].label,
-        Offset(x - 14, padTop + chartH + 8),
-        TextStyle(color: textColor.withAlpha(120), fontSize: AppTheme.metrics.fontSize9),
-      );
-    }
-
-    // 渐变填充区域：折线 → 右下角 → 左下角 → 回到折线起点，闭合出一条沿底边的带。
-    // 不能用 addPolygon：它会 moveTo(points.first) 另起一条子路径，把前面那个
-    // "从底边起步"的点甩在另一条子路径里，之后的 lineTo/close 于是接在折线尾巴上，
-    // 闭合线变成从右下角斜着拉回左上角第一个点——屏幕上就是一块大三角。
-    if (points.length >= 2) {
-      final baseY = padTop + chartH;
-      final fillPath = Path()
-        ..moveTo(points.first.dx, baseY)
-        ..lineTo(points.first.dx, points.first.dy);
-      for (final pt in points.skip(1)) {
-        fillPath.lineTo(pt.dx, pt.dy);
-      }
-      fillPath
-        ..lineTo(points.last.dx, baseY)
-        ..close();
-      final fillPaint = Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [color.withAlpha(80), color.withAlpha(0)],
-        ).createShader(Rect.fromLTWH(padLeft, padTop, chartW, chartH));
-      canvas.drawPath(fillPath, fillPaint);
-    }
-
-    // 折线
-    final linePaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = AppTheme.metrics.strokeRegular
-      ..strokeJoin = StrokeJoin.round
-      ..strokeCap = StrokeCap.round;
-    if (points.length >= 2) {
-      canvas.drawPoints(ui.PointMode.polygon, points, linePaint);
-    }
-
-    // 数据点（默认小点）
-    final dotPaint = Paint()..color = color;
-    final ringPaint = Paint()
-      ..color = surfaceColor
-      ..style = PaintingStyle.fill;
-    for (final p in points) {
-      canvas.drawCircle(p, 3, ringPaint);
-      canvas.drawCircle(p, 2, dotPaint);
-    }
-
-    // 十字线 + 高亮点（hover 时）
-    if (hoverIndex != null && hoverIndex! < points.length) {
-      final hp = points[hoverIndex!];
-      final crossPaint = Paint()
-        ..color = color.withAlpha(140)
-        ..strokeWidth = 0.8
-        ..style = PaintingStyle.stroke;
-      // 垂直十字线
-      canvas.drawLine(
-        Offset(hp.dx, padTop),
-        Offset(hp.dx, padTop + chartH),
-        crossPaint,
-      );
-      // 水平十字线
-      canvas.drawLine(
-        Offset(padLeft, hp.dy),
-        Offset(padLeft + chartW, hp.dy),
-        crossPaint,
-      );
-      // 高亮光晕
-      final haloPaint = Paint()
-        ..color = color.withAlpha(50)
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(hp, 9, haloPaint);
-      canvas.drawCircle(hp, 5, ringPaint);
-      canvas.drawCircle(hp, 3.5, dotPaint);
-    }
-  }
-
-  void _drawText(Canvas canvas, String text, Offset pos, TextStyle style) {
-    final tp = TextPainter(
-      text: TextSpan(text: text, style: style),
-      textDirection: ui.TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, pos);
-  }
-
-  @override
-  bool shouldRepaint(covariant _ChartCanvas old) =>
-      old.buckets != buckets ||
-      old.metric != metric ||
-      old.color != color ||
-      old.surfaceColor != surfaceColor ||
-      old.hoverIndex != hoverIndex ||
-      old.unitScale != unitScale;
 }
