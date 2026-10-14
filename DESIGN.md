@@ -1,47 +1,325 @@
+---
+version: beta
+name: SlimeWorks Design System
+description: 柔彩氛围底 + 玻璃层 + 渐变强调的界面语言（v2）。取色只走 AppSemantic + AppAtmosphere，尺寸只走 AppTheme.metrics 的 scaleW/scaleS 两族，动效只走 AppMotion；本文是这三者的唯一口径来源，试验田是已验收的电量统计页。
+colors:
+  # ── 已确认：逐条采自 lib/pages/power_stats/power_stats_theme.dart（本页已出图验收）──
+  ink: "#261A3A"
+  ink-dark: "#F1EEFA"
+  accent: "#2F65DE"
+  accent-dark: "#7C9BFF"
+  accent-solid: "#2F65DE"
+  accent-solid-dark: "#3B63D8"
+  accent-on: "#FFFFFF"
+  violet: "#715FFD"
+  violet-dark: "#9C8CFF"
+  data-rise: "#0CA678"
+  data-rise-dark: "#3FD19C"
+  data-fall: "#F06E81"
+  data-fall-dark: "#FF8DA0"
+  warm: "#FF855A"
+  warm-dark: "#FFA07A"
+  cool: "#1B8FB5"
+  cool-dark: "#5AC8E0"
+  canvas: "#F3E7E4"
+  canvas-dark: "#1B1826"
+  atmosphere-warm: "#F9DAC4"
+  atmosphere-lilac: "#D4D1E9"
+  atmosphere-sky: "#D3E4F6"
+  atmosphere-dark-warm: "#241C33"
+  atmosphere-dark-indigo: "#1A1E2E"
+  glass-tint: "#FFFFFF96"
+  glass-tint-dark: "#221C38A5"
+  glass-border: "#FFFFFFA0"
+  glass-border-dark: "#FFFFFF22"
+  glass-highlight: "#FFFFFFC8"
+  glass-highlight-dark: "#FFFFFF1A"
+  chip-rest: "#FFFFFFAA"
+  chip-rest-dark: "#FFFFFF18"
+  atmosphere-shadow: "#5B4A7F26"
+  atmosphere-shadow-dark: "#00000046"
+  # ── 派生档（尚未出图确认，落地时按 §11 重跑明暗基线）──
+  surface: "#FFFFFF"
+  surface-dark: "#221C38"
+  surface-sunken: "#F1ECF6"
+  surface-sunken-dark: "#1B1728"
+  text-secondary: "#5A4C72"
+  text-secondary-dark: "#B9B0D0"
+  text-tertiary: "#82749B"
+  text-tertiary-dark: "#8F86A8"
+  text-disabled: "#B3A8C6"
+  text-disabled-dark: "#5F587A"
+  border: "#DDD5E8"
+  border-dark: "#3A3352"
+  border-strong: "#A79BC0"
+  border-strong-dark: "#5D5480"
+  hairline: "#261A3A1A"
+  hairline-dark: "#F1EEFA1A"
+  scrim: "#000000B3"
+  # ── 语义状态色：v2 不动（见 §2.5 的"涨跌不是状态"）──
+  success: "#00BB7F"
+  warning: "#EDB200"
+  danger: "#E40014"
+  info: "#8D54FF"
+  neutral: "#737373"
+typography:
+  display-number:
+    fontFamily: "Inter, PingFang SC, Hiragino Sans GB, Microsoft YaHei, Noto Sans SC"
+    fontSize: 52px
+    fontWeight: 700
+    lineHeight: 1.02
+    letterSpacing: -1.5px
+  metric:
+    fontFamily: "Inter, PingFang SC, Noto Sans SC"
+    fontSize: 28px
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: -0.2px
+  heading-page:
+    fontFamily: "Inter, PingFang SC, Noto Sans SC"
+    fontSize: 15px
+    fontWeight: 600
+    lineHeight: 1.35
+    letterSpacing: 0px
+  heading-card:
+    fontFamily: "Inter, PingFang SC, Noto Sans SC"
+    fontSize: 13px
+    fontWeight: 600
+    lineHeight: 1.35
+    letterSpacing: 0px
+  row-title:
+    fontFamily: "Inter, PingFang SC, Noto Sans SC"
+    fontSize: 13px
+    fontWeight: 500
+    lineHeight: 1.4
+    letterSpacing: 0px
+  body:
+    fontFamily: "Inter, PingFang SC, Noto Sans SC"
+    fontSize: 13px
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: 0px
+  caption:
+    fontFamily: "Inter, PingFang SC, Noto Sans SC"
+    fontSize: 11px
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: 0px
+  overline:
+    fontFamily: "Inter, PingFang SC, Noto Sans SC"
+    fontSize: 11px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 1.2px
+  badge:
+    fontFamily: "Inter, PingFang SC, Noto Sans SC"
+    fontSize: 11px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.8px
+  code:
+    fontFamily: "Menlo, Consolas, DejaVu Sans Mono, Liberation Mono, monospace"
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: 0px
+rounded:
+  none: 0px
+  xs: 6px
+  float: 8px
+  sm: 10px
+  dense: 14px
+  md: 16px
+  lg: 20px
+  xl: 24px
+  full: 999px
+spacing:
+  xxs: 2px
+  xs: 4px
+  sm: 6px
+  md: 8px
+  lg: 12px
+  xl: 16px
+  xxl: 20px
+  xxxl: 24px
+  section: 40px
+components:
+  glass-card:
+    backgroundColor: "{colors.glass-tint}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    padding: "16px"
+  glass-card-lifted:
+    backgroundColor: "{colors.glass-tint}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    padding: "16px"
+  glass-card-glow:
+    backgroundColor: "{colors.glass-tint}"
+    textColor: "{colors.accent}"
+    rounded: "{rounded.md}"
+  hero-panel:
+    backgroundColor: "{colors.glass-tint}"
+    textColor: "{colors.ink}"
+    typography: "{typography.display-number}"
+    rounded: "{rounded.md}"
+    padding: "16px"
+  card-dense:
+    backgroundColor: "{colors.glass-tint}"
+    textColor: "{colors.ink}"
+    typography: "{typography.caption}"
+    rounded: "{rounded.dense}"
+    padding: "12px 12px 10px"
+  glass-card-glow:
+    backgroundColor: "{colors.glass-tint}"
+    textColor: "{colors.accent}"
+    rounded: "{rounded.md}"
+  pill-filled:
+    backgroundColor: "{colors.accent-solid}"
+    textColor: "{colors.accent-on}"
+    typography: "{typography.badge}"
+    rounded: "{rounded.full}"
+    padding: "6px 12px"
+  pill-wash:
+    textColor: "{colors.accent}"
+    typography: "{typography.badge}"
+    rounded: "{rounded.full}"
+    padding: "6px 12px"
+  section-label:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.overline}"
+  range-stop:
+    backgroundColor: "{colors.warm}"
+    textColor: "{colors.accent-on}"
+    typography: "{typography.badge}"
+    rounded: "{rounded.full}"
+    size: "52px x 24px"
+  range-stop-rest:
+    backgroundColor: "{colors.chip-rest}"
+    textColor: "{colors.ink}"
+    typography: "{typography.badge}"
+    rounded: "{rounded.full}"
+    size: "52px x 24px"
+  button-primary:
+    backgroundColor: "{colors.accent}"
+    textColor: "{colors.accent-on}"
+    typography: "{typography.row-title}"
+    rounded: "{rounded.sm}"
+    height: 32px
+  text-input:
+    backgroundColor: "{colors.surface-sunken}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.sm}"
+    padding: "8px 12px"
+  chart-tooltip:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.caption}"
+    rounded: "{rounded.float}"
+    padding: "8px 10px"
+  sidebar-row-selected:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.row-title}"
+    rounded: "{rounded.sm}"
+    height: 30px
+  modal:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.heading-card}"
+    rounded: "{rounded.lg}"
+    padding: "20px"
+---
+
 # SlimeWorks 设计系统
 
-> 一套**中性底 + 反相墨主色**的界面语言：层次靠明度阶梯和 1px 实心描边拉开，不靠染色；
-> 反馈靠同一个形状改尺寸/改圆角/改颜色，不靠加东西。本文是**取色、取尺寸、取动效的唯一口径来源**。
+> 一套**柔彩氛围底 + 玻璃层 + 渐变强调**的界面语言（v2）：层次靠"透出底色的玻璃 + 有色投影"
+> 拉开，不靠灰阶阶梯；反馈靠同一个形状改尺寸/改圆角/改发光，**且只在真的发生了事情时动**。
+> 本文是**取色、取尺寸、取动效的唯一口径来源**。
 >
-> 代码入口：`lib/core/theme/`（令牌）+ `lib/core/widgets/`（组件）+ `lib/components/window/`（外壳）
+> 代码入口：`lib/core/theme/`（令牌：`app_semantics.dart` 角色 + `app_atmosphere.dart` 氛围 +
+> `app_viz.dart` 身份 + `app_theme.dart` 尺寸字阶 + `app_motion.dart` 节奏）
+> + `lib/core/widgets/`（组件）+ `lib/components/window/`（外壳）
 > + `lib/pages/theme_preview_screen.dart`（可视化总览，路由 `/theme-preview`）
 > + `lib/pages/motion_lab/`（动效参考集，隔离在主题之外，§12）。
 >
-> 阅读顺序：§1 分层 → §2 取色 → §3 尺寸 → §4 文字 → §5 动效 → §6 外壳 → §7 磨砂 → §8 响应式
-> → §9 组件 → §10 规范 → §11 验收 → §12 动效实验室 → §13 进度。
+> 阅读顺序：§0 总纲 → **§0.5 v2 废除了什么** → §1 分层 → §2 取色 → §3 尺寸 → §4 文字 →
+> §5 动效 → §6 外壳 → §7 玻璃 → §8 响应式 → §9 组件 → §10 规范 → §11 验收 →
+> §12 动效实验室 → §13 迁移进度 → §14 冲突与待确认。
 > 标了 **🔧 待落地** 的条目是已定的契约、代码还没跟上，改动时按契约做，不要按现状反推。
 
 ---
 
-## 0. 六条总纲
+## 0. 七条总纲
 
-1. **中性底**：所有表面都是纯灰，不掺色温。灰一旦带暖，卡片和画布的分层就发"糊"，状态色也跟着串味。
-2. **主色是墨，不是品牌色**：主按钮、选中态、开关走"反相"——浅色档压成近黑，深色档提为近白。
-   品牌紫退出主色位，只活在 `info` 和图表里当点缀。
-3. **描边承担层次，投影只承担"离地一点点"**：`border` 是实心灰阶、能独立成立；
-   投影整体压到极轻（`raised` 只有 y1/blur2）。投得越重越像贴了张纸上去。
-4. **一个形状，永不分裂**：一个控件的默认/悬停/选中/展开是**同一个元素**在改宽高、改圆角、
-   改底色，内容在切换瞬间糊一下。不叠第二层描边、不加第二颗光晕。
-5. **两族尺寸不能混用**：宽度族 `scaleW` 只跟窗口，字号族 `scaleS` 还乘用户的界面字号比例。
-   混用是本项目最贵的一次翻车（侧栏图标条被顶穿）。
-6. **桌面留磨砂，但磨砂只在"面板"上**：内容卡片一律实色，只有侧栏、顶栏、浮层这类
-   常驻/悬浮的面板透出底下内容。实色卡片叠模糊只会两头都不像。
+1. **柔彩底，不是灰底**：画布是一层**氛围**——对角线性渐变打底 + 四角径向色团叠出 mesh 感，
+   整个窗口只画一次（§7.4）。低饱和度是硬约束：色团一旦上饱和度，玻璃卡上的小灰字立刻读不出。
+2. **卡片是玻璃，密度面仍是实色**：内容卡走玻璃配方（着色 + 发丝描边 + **顶缘高光** + 有色投影），
+   底必须透出氛围层的色团；列表行 / 输入框 / 菜单行 / 图标底这类高密度面**一律实色或水洗**，
+   把它们玻璃化只会让整页发脏。
+3. **主色是柔彩蓝，墨色退成字色**：`accent` 是蓝（亮 `#2F65DE` / 暗 `#7C9BFF`），实心胶囊 + 白字
+   表达"这是主动作"；带冷紫相的墨（`#261A3A` / `#F1EEFA`）只做文字与轨道基线。
+   渐变里的中间档是紫（`violet`），品牌紫不再单列。
+4. **渐变只有三个容身之处**：**氛围层**、**图表填充**、**进度/轨道填充**（都是"同一个动作的起收点"，
+   成对给，§2.9.3）。按钮底、卡片底、输入底、图标底一律纯色——渐变铺在 UI 骨架上，
+   控件就从"一个形状"变成"一块装饰"。
+5. **发光只由事件驱动**：外发光是同一元素投影的一次性抬升（0→1→0）或状态点的呼吸，
+   不是装饰。层次仍然主要来自描边——玻璃上的描边是白 60%（亮）/ 白 13%（暗）。
+6. **一个形状，永不分裂**：默认/悬停/选中/展开是**同一个元素**在改宽高、圆角、底色、发光，
+   内容在切换瞬间糊一下。不叠第二层描边、不加第二颗常驻光晕。
+7. **两族尺寸不能混用**（v1 原样继承，仍是本项目最贵的一次翻车）：宽度族 `scaleW` 只跟窗口，
+   字号族 `scaleS` 还乘用户的界面字号比例。**展示型数字走宽度族**（§3.1 例外档）：
+   大数字要和面板一起长，且绝不允许被用户字号顶破卡片。
+
+---
+
+## 0.5 v2 废除了什么（改动前必读）
+
+v1 是"中性底 + 反相墨"，它的三条禁令正好是 v2 的三条主张。以下是**明确作废**的条目，
+读到旧代码/旧注释按这些结论处理，不要来回摆：
+
+| v1 原条 | v1 怎么说 | v2 结论 |
+|---|---|---|
+| §0.1 中性底 | 所有表面纯灰，不掺色温 | **作废**。掺冷紫相；纯灰只留在实色密度面（§2.1 派生档） |
+| §0.2 主色是墨 | 反相墨做主按钮/选中/开关 | **作废**。`accent` 换柔彩蓝，实心胶囊 + 白字（§2.1） |
+| §0.3 描边优先于投影 | 投影压到 y1/blur2 | **半作废**。实色面仍描边优先；玻璃面靠**顶缘高光 + 有色投影**（§2.4） |
+| §0.6 磨砂只在面板上 | 内容卡片一律实色 | **作废**。内容卡片就是玻璃，§7.1 改成"哪些面**不许**玻璃" |
+| §5.1 ❌ UI 骨架铺渐变 | 渐变只活在图表线里 | **收窄**。氛围层 + 图表 + 轨道/进度三处允许，其余仍纯色（§5.1） |
+| §5.1 ❌ 发光/glow | 层次只来自描边和投影 | **收窄**。事件驱动的一次性发光与状态点呼吸允许，常驻装饰发光仍禁（§5.1） |
+| §4 字重上限 w600 | 不用 w700 及以上 | **作废**。徽标与展示数字到 w700；资产里没有 800 档，现有 17 处 `w800` 全部收到 `w700`（§4） |
+| §2.5 状态色族 | 五档语义色 | **不动**。涨跌/多空是**身份**不是**状态**，柔彩的绿/粉/橙/青进 `AppAtmosphere`/`AppViz`（§2.5） |
+
+不变的地基：§1 分层、§2.2 水洗方向、§2.3 对比度下限、§2.7 媒体层 chrome、§2.8 三块自成一体的配色、
+§3 两族尺寸、§5.2 时长刻度、§5.3 曲线与弹簧、§6 外壳几何、§8 响应式、§11 验收姿势。
 
 ---
 
 ## 1. 分层：原始色 → 语义角色 → 组件
 
 ```
-app_colors.dart     原始调色板：色值本身，不含判断
+app_colors.dart      原始调色板：色值本身，不含判断
    ↓ 只被下一层引用
-app_semantics.dart  语义角色（ThemeExtension）：明暗在此一次性解析
-   ↓ 业务代码只碰这一层
-页面 / 组件          AppSemantic.of(context).surface …
+app_semantics.dart   语义**角色**（ThemeExtension）：明暗在此一次性解析
+app_atmosphere.dart  语义**氛围**（ThemeExtension，🔧 待落地）：背景分层 / 玻璃配方 /
+   ↓                  成对渐变 / 水洗档 / 发光——只有渐变和 composite 装饰
+app_viz.dart         身份色（图表线成对色）
+   ↓ 业务代码只碰这三层
+页面 / 组件           AppSemantic.of(context).surface · AppAtmosphere.of(context).glassCard
 ```
 
 `app_colors.dart` 里的 `LightColors` / `DarkColors` / `AppSurfaces` / `AppBrand` /
-`AppStatus` / `AppGlass` **不是给业务代码用的**，它们只负责被 `AppSemantic` 装配。
+`AppStatus` / `AppGlass` **不是给业务代码用的**，它们只负责被上面三层装配。
 业务代码写 `isDark ? DarkColors.x : LightColors.y` 就是绕过了这一层，属于待清理项（§11）。
+
+**为什么氛围要单开一档，而不是塞进 `AppSemantic`**：`AppSemantic` 是"角色"层，
+它的每个字段都是一条能在 lerp 里插值的颜色；氛围层的主体是 `LinearGradient` /
+`RadialGradient` 和一个 `List<BoxDecoration>`——`lerp` 对渐变只能整条换（现
+`accentGradient` 就是这么处理的），塞进角色层会让主题过渡出现"颜色在动、渐变在跳"的
+错位。分档之后调用点仍然是两行、两个入口，不存在第三套取色姿势。
 
 `style_tokens.dart` 是**采集自参考实现的令牌底料**（`DesignPalette` / `DesignRadius` /
 `DesignShadow` / `DesignType` / `DesignSpace` / `DesignFont`），**故意不接进运行时**：
@@ -50,74 +328,97 @@ app_semantics.dart  语义角色（ThemeExtension）：明暗在此一次性解�
 
 ---
 
-## 2. 取色唯一入口：`AppSemantic`
+## 2. 取色入口：`AppSemantic`（角色）+ `AppAtmosphere`（氛围）
 
 ```dart
 final s = AppSemantic.of(context);   // 或 context.semantic.surface
+final a = AppAtmosphere.of(context); // 背景层 / 玻璃配方 / 渐变——🔧 待落地
 final m = AppTheme.metrics;
 ```
 
-以 `ThemeExtension` 注册进 `ThemeData`，因此随明暗自动切换、参与主题过渡动画、
+两档都以 `ThemeExtension` 注册进 `ThemeData`，因此随明暗自动切换、参与主题过渡动画、
 调用点不需要 `brightness` 分支。
 
-### 2.1 角色表（当前真实值）
+**v2 的取色分界线**：一个颜色如果是"这块面是什么用途"的答案（字、描边、选中底、报错），
+走 `s.`；如果是"这块面用什么材质画"的答案（玻璃着色、顶缘高光、氛围投影、成对渐变），
+走 `a.`。`AppViz`（§2.6）管图表身份。三档之外不许再有第四种取色入口。
+
+### 2.1 角色表（v2 目标值）
+
+标 ✅ 的是电量统计页已出图验收的实测值（源：`lib/pages/power_stats/power_stats_theme.dart`）；
+标 🔧 的是按同一色相派生、**还没出图**的档——落地那一波必须重跑明暗基线才算定稿。
 
 **表面与描边**
 
 | 角色 | 亮色 | 暗色 | 用途 |
 |---|---|---|---|
-| `canvas` | `#FAFAFA` | `#0A0A0A` | 窗口画布，最外层底色 |
-| `surface` | `#FFFFFF` | `#171717` | 一级表面：卡片 / 面板 / 选中白卡 |
-| `surfaceRaised` | `#FFFFFF` | `#262626` | 二级表面：卡片内嵌块 / 浮起菜单 |
-| `surfaceSunken` | `#F5F5F5` | `#0F0F0F` | 下沉表面：输入框底 / 图标占位底 |
-| `surfaceHover` | `0x0A000000` | `0x14FFFFFF` | 悬停状态层（半透明水洗） |
-| `surfaceActive` | `0x14000000` | `0x1FFFFFFF` | 按压态 |
-| `hairline` | `0x0D000000`（5%） | `0x14FFFFFF`（8%） | 发丝分隔线：相邻表面几乎无接缝处 |
-| `border` | `#E5E5E5` | `0x1AFFFFFF` | 常规描边（亮色档是**实心灰**，不是半透明黑） |
-| `borderStrong` | `#A3A3A3` | `0x33FFFFFF` | 强描边：需要边界感处 |
+| `canvas` | 🔧 `#F3E7E4` | 🔧 `#1B1826` | 氛围层的**实底替身**：不画氛围层时（移动端、低端窗）用它；也是渐变第二档色标 |
+| `surface` | ✅ `#FFFFFF` | 🔧 `#221C38` | 实色密度面：列表行 / 选中卡 / 菜单 / 输入框 |
+| `surfaceRaised` | `#FFFFFF` | 🔧 `#2A2340` | 二级实色：卡片内嵌块 / 浮起菜单 |
+| `surfaceSunken` | 🔧 `#F1ECF6` | 🔧 `#1B1728` | 下沉面：输入框底 / 图标占位底 |
+| `surfaceHover` | `0x0A000000` | `0x14FFFFFF` | 悬停水洗（方向见 §2.2，**v2 不改**） |
+| `surfaceActive` | `0x14000000` | `0x1FFFFFFF` | 按压态（须改半透明，§13 遗留项） |
+| `hairline` | 🔧 `#261A3A1A` | 🔧 `#F1EEFA1A` | 发丝分隔线：实色面之间 |
+| `border` | 🔧 `#DDD5E8` | 🔧 `#3A3352` | 实色面描边 |
+| `borderStrong` | 🔧 `#A79BC0` | 🔧 `#5D5480` | 强描边：需要边界感处 |
 
-> `darkSurfaceSunken` 不能等于 `darkCanvas`：否则"下沉"控件（输入框 / 图标底板 / 侧栏）
-> 贴在画布上完全隐形，落在卡片上又像一个挖空的洞。
+> `canvas` 与 `surface` 的关系换了：v1 靠两者明度差分层，v2 靠**材质差**（氛围 vs 玻璃 vs 实色）。
+> 所以 `canvas` 现在必须是氛围渐变的**中间档**，否则氛围层缺席时页面底色和渐变对不上。
 
-**文字**
-
-| 角色 | 亮色 | 暗色 | 用途 |
-|---|---|---|---|
-| `textPrimary` | `#0A0A0A` | `#FAFAFA` | 主文字、图标默认色 |
-| `textSecondary` | `#525252` | `#A3A3A3` | 次级文字 |
-| `textTertiary` | `#737373` | `#737373` | 说明文字、分组标签 |
-| `textDisabled` | `#A3A3A3` | `#525252` | 禁用 |
-
-**强调色（反相墨）**
+**文字（带冷紫相的墨阶）**
 
 | 角色 | 亮色 | 暗色 | 用途 |
 |---|---|---|---|
-| `accent` | `#171717`（`AppBrand.ink`） | `#E5E5E5`（`AppBrand.inkInverse`） | 主按钮底、选中指示器、开关滑块 |
-| `accentOn` | `#FAFAFA` | `#171717` | 强调底上的文字 |
-| `accentText` | `textPrimary` | `textPrimary` | 选中文字（墨色语言里选中字不需要变色，只加粗） |
-| `accentContainer` | `#F5F5F5` | `#262626` | 选中底 / 图标底（低浓度强调） |
-| `accentContainerBorder` | `#E5E5E5` | `#404040` | 选中白卡的描边 |
-| `accentGradient` | 两端同色 `ink` | 两端同色 `inkInverse` | 只为还吃 `LinearGradient` 的老签名保留，**当纯色用** |
+| `textPrimary` | ✅ `#261A3A`（`ink`） | ✅ `#F1EEFA` | 主文字、大数字、图标默认色 |
+| `textSecondary` | 🔧 `#5A4C72` | 🔧 `#B9B0D0` | 次级文字 |
+| `textTertiary` | 🔧 `#82749B` | 🔧 `#8F86A8` | 说明文字、分组标签 |
+| `textDisabled` | 🔧 `#B3A8C6` | 🔧 `#5F587A` | 禁用 |
 
-**遮罩 / 投影 / 玻璃**
+> 试验页把弱化的墨一律写成 `p.ink.withAlpha(140 / 120 / 90 / 160)`（小标签、小数位、
+> 熄灭的点、单位尾巴）。全局化时**这四档水洗保留算式形式**，不进角色表：
+> 它们表达的是"同一个 `ink` 的不同在场程度"，拆成四个命名色反而丢掉了这层关系。
+> 只有跨页复用的正文/说明文字才用 `textSecondary/Tertiary`。
+
+**强调色（柔彩蓝）**
 
 | 角色 | 亮色 | 暗色 | 用途 |
 |---|---|---|---|
-| `scrim` | `0xB3000000` | `0xB3000000` | 模态遮罩 |
-| `shadowKey` | `0x0F000000` | `0x66000000` | 投影主层 |
-| `shadowAmbient` | `0x07000000` | `0x33000000` | 投影扩散层（自动 blur×2、y×2） |
-| `glassTint` | `0xB8FFFFFF` | `0x9E171717` | 玻璃面板着色 |
-| `glassPanelTint` | `0x8CFFFFFF` | `0x6B171717` | 常驻面板（比卡片更透，以便透出桌面） |
-| `glassBorder` | `border` | `border` | 玻璃上的发丝描边 |
+| `accent` | ✅ `#2F65DE` | ✅ `#7C9BFF` | 选中指示、滑轨游标、进度终点、刷新闪烁、图表线 |
+| `accentSolid` 🔧 | `#2F65DE` | **`#3B63D8`** | **实心胶囊/主按钮的底**（暗色档必须比 `accent` 深一档，见下方 ⚠️） |
+| `accentOn` | ✅ `#FFFFFF` | ✅ `#FFFFFF` | 强调实心底上的文字——**配对对象是 `accentSolid`，不是 `accent`** |
+
+⚠️ **暗色档的"实心底 + 白字"是算过的，不是看着像**：白字压 `#7C9BFF` 只有 **2.63:1**
+（WCAG AA 正文要 4.5:1），压 `#2F65DE` 是 **5.2:1**，压 `#3B63D8` 是 **5.3:1**。
+所以试验页那种"filled 胶囊用 `accent` 底 + 白字"在暗色档**不达标**，全局化时拆成两档：
+`accent` 负责"亮着的东西"（线、游标、闪烁、字），`accentSolid` 负责"要压白字的实心底"。
+亮色档两者同值。**任何新加的实心底都要回 `AppTheme._ensureContrast()` 走一遍**（§2.3）。
+| `accentText` | `#2F65DE` | `#7C9BFF` | 选中文字：**v2 起选中字要变色**（墨色语言才靠加粗，彩色语言靠同色） |
+| `accentContainer` | `#2F65DE` @ 13% | `#7C9BFF` @ 18% | 选中底 / 图标底（低浓度强调，浓度规则同 §2.5） |
+| `accentContainerBorder` | `#2F65DE` @ 26% | `#7C9BFF` @ 34% | 选中卡描边 |
+| `accentGradient` | ✅ `violet → accent`（峰值柱那档） | 同 | v2 起**是真的渐变**，不再是"当纯色用"的兼容档 |
+
+**遮罩 / 投影 / 玻璃**（玻璃配方本体在 §2.9，这里只列角色层保留的那几项）
+
+| 角色 | 亮色 | 暗色 | 用途 |
+|---|---|---|---|
+| `scrim` | `0xB3000000` | `0xB3000000` | 模态遮罩（不动） |
+| `shadowKey` | 🔧 `#5B4A7F26` | ✅ `#00000046` | 投影主层：**带色相**，不再是纯黑（v1 是 `0x0F000000`） |
+| `shadowAmbient` | `0x07000000` | `0x33000000` | 扩散层，只服务于 §2.4 的浮层/弹窗两档 |
+| `glassTint` | ✅ `#FFFFFF96` | ✅ `#221C38A5` | 玻璃卡着色（= v1 的面板着色升级为默认材质） |
+| `glassPanelTint` | 🔧 `#FFFFFF7A` | 🔧 `#1B182685` | 常驻面板（侧栏/顶栏）：比卡片更透，好透出氛围层 |
+| `glassBorder` | ✅ `#FFFFFFA0` | ✅ `#FFFFFF22` | 玻璃发丝描边 |
+| `glassHighlight` | ✅ `#FFFFFFC8` | ✅ `#FFFFFF1A` | **新增**：顶缘那道比下沿亮的高光线（§7.2） |
 | `glassBlur` | `24`（`AppGlass.blurMedium`） | 同 | 背景模糊半径 |
 
 ### 2.2 状态层方向：**水洗永远朝"看得见"那侧走**
 
 这是本项目踩过最深的一个坑，值得单独写死。
 
-- 亮色侧表面本来就是白（`#FFFFFF` 卡片 / `#FAFAFA` 画布），再叠半透明**白**是零反馈。
+- 亮色侧表面本来就是白（`#FFFFFF` 实色面 / 近白的氛围渐变），再叠半透明**白**是零反馈。
   历史上 `lightSurfaceHover = 0x2DFFFFFF` 正是这个值——卡片、列表行、菜单在亮色模式
-  下**完全没有悬停**。现改为半透明黑，压白得 `#F5F5F5`、压画布得 `#F0F0F0`，依旧透得下去。
+  下**完全没有悬停**。现改为半透明黑，压白得 `#F5F5F5`、压氛围得 `#EDE4EA` 一带，依旧透得下去。
+  **v2 不换方向**：氛围层再花，水洗这条仍朝"压深"走；玻璃面上的水洗则走 `a.glassHighlight`
+  提亮那一档（§7.2），不要在同一张卡上既压深又提亮。
 - 暗色侧表面比白暗，所以继续用**提亮**的白水洗。
 - 两侧方向相反是有意为之，不是不一致。
 
@@ -138,25 +439,41 @@ final m = AppTheme.metrics;
 `_ensureContrast` 会在暗色档被提成中灰，所以 `_applyCustomization` 里对它短路，
 直接把语义层自己的 `accent` 填回去。加新"语义档"强调色时照这个模式办，不要塞真色值。
 
-### 2.4 投影：`s.elevation(Elevation.x)`
+### 2.4 投影：实色面走 `s.elevation()`，玻璃卡走 `a.cardShadow()`
 
-五档，key + ambient 双层，替代散落的各写各的 `BoxShadow`：
+v1 的"投影只负责离地一点点"只对**实色面**成立。玻璃卡必须有能撑住厚度的影子，
+但它不是黑影子——是氛围色相压暗后的影子，否则在柔彩底上会成一团脏灰。
+
+**实色面与浮层（继承 v1 五档，`shadowKey` 换带色相值）**
 
 | 档位 | y / blur / spread | 用途 |
 |---|---|---|
 | `none` | 0 | 贴平 |
-| `raised` | 1 / 2 / 0 | 微浮：侧栏选中白卡、静止卡片 |
-| `card` | 1 / 3 / 0 | 卡片悬停 |
+| `raised` | 1 / 2 / 0 | 微浮：侧栏选中卡、静止实色卡 |
+| `card` | 1 / 3 / 0 | 实色卡悬停 |
 | `floating` | 10 / 15 / -3 | 悬浮工具条、命令面板 |
 | `overlay` | 20 / 25 / -5 | 弹窗 / 菜单 |
 
 ambient 层自动取 `blur×2`、`y×2`。停靠类控件（如底部播放条）要把 y 翻成负值，
 向下的影子落在窗口外等于没有。
 
-**描边优先于投影**：卡片默认是 `surface` 底 + `border` 描边 + `raised`，
-悬停才把描边升到 `borderStrong`、投影升到 `card`。只升投影不升描边，在浅色档几乎看不出来。
+**玻璃卡（✅ 已验收，两档）**
 
-### 2.5 状态色族
+| 档 | y / blur / spread | 色 | 用途 |
+|---|---|---|---|
+| `rest` | `scaleW(6)` / `scaleW(16)` / 0 | 亮 `#5B4A7F`@38、暗 `#000000`@70 | 静止玻璃卡 |
+| `lifted` | `scaleW(12)` / `scaleW(28)` / `scaleW(2)` | 同 | 悬停、选中、被事件点亮 |
+
+- 投影的 y/blur **可以**吃 `scaleW`（投影跟窗口一起长是合理的），这和 §3.3 禁止
+  **描边**吃 `scaleW` 是同一条规则的两面：线要保住物理像素，影子要保住透视感。
+- **事件驱动发光**是同一档投影的连续抬升，不是加一层：`blurRadius = scaleW(30) × g`、
+  `spreadRadius = scaleW(1) × g`、`alpha = 110 × g`，`g` 从 0 推到 1 再回落（§5.5 数据事件面）。
+- 玻璃的描边**恒定**（`glassBorder`，`strokeUltraThin`），hover 不升粗——粗描边会吃掉
+  卡内可用宽度，而玻璃卡本来就是拿来放数据的。要升就升发光与投影那两档。
+- ⚠️ 旧的"**描边优先于投影**"从此只约束实色面：玻璃面的层次来自
+  **顶缘高光 + 有色投影**两件事，描边只负责"这块玻璃有边"。
+
+### 2.5 状态色族（v2 不动）
 
 每个状态给两档：**主色**（点、图标、图表线）和**容器上的文字色**。
 文字必须单独压深/提亮：状态主色是给"点"用的，直接拿它当小字号文字，
@@ -172,10 +489,18 @@ ambient 层自动取 `blur×2`、`y×2`。停靠类控件（如底部播放条�
 
 容器底与描边从主色派生，**不要手写 `withAlpha`**：
 `role.container` = 主色 @ 10%（亮）/ 16%（暗），`role.containerBorder` = @ 22%（亮）/ 28%（暗）。
-暗色浓度更高，否则在深灰表面上看不出层次。
+暗色浓度更高，否则在深灰表面上看不出层次。同一档浓度也是 §2.1 `accentContainer` 的算法，
+以及胶囊水洗的写法（`c.withAlpha(暗 46 / 亮 34)` 底、`c.withAlpha(暗 90 / 亮 70)` 描边）。
 
 > `danger` 只用于**破坏性**操作（删除、从库中移除）。收藏/喜欢这类"选中"状态
 > 用 `accent`，不是红——原先播放器里两处 `Colors.redAccent` 就是这个口径错位。
+
+🚩 **v2 明确：涨跌 / 多空 / 峰谷不是状态，是身份。** 试验页那套绿 `#0CA678`、
+粉 `#F06E81`、橙 `#FF855A`、青 `#1B8FB5` **不进 `AppStatus`**，它们和 `violet` 一起
+归 `AppAtmosphere` 的方向色与渐变端点（§2.9.2）。理由很实际：`success` 的 `#00BB7F`
+和"用电量上涨"的绿是两个语义，硬合成一档会让"抓取成功"和"消耗变多"在界面上同色；
+`danger` 的红和"读数下降"更是相反的意思。判据一句话——**这块颜色在报告"好不好"还是在报告"往哪走"**，
+前者上状态族，后者上身份档。
 
 ### 2.6 身份色板 `AppViz`：图表和图标底，不进语义层
 
@@ -188,6 +513,10 @@ ambient 层自动取 `blur×2`、`y×2`。停靠类控件（如底部播放条�
 
 用法固定三件套：图标底 `viz.base.withValues(alpha: 暗 0.18 / 亮 0.12)`、
 图标 `viz.base`、图表线 `viz.gradient`。**身份色只出现在图标底和图表里，不做卡片描边、不做按钮底。**
+
+**v2 的分工**：`AppViz` 管"这张卡是谁"（CPU/内存/流量…），`AppAtmosphere` 的方向档
+管"这个数往哪走"（涨/跌/越过阈值）。两档都是成对色，都不进角色层；
+新页面要加身份优先扩 `AppVizSet`，要加方向优先扩 `AppAtmosphere`，不要就地取 hex。
 
 ---
 
@@ -230,6 +559,79 @@ ambient 层自动取 `blur×2`、`y×2`。停靠类控件（如底部播放条�
 - `AppReaderPaper`（5 档纸张）：阅读页正文底色是**用户选的**内容主题，选了羊皮纸就一直是羊皮纸，
   不跟明暗翻。两处阅读器共用这一份清单，预设与默认值只有一处出处。
 
+### 2.9 氛围层 `AppAtmosphere`：v2 的材质档（🔧 待落地，源已验收）
+
+这一档目前只存在于试验页（`lib/pages/power_stats/power_stats_theme.dart` 的
+`PowerStatsPalette`，✅ 已出图验收）。全局化的动作是**整体上收 + 换名**，不是重新设计：
+下表每一项都有实测出处，照抄即可，**不要顺手调色**。
+
+#### 2.9.1 背景：对角基色 + 四角色团
+
+```
+一层 LinearGradient(topLeft → bottomRight)
+  亮：#F9DAC4 → #F3E7E4 → #D4D1E9 → #D3E4F6   stops 0 / .38 / .72 / 1
+  暗：#241C33 → #1B1826 → #1A1E2E → #221B31   stops 0 / .38 / .72 / 1
++ 四团 RadialGradient（左上暖橙、右上天蓝、左下薰衣草、右下粉）
+  亮 alpha 140~150、radius 0.7~0.8；暗换深色相（#7A4A2E/#2F4E7A/#4A3A75/#6E3A52）alpha 75~85
+```
+
+- **`BoxDecoration` 只吃一个 gradient**，所以分层交给页面/外壳叠 `Stack`，
+  色板只交 `List<BoxDecoration>`（`backgroundLayers`）——越靠后越浮在上面。
+- 这一层永远 `IgnorePointer`：纯装饰不参与命中。
+- **只画一次**，画在外壳（§7.4）。页面再画一层就是两张氛围皮叠在一起，滚动时色差会漂。
+- 暗色**不是把亮色反一下**：柔彩底压暗后饱和度必须跟着降（试验页的暗档色团 alpha 只有
+  亮档的一半，且换成深色相），否则桃红和薰衣草在深底上会成两块荧光斑。
+
+#### 2.9.2 方向色与强调档（成对，明暗各一档）
+
+| 档 | 亮 | 暗 | 用途 |
+|---|---|---|---|
+| `ink` | `#261A3A` | `#F1EEFA` | 主字、大数字、轨道基线（= `textPrimary`） |
+| `accent` | `#2F65DE` | `#7C9BFF` | 实心胶囊、游标、进度终点、刷新闪烁（= `accent`） |
+| `violet` | `#715FFD` | `#9C8CFF` | 渐变中间档、峰值徽章 |
+| `rise`（绿） | `#0CA678` | `#3FD19C` | 正向增量、上涨柱 |
+| `fall`（粉） | `#F06E81` | `#FF8DA0` | 负向、下降柱、空头标记 |
+| `warm`（橙） | `#FF855A` | `#FFA07A` | 轨道起点、被越过的档位 |
+| `cool`（青） | `#1B8FB5` | `#5AC8E0` | 横幅渐变起点 |
+
+> `ink`/`accent` 与角色层的 `textPrimary`/`accent` 是**同一个值的两个名字**，
+> 落地时以 `AppSemantic` 为准，氛围层只留一个引用；不要让两处各写一遍 hex（那正是 §2.6 说的那种重复）。
+
+#### 2.9.3 成对渐变：六档，全是"同一个动作的起收点"
+
+| 档 | 色标 | 方向 | 用途 |
+|---|---|---|---|
+| `trackFill` | `warm → violet → accent` | 左→右 | 滑轨已填充段：档位越高越冷 |
+| `banner` | `#1897A9 → #466DFD → #715FFD` | 左→右 | 事件横幅（抓取成功那一条） |
+| `progress` | `rise → accent` | 左→右 | 进度条 |
+| `spark` | `warm → violet → accent` | 左→右 | 迷你趋势线：暖→冷对应"越涨越值钱" |
+| `peakBar` | `accent → violet` | 下→上 | 峰值柱 |
+| `underline` | `warm → accent` | 左→右 | 卡片底缘那条身份线 |
+
+**三条硬规矩**：① 渐变只在**氛围层 / 图表填充 / 轨道与进度填充**三处出现（§0.4）；
+② 端点必须成对给，**不许在页面里现拼色标**（`colors: [x, y]` 出现在页面就是债）；
+③ 零宽盒上不挂 gradient——Flutter 会在零尺寸 shader 上断言，
+`PsGradientBar` 的 `t <= 0.001 ? null : gradient` 就是这个防波。
+
+#### 2.9.4 静止档：轨道、胶囊、空槽、基线
+
+| 档 | 亮 | 暗 | 用途 |
+|---|---|---|---|
+| `glassTint` | `#FFFFFF`@150 | `#221C38`@165 | 玻璃卡着色 |
+| `glassBorder` | `#FFFFFF`@160 | `#FFFFFF`@34 | 玻璃发丝描边 |
+| `glassHighlight` | `#FFFFFF`@200 | `#FFFFFF`@26 | **顶缘高光**（两端 alpha 0、中间全值） |
+| `shadow` | `#5B4A7F`@38 | `#000000`@70 | 玻璃投影主层 |
+| `trackRest` | `ink`@22 | `#FFFFFF`@28 | 轨道未填充段 |
+| `chipRest` / `chipRestBorder` | `#FFFFFF`@170 / @200 | `#FFFFFF`@24 / @38 | 未选中档位胶囊 |
+| `slotRest` | `#FFFFFF`@70 | `#FFFFFF`@16 | 空槽（TOP5 未填满那几格） |
+| `baseline` | `ink`@40 | `#FFFFFF`@46 | 柱状带基线 |
+
+#### 2.9.5 玻璃卡与发光
+
+`a.cardShadow()` 的几何与"发光就是同一档投影的连续抬升"见 §2.4；顶缘高光的画法
+（比下沿亮的一道线，去掉"塑料贴片"感）见 §7.2。磨砂那层**不重写实现**，
+`GlassSurface` 已经是全站收敛后的那一份，氛围档只提供 tint/border/highlight 三个值。
+
 ---
 
 ## 3. 尺寸令牌：`AppTheme.metrics`
@@ -241,9 +643,25 @@ double sp = m.kSpace16;
 ```
 
 - **语义圆角**（调用点优先用这组，不要记数字）：
-  `radiusControl`(8) 按钮/控件 · `radiusField`(8) 输入框 · `radiusCard`(10) 卡片/列表项 ·
-  `radiusPanel`(14) 面板/分栏 · `radiusOverlay`(14) 弹窗/抽屉 · `radiusPill`(999) 胶囊
-  —— 整体刻意收得很小：圆角一大，小尺寸控件就变成一颗颗胶囊，列表读不出边界。
+  v2 按**材质**分档——玻璃比纸厚，圆角必须更大才不像贴纸；实色密度面维持小圆角保住边界感。
+
+  | 档 | v1 | v2 | 用在 |
+  |---|---|---|---|
+  | `radiusControl` | 8 | 🔧 10 | 按钮 / 控件 |
+  | `radiusField` | 8 | 🔧 10 | 输入框 |
+  | `radiusCard` | 10 | 🔧 **16**（✅ 实测：`PsGlassCard` 默认就是 `m.radius16`，`power_stats_widgets.dart:197`） | 玻璃卡 / Hero 面板（列表行仍取 10） |
+  | `radiusPanel` | 14 | 🔧 **20**（✅ 实测 `radius20` 只出现在"大按钮"这一档：抓取按钮 `power_stats_screen.dart:216/230`） | 弹窗 / 抽屉 / 大按钮 |
+
+  ⚠️ **实测的例外档：密排小卡收一档。** 六列维度卡用的是 `radius14`（`power_stats_screen.dart:706`），
+  不是 16——同一行里并排六颗，圆角再大一档就成六个胶囊，卡片之间的边界读不出来。
+  规则：**一行 ≥ 4 张卡时降一档**（16→14），不是随手取数字。
+  | `radiusOverlay` | 14 | 🔧 20 | 弹窗 / 抽屉 |
+  | `radiusPill` | 999 | 999 | 胶囊、徽标、轨道、滑轨游标 |
+
+  ⚠️ 这三档一改是**全站重排**（56 个 screen/page 文件都会跟着变），必须和 §13 W0 同一批落地、
+  同一批出图；不要一边迁页面一边留着旧圆角，那会得到一版"卡片有的厚有的薄"。
+  列表行、菜单行（`GlassMenuItem` 行高 30 那一族）**不跟着升**——圆角一大，
+  小尺寸控件就变成一颗颗胶囊，列表读不出边界。
 - **数值圆角**：`radius2/3/4/6/8/10/12/14/16/18/20/22/24/25/28/32/40/100/999`
 - **间距**：`kSpace1/2/3/4/5/6/8/10/12/14/16/18/20/24/32/40/44/48/56/64/80`
   （别名 `paddingSmall/Medium/Large/XLarge`、`spacingSmall…`）
@@ -281,6 +699,26 @@ double sp = m.kSpace16;
 于是字号比例 2.0 时版本号自己就能吃掉整行——`A RenderFlex overflowed by 15 pixels`。
 一律套 `ConstrainedBox(maxWidth: m.kSpace56) + ClipRect`（上限走宽度族，跟行宽同比），
 并且源头的 `Text` 自己写 `maxLines: 1, overflow: ellipsis`。**宁可截断，不许顶破。**
+
+推论（第三次发作，v2 立档）：**图表浮层是"字号族内容 + 宽度族画布"的正面冲突，必须让浮层逃出画布。**
+浮层的字取 `m.fontSize*`（吃用户字号），它挂在图表的绘制盒上（`scaleW(126)` 之类，不吃字号），
+于是字号一放大就报 `A RenderFlex overflowed by 4.9 pixels on the bottom`。修法不是在盒子里缩字，
+而是让浮层**不受画布高度约束**——`SingleChildLayoutDelegate.getConstraintsForChild` 返回
+`BoxConstraints(maxWidth: constraints.maxWidth)`。两个坑叠在这里：
+
+1. `constraints.loosen()` 只松掉 min，`maxHeight` 还留着画布那一档；
+2. `copyWith(maxHeight: null)` 是"**保持原值**"，不是无穷——必须重新构造 `BoxConstraints`。
+
+浮层本来就该盖在图表外面（父 `Stack` 是 `Clip.none`），所以高度这一档不给上限。
+**验收姿势（写死）**：任何带文字浮层的组件，必须有一条 `AppTheme.fontScaleObs.value = 1.6` 的
+用例并 `expect(tester.takeException(), isNull)`；只看 1.0 档的出图等于没测（§11 第 7 条）。
+
+**例外档：展示型数字走宽度族。** Hero 大数字是 `scaleW(52)` + `letterSpacing: scaleW(-1.5)`，
+小数位 `scaleW(24)`——它和面板一起长，**不跟用户字号长**。理由：这块数字在版式里是图形不是正文，
+让它吃字号会把整块 Hero 顶变形，而读屏幕的人真正需要放大的是正文。
+约束：这类数字必须待在宽度有界的容器里，并且**必须有 1.6 字阶回归兜底**（因为同卡内的
+说明文字会放大，数字不放大，两者会互相挤）。判据一句话——**这串数字是"看量级"的还是"读内容"的**，
+前者走宽度族（`display-number` / `metric`），后者走字号族。
 
 ### 3.2 为什么宽度类尺寸要 `scaleW` 而不是 `const`
 
@@ -329,8 +767,20 @@ double sp = m.kSpace16;
 中文走系统（`PingFang SC` → `Hiragino Sans GB` → `Microsoft YaHei` → `Noto Sans SC`），
 最后兜底到内置的 `FZLanTingYuanS-EB-GB`。定义在 `AppTheme._fontFamily` / `_fontFamilyFallback`。
 
-**字重政策**：只用 `w400`（正文）/ `w500`（行标题、按钮、标签）/ `w600`（标题、强调）。
-不用 w700 及以上——墨色语言里"重"靠描边和抬升表达，字重拉满只会糊成一片黑。
+**字重政策（v2）**：`w400` 正文 · `w500` 行标题/按钮/标签 · `w600` 小节与卡片标题 ·
+`w700` **只给两类东西**：徽标胶囊里的字、展示型数字。
+v1 的"不用 w700 及以上"作废——那条是为"重靠描边和抬升表达"的墨色语言定的，
+柔彩玻璃语言里实心胶囊和渐变数字**需要**自身有重量，否则白字压蓝底会显得没劲。
+仍然不放开 w800/w900：正文一律够不到那一档，只有"数字当图形"时才用最高档。
+
+⚠️ **实测的资产缺口**：`pubspec.yaml` 与 `assets/fonts/` 里 Inter 只有 **400 / 500 / 600 / 700** 四档，
+所以 `FontWeight.w800` 拿不到实体字面、静默降到 Bold。试验页有 15 处、`sentry_log` 有 2 处写着 `w800`
+（口径：`grep -rn "FontWeight.w800" lib/ --include='*.dart'`）——**要么把 Inter-ExtraBold 补进资产并登记四档→五档，
+要么把这 17 处收编到 `w700`**。在补资产之前，`w800` 不许新增。
+
+**数字排版**：展示型数字与徽标一律开 `FontFeature.tabularFigures()`（等宽数字，
+滚动补间时不左右跳），大数字配负字距（`scaleW(-1.5)`），单位尾巴和前缀单独一档
+（`0.62` 倍字号 + `alpha 160`）——**别让单位继承父级正文样式**，那会让它在同一行里粗一圈。
 
 所有角色都从 `textTheme.bodyMedium` 派生（`_role()`），**不能裸 `TextStyle(...)` 构造**——
 裸构造会丢 `fontFamily` 和回退清单，中文会静默落到引擎兜底字上。
@@ -344,7 +794,9 @@ double sp = m.kSpace16;
 | `body` | 13 / w400 / textSecondary | 正文 |
 | `caption` | 11 / w400 / textTertiary | 次要说明 |
 | `overline` | 10 / w600 / textTertiary / +0.9 字距 | 分组标签 |
-| `metric` | 28 / w600 / textPrimary | 数据大屏数字 |
+| `metric` | 28 / w700 / textPrimary / 负字距 / 等宽数字 | 数据大屏数字（🔧 原 w600，v2 升一档） |
+| `displayNumber` | `scaleW(44–52)` / w700 / `ink` / height 1.02 / `scaleW(-1.5)` 字距 | Hero 主数字（**宽度族**，见 §3.1 例外档）；小数位另降 `0.46` 倍 |
+| `badge` | 10–11 / w700 / 状态或强调色 / `+0.8~1.2` 字距 / 等宽数字 | 胶囊徽标、LIVE、W/L 计数、档位名 |
 | `mono` | Menlo 12 / textSecondary | 日志、路径、代码 |
 
 `rowTitle` 与 `cardTitle` 只差一档字重：整页卡片标题要撑住区块，列表行里几十条同名行
@@ -377,21 +829,38 @@ double sp = m.kSpace16;
 **宽高、圆角、底色**，内容在切换的那一瞬糊一下（短暂模糊），不是"旧的东西消失、
 新的东西出现"。指针要驱动它（悬停即响应），点击和拖拽要有真实的跟手感。
 
+**v2 补的第一原则：动效只由"事情发生了"驱动，不由时间驱动。**
+这条是电量统计页整块试验的核心，也是它和"模板动效"的分界线：
+
+- **值没变不起钟**（`didUpdateWidget` 比 `old.value`，相等就直接跟到新终值，不播）。
+  数据每 30 秒才回一次真值，所以补间必须**只在拿到新值那一刻**跑——
+  常驻跳变是在骗用户"数据一直在涨"。
+- **新数据只动尾巴**：抓取到的新段只给那一段做入场，历史段静止。
+- **换范围整带重播**：切换区间是"换了一副眼镜看同一件事"，所有图表按 `trigger` 重播一次入场，
+  但入场是错峰的一批（§5.2 `stagger`），不是一屏同帧。
+- **推完静止**：进度条、滚动数字跑完就停，不循环、不回弹。
+
 允许：
 - 弹簧收尾，**最多一次轻微过冲**（overshoot ≤ 6%）。
-- 状态切换时**尺寸、圆角、颜色同时动**，共用一条时间轴。
+- 状态切换时**尺寸、圆角、底色、发光同时动**，共用一条时间轴。
 - 转场用"镜头拉近"的思路：让**当前状态的那个元素**放大铺满画面，而不是换一张脸。
+- **事件驱动的一次性发光**（0→1→0 的投影抬升，§2.4）与**状态点呼吸**（`ambient` 档循环）。
+- 渐变只出现在三处：**氛围层**、**图表填充**、**轨道与进度填充**（§0.4、§2.9.3）。
 
 禁止（每一条都是真实翻车过的观感）：
 - ❌ 弹跳缓动（bounce）、多次回弹。
 - ❌ 粒子、爆花、星星点点。
-- ❌ 发光 / glow / 外发光描边。层次只允许来自描边和投影。
-- ❌ **UI 骨架上铺渐变**（按钮底、卡片底、侧栏底一律纯色）。渐变只活在图表线里。
-- ❌ 图标描边粗细不一致（正在做全局图标组件，见 §9.11）。
-- ❌ **用模糊表达远近**（堆叠越深越糊）。上面允许的"短暂模糊"只活在状态切换的那一瞬；
+- ❌ **常驻装饰性发光**、外发光描边、glow 当层次用。发光只在"事件点亮的那一下"存在；
+  静止状态下的卡片靠玻璃描边 + 有色投影站立（§2.4）。
+- ❌ **UI 骨架铺渐变**：按钮底、卡片底、输入底、侧栏底、图标底一律纯色。
+  渐变一旦进控件底，"一个形状永不分裂"就没了——切换状态时用户看到的是换了块装饰。
+- ❌ 图标描边粗细不一致（全局图标组件见 §9.1）。
+- ❌ **用模糊表达远近**（堆叠越深越糊）。允许的"短暂模糊"只活在状态切换的那一瞬；
   常驻的景深糊在白药丸压近白舞台这种低对比内容上一眼读作"没对齐/渲染坏了"。
   远近只用位移、缩放、变暗三样表达。
-- ❌ 无事发生的空等时间；也 ❌ 一眼看出是模板套出来的动效。
+  ⚠️ 玻璃的 `BackdropFilter` **不属于这一条**：它是材质（透出背后的氛围），不是深度线索；
+  两者的 sigma 也分属两档（§5.4 的对照表）。
+- ❌ 无事发生的空等时间；也 ❌ 一眼看出是模板套出来的动效（无数据变化却一直在动，就是模板味）。
 
 ### 5.2 时长节奏
 
@@ -407,6 +876,13 @@ double sp = m.kSpace16;
 | `stagger` | 45ms | 参考库取 40–90 | 会反复触发的列表逐条入场间隔 |
 | `entrance`/`entranceGap` | 600/80ms | — | 开机整块面板入场，只播一次 |
 | `cascade` | 900ms | — | 入场级联的**主控轴**（每张卡按 0~1 的 `Interval` 摊在这条轴上，不是单条时长） |
+| `roll` 🔧 | 720ms | — | **数据补间专档**（建议新增）：滚动数字、渐变条推满。它必须比 `emphasis` 慢——数字是要读完的，不是闪过的；试验页实测 720ms，比 `emphasis` 长 260ms 是有意的 |
+
+🔧 **档外的两个实测值（落地时必须归位，别原样抄进全局层）**：
+`PsRollingNumber.duration` 默认 720ms（→ 新增 `roll` 档）；`PsStagger` 的 `rise: 14` 设计像素
+不在位移五档上（→ 收 `travelMedium` 12，见 §5.4）、`fromScale: 0.9` 不在缩放五档上（→ 新增
+`scaleBlock`）。**靠档的代价要当场报**：这三处一收，电量统计页的入场会轻微变短变收，
+12 张 golden 要重跑基线（§10.17 同一口径）。
 
 **反馈类必须 ≤160ms**。悬停超过这个值就不叫"跟手"，叫"卡了一下才理你"。
 
@@ -493,6 +969,12 @@ service / 设置项里、各带一句注释说明为什么是这个数；把它�
 推近，比浮层要看得出更多位移）/ `scaleRetreat 0.99`（收起终态，留 1% 才看得出是
 同一个东西缩回去，而不是消失）。
 
+🔧 **v2 加第六档 `scaleBlock = 0.90`**：整块面板 / 柱状带 / TOP5 槽位这种"一块内容错位进场"
+的起点。`scaleStage 0.93` 是给**全屏**画面推近用的，用在一张卡上位移感不够；试验页实测用的
+就是 `0.9`（`PsStagger.fromScale`），所以这档照实测落名，别再在页面里现写。
+同族里 `travelMedium 12` 收掉试验页的 `rise: 14`——位移差 2 设计像素看不出来，
+缩放差 3% 看得出来，所以一个靠档、一个补档。
+
 **瞬时模糊**是这套语言里"内容换脸"的那一下：状态切换的瞬间给旧内容加模糊、新内容从模糊里
 结像（`StateTransitionAnimation` 已经是这个做法）。它和磨砂玻璃的
 `BackdropFilter` 是**两件事，别互相引用值**：
@@ -529,11 +1011,17 @@ service / 设置项里、各带一句注释说明为什么是这个数；把它�
 | 12 | 开关 Toggle | 滑块 `spring` 单次轻微过冲；轨道底色**独立时间轴**交叉淡入 | 🔧 |
 | 13 | 勾选 / 成功反馈 | 底色 150ms 填充 + 勾线**描出来**（`stroke-dashoffset` 等价：`DrawIcon` 的 path 进度）350ms；**退场不倒放**，只淡出 | `DrawIcon` 已具备底料 🔧 |
 | 14 | 骨架屏 → 真内容 | 骨架只脉冲一次就交叉淡入（两层同 blur）；**回退时关掉所有过渡**，否则反向闪 | `Hoverable` 骨架 lerp ✅ / 回退抑制 🔧 |
-| 15 | 数值变化（仪表盘指标） | 逐位上滑 `travelBase`，位间 `stagger`，**等宽数字**（`tabularFigures`，§6.5）防行抖；不要弹跳计数 | 🔧 |
+| 15 | 数值变化（仪表盘指标、电表读数） | **补间滚动到新值**：整数值 `Tween` 滚动 + 滚动期间染强调色再 lerp 回本色；**等宽数字**（`tabularFigures`）防行抖；不要弹跳计数 | v1 写的是"逐位上滑"，试验页实测改成**整体补间 + 闪烁**（更像电表、且实现只有一条钟）；逐位上滑留给表格里"一列同时刷新"那类 🔧 |
 | 16 | 流式输出（Ollama 生成、下载日志） | 按词进：间隔 60ms、单条 `base`、`blurContent` 1 档；状态行换行时进出同时播 | 🔧 |
 | 17 | 校验失败抖动 | `travelSmall` 四段往复，末段不回弹；错误态 3s 后自动淡回 | 🔧 |
-| 18 | 状态点脉冲（节点/服务在线） | `cycle 1200ms`，只走状态色或 `AppViz`，同族共享节拍、各自延迟 | 🔧 |
+| 18 | 状态点脉冲（节点/服务在线） | `cycle 1200ms`，只走状态色或 `AppViz`，同族共享节拍、各自延迟 | 试验页 LIVE 点已实测：`ambient` 档呼吸 + 光晕 `blurRadius scaleW(2+8t)`，`isLive=false` 时**完全静止**、灰 `ink@90` ✅ |
 | 19 | 通知堆叠（任务队列） | 最多露 3 张：每深一层 `scale 0.94`、Y 抬 `travelMedium`、透明度 0.6、blur 加一档；hover 展开成列并去掉深度缩放 | `floating_task_progress.dart` 现在只显一条、且完全静态 🔧 |
+| 20 | 玻璃卡被事件点亮 | `rest → lifted` 的投影抬升 + 发光 `g: 0→1→0`（§2.4），描边同时向强调色 lerp 一档；**一次性**，落回静止 | ✅ 试验页抓取成功那一下（`PsGlassCard.glow`）→ 组件上收 🔧 |
+| 21 | 数据刷新闪烁 | 数字滚到新值的同时整块底色做一次 `fast` 水洗，不循环；值未变则**整条不起钟** | ✅ 试验页（`didUpdateWidget` 比 `old.value`）🔧 全局件待上收 |
+| 22 | 新增长出来的那一段（时序带、日志列表） | **只给末尾段做入场**（`travelMedium` 上浮 + `scaleBlock`），历史段静止；整带不许跟着重排 | ✅ 试验页柱状带尾巴动画 🔧 |
+| 23 | 换范围 / 换数据源 = 整带重播 | `trigger` 变化 → 所有图表按 `stagger` 逐条重播入场；重播是**一次性**的，播完静止 | ✅ 试验页（`_shapeTick = 区间|指标|单位`）🔧 |
+| 24 | 图表浮层跟指针 | 浮层贴在焦点列上（`SingleChildLayoutDelegate`），换列只改位置和文字，**不重播**；浮层高度不受画布约束（§3.1 第三次发作） | ✅ 试验页三处浮层，含 1.6 字阶回归 |
+| 25 | 档位滑轨 | 填充与游标**共用一条补间**（才像"同一根被推过去的针"）：`base` + `decelerate`，游标 `accent` + 白 2px 圈 + `accent@90` 光晕 | ✅ 试验页 `PsRangeTrack` 🔧 全局件待上收 |
 
 ### 5.6 按输入方式补齐覆盖
 
@@ -709,34 +1197,41 @@ shadow:  isSelected ? s.elevation(Elevation.raised) : const []
 
 ---
 
-## 7. 磨砂与窗口透出（桌面专属，移动端一律实色）
+## 7. 玻璃、氛围层与窗口透出
 
-"透出应用背后内容"是**两层**结构，缺一层就不成立：
+"透出背后内容"是**两层**结构，缺一层就不成立：
 
 1. **窗口本身透明** —— `macos/Runner/MainFlutterWindow.swift` 往 `NSThemeFrame`
    插 `NSVisualEffectView`（`.fullScreenUI` / `.behindWindow`），负责透出**桌面**。
    该视图重写了 `hitTest` 返回 nil：否则 AppKit 会把事件全吃进原生层，Flutter 收不到点击。
    Windows 走 DWM 背景材质（申请压克力而非 Mica：Mica 只是壁纸静态着色，不透不糊）。
-2. **面板再叠 `BackdropFilter`** —— 负责透出**同一 App 内**它下面的内容
-   （列表滚到面板下方时能隐约看见，这是层次感的关键来源）。
+2. **面板与卡片再叠 `BackdropFilter`** —— 负责透出**同一 App 内**它下面的东西
+   （氛围层色团、滚到卡下方的列表），这是 v2 层次感的主要来源。
 
-### 7.1 哪些面允许是玻璃
+### 7.1 哪些面**不许**是玻璃（v1 那张表反转了）
 
-| 允许 | 不允许 |
+| 允许玻璃 | 不许玻璃（一律实色或水洗） |
 |---|---|
-| 侧栏、顶栏、悬浮工具条、弹窗/菜单、底部播放条 | 内容卡片、列表行、输入框、图标底 |
+| 内容卡片、Hero 面板、侧栏、顶栏、悬浮工具条、弹窗/菜单、底部播放条、图表浮层 | **列表行**、**输入框**、**菜单行**、**图标底**、**按钮底**、代码/日志正文区 |
 
-内容卡片一律实色 `surface` + 描边 + 极轻投影。半透明卡片叠背景模糊在这套中性底上
-只会两头都不像：既看不出透，又把文字对比度吃掉。
+判据是**密度**，不是层级：一张卡里少于 ~20 个可视元素才经得起磨砂，一屏 40 行的列表玻璃化之后
+整页发脏、字对比度被吃。所以 v2 是"卡片玻璃化 + 密度面保持实色"，而不是"全都半透明"。
+实色密度面继续走 §2.1 的 `surface` / `surfaceSunken` / `surfaceHover`。
 
 ### 7.2 组件与档位
 
 | 组件 | 签名要点 |
 |---|---|
-| `GlassSurface(child, blur, tint, borderColor, borderRadius, padding, elevated, asPanel)` | 常驻面板；`asPanel` 用更透的着色 + `radiusPanel` |
+| `GlassSurface(child, blur, tint, borderColor, borderRadius, padding, elevated, asPanel)` | 全站唯一磨砂实现，**不要另写一份**；v2 起默认 `tint = a.glassTint`、`radius = radiusCard(16)` |
+| `GlassCard(child, padding, radius, glow, glowColor, tint, borderColor, onTap)` 🔧 | **由 `PsGlassCard` 上收**：`GlassSurface` + 顶缘高光 + 事件驱动发光三件套（§5.5 的 20） |
 | `GlassAppBar(title, leading, actions, bottom)` | 顶/底吸附条，内容从其下方滚过（外壳顶栏应走这个，🔧） |
 | `GlassFloat(child, padding, borderRadius)` | 命令面板 / 悬浮工具条 / 下拉浮窗 |
-| `GlassMenuItem(label, icon, destructive, selected, value, enabled)` | 桌面紧凑菜单行，行高 30（Material 默认 48 是给触屏定的） |
+| `GlassMenuItem(label, icon, destructive, selected, value, enabled)` | 桌面紧凑菜单行，行高 30（Material 默认 48 是给触屏定的）——**这一族保持实色**，见 §7.1 |
+
+**顶缘高光是玻璃的必备第三层**（不是可选装饰）：一道 `strokeUltraThin` 的线，
+两端 alpha 0、中间全值（`glassHighlight`），左右各留 `radius × 0.6` 的起点。
+没有它，玻璃卡读起来就是"贴了片半透明塑料"；有了它，光才像是从氛围层那边过来的。
+它必须 `IgnorePointer`，且**永远只在顶缘**——下沿来一道就成了描边，那是 v1 的语言。
 
 | 档位（`WindowGlass`，`window_backdrop.dart`） | alpha | 生效条件 |
 |---|---|---|
@@ -744,9 +1239,10 @@ shadow:  isSelected ? s.elevation(Elevation.raised) : const []
 | `panelAlpha` | 200 | 侧栏/面板 |
 | `overlayAlpha` | 242 | 浮层（菜单、弹窗、底部播放条） |
 
-非对应平台一律 255（实心）。模糊半径三档：`AppGlass.blurSoft`(12) / `blurMedium`(24，
-语义层默认值) / `blurStrong`(40)。`kWindowsGlassEnabled` 是 Windows 子窗口 HWND 能否透出
-的总开关——**该项在 Windows 上尚未实测**，观感异常先把它改成 `false` 退回实心底。
+非对应平台一律 255（实心）。模糊半径：卡片走 `blurMedium`(24)（即 `s.glassBlur` 默认档），
+浮层小片用 `blurSoft`(12)，封面卡上的角标类浮层用 `blurFeather`(8) / `blurTrace`(3) 两档下界。
+`kWindowsGlassEnabled` 是 Windows 子窗口 HWND 能否透出的总开关——**该项在 Windows 上尚未实测**，
+观感异常先把它改成 `false` 退回实心底。
 
 ### 7.3 取色禁忌
 
@@ -754,8 +1250,25 @@ shadow:  isSelected ? s.elevation(Elevation.raised) : const []
   （= `surfaceHover`），自己再叠一颗会变成"方块灰 + 药丸灰"两层。
 - 菜单/浮层底色一律 `surfaceRaised.withAlpha(WindowGlass.overlayAlpha)`，
   不要写死 `Colors.black45` 之类。
-- 玻璃上的描边只用 `s.glassBorder`，不要另配 `Colors.white.withAlpha(180)`——
+- 玻璃上的描边只用 `a.glassBorder`，不要另配 `Colors.white.withAlpha(180)`——
   那条历史上就是浅色档看不见、深色档过重的一根线。
+- **不许玻璃叠玻璃**：玻璃卡内部的小块（内嵌分组、槽位）走 `slotRest` / `chipRest` 水洗档
+  （§2.9.4），不再套一层 `BackdropFilter`。两层模糊叠在一起除了贵没有别的效果。
+- **发光不靠加粗描边**：事件点亮抬的是投影与发光（§2.4），描边只做颜色 lerp，
+  加粗会吃掉卡内可用宽度。
+
+### 7.4 氛围层只画一次：收口位置与预算
+
+- **单一出处**：氛围层画在外壳（`DesktopScaffold` 正文区底 / `ScreenChrome` 的 body 之下），
+  页面**不得**再叠一层自己的背景渐变。试验页现在是自己画的（`_buildBackground`），
+  这是它在试验期的特权，W0 上收后取消（🔧）。理由见 §2.9.1：两张氛围皮叠着，滚动时色差会漂。
+- **性能预算**：同屏 `BackdropFilter` 实例 **≤ 8**。试验页实测 5 张 `PsGlassCard` + 内部件，
+  明暗两档出图和真机都跟得住；再往上加要先测帧时间，不要凭感觉加卡。
+  需要"很多张卡"的页面（媒体库、账本明细）用**分组长卡**：一张玻璃包住 N 行实色内容。
+- **降级**：移动端与窗口 ≤600 时 `GlassSurface` 一律走 `alpha=255` + 跳过 `BackdropFilter`，
+  玻璃卡退成 `surface` 实色卡（§8）。氛围层**保留**——它是底色语言，不是效果，
+  在移动端换成单层 `canvas` 实底即可（渐变层数按平台裁）。
+- **命中**：氛围层与顶缘高光永远 `IgnorePointer`。
 
 ---
 
@@ -767,7 +1280,11 @@ shadow:  isSelected ? s.elevation(Elevation.raised) : const []
   （不是贴在桌面之上），所以那一层必须整窗不透明，否则根 Material 一透明，
   正文就直接压在桌面背景上（这条已经踩过，见 `desktop_layout.dart` 注释）。
 - 移动端**没有磨砂**：没有原生振动层，半透明只会透出窗口底色，观感是"脏"。
-  所有 `Glass*` 组件在移动端走 `alpha=255` 分支。
+  所有 `Glass*` 组件在移动端走 `alpha=255` 分支，玻璃卡退成 `surface` 实色卡（§7.4）。
+  **但氛围层不降级成 v1 的纯灰**：移动端保留柔彩底，只是把 4 团径向色团裁掉、留单层对角渐变，
+  卡片退回实色——换了材质，不换颜色语言。
+- 玻璃预算（同屏 `BackdropFilter` ≤ 8）是按桌面定的；移动端一律 0，桌面窄窗（≤600 强制移动模式）
+  也按 0 处理。
 - 触控目标最小 44×44 逻辑像素（桌面可小到 30，见 `GlassMenuItem`）。
 - 内容宽度只有四档：`ContentWidth.narrow`(460) / `medium`(680) / `regular`(920) / `wide`(1440)。
 
@@ -795,6 +1312,14 @@ shadow:  isSelected ? s.elevation(Elevation.raised) : const []
 | `SectionHeader` / `OverlineLabel` | `section_header.dart` | 约 12 份小节标题（仅设置模块就 7 份） |
 | `ContentContainer` / `AppSplitView` | `page_container.dart` | 18 种不同 `maxWidth`、各页 `Row + SizedBox(魔数) + Expanded` |
 | `GlassSurface` / `GlassAppBar` / `GlassFloat` / `GlassMenuItem` | `glass_surface.dart` / `glass_menu.dart` | 见 §7 |
+| `GlassCard(child, padding, radius, glow, glowColor, onTap)` 🔧 | 待上收（现 `power_stats/components/power_stats_widgets.dart`） | 每页各写一遍"磨砂 + 高光 + 有色投影" |
+| `MetricNumber(value, majorStyle, minorStyle, flashColor, prefix, suffix)` 🔧 | 待上收（现 `PsRollingNumber`） | 各页 `Text('$value')` 硬换值，数据刷新时整块重画 |
+| `GradientBar(value, gradient, track, height)` 🔧 | 待上收（现 `PsGradientBar`） | 各写各的 `FractionallySizedBox + 单色` |
+| `StaggerBlock(index, trigger, rise, fromScale, child)` 🔧 | 待上收（现 `PsStagger`） | 各页手写的 `Future.delayed(300 + i*80)`（§5.3 点名的空窗写法） |
+| `SectionLabel(text, color, trailing)` 🔧 | 待上收（现 `PsSectionLabel`） | 与既有 `SectionHeader` / `OverlineLabel` **合并成一族**，不要三套并立（§9.2） |
+| `Pill(label, color, filled, leading, dense)` 🔧 | 待上收（现 `PsPill`） | 与 `StatusChip` 的分工见 §9.2 |
+| `RangeTrack(ranges, selected, onChanged)` 🔧 | 待上收（现 `PsRangeTrack`） | 各页分段选择器（§5.5 的 11）与时间范围条 |
+| `ChartTooltip(label, valueText, note, color)` + `TooltipLayoutDelegate` 🔧 | 待上收（现 `power_stats_chart.dart`） | 各图表浮层各写各的定位，且都会撞 §3.1 的高度约束坑 |
 | `Breadcrumb({entries})` / `BreadcrumbEntry(label, {onTap})` | `core/widgets/breadcrumb.dart` | 外壳顶栏层级位；宽度不够只折中间级、首尾不折（§6.3） |
 | `TreeConnector({childCount, rowHeight, spacing, child})` | `core/widgets/tree_connector.dart` | 侧栏子项连接线，整族一层 `CustomPaint` 画完（§6.5） |
 | `DrawIcon` / `StrokeZone` / `StrokeIconButton` | `components/icons/`、`components/buttons/` | 全站图标：`Icon(Icons.*)` 与 41 张自绘 svg 一起换掉（§9.1） |
@@ -846,6 +1371,37 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
 
 ---
 
+### 9.2 v2 的组件分工（谁顶掉谁）与数据面约定
+
+**卡片两族**：`GlassCard` 是**数据卡**的默认材质（概览、指标、图表、Hero）；
+`AppCard` 保留给**实色面**（列表里的行卡、玻璃卡内嵌的分组块、设置页的密集条目）。
+判据还是 §7.1 的密度：同屏可见元素多过 ~20 就往实色族走。两族共用
+`radiusCard(16)` / `radiusPanel(20)` 两档圆角，**不要一页里厚薄混排**。
+
+**小节标题合并成一族**：`SectionLabel`（带字距的 overline，§4 `overline` 档）与
+`SectionHeader`（带操作区/副标题的区块头）各管一档，`OverlineLabel` 收进 `SectionLabel`。
+现在三套并立是 §9 右列那串"约 12 份小节标题"还没清完的直接原因。
+
+**徽标两族**：`StatusChip` 报**状态**（成功/警告/危险/信息，走 §2.5 五档语义）；
+`Pill` 报**身份与方向**（涨/跌、计数、LIVE、被越过的档位，走 §2.9.2 方向档）。
+两族都有 `filled`（实心底 + 恒白字，字色走 `s.onStatusBadge`）与水洗底（走 §2.5 的浓度档）两种；
+**实心与半透明配对不同，别混**——这是历史上白字白底类缺陷的源头。
+
+**数据面四条约定**（电量统计页验收时定下，全站时序类页面照此办）：
+
+1. **时序图必须有跟随指针的浮层**，用 `ChartTooltip` + 不受高度约束的定位委托（§3.1）。
+2. **浮层时间标签必须补齐到"哪天 + 周几 + 几点"**：后端只给短标签
+   （`%H:%M` 或 `%m-%d`，见 `rust/power_stats/src/aggregator.rs::range_config`），
+   前端拿桶上的 `timestamp`（**秒**）补成 `MM-dd 周X HH:mm`（时刻型把日期顶在前面）或
+   `MM-dd 周X`（日期型往后挂）。时间戳为 0（桩数据）时**原样返回短标签**，不许编一个 1970 出来。
+   现成实现：`psTooltipLabel()`，上收时改名 `formatBucketLabel()` 放进 `core/widgets/`。
+3. **零值段不画**：整点级数据里"没用就是 0.00"是噪声，画出来会把有效柱压成一排矮桩；
+   过滤发生在**绘图层**，不进统计口径（均值/峰值仍按原始桶算）。
+4. **刷新只动新增的那一段**（§5.5 的 22），换范围整带重播一次（§5.5 的 23）。
+   数值补间用 `MetricNumber`，值不变一律不起钟。
+
+---
+
 ## 10. 编写规范（硬约束）
 
 1. 取色只走 `AppSemantic.of(context)`；**禁止** `isDark ? … : …` 分支和裸 `Colors.*`。
@@ -856,7 +1412,9 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
 5. 时长/曲线/位移/缩放/瞬时模糊只走 `AppMotion.*`（§5.2–§5.4，别在页面里现写 `0.93`、
    `Duration(milliseconds: 260)`）；反馈类 ≤160ms；退场取进场的下一档。
    位移族是**宽度族 getter**，和 §3.2 同一条理由。
-6. **UI 骨架不铺渐变、不加发光**（§5.1）。渐变只允许出现在图表线里。
+6. **渐变只有三处容身**：氛围层、图表填充、轨道与进度填充（§0.4、§2.9.3），且端点必须成对
+   取自令牌，不许页面里 `colors: [x, y]` 现拼。**发光只由事件驱动**（§5.5 的 20），
+   常驻装饰性 glow、外发光描边仍然禁止。按钮底 / 卡片底 / 输入底 / 图标底一律纯色。
 7. 弹窗用 `showDialog`，不用 `Get.dialog`。
 8. 注释必须中文，且**不要删除已有注释**——现有注释大量是踩坑记录（本文多条规则就来自它们）。
    注释只写"为什么"，一句话；**不要在代码/注释/命名/提交信息里点名任何参考实现**。
@@ -899,6 +1457,27 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
     页面 Scaffold 上，会被整个弹层挡住；弹层内保留行内错误文案（同样过 `describe()`），
     整块列表的失败态用 `EmptyState(compact: true)` 承载，别自己铺一段红字。
 
+**v2 新增（材质与数据面）**
+
+19. **取色三个入口，不许第四个**：角色走 `s.`（`AppSemantic`）、材质走 `a.`（`AppAtmosphere`）、
+    图表身份走 `AppViz`（§1、§2.6）。判据是"这块颜色在回答**用途**还是**材质**"；
+    同一段颜色在两处各写一遍就是债（`ink`/`textPrimary` 必须同一档值）。
+20. **氛围层只画一次**，画在外壳（§7.4）。页面自己叠一层 `DecoratedBox(gradient: …)` 当背景
+    就是违规——试验页那一层是试验期特权，W0 上收后取消。
+21. **玻璃预算**：同屏 `BackdropFilter` ≤ 8，移动端与窄窗一律 0（走 `alpha=255` 实色分支）；
+    **不许玻璃叠玻璃**，玻璃卡内的小块用水洗档（`slotRest`/`chipRest`）。
+    新增玻璃卡前先数实例，不要等出图掉帧才发现。
+22. **动效只在数据变化时发生**：`didUpdateWidget` 先比值，相等就直接跟到新终值、不起钟；
+    新数据只动末尾段；一次性动画播完静止，不循环不倒放（§5.1 第一原则）。
+23. **字重上限 w700**，且只有徽标与展示数字能用那一档（§4）。在 Inter-ExtraBold 补进资产之前
+    **禁止新增 `FontWeight.w800`**（现在拿不到实体字面，静默降 Bold）。
+    口径：`grep -rn "FontWeight.w800" lib/ --include='*.dart'` 应当归零。
+24. **带文字的浮层/弹层必须能逃出宿主高度**（§3.1 第三次发作）：定位委托返回
+    `BoxConstraints(maxWidth: …)`，不要 `loosen()`、不要 `copyWith(maxHeight: null)`；
+    并且**必须有一条 `fontScaleObs = 1.6` 的回归**断言 `takeException()` 为空。
+25. **时序图的四条数据面约定**（浮层、日期+周几标签、零值段不画、尾巴动画）见 §9.2，
+    新做图表页照抄电量统计页，不要再发明一遍。
+
 ---
 
 ## 11. 视觉验收：离屏 golden
@@ -912,6 +1491,8 @@ flutter test test/music_player_render_test.dart
 flutter test test/sidebar_collapsed_layout_test.dart      # 布局回归（快，CI 跑）
 flutter test --update-goldens -t golden test/sidebar_collapsed_layout_test.dart  # 出图
 flutter test --update-goldens -t golden test/shell_chrome_render_test.dart       # 顶栏标题格两态
+flutter test test/power_stats_render_test.dart            # 新语言的样板页：11 条含动效与字阶回归
+flutter test --update-goldens -t golden test/power_stats_render_test.dart        # 明暗/宽窄/悬停/重播 13 张
 ```
 
 外壳的验收点是分开的两块：**侧栏**（`sidebar_*`）看 logo、指示条、行末箭头、子项连接线；
@@ -923,7 +1504,7 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
 左右拼图在 `test/goldens/compare/`。`test/failures/`（不匹配时 Flutter 吐的 diff 图）
 是临时产物，不要提交。
 
-六个必须知道的坑：
+八个必须知道的坑：
 
 1. **有无限循环动画就不能 `pumpAndSettle`**——正在播放行的跳动指示条、`StatusDot` 的
    脉冲、骨架屏的呼吸都永远 settle 不下来，测试直接超时。改用
@@ -949,14 +1530,28 @@ flutter test --update-goldens -t golden test/shell_chrome_render_test.dart      
    出图直接变成另一种布局。要补的依赖在**自己的测试文件里**注册，并且先
    `SharedPreferences.setMockInitialValues({})`——`SidebarController.onInit` 要读持久化栏宽，
    没有假 prefs 第一帧就抛 `MissingPluginException`。
+7. **字阶放大档必须进验收矩阵**：把用户的"界面字号"比例顶到 1.6 再跑一遍真实页面，
+   每个浮层/悬停态后面补一条 `expect(tester.takeException(), isNull)`。
+   只出 1.0 档的图等于没测——§3.1 那次 `overflowed by 4.9 pixels` 在 1.0 档是**完全看不见的**。
+   写法：`AppTheme.fontScaleObs.value = 1.6;` + `addTearDown(() => AppTheme.fontScaleObs.value = 1.0);`
+   （`fontScaleObs` 是全局 ValueNotifier，不复位会污染下一个用例）。
+8. **时序类 golden 的数据不许拿 `DateTime.now()` 造**：桶的 `timestamp` 一旦跟着真实日期走，
+   周几标签、日期标签就会**一周后全部错位**，基线自己变红且看不出是谁改坏的。
+   固定基准（样板页用 `DateTime(2026, 10, 13)`，周二）再往后推小时；桩数据给 0 时
+   标签函数必须原样返回短标签（§9.2 第 2 条）。
 
 ---
 
 ## 12. 动效实验室（隔离案例集）
 
 `lib/pages/motion_lab/` 是一页 44 格的动效参考集：每格一个独立组件，照外部参考稿逐像素还原
-尺寸/颜色/时长/曲线/关键帧。**它是只读参考，不是产品 UI**——§5.1 的禁令在这里依然成立，
-发光、粒子爆炸、骨架渐变搬进真页面仍然是违规。
+尺寸/颜色/时长/曲线/关键帧。**它是只读参考，不是产品 UI**——§5.1 的禁令按 v2 收窄后在这里依然成立：
+粒子爆炸、多次回弹、**常驻装饰性发光**、把渐变铺在控件底上，搬进真页面仍然是违规。
+v2 新允许的只有两样：**事件驱动的一次性发光**（§5.5 的 20）和**三处容身的渐变**（§0.4）；
+lab 里那些为"演示某种效果"而生的常驻 glow / 渐变底，属于实验道具，不进产品。
+
+**v2 的样板页不是这三页 lab，是 `lib/pages/power_stats/`**（已验收的新语言整页实现）。
+要看"这块面该长什么样、该怎么动"，先查样板页，再查 lab；lab 只回答"这种动效怎么做"。
 
 同一套接线方式后来复用了两遍，长出了三页（`/motion-lab` 44 格、`/interaction-lab` 13 格、
 `/surface-lab` 7 格）。**加一格或加一页照 `docs/ui_labs.md` §1 走**（目录骨架、本地令牌底座、
@@ -1608,6 +2203,30 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 - **看图器进场缩放成档**：`AppMotion.scaleStage 0.93`（三处入口原本各写各的 0.93）。
 - **等宽字族单一出处**：`AppTheme._monoFontFamily` + `_monoFontFamilyFallback`（Menlo → Consolas →
   DejaVu/Liberation → monospace），调用点只走 `AppTextStyles.mono(context, …)`。
+- **v2 试验田整页验收**（`lib/pages/power_stats/`）：柔彩氛围底 + 玻璃卡 + 事件驱动动效
+  在一页上跑通，11 条用例 + 13 张 golden（明/暗/宽/窄 + 三处悬停浮层 + 四个事件帧 +
+  区间重播 + 尾巴动画 + **1.6 字阶无溢出回归**）。色板出处 `power_stats_theme.dart`，
+  通用件出处 `power_stats/components/`——**这两处就是 §2.9 与 §9 上收前的唯一实体来源**。
+
+### v2 全局化波次（本节是执行计划，不是历史）
+
+**关键杠杆**：619 处 `AppSemantic.of(context)` 取色入口**不用逐页改**——换掉令牌值，它们自动跟着换
+（口径：`grep -rn "AppSemantic\.of" lib --include='*.dart' | wc -l`，其中约 20 处就在 `core/theme/` 自己）。
+所以每个波次只有两种动作：**W0 换值**（一次性、全局生效），**W1+ 换表面**（逐页：加氛围层接收、
+卡片换 `GlassCard`、数据面接 §9.2 四条）。`lib/pages/**` 下共 56 个 `*_screen.dart` / `*_page.dart`，
+扣掉豁免树（`backup` 1、`demo` 2、三页 lab 3）与死文件 1，**待铺 48 页 / 已完成 1 页（样板页）**。
+
+| 波 | 范围 | 页量 | 出口判据 |
+|---|---|---|---|
+| **W0 地基** | 新建 `app_atmosphere.dart`（§2.9 全表上收）+ `AppSemantic` 换值 + `ThemeMetrics` 圆角三档升档（§3）+ 字重与 `w800` 收编（§4）+ `AppMotion` 补 `roll`/`scaleBlock` 两档（§5.2/§5.4）+ **§9 通用件上收** + **外壳收口氛围层**（§7.4）+ `PowerStatsPalette` 改为消费全局层 | — | 全仓 `dart analyze` 分域干净；样板页 11 条用例与 13 张 golden 全部重跑并**逐张看图**（令牌换值必然改基线）；`s.`/`a.` 双入口文档化 |
+| **W1 门面** | `components/window/*`（侧栏/顶栏/把手/浮层）+ `dashboard_screen` + `theme_preview_screen`（新令牌可视化总览） | 1 + 外壳 | `shell_chrome_*` / `sidebar_*` / `dashboard_*` 出图重跑；外壳同屏 `BackdropFilter` ≤ 8 实测计数 |
+| **W2 高密度业务** | `ledger`(9) / `manga`(8) / `game_library`(8) / `collection`(3) | 28 | 每模块明暗各一张 + 一条 1.6 字阶回归；列表族**保持实色**（§7.1），只有卡族换玻璃 |
+| **W3 内容与播放** | `novel_library`(1) / `novel_reader`(1) / `music_player`(2) / `about`(1) | 5 | 阅读器纸张族（`AppReaderPaper`）与媒体 chrome（§2.7）**不受本次影响**，只换外壳与卡片 |
+| **W4 工具与运维** | `tools` / `sentry_log` / `aliyun_ddns` / `lan_transfer`(2) / `ncm_decrypt` / `module_management` / `settings` / `websocket_test` / `http_bridge_test` / `capture_screen_page` | 11 | 日志控制台仍走 `s.terminal`（§2.8），别把终端格玻璃化 |
+| **W5 清账** | 死文件 `lib/pages/novel_library_page.dart` 删除（**需用户确认**）+ §13 残余豁免复账 + 旧语言注释清理 | — | §10 全部 grep 口径复跑一遍归零或记账 |
+
+每波结束跑 W0 的三件套：analyze 分域、golden 明暗重跑、玻璃预算与旧语言 grep 复账（§11 的命令口径）。
+**不要跨波混做**：令牌值没定稿就逐页换玻璃，会得到"卡片有的厚有的薄、有的透有的实"的中间态。
 
 ### 未完成（按可见度排序）
 
@@ -1619,10 +2238,15 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 | 图标残留：`IconData` 形参的-helper | `Icon(Icons.*)` 直接渲染只剩 5 处（`node_directory_picker` 2、看图器三个 part 各 1），但**私有 helper 用 `IconData` 收参数、内部再 `Icon(icon)`** 的写法在看图器那组 `part` 里成窝（`_GlassIconButton` 收 4 个 `Icons.*_rounded`）。§13 早先记的"图标全部收敛"指的是渲染点，这一类是漏网的签名层 | `rg -o 'Icon\(Icons\.[a-zA-Z_]+' lib --no-heading \| wc -l`；再逐处查 `final IconData` 形参 |
 | 历史取色的**残余豁免**（收编已到底，剩下的是记账） | 生产代码（排 `core/theme/`、`lib/gen/`、§12.3 实验室与两张展示页）里：① 裸 hex **21 处**全部在命名常量族内——黑胶盘面 `_DiscMaterial` 10、搜索高亮 `_SearchHighlight` 4、小说卡 3、漫画条按钮 `_BarBtn` 3、音频舞台渐变 1；② 裸 `Colors.*`（非 `transparent`）**26 处**各有豁免理由——启动图 5（`runApp` 前禁 `AppTheme.metrics`）、强调色选择器的原始色板 12（这个面的职责就是摆色板）、按亮度反差挑勾字 2（`computeLuminance()`）、死文件 7、设备头像 HSL 派生 1；③ `LightColors.`/`DarkColors.` **12 行** = 色板 10 + `live_frost` 窗口底 1 + 死文件 1；④ `Colors.transparent` 82 处不是取色，是"这里没底"，不进这套账。`brandColor` 已 0 处 | `grep -rn "Color(0x[0-9A-Fa-f]\{8\})" lib --include='*.dart' \| grep -vE "core/theme/\|lib/gen/" \| grep -v ":[ ]*//"`；`grep -rn "Colors\.[a-z]" lib --include='*.dart' \| grep -v Colors.transparent \| grep -vE "core/theme/\|pages/(backup\|demo\|surface_lab\|motion_lab\|interaction_lab\|theme_preview_screen\|style_showcase_screen)"` |
 | 死文件待清 | `lib/pages/novel_library_page.dart`（根级，10KB，路由实际指向 `pages/novel_library/novel_library_page.dart`，全仓零引用）带着 7 处裸 `Colors.*` + 1 处 `LightColors/DarkColors` 三元分支（另 2 处 `transparent`），收编时按"死代码"跳过 | `rg -n 'pages/novel_library_page' lib/ test/` 应为空 |
-| 其余 ~29 个页面仍是旧语言 | 和新外壳并排看会明显不一致（这是**预期中的中间态**） | 逐模块迁移，见任务 Stage 4–10 |
+| 其余 48 个页面仍是 **v1 语言**（中性底 + 实色卡 + 墨主色） | 与样板页并排会明显不一致；这是**预期中的中间态**。好消息是"换值"一步（W0）就能把它们整体带到 v2，剩下的全是"换表面" | §13 的 v2 波次表 W1–W5；单页判据三件事：卡片是否 `GlassCard`、氛围层是否只由外壳画、§9.2 四条数据面约定 |
+| **v2 地基四处待接线** | ① `AppAtmosphere` 尚未建（§2.9 全表还活在 `power_stats_theme.dart`）；② `AppSemantic` 的柔彩档值未替换（现在仍是 v1 灰阶）；③ 圆角三档升档未做（`radiusCard` 仍 10）；④ `AppMotion` 缺 `roll` / `scaleBlock` 两档 | W0；每项都要跟着重跑对应 golden |
+| **氛围层还在页面自画** | `desktop_scaffold.dart:180` 目前刷 `canvas` 实底，样板页自己叠了 5 层渐变；外壳收口后页面那一层要撤（§7.4） | W0/W1；`grep -rn "backgroundLayers\|RadialGradient(" lib/pages --include='*.dart'` 应当只剩外壳 |
+| **玻璃预算未实测** | 同屏 `BackdropFilter` ≤ 8 是按样板页（5 张卡）推的，没在 Windows / 低端机 / 大列表页验过帧时间 | W1 起每波首次出图时顺手记一次帧时间 |
+| **Inter 缺 800 档** | 资产只有 Regular/Medium/SemiBold/Bold（`pubspec.yaml` 181–187 行），17 处 `FontWeight.w800` 静默降 Bold（试验页 15 处 + `sentry_log` 2 处） | §4；要么补 `Inter-ExtraBold.ttf` 进 `pubspec.yaml`，要么 17 处收 `w700` |
+| **暗色实心胶囊对比度不达标**（实测算出来的，不是猜的） | 白字压 `#7C9BFF` 只有 **2.63:1**（WCAG 需 4.5:1）；压 `#2F65DE` 是 5.2:1。所以暗色档"实心底 + 白字"必须换深一档蓝 | 已定方案：新增 `accentSolid`（暗 `#3B63D8`，5.3:1），`accent` 在暗色档只承担线/游标/字（§2.1、§14 冲突 C3） |
 | 共享组件库未铺满 | 大量页面仍手搓卡片/空状态/小节标题（~25 套卡片、`_GlassCard` 两处重复、`EmptyState` 两套打架） | 见 §9 右列 |
 | 动效**字面量已清零，编排还没统一** | 时长/曲线/描边/sigma 四类字面量都落档了（口径见 §5.3、§3.3、§5.4 的 grep），剩下的不是数字而是编排：① 绝大多数 `AnimatedX` 还挂 `standard`，弹簧档只接到 §5.5 点名的几面；② 退场普遍还在倒放同一条时间轴（该取相邻低档，§5.2）；③ 路由转场两条手写 builder 没并给 `AppPageTransitions.fadeUp`（260ms 与 0.985 因此还在档外，§5.3）；④ `StateTransitionAnimation.animationDuration` 默认仍是手写 400ms。另：`StateTransitionAnimation` 已随图标迁移换签名（`icon`/`hoverIcon` 现为 `StrokeIcon?`），图标固定 `StrokeTrigger.none`（§9.1 的"一个主角"） | §5.5 逐面 + §5.6 逐输入；字面量账：`grep -rn "Duration(milliseconds:\|Curves\.\|sigmaX: [0-9]\|Border\.all(.*width: [0-9]" lib/pages lib/components --include='*.dart'`（曲线 / sigma / 描边三项应只剩 §12.3 实验室页与图表几何两处；`Duration(milliseconds:` 剩下的 18 处全是 §5.2 划出去的"数据节奏"——超时、轮询、防抖、重试、逐帧节拍、idle 计时，逐处自解释） |
-| 自选强调色仍会覆盖新墨色 | 用户以前存过自定义强调色的话，除非改选第一档"跟随主题"，否则旧色仍生效 | 设置页 → 主题 → 第一档 |
+| 自选强调色仍会覆盖新主色 | 用户以前存过自定义强调色的话，除非改选第一档"跟随主题"，否则旧色仍生效。**v2 起这条更要紧**：存过的品牌紫/旧墨色会直接顶掉柔彩蓝，整页看着还是 v1 | 设置页 → 主题 → 第一档；`AppTheme.kFollowThemeAccent` 哨兵（§2.3） |
 | `surfaceActive` 仍是实心 | 按压态会打断窗口磨砂（悬停已修，按压未修） | `app_colors.dart` |
 | 仪表盘卡片是死控件 | `onTap: () {}`；指标卡在 300px 封顶，宽窗留白 | `dashboard_screen.dart` |
 | 仪表盘 golden 里数值是 `--` | `SystemMetricsService.lastSnapshot` 没有测试桩 | 需要时补注入点 |
@@ -1633,9 +2257,94 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 
 ---
 
-## 14. 相关提交
+## 14. 冲突与待确认
+
+这一节只干一件事：**把"试验页已验收"和"全站现状"打架的地方列出来，并给出实测代价**。
+试验页证明的是这套语言**能成立**，不是它**能和现有 48 页无痛共存**。下面五条里，
+C3 已经当场解决（记录结论供复核），C1/C2/C4/C5 **需要你拍板**——我在 W0 动工前不会自己选。
+
+### C1 `danger` 与"下跌"撞车：错误红 vs 走势rose  `needs-decision`
+
+| | v1 状态色 | v2 方向色（试验页实测） |
+|---|---|---|
+| 用途 | "这块数据有问题" | "这块数据在往下走" |
+| 亮 | `danger #E40014` | `data-fall #F06E81` |
+| 暗 | `danger` 同一支 | `data-fall-dark #FF8DA0` |
+
+- **冲突点**：两个都是红族，小尺寸徽标上肉眼分不出"故障"和"跌了"。试验页里 `data-fall` 出现频率远高于
+  `danger`，因为它要给每一根下行柱上色；而同一屏的事件流水里失败项就挂着 `s.danger`
+  （`power_stats_screen.dart:1047`：`success ? s.success.color : s.danger.color`）——那一屏里红有两种意思。
+- **实测代价**：`grep -rn "s\.danger" lib --include='*.dart'` → **142 处 / 54 个文件**。
+  这不是要改这些点，而是说：任何"红族重新分工"的方案都要在这 54 个文件的出图里被验证，
+  改一支等于 54 个文件的 golden 重看。
+- **我的建议**：`danger` 保留且**只**给"操作失败/不可用/超阈值"；`data-fall` 永远不进状态角色层
+  （它在 `AppAtmosphere`/`AppViz`，§2.5 的判据"这块颜色在报告'好不好'还是在报告'往哪走'"）。
+  记账页的收入/支出、电量的峰/谷一律走方向色，**不许借用 `success`/`danger` 当涨跌**——
+  这条已经写进 §2.5，此处只是把代价说明白。
+
+### C2 `info` 的紫与 `violet` 的紫几乎是同一支  `needs-decision`
+
+- **现状**：`AppSemantic.info` = `#8D54FF`（`app_colors.dart` 的 `lightInfo`）；
+  试验页的 `violet` = `#715FFD`，暗档 `#9C8CFF`。相差不到一档明度，同屏放一起会被读成"同一个紫用错了"。
+- **实测代价**：`grep -rn "s\.info" lib --include='*.dart'` → **75 处 / 38 个文件**。
+- **三条路**：
+  1. **info 归并到 violet**（推荐）：`info` 换值成 `#715FFD`，两族合成一族。代价是 38 个文件跟着换值，
+     且"提示"从此没有独立色相可用。
+  2. **info 换色相**：把 info 挪到青蓝一侧（例如与 `cool #1B8FB5` 同族），紫整个让给氛围。
+     代价：38 处的语义色彩全部重认一遍，历史截图失去可比性。
+  3. **两者都留**：靠"info 只用于文字/图标点缀、violet 只用于渐变与身份"分工。
+     代价：这条分工只能靠 §10 的规矩维持，最容易在后续页面破功。
+- **我的建议**：走 1，但**留 `info` 这个名字**（业务代码不动），只换值。这样 38 处调用点零改动。
+
+### C3 暗色实心胶囊的对比度（**已解**，记录供复核）
+
+- **问题**：白字压试验页的 `accent-dark #7C9BFF` 只有 **2.63:1**，WCAG AA 要求 4.5:1，不达标。
+- **实测**：压 `#2F65DE`（亮档）= **5.2:1**；压 `#3B63D8` = **5.3:1**。
+- **结论**：拆两档——`accent` 负责"亮着的东西"（线、游标、字、洗底），
+  新增 **`accentSolid`** 负责"要压白字的实心底"（实心胶囊、主按钮），暗档取深一档的 `#3B63D8`。
+  已落 §2.1 表格与 frontmatter。
+
+### C4 圆角整体升档是**全站重排**，不是一页的事  `needs-decision`
+
+- **现状**：`ThemeMetrics` 里 `radiusControl = scaleW(8)`、`radiusCard = scaleW(10)`
+  （`app_theme.dart:1177/1179`），试验页实测：所有玻璃卡走 `radius16`（`PsGlassCard` 默认），
+  六列维度卡走 `radius14`，抓取按钮走 `radius20`。v2 §3 把三档定为 `10 / 16 / 20`。
+- **实测代价**：`grep -rn "radiusCard\|radiusPanel\|radiusControl" lib --include='*.dart'` →
+  **66 处 / 20 个文件**，其中 `app_theme.dart` 主题自己占 **17 处**，业务调用点 **49 处 / 19 个文件**。
+  改值即**所有明暗基线重拍**，包括与 v2 无关的旧页面——它们会在同一次提交里变圆。
+- **待确认**：是接受"一次把 20 个文件一起变圆"，还是**只对上了玻璃的卡升档**（其余暂时留着旧 8/10）。
+  我建议前者：混用会得到"卡片有的厚有的薄"，而 §13 的波次表本来就是按"令牌先定稿"排的。
+
+### C5 用户自选强调色会顶掉柔彩蓝  `needs-decision`
+
+- **机制**：`AppTheme.kFollowThemeAccent` 是"跟随主题"哨兵（`app_theme.dart:34`）；只有选到第一档时
+  `buildCustom*` 才短路（`app_theme.dart:117` 的 `followTheme` 判定），否则用存的色覆盖 `semantic.accent`。
+- **实测代价**：`accent` 相关取色点 **537 处 / 96 个文件**（`grep -rn "s\.accent" lib --include='*.dart'`）。
+  也就是说：**只要用户以前存过一档自定义强调色，v2 换底在他机器上等于没换**——整屏还是 v1 的墨/紫。
+  选择器里存的还是旧色板（`theme_settings_tab.dart:20` 的 `_accentPalette`，10 档原始色）。
+- **三条路**：
+  1. **迁移一次**：读到存的值等于旧色板任意一档时，重置为"跟随主题"；用户真自定义过的保留。
+  2. **换色板**：`_accentPalette` 换成 v2 的六支（accent/violet/warm/cool/data-rise/data-fall），
+     存过的旧值自动失效，但不通知用户。
+  3. **只改文档**：让用户自己去设置页点第一档（§13 现在的口径）。
+- **我的建议**：1 + 2 同做——换色板，并把旧值映射到最近的新一档（而不是直接重置），迁移完在设置页留一行说明。
+  这条涉及用户存的偏好，所以我**不擅自动手**。
+
+### 已定不再议（本页已出图验收，改动前请先看 §11）
+
+| # | 结论 | 出处 |
+|---|---|---|
+| D1 | 状态色族五档不动，涨跌/峰谷是**身份**不是**状态** | §2.5、§0.5 末行 |
+| D2 | 氛围层只在**外壳画一次**，页面不许自铺背景；同屏 `BackdropFilter` ≤ 8 | §7.4、§10 第 20/21 条 |
+| D3 | 移动端保留柔彩**颜色**、去掉**模糊**、玻璃退化实色 | §8 |
+| D4 | 展型大数字走宽度族（`scaleW(52)`，实测 `power_stats_hero.dart:77`） | §3.1 例外档 |
+
+---
+
+## 15. 相关提交
 
 ```
+72316ae feat(power_stats): 电量统计页改成柔彩氛围底 + 玻璃卡，动效改为数据驱动
 40452f4 refactor(ui): 音乐播放器整块接进设计系统语义层
 e5c94d6 fix(ui): 悬停状态层在亮色下真正可见——水洗方向跟底色走
 9534679 feat(ui): 菜单收进设计系统——新增紧凑菜单项，浮层统一玻璃口径
