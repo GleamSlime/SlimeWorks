@@ -405,14 +405,12 @@ class _AboutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppSemantic.of(context);
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-      decoration: BoxDecoration(
-        color: s.surface,
+      decoration: AppCard.glassDecoration(
+        context,
         borderRadius: AppTheme.metrics.radius12,
-        border: Border.all(color: s.border),
       ),
       child: child,
     );

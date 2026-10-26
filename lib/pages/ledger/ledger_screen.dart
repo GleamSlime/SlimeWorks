@@ -225,8 +225,11 @@ class _OverviewCard extends StatelessWidget {
         SizedBox(height: m.kSpace4),
         Text(
           '¥${formatLedgerAmount(summary.net.abs())}',
+          // 大数字走墨色（§2.1 的 textPrimary 档），负数才用状态红报"不好"。
+          // 原来这里吃的是 `viz.lagoon.base`——那是图表系列身份色，实测压在卡上只有
+          // 1.4:1，整页最该看清的那串数反而是最淡的。
           style: AppTextStyles.metric(context).copyWith(
-            color: summary.net < 0 ? s.danger.color : viz.lagoon.base,
+            color: summary.net < 0 ? s.danger.color : s.textPrimary,
           ),
         ),
         SizedBox(height: m.kSpace4),

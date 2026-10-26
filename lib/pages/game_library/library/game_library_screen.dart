@@ -935,7 +935,7 @@ class _GameCardState extends State<_GameCard> {
                             left: AppTheme.metrics.kSpace4,
                             child: Container(
                               decoration: BoxDecoration(
-                                color: s.accent,
+                                color: s.accentSolid,
                                 shape: BoxShape.circle,
                               ),
                               child: DrawIcon(StrokeIcons.check, color: s.accentOn, size: AppTheme.metrics.iconSize16),

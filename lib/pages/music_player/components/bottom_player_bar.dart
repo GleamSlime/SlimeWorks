@@ -231,7 +231,7 @@ class BottomPlayerBar extends StatelessWidget {
           // 底色必须走 styleFrom 而不是外面套一个圆形 Container：Container 在
           // InkWell 之下，涟漪会方形溢出圆钮，圆形底也吃不到按压反馈。
           style: IconButton.styleFrom(
-            backgroundColor: s.accent,
+            backgroundColor: s.accentSolid,
             foregroundColor: s.accentOn,
             padding: EdgeInsets.zero,
             minimumSize: Size(scaleW(40), scaleW(40)),

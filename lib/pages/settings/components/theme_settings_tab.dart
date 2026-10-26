@@ -8,6 +8,7 @@ import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 
 class ThemeSettingsTab extends StatefulWidget {
   const ThemeSettingsTab({super.key});
@@ -260,10 +261,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           Container(
             width: double.infinity,
             padding: EdgeInsets.all(m.kSpace16),
-            decoration: BoxDecoration(
-              color: s.surface,
+            decoration: AppCard.glassDecoration(
+              context,
               borderRadius: m.radius12,
-              border: Border.all(color: s.border),
             ),
             child: Wrap(
               spacing: m.kSpace12,
@@ -287,10 +287,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           Container(
             width: double.infinity,
             padding: EdgeInsets.all(m.kSpace16),
-            decoration: BoxDecoration(
-              color: s.surface,
+            decoration: AppCard.glassDecoration(
+              context,
               borderRadius: m.radius12,
-              border: Border.all(color: s.border),
             ),
             child: Wrap(
               spacing: m.kSpace12,
@@ -314,10 +313,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           Container(
             width: double.infinity,
             padding: EdgeInsets.all(m.kSpace16),
-            decoration: BoxDecoration(
-              color: s.surface,
+            decoration: AppCard.glassDecoration(
+              context,
               borderRadius: m.radius12,
-              border: Border.all(color: s.border),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -374,10 +372,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
             Container(
               width: double.infinity,
               padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace8),
-              decoration: BoxDecoration(
-                color: s.surface,
+              decoration: AppCard.glassDecoration(
+                context,
                 borderRadius: m.radius12,
-                border: Border.all(color: s.border),
               ),
               child: Row(
                 children: [
@@ -405,10 +402,9 @@ class _ThemeSettingsTabState extends State<ThemeSettingsTab> {
           Container(
             width: double.infinity,
             padding: EdgeInsets.all(m.kSpace20),
-            decoration: BoxDecoration(
-              color: s.surface,
+            decoration: AppCard.glassDecoration(
+              context,
               borderRadius: m.radius12,
-              border: Border.all(color: s.border),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

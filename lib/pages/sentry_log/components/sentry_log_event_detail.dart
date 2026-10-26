@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -275,11 +276,7 @@ class SentryLogEventDetail extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radiusCard),
       child: Column(
         children: entries.map((e) => _buildInfoRow(context, theme, m, s, e.label, e.value)).toList(),
       ),
@@ -338,11 +335,7 @@ class SentryLogEventDetail extends StatelessWidget {
         return Container(
           margin: EdgeInsets.only(bottom: m.kSpace8),
           padding: EdgeInsets.all(m.kSpace12),
-          decoration: BoxDecoration(
-            color: s.surface,
-            borderRadius: m.radiusCard,
-            border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
-          ),
+          decoration: AppCard.glassDecoration(context, borderRadius: m.radiusCard),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -435,11 +428,7 @@ class SentryLogEventDetail extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radiusCard),
       child: Column(
         children: values.map<Widget>((b) {
           final crumb = b as Map<String, dynamic>;
@@ -537,11 +526,7 @@ class SentryLogEventDetail extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radiusCard),
       child: Column(
         children: extra.entries
             .map((e) => _buildInfoRow(context, theme, m, s, e.key, e.value.toString()))
@@ -561,11 +546,7 @@ class SentryLogEventDetail extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radiusCard),
       child: Row(
         children: [
           CircleAvatar(
@@ -607,11 +588,7 @@ class SentryLogEventDetail extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radiusCard),
       child: Column(
         children: [
           if (request['method'] != null || request['url'] != null)
@@ -641,11 +618,7 @@ class SentryLogEventDetail extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.all(m.kSpace12),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radiusCard,
-        border: Border.all(color: s.border, width: AppTheme.metrics.strokeUltraThin),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radiusCard),
       child: Column(
         children: contexts.entries.map((e) {
           final value = e.value;

@@ -64,16 +64,11 @@ class _GameSettingsTabState extends State<GameSettingsTab> {
   }
 
   Widget _buildSettingsCard({required Widget child}) {
-    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace16),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radius12,
-        border: Border.all(color: s.border),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
       child: child,
     );
   }

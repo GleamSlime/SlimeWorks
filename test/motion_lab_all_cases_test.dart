@@ -13,7 +13,21 @@ import 'helpers/lab_golden.dart';
 // 触发方式按各格参考稿写死在 [_acts] 里：按钮点按钮、悬停的压中心、
 // 自动循环的什么都不做只推进时间。
 
-enum _Act { animate, toggleModal, togglePanel, play, clickable, hoverClickable, auto }
+enum _Act {
+  animate,
+  toggleModal,
+  togglePanel,
+  play,
+  clickable,
+  hoverClickable,
+  auto,
+
+  /// 手势类：脚本化的一次指尖拖拽（按下—移动—抬起一气呵成）
+  dragLeft,
+  dragRight,
+  dragDown,
+  dragUp,
+}
 
 const Map<int, _Act> _acts = {
   1: _Act.animate,
@@ -60,6 +74,12 @@ const Map<int, _Act> _acts = {
   42: _Act.play,
   43: _Act.auto,
   44: _Act.auto,
+  45: _Act.dragLeft,
+  46: _Act.dragDown,
+  47: _Act.dragUp,
+  48: _Act.dragUp,
+  49: _Act.clickable,
+  50: _Act.dragRight,
 };
 
 /// 舞台在 320×284 的窗口里居中（舞台本身 296×260）
@@ -75,7 +95,30 @@ const _labelOverride = {19: 'Ask'};
 /// 28 号的粒子窗口含延迟有 830ms，150ms 才刚出中心
 /// 44 号要拍在载波外推的半路上（一腹从中轴走到端点 3000ms）：途中这帧刚出中轴，
 /// 终态那帧已经走到边上，两帧一比才看得出它是往外走的
-const _midOverride = {4: 400, 6: 400, 9: 100, 12: 600, 28: 300, 37: 2500, 38: 600, 44: 1300};
+/// 46 号要拍在挂住转圈那一段（脚本 1930ms，270→1500 才是它最有代表性的样子）：
+/// 150ms 只拍到回落的一半，2000ms 又已经落回原位和静止帧撞车
+/// 47 号上行有 130ms 的蓄势、抬起来又快（`smoothOut` 前半段就走完大半），
+/// 150ms 面板还压在低档下面，320ms 又已经快到位，拍 200ms 才在半路上
+/// 48 号的让位要 400ms，而脚本里那一拖是瞬时完成的（邻行刚起步就被松手追上），
+/// 150ms 拍到的是浮层压在半挪的邻行上；拍 320ms 才是"邻行已经让开一格"的那一帧
+/// 49 号长按 430ms 才起预览，卡片长成 640ms、背景糊到位 200ms：150ms 只拍到格子刚变深，
+/// 拍 560ms（起预览后 162ms）才是"卡片已经大了七成、背景糊了一半、白还没透出来"那一帧
+/// 50 号松手就开飞，详情页 200ms 内出屏：150ms 已经快划完了，拍 60ms 才看得见两页并排
+const _midOverride = {
+  4: 400,
+  6: 400,
+  9: 100,
+  12: 600,
+  28: 300,
+  37: 2500,
+  38: 600,
+  44: 1300,
+  46: 900,
+  47: 200,
+  48: 320,
+  49: 560,
+  50: 60,
+};
 
 String _pad(int seq) => seq.toString().padLeft(2, '0');
 
@@ -119,7 +162,23 @@ Future<void> _trigger(WidgetTester tester, _Act act, int seq) async {
       );
     case _Act.auto:
       break;
+    case _Act.dragLeft:
+      await _dragZone(tester, const Offset(-60, 0));
+    case _Act.dragRight:
+      await _dragZone(tester, const Offset(60, 0));
+    case _Act.dragDown:
+      await _dragZone(tester, const Offset(0, 44));
+    case _Act.dragUp:
+      await _dragZone(tester, const Offset(0, -44));
   }
+}
+
+/// 在手型光标那块格子上做一次脚本化指尖拖拽（手势类案例的触发点）
+///
+/// 用 [WidgetTester.drag]：它的指针默认就是触屏类型，正好走案例里给指尖留的那条路
+Future<void> _dragZone(WidgetTester tester, Offset by) async {
+  expect(_clickable.evaluate().isNotEmpty, isTrue, reason: '没找到可拖的那块');
+  await tester.drag(_clickable.first, by);
 }
 
 Future<void> _shoot(

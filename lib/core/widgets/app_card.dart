@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/components/icons/stroke_zone.dart';
+import 'package:slime_works/core/theme/app_atmosphere.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -113,7 +114,11 @@ class _HoverableState extends State<Hoverable> {
 /// 标准卡片容器
 ///
 /// 收敛点：项目原本有 95 处手写 `BoxShadow`、三套卡片圆角。统一为
-/// 「表面色 + 发丝描边 + 极浅投影」，并让投影跟随明暗主题。
+/// 「玻璃材质：着色 + 发丝描边 + 顶缘高光 + 同色相投影」，并让投影跟随明暗主题。
+///
+/// **这里故意不挂 `BackdropFilter`**：AppCard 是全站最密的容器（一屏几十张），
+/// 真磨砂的预算（同屏 ≤8，§7.4）会被它一个组件花光。它透出背后氛围层靠的是
+/// 着色本身半透明，不是模糊——需要真磨砂的那几张 Hero 卡另走 [GlassSurface]。
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
@@ -133,7 +138,7 @@ class AppCard extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final VoidCallback? onTap;
 
-  /// true 时叠加投影（用于浮在列表之上的强调块）
+  /// true 时投影抬一档（用于浮在列表之上的强调块）
   final bool elevated;
   final bool selected;
   final bool hoverable;
@@ -142,20 +147,74 @@ class AppCard extends StatelessWidget {
   final Color? color;
   final Clip clipBehavior;
 
+  /// 玻璃材质配方：着色 + 发丝描边 + 同色相投影。
+  ///
+  /// 页面里那些自己写了 `Container(decoration:)` 的卡不必换成 [AppCard]——
+  /// 只把 `decoration` 换成这个，材质就并进同一条口径了。配 [edgeHighlight]
+  /// 一起用才完整：没有顶缘那道高光，半透明卡压在柔彩底上会读成"贴了块塑料片"。
+  static BoxDecoration glassDecoration(
+    BuildContext context, {
+    BorderRadius? borderRadius,
+    Color? color,
+    Color? borderColor,
+    bool selected = false,
+    bool lifted = false,
+  }) {
+    final s = AppSemantic.of(context);
+    final a = AppAtmosphere.of(context);
+    return BoxDecoration(
+      color: color ?? (selected ? s.accentContainer : s.glassTint),
+      borderRadius: borderRadius ?? AppTheme.metrics.radiusCard,
+      border: Border.all(
+        color: selected
+            ? s.accentContainerBorder
+            : (borderColor ?? s.glassBorder),
+        width: scaleW(selected ? 1.4 : 1),
+      ),
+      boxShadow: a.cardShadow(lifted: lifted),
+    );
+  }
+
+  /// 顶缘高光：两端 alpha 收到 0、左右各内缩半个圆角，否则高光会戳出圆角外成一截直线。
+  static Widget edgeHighlight(BuildContext context, BorderRadius radius) {
+    final a = AppAtmosphere.of(context);
+    return Positioned(
+      left: radius.topLeft.x * 0.6,
+      right: radius.topRight.x * 0.6,
+      top: 0,
+      child: IgnorePointer(
+        child: Container(
+          height: AppTheme.metrics.strokeUltraThin,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(radius.topLeft.x),
+            ),
+            gradient: LinearGradient(
+              colors: [
+                a.glassHighlight.withAlpha(0),
+                a.glassHighlight,
+                a.glassHighlight.withAlpha(0),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     final radius = borderRadius ?? m.radiusCard;
 
-    final decoration = BoxDecoration(
-      color: color ?? (selected ? s.surfaceActive : s.surface),
+    final decoration = glassDecoration(
+      context,
       borderRadius: radius,
-      border: Border.all(
-        color: selected ? s.accentContainerBorder : (borderColor ?? s.hairline),
-        width: scaleW(selected ? 1.4 : 1),
-      ),
-      boxShadow: elevated ? s.elevation(Elevation.card) : null,
+      color: color,
+      borderColor: borderColor,
+      selected: selected,
+      lifted: elevated,
     );
 
     final content = Padding(
@@ -163,20 +222,25 @@ class AppCard extends StatelessWidget {
       child: child,
     );
 
+    Widget card;
     if (!hoverable && onTap == null) {
-      return DecoratedBox(decoration: decoration, child: content);
+      card = DecoratedBox(decoration: decoration, child: content);
+    } else {
+      card = Hoverable(
+        onTap: onTap,
+        borderRadius: radius,
+        hoverColor: s.surfaceHover,
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.standard,
+          decoration: decoration,
+          child: content,
+        ),
+      );
     }
 
-    return Hoverable(
-      onTap: onTap,
-      borderRadius: radius,
-      hoverColor: s.surfaceHover,
-      child: AnimatedContainer(
-        duration: AppMotion.fast,
-        curve: AppMotion.standard,
-        decoration: decoration,
-        child: content,
-      ),
+    return Stack(
+      children: [card, edgeHighlight(context, radius)],
     );
   }
 }

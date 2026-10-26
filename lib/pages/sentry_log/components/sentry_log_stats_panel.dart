@@ -6,6 +6,7 @@ import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -214,7 +215,7 @@ class SentryLogStatsPanel extends StatelessWidget {
                   Text(
                     value,
                     style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       fontFeatures: [const FontFeature.tabularFigures()],
                     ),
                   ),
@@ -486,7 +487,7 @@ class SentryLogStatsPanel extends StatelessWidget {
                     Text(
                       _formatNumber(eventCount),
                       style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         fontFeatures: [const FontFeature.tabularFigures()],
                       ),
                     ),
@@ -581,34 +582,17 @@ class _StatCardHoverState extends State<_StatCardHover> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
-    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
         duration: AppMotion.base,
         curve: AppMotion.standard,
-        decoration: BoxDecoration(
-          color: s.surface.withAlpha(_hovered ? 250 : 230),
+        decoration: AppCard.glassDecoration(
+          context,
           borderRadius: m.radiusPanel,
-          border: Border.all(
-            color: _hovered ? widget.accentColor.withAlpha(30) : s.border,
-            width: 0.5,
-          ),
-          boxShadow: [
-            ...s.elevation(_hovered ? Elevation.card : Elevation.raised),
-            if (_hovered)
-              BoxShadow(
-                color: widget.accentColor.withAlpha(15),
-                blurRadius: scaleW(20),
-                offset: Offset(0, scaleW(4)),
-              ),
-            BoxShadow(
-              color: s.accent.withAlpha(6),
-              blurRadius: scaleW(16),
-              offset: Offset(0, scaleW(4)),
-            ),
-          ],
+          // 悬停时发丝描边染上该卡片的强调色，保持原有的按语义高亮
+          borderColor: _hovered ? widget.accentColor.withAlpha(30) : null,
         ),
         child: ClipRRect(
           borderRadius: m.radiusPanel,
@@ -640,7 +624,6 @@ class _ProjectCardHoverState extends State<_ProjectCardHover> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
-    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -648,22 +631,11 @@ class _ProjectCardHoverState extends State<_ProjectCardHover> {
         duration: AppMotion.base,
         curve: AppMotion.standard,
         width: scaleW(240),
-        decoration: BoxDecoration(
-          color: s.surface.withAlpha(_hovered ? 250 : 230),
+        decoration: AppCard.glassDecoration(
+          context,
           borderRadius: m.radiusPanel,
-          border: Border.all(
-            color: _hovered ? s.accent.withAlpha(25) : s.border,
-            width: 0.5,
-          ),
-          boxShadow: [
-            ...s.elevation(_hovered ? Elevation.card : Elevation.raised),
-            if (_hovered)
-              BoxShadow(
-                color: s.accent.withAlpha(12),
-                blurRadius: scaleW(16),
-                offset: Offset(0, scaleW(4)),
-              ),
-          ],
+          // 悬停时发丝描边染上主强调色，保持原有的选中高亮
+          borderColor: _hovered ? AppSemantic.of(context).accent.withAlpha(25) : null,
         ),
         child: ClipRRect(
           borderRadius: m.radiusPanel,

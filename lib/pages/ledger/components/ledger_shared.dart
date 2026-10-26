@@ -783,7 +783,7 @@ class _QuickAddButton extends StatelessWidget {
     final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Material(
-      color: onTap == null ? s.surfaceHover : s.accent,
+      color: onTap == null ? s.surfaceHover : s.accentSolid,
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

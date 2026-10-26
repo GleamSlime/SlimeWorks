@@ -134,9 +134,8 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
 
     return Container(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
-      decoration: BoxDecoration(
-        color: s.surface,
-        border: Border.all(color: s.border),
+      decoration: AppCard.glassDecoration(
+        context,
         borderRadius: AppTheme.metrics.radius14,
       ),
       child: Column(
@@ -284,7 +283,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                     widget.onAccept();
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: s.accent,
+                    backgroundColor: s.accentSolid,
                     foregroundColor: s.accentOn,
                     elevation: 0,
                     padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace10),

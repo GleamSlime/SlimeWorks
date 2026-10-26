@@ -1114,7 +1114,7 @@ class _MangaComicDetailScreenState
                                 color: isDownloaded
                                     ? s.success.container
                                     : isSelected
-                                    ? s.accent
+                                    ? s.accentSolid
                                     : s.surfaceRaised,
                                 borderRadius: m.radius6,
                               ),

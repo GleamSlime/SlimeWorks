@@ -83,16 +83,10 @@ class CollectionDetailSection extends StatelessWidget {
           child: Container(
             padding: EdgeInsets.all(m.kSpace32),
             margin: EdgeInsets.symmetric(horizontal: m.kSpace24),
-            decoration: BoxDecoration(
-              color: s.surface,
+            decoration: AppCard.glassDecoration(
+              context,
               borderRadius: m.radius16,
-              boxShadow: [
-                BoxShadow(
-                  color: s.shadowKey,
-                  blurRadius: scaleW(16),
-                  offset: Offset(0, scaleW(6)),
-                ),
-              ],
+              lifted: true,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,

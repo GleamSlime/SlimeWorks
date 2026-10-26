@@ -406,7 +406,7 @@ class _GameDetailScreenState
                     AppTheme.metrics.kSpace6,
                   ),
                   decoration: BoxDecoration(
-                    color: s.accent,
+                    color: s.accentSolid,
                     borderRadius: BorderRadius.horizontal(
                       right: Radius.circular(scaleW(20)),
                     ),
@@ -596,14 +596,10 @@ class _GameDetailScreenState
                   .map(
                     (_MetaItem stat) => SizedBox(
                       width: itemW,
-                      child: Card(
-                        color: s.surface.withValues(alpha: 0.72),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
+                      child: Container(
+                        decoration: AppCard.glassDecoration(
+                          context,
                           borderRadius: AppTheme.metrics.radius12,
-                          side: BorderSide(
-                            color: s.border.withValues(alpha: 0.12),
-                          ),
                         ),
                         child: Padding(
                           padding: EdgeInsets.all(AppTheme.metrics.kSpace16),
@@ -682,19 +678,25 @@ class _GameDetailScreenState
           )
         else
           ...viewModel.sessions.map(
-            (PlaySession session) => Card(
-              color: s.surface.withValues(alpha: 0.72),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
+            (PlaySession session) => Container(
+              decoration: AppCard.glassDecoration(
+                context,
                 borderRadius: AppTheme.metrics.radius12,
-                side: BorderSide(
-                  color: s.border.withValues(alpha: 0.12),
-                ),
               ),
-              child: ListTile(
-                leading: DrawIcon(StrokeIcons.history),
-                title: Text('${session.startTime} → ${session.endTime}'),
-                trailing: Text(viewModel.formatDuration(session.durationSec)),
+              // 玻璃底画在外层 Container 上，ListTile 的水洗仍需要一层同圆角的
+              // 透明 Material 来裁边，否则涟漪会铺满整页
+              child: Material(
+                type: MaterialType.transparency,
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppTheme.metrics.radius12,
+                  side: BorderSide.none,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  leading: DrawIcon(StrokeIcons.history),
+                  title: Text('${session.startTime} → ${session.endTime}'),
+                  trailing: Text(viewModel.formatDuration(session.durationSec)),
+                ),
               ),
             ),
           ),
@@ -713,14 +715,10 @@ class _GameDetailScreenState
       final String html = viewModel.moegirlHtml.value;
       final String error = viewModel.moegirlError.value;
       if (loading) {
-        return Card(
-          color: s.surface.withValues(alpha: 0.72),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
+        return Container(
+          decoration: AppCard.glassDecoration(
+            context,
             borderRadius: AppTheme.metrics.radius12,
-            side: BorderSide(
-              color: s.border.withValues(alpha: 0.12),
-            ),
           ),
           child: Padding(
             padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -739,46 +737,48 @@ class _GameDetailScreenState
         );
       }
       if (error.isNotEmpty) {
-        return Card(
-          color: s.surface.withValues(alpha: 0.72),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
+        return Container(
+          decoration: AppCard.glassDecoration(
+            context,
             borderRadius: AppTheme.metrics.radius12,
-            side: BorderSide(
-              color: s.border.withValues(alpha: 0.12),
-            ),
           ),
-          child: ListTile(
-            leading: DrawIcon(StrokeIcons.warningAmber),
-            title: const Text('萌娘百科加载失败'),
-            subtitle: Text(
-              error,
-              style: AppTextStyles.role(
-                context,
-                fontSize: AppTheme.metrics.fontSize12,
-                color: s.textTertiary,
-                height: 1.6,
-              ),
+          // 玻璃底画在外层 Container 上，ListTile 的水洗仍需要一层同圆角的
+          // 透明 Material 来裁边，否则涟漪会铺满整页
+          child: Material(
+            type: MaterialType.transparency,
+            shape: RoundedRectangleBorder(
+              borderRadius: AppTheme.metrics.radius12,
+              side: BorderSide.none,
             ),
-            trailing: IconButton(
-              icon: DrawIcon(StrokeIcons.refresh),
-              tooltip: '重试',
-              onPressed: viewModel.retryMoegirl,
+            clipBehavior: Clip.antiAlias,
+            child: ListTile(
+              leading: DrawIcon(StrokeIcons.warningAmber),
+              title: const Text('萌娘百科加载失败'),
+              subtitle: Text(
+                error,
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: AppTheme.metrics.fontSize12,
+                  color: s.textTertiary,
+                  height: 1.6,
+                ),
+              ),
+              trailing: IconButton(
+                icon: DrawIcon(StrokeIcons.refresh),
+                tooltip: '重试',
+                onPressed: viewModel.retryMoegirl,
+              ),
             ),
           ),
         );
       }
       if (html.isEmpty) return const SizedBox.shrink();
-      return Card(
-        color: s.surface.withValues(alpha: 0.72),
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: AppTheme.metrics.radius12,
-          side: BorderSide(
-            color: s.border.withValues(alpha: 0.12),
-          ),
-        ),
+      return Container(
         clipBehavior: Clip.antiAlias,
+        decoration: AppCard.glassDecoration(
+          context,
+          borderRadius: AppTheme.metrics.radius12,
+        ),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
             AppTheme.metrics.kSpace16,
@@ -1123,14 +1123,10 @@ class _GameDetailScreenState
             ),
 
           // 启动配置卡
-          Card(
-            color: s.surface.withValues(alpha: 0.72),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
+          Container(
+            decoration: AppCard.glassDecoration(
+              context,
               borderRadius: AppTheme.metrics.radius12,
-              side: BorderSide(
-                color: s.border.withValues(alpha: 0.12),
-              ),
             ),
             child: Padding(
               padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -1438,14 +1434,10 @@ class _GameDetailScreenState
 
           // 万物皆可萌
           SizedBox(height: AppTheme.metrics.kSpace16),
-          Card(
-            color: s.surface.withValues(alpha: 0.72),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
+          Container(
+            decoration: AppCard.glassDecoration(
+              context,
               borderRadius: AppTheme.metrics.radius12,
-              side: BorderSide(
-                color: s.border.withValues(alpha: 0.12),
-              ),
             ),
             child: Padding(
               padding: EdgeInsets.all(AppTheme.metrics.kSpace20),
@@ -1487,14 +1479,10 @@ class _GameDetailScreenState
 
   Widget _buildTwodfanCard(GameItem g) {
     final s = AppSemantic.of(context);
-    return Card(
-      color: s.surface.withValues(alpha: 0.72),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
+    return Container(
+      decoration: AppCard.glassDecoration(
+        context,
         borderRadius: AppTheme.metrics.radius12,
-        side: BorderSide(
-          color: s.border.withValues(alpha: 0.12),
-        ),
       ),
       child: Padding(
         padding: EdgeInsets.all(AppTheme.metrics.kSpace20),

@@ -147,9 +147,8 @@ class AppSurfaces {
   // ── 亮色 ──
   /// 窗口画布（最外层底色）
   ///
-  /// 必须与 surface 拉开：历史上画布与卡片都是接近 #FFF 的白，
-  /// 卡片只能靠描边勉强分辨，整页显得"平、糊、没有浮起感"。
-  static const Color lightCanvas = Color(0xFFFAFAFA);
+  /// 现代高级冷灰底，通透纯净，去除泛黄肉色混杂。
+  static const Color lightCanvas = Color(0xFFF4F6F9);
 
   /// 一级表面：卡片 / 面板
   static const Color lightSurface = Color(0xFFFFFFFF);
@@ -158,69 +157,52 @@ class AppSurfaces {
   static const Color lightSurfaceRaised = Color(0xFFFFFFFF);
 
   /// 下沉表面：输入框底 / 分组背景
-  static const Color lightSurfaceSunken = Color(0xFFF5F5F5);
+  static const Color lightSurfaceSunken = Color(0xFFEEF2F6);
 
   /// 交互态
-  ///
-  /// 悬停是"状态层"，必须用水洗而不是实心色：实心底一压上去，底下那层窗口磨砂就
-  /// 断了（实测表现为鼠标移到侧栏分组标题上出现一块不透的白斑）。
-  ///
-  /// 水洗的方向必须跟着底色走：亮色侧的表面是白（#FFFFFF 卡片 / #FAFAFA 画布），
-  /// 再往上叠白色就是零反馈——原来那颗 0x2DFFFFFF 正是这个问题，卡片、列表行、
-  /// 菜单在亮色模式下全都没有悬停。改成半透明黑，压白得 #F5F5F5、压画布得 #F0F0F0，
-  /// 依旧透得下去。暗色侧表面本来就比白暗，继续用提亮的白水洗。
   static const Color lightSurfaceHover = Color(0x0A000000);
   static const Color lightSurfaceActive = Color(0x14000000);
 
   /// 亮色下极轻的分隔（用于相邻表面几乎无接缝处）
-  static const Color lightHairline = Color(0x0D000000);
+  static const Color lightHairline = Color(0x120F172A);
 
   /// 亮色下常规描边
-  ///
-  /// 这套语言里描边是实心灰阶（#E5E5E5），不是半透明黑：描边要能独立成立，
-  /// 卡片压在画布上才有那一条干脆的分界线。
-  static const Color lightBorder = Color(0xFFE5E5E5);
+  static const Color lightBorder = Color(0xFFE2E8F0);
 
   /// 亮色下强描边（输入框聚焦前 / 需要边界感处）
-  static const Color lightBorderStrong = Color(0xFFA3A3A3);
+  static const Color lightBorderStrong = Color(0xFFCBD5E1);
 
   // ── 暗色 ──
-  /// 窗口画布
-  static const Color darkCanvas = Color(0xFF0A0A0A);
+  /// 窗口画布：深邃纯净的深空曜石色，去除发紫发黄的泥巴感
+  static const Color darkCanvas = Color(0xFF0F1117);
 
   /// 一级表面
-  static const Color darkSurface = Color(0xFF171717);
+  static const Color darkSurface = Color(0xFF161922);
 
   /// 二级表面
-  static const Color darkSurfaceRaised = Color(0xFF262626);
+  static const Color darkSurfaceRaised = Color(0xFF1E2230);
 
   /// 下沉表面
-  ///
-  /// 不能等于 darkCanvas：否则"下沉"控件（输入框/图标底板/侧栏）贴在画布上时
-  /// 完全隐形，落在卡片上又像一个挖空的洞。
-  static const Color darkSurfaceSunken = Color(0xFF0F0F0F);
+  static const Color darkSurfaceSunken = Color(0xFF11131A);
 
   /// 交互态
-  ///
-  /// 暗色侧的表面比白暗，所以这里继续用**提亮**的白水洗。方向与亮色相反是
-  /// 有意为之：水洗永远朝"看得见"那侧走。
-  static const Color darkSurfaceHover = Color(0x14FFFFFF);
-  static const Color darkSurfaceActive = Color(0x1FFFFFFF);
+  static const Color darkSurfaceHover = Color(0x12FFFFFF);
+  static const Color darkSurfaceActive = Color(0x1CFFFFFF);
 
   static const Color darkHairline = Color(0x14FFFFFF);
-  static const Color darkBorder = Color(0x1AFFFFFF);
-  static const Color darkBorderStrong = Color(0x33FFFFFF);
+  static const Color darkBorder = Color(0xFF262B3A);
+  static const Color darkBorderStrong = Color(0xFF3B435B);
 
-  // ── 文字层级 ──
-  static const Color lightTextPrimary = Color(0xFF0A0A0A);
-  static const Color lightTextSecondary = Color(0xFF525252);
-  static const Color lightTextTertiary = Color(0xFF737373);
-  static const Color lightTextDisabled = Color(0xFFA3A3A3);
+  // ── 文字层级：高清晰度 Slate 系列，保证纯净阅读质感 ──
+  static const Color lightTextPrimary = Color(0xFF0F172A);
+  static const Color lightTextSecondary = Color(0xFF475569);
+  static const Color lightTextTertiary = Color(0xFF64748B);
+  static const Color lightTextDisabled = Color(0xFF94A3B8);
 
-  static const Color darkTextPrimary = Color(0xFFFAFAFA);
-  static const Color darkTextSecondary = Color(0xFFA3A3A3);
-  static const Color darkTextTertiary = Color(0xFF737373);
-  static const Color darkTextDisabled = Color(0xFF525252);
+  static const Color darkTextPrimary = Color(0xFFF8FAFC);
+  static const Color darkTextSecondary = Color(0xFF94A3B8);
+  static const Color darkTextTertiary = Color(0xFF64748B);
+  static const Color darkTextDisabled = Color(0xFF475569);
 }
 
 /// 品牌与强调色（Brand Ramp）
@@ -239,6 +221,36 @@ class AppBrand {
 
   /// 反相主按钮底色（暗色：近白）
   static const Color inkInverse = Color(0xFFE5E5E5);
+
+  /// v2 主色（柔彩蓝）：`accent` 管"亮着的东西"——线、游标、闪烁、洗底、选中字
+  static const Color accentLight = Color(0xFF2F65DE);
+  static const Color accentDark = Color(0xFF7C9BFF);
+
+  /// 正文档强调色文字专用一档。v2 的画布从纯白换成暖底 `#F3E7E4` 之后，
+  /// `accentLight` 压在画布上实测只剩 **4.30:1**（WCAG AA 正文要 4.5:1；压玻璃合成底
+  /// `#FAF5F4` 是 4.81:1，也就是忽达标忽不达标）。深一档取 `#2A5BC9`：
+  /// 压暖画布 **5.05:1**、压白 6.11:1，色相几乎不动。
+  /// 非文字用途（线/游标/图标/洗底）走 3:1 那条线，`accentLight` 本来就够，不必跟着深。
+  static const Color accentTextLight = Color(0xFF2A5BC9);
+
+  /// 要压白字的**实心**底（胶囊、主按钮）必须单独一档：
+  /// 实测白字压 #7C9BFF 只有 2.63:1（WCAG AA 要 4.5:1），压 #3B63D8 是 5.3:1。
+  static const Color accentSolidLight = Color(0xFF2F65DE);
+  static const Color accentSolidDark = Color(0xFF3B63D8);
+
+  /// 亮色档主标题/主按钮的渐变收口（蓝 → 紫），只给实心强调底不够"柔彩"那一档
+  static const LinearGradient accentLightGradient = LinearGradient(
+    colors: [Color(0xFF2F65DE), Color(0xFF715FFD)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  /// 暗色档同一条渐变的浅端
+  static const LinearGradient accentDarkGradient = LinearGradient(
+    colors: [Color(0xFF7C9BFF), Color(0xFF9C8CFF)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 
   /// 两端同色的"渐变"：只为还吃 LinearGradient 的老签名（渐变标题）保留
   static const LinearGradient inkLight = LinearGradient(
@@ -292,7 +304,9 @@ class AppStatus {
   static const Color lightWarningText = Color(0xFF733E0A);
   static const Color lightDanger = Color(0xFFE40014);
   static const Color lightDangerText = Color(0xFF9F0712);
-  static const Color lightInfo = Color(0xFF8D54FF);
+  /// info 与氛围紫合并成一支（v2）：以前 #8D54FF 和渐变里的 #715FFD 差不到一档明度，
+  /// 同屏放一起会被读成"同一个紫用错了"。只换值、不改角色名，调用点零改动。
+  static const Color lightInfo = Color(0xFF715FFD);
   static const Color lightInfoText = Color(0xFF4D179A);
   static const Color lightNeutral = Color(0xFF737373);
   static const Color lightNeutralText = Color(0xFF404040);
@@ -303,14 +317,23 @@ class AppStatus {
   static const Color darkWarningText = Color(0xFFFCD34D);
   static const Color darkDanger = Color(0xFFFF6568);
   static const Color darkDangerText = Color(0xFFFFB4B6);
-  static const Color darkInfo = Color(0xFFAC4BFF);
+  static const Color darkInfo = Color(0xFF9C8CFF);
   static const Color darkInfoText = Color(0xFFD6BBFE);
   static const Color darkNeutral = Color(0xFFA1A1A1);
   static const Color darkNeutralText = Color(0xFFD4D4D4);
 
   /// 容器底色统一用主色 + 低透明度，避免再手写 withAlpha
-  static Color container(Color base, {bool dark = false}) =>
-      base.withValues(alpha: dark ? 0.16 : 0.10);
+  ///
+  /// 必须**先跟画布合成成实色**再返回：直接留 10% alpha 的洗底，压在 v2 的柔彩氛围底上
+  /// 会吃到色团的色相，同一档状态色在不同页面上深浅不一。账本邮件横幅实测从
+  /// 7.82:1 掉到 3.42:1（AA 正文要 4.5），合成就回到 6.83:1。
+  static Color container(Color base, {bool dark = false}) {
+    final canvas = dark ? AppSurfaces.darkCanvas : AppSurfaces.lightCanvas;
+    return Color.alphaBlend(
+      base.withValues(alpha: dark ? 0.16 : 0.10),
+      canvas,
+    );
+  }
 
   /// 容器内描边
   static Color containerBorder(Color base, {bool dark = false}) =>
@@ -533,5 +556,135 @@ class AppReaderPaper {
 
   /// 选择器铺的这一排，顺序即 UI 顺序
   static const List<Color> presets = [parchment, snow, mint, sky, graphite];
+}
+
+/// 柔彩氛围层原始色板（Atmosphere Palette）
+///
+/// 这一档回答的是"这块材质**是什么做的**"（玻璃、轨道、空槽、柔彩底），
+/// 不是"这块区域**报告了什么**"——后者归 [AppSemantic]。所以它不进角色层：
+/// 角色层要参与明暗 lerp，而这里的对角基色与四团径向色斑是 `LinearGradient` /
+/// `RadialGradient`，Flutter 没有可插值的渐变对，硬塞进 `AppSemantic.lerp`
+/// 只会在主题切换动画里闪一下。
+///
+/// 逐条采自已验收的电量统计页（`pages/power_stats/power_stats_theme.dart`），
+/// **改值前先出图**：这里的每一档都在那张卡上有对应像素。
+class AppAtmosphereColors {
+  AppAtmosphereColors._();
+
+  // ── 方向色与装饰档（成对，明暗各一档）──
+  static const Color violetLight = Color(0xFF715FFD);
+  static const Color violetDark = Color(0xFF9C8CFF);
+
+  /// 涨：只给"数据在往上走"，不当成功状态用（判据见 DESIGN.md §2.5）
+  static const Color riseLight = Color(0xFF0CA678);
+  static const Color riseDark = Color(0xFF3FD19C);
+
+  /// 跌：同理，不是"出错了"，那才是 [AppStatus] 的 danger
+  static const Color fallLight = Color(0xFFF06E81);
+  static const Color fallDark = Color(0xFFFF8DA0);
+
+  /// 暖橙：轨道起点、被越过的档位
+  static const Color warmLight = Color(0xFFFF855A);
+  static const Color warmDark = Color(0xFFFFA07A);
+
+  /// 冷青：横幅渐变起点
+  static const Color coolLight = Color(0xFF1B8FB5);
+  static const Color coolDark = Color(0xFF5AC8E0);
+
+  /// 事件横幅的三支色标（明暗同值，试验页实测就是这一条）
+  ///
+  /// 端点看着像 [coolLight] 与 [AppBrand.accentLight]，但实测是另外两个值
+  /// （#1897A9 / #466DFD）。氛围层的规矩是"照抄已验收的像素，不顺手归并"，
+  /// 所以这里单独钉住，别改成语令色。
+  static const List<Color> bannerStops = [
+    Color(0xFF1897A9),
+    Color(0xFF466DFD),
+    Color(0xFF715FFD),
+  ];
+
+  // ── 玻璃材质：只有顶缘高光是角色层没有的，tint/border/shadow 走 AppSemantic ──
+  static const Color glassHighlightLight = Color(0xC8FFFFFF);
+  static const Color glassHighlightDark = Color(0x1AFFFFFF);
+
+  // ── 静止档（未填充/未选中/空槽/基线）──
+  static const Color trackRestLight = Color(0x16261A3A);
+  static const Color trackRestDark = Color(0x1CFFFFFF);
+  static const Color chipRestLight = Color(0xAAFFFFFF);
+  static const Color chipRestDark = Color(0x18FFFFFF);
+  static const Color chipRestBorderLight = Color(0xC8FFFFFF);
+  static const Color chipRestBorderDark = Color(0x26FFFFFF);
+  static const Color slotRestLight = Color(0x46FFFFFF);
+  static const Color slotRestDark = Color(0x10FFFFFF);
+  static const Color baselineLight = Color(0x28261A3A);
+  static const Color baselineDark = Color(0x2EFFFFFF);
+
+  // ── 页面底：现代通透柔光画布，去除脏色斑与油腻感 ──
+  static const LinearGradient canvasLight = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFFF9FAFC),
+      Color(0xFFF3F5F9),
+      Color(0xFFEFF2F8),
+      Color(0xFFEBF0F8),
+    ],
+    stops: [0.0, 0.35, 0.70, 1.0],
+  );
+  static const LinearGradient canvasDark = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF0F1117),
+      Color(0xFF131620),
+      Color(0xFF161924),
+      Color(0xFF11141C),
+    ],
+    stops: [0.0, 0.38, 0.72, 1.0],
+  );
+
+  static const List<RadialGradient> washesLight = [
+    RadialGradient(
+      center: Alignment(-0.85, -0.80),
+      radius: 0.85,
+      colors: [Color(0x153B82F6), Color(0x00000000)],
+    ),
+    RadialGradient(
+      center: Alignment(0.90, -0.60),
+      radius: 0.75,
+      colors: [Color(0x1206B6D4), Color(0x00000000)],
+    ),
+    RadialGradient(
+      center: Alignment(-0.70, 0.90),
+      radius: 0.85,
+      colors: [Color(0x108B5CF6), Color(0x00000000)],
+    ),
+    RadialGradient(
+      center: Alignment(0.85, 0.75),
+      radius: 0.75,
+      colors: [Color(0x123B82F6), Color(0x00000000)],
+    ),
+  ];
+  static const List<RadialGradient> washesDark = [
+    RadialGradient(
+      center: Alignment(-0.85, -0.80),
+      radius: 0.85,
+      colors: [Color(0x221E3A8A), Color(0x00000000)],
+    ),
+    RadialGradient(
+      center: Alignment(0.90, -0.60),
+      radius: 0.75,
+      colors: [Color(0x1A1E1B4B), Color(0x00000000)],
+    ),
+    RadialGradient(
+      center: Alignment(-0.70, 0.90),
+      radius: 0.85,
+      colors: [Color(0x18134E4A), Color(0x00000000)],
+    ),
+    RadialGradient(
+      center: Alignment(0.85, 0.75),
+      radius: 0.75,
+      colors: [Color(0x1C172554), Color(0x00000000)],
+    ),
+  ];
 }
 

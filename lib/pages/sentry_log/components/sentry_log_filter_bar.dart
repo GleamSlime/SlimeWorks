@@ -306,12 +306,12 @@ class _FilterButtonWidgetState extends State<_FilterButtonWidget> {
             gradient: LinearGradient(
               colors: _hovered
                   ? [
-                      s.accent,
-                      s.accent.withAlpha(200),
+                      s.accentSolid,
+                      s.accentSolid.withAlpha(200),
                     ]
                   : [
-                      s.accent,
-                      s.accent.withAlpha(180),
+                      s.accentSolid,
+                      s.accentSolid.withAlpha(180),
                     ],
             ),
             borderRadius: m.radiusControl,

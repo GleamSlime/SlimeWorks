@@ -183,7 +183,7 @@ void main() {
       design: _desktopDesign,
     );
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_light.png'),
     );
     await unmountPage(tester);
@@ -197,7 +197,7 @@ void main() {
       design: _desktopDesign,
     );
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_dark.png'),
     );
     await unmountPage(tester);
@@ -211,7 +211,7 @@ void main() {
       design: _phoneDesign,
     );
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_mobile.png'),
     );
     await unmountPage(tester);
@@ -229,7 +229,7 @@ void main() {
     expect(find.text('峰值时段'), findsOneWidget);
     expect(find.text('抓取日志'), findsOneWidget);
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_tall.png'),
     );
     await unmountPage(tester);
@@ -262,7 +262,7 @@ void main() {
     final midWidth = tester.getSize(wipe).width;
     expect(midWidth, lessThan(_desktopWindow.width - 100));
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_event_mid.png'),
     );
 
@@ -271,7 +271,7 @@ void main() {
     expect(find.text('抓取成功'), findsOneWidget);
     expect(tester.getSize(wipe).width, greaterThan(midWidth));
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_event_hold.png'),
     );
 
@@ -284,7 +284,7 @@ void main() {
     );
     expect(wipe, findsNothing);
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_event_settled.png'),
     );
   });
@@ -307,7 +307,7 @@ void main() {
     expect(find.text('连接超时'), findsOneWidget);
     expect(find.text('抓取失败: 连接超时'), findsNothing);
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_event_failed.png'),
     );
     await unmountPage(tester);
@@ -346,7 +346,7 @@ void main() {
     expect(tape.from, 18);
     expect(tape.elapsed, lessThan(200));
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_tape_tail.png'),
     );
 
@@ -380,7 +380,7 @@ void main() {
     expect(tape.elapsed, lessThan(460));
     expect(_painter(tester, '_SparklinePainter').reveal, lessThan(1.0));
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_range_replay.png'),
     );
 
@@ -420,7 +420,7 @@ void main() {
     expect(find.text('10-13 周二 15:00'), findsOneWidget);
     expect(tester.takeException(), isNull, reason: '浮层不该把画布那点高度当上限');
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_hover_tape.png'),
     );
 
@@ -437,7 +437,7 @@ void main() {
     expect(find.textContaining(RegExp(r'^10-13 周二 \d\d:00$')), findsOneWidget);
     expect(tester.takeException(), isNull);
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_hover_hero.png'),
     );
 
@@ -449,7 +449,7 @@ void main() {
     expect(find.textContaining(RegExp(r'^10-13 周二 \d\d:\d\d$')), findsOneWidget);
     expect(tester.takeException(), isNull);
     await expectLater(
-      find.byType(PowerStatsScreen),
+      pageSurface(),
       matchesGoldenFile('goldens/power_stats_hover_chart.png'),
     );
     await unmountPage(tester);

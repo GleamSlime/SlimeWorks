@@ -494,7 +494,7 @@ class PsTopSlotsCard extends StatelessWidget {
                 value: total,
                 majorStyle: TextStyle(
                   fontSize: scaleW(22),
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: p.accent,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
@@ -668,7 +668,7 @@ class _Slot extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: m.fontSize12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: p.ink,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
@@ -687,7 +687,7 @@ class _Slot extends StatelessWidget {
             psFormatPowerValue(data.value),
             style: TextStyle(
               fontSize: scaleW(17),
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: p.green,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),

@@ -1074,7 +1074,7 @@ class _MangaReaderScreenState
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: isCurrent
-                                ? s.accent
+                                ? s.accentSolid
                                 : s.surfaceSunken,
                             borderRadius: m.radius6,
                           ),

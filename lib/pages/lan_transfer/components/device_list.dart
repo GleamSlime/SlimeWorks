@@ -77,14 +77,11 @@ class _DeviceCard extends StatelessWidget {
           horizontal: m.kSpace16,
           vertical: m.kSpace12,
         ),
-        decoration: BoxDecoration(
-          // 选中态走"强调容器 + 其描边"，未选中走一级表面 + 常规描边
-          color: isSelected ? s.accentContainer : s.surface,
-          border: Border.all(
-            color: isSelected ? s.accentContainerBorder : s.border,
-            width: isSelected ? 1.5 : 1,
-          ),
+        decoration: AppCard.glassDecoration(
+          context,
+          // 选中态由 selected: 表达（强调容器 + 其描边），未选中走玻璃着色 + 发丝描边
           borderRadius: m.radius14,
+          selected: isSelected,
         ),
         child: Row(
           children: [

@@ -163,7 +163,7 @@ class _TransferChatViewState extends State<TransferChatView> {
                   vertical: AppTheme.metrics.kSpace8,
                 ),
                 decoration: BoxDecoration(
-                  color: s.accent,
+                  color: s.accentSolid,
                   borderRadius: AppTheme.metrics.radius20,
                   boxShadow: s.elevation(Elevation.floating),
                 ),

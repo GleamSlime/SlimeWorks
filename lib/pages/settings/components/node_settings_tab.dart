@@ -10,6 +10,7 @@ import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class NodeSettingsTab extends StatefulWidget {
@@ -211,12 +212,9 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
             Container(
               width: double.infinity,
               padding: EdgeInsets.all(m.kSpace16),
-              decoration: BoxDecoration(
-                color: s.surface,
+              decoration: AppCard.glassDecoration(
+                context,
                 borderRadius: m.radius12,
-                border: Border.all(
-                  color: s.border,
-                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,12 +417,9 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                     : '不可达';
                 return Container(
                   margin: EdgeInsets.only(bottom: m.kSpace8),
-                  decoration: BoxDecoration(
-                    color: s.surface,
+                  decoration: AppCard.glassDecoration(
+                    context,
                     borderRadius: m.radius12,
-                    border: Border.all(
-                      color: s.border,
-                    ),
                   ),
                   child: ClipRRect(
                     borderRadius: m.radius12,

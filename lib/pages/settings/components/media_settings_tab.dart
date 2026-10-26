@@ -10,6 +10,7 @@ import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/core/widgets/fake_cover.dart';
 import 'package:slime_works/pages/settings/components/asr_subtitle_section.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -875,16 +876,11 @@ class _SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace16),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radius12,
-        border: Border.all(color: s.border),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
       child: child,
     );
   }

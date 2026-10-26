@@ -15,6 +15,7 @@ import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/core/widgets/empty_state.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/pages/manga/view_models/manga_history_viewmodel.dart';
@@ -89,10 +90,10 @@ class _MangaHistoryScreenState extends BasePageState<MangaHistoryViewModel, Mang
           child: Container(
             padding: EdgeInsets.all(metrics.kSpace32),
             margin: EdgeInsets.symmetric(horizontal: metrics.kSpace24),
-            decoration: BoxDecoration(
-              color: s.surface,
+            decoration: AppCard.glassDecoration(
+              context,
               borderRadius: metrics.radius16,
-              boxShadow: s.elevation(Elevation.floating),
+              lifted: true,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,

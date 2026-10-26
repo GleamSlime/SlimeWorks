@@ -757,7 +757,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
                                   height: scaleW(22),
                                   decoration: BoxDecoration(
                                     color: widget.isSelected
-                                        ? s.accent
+                                        ? s.accentSolid
                                         : s.scrim.withAlpha(60),
                                     shape: BoxShape.circle,
                                     // 选中圆点压在封面 art 上，那圈白环不随主题反转

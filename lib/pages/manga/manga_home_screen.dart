@@ -14,6 +14,7 @@ import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
 import 'package:slime_works/core/widgets/empty_state.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/core/widgets/escape_back_boundary.dart';
 import 'package:slime_works/pages/manga/components/manga_block_words_dialog.dart';
 import 'package:slime_works/pages/manga/components/manga_comic_card.dart';
@@ -137,10 +138,10 @@ class _MangaHomeScreenState extends BasePageState<MangaHomeViewModel, MangaHomeS
       child: Container(
         padding: EdgeInsets.all(metrics.kSpace32),
         margin: EdgeInsets.symmetric(horizontal: metrics.kSpace24),
-        decoration: BoxDecoration(
-          color: s.surface,
+        decoration: AppCard.glassDecoration(
+          context,
           borderRadius: metrics.radius16,
-          boxShadow: s.elevation(Elevation.floating),
+          lifted: true,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

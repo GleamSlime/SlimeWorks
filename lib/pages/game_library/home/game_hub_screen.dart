@@ -656,14 +656,7 @@ class _StatsTab extends StatelessWidget {
                 padding: EdgeInsets.only(bottom: m.kSpace8),
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: m.kSpace16, vertical: m.kSpace14),
-                  decoration: BoxDecoration(
-                    color: s.surfaceRaised,
-                    borderRadius: m.radius12,
-                    border: Border.all(
-                      color: s.border,
-                      width: m.strokeUltraThin,
-                    ),
-                  ),
+                  decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -981,11 +974,7 @@ class _StatsOverviewCard extends StatelessWidget {
     final primaryColor = s.info.color;
     return Container(
       padding: EdgeInsets.all(m.kSpace16),
-      decoration: BoxDecoration(
-        color: s.surfaceRaised,
-        borderRadius: m.radius14,
-        border: Border.all(color: s.border, width: m.strokeUltraThin),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radius14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1057,10 +1046,10 @@ class _DateRangeCard extends StatelessWidget {
       },
       child: Container(
         padding: EdgeInsets.all(m.kSpace16),
-        decoration: BoxDecoration(
-          color: s.surfaceRaised,
+        decoration: AppCard.glassDecoration(
+          context,
           borderRadius: m.radius14,
-          border: Border.all(color: s.info.containerBorder, width: m.strokeUltraThin),
+          borderColor: s.info.containerBorder,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

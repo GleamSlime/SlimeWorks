@@ -118,20 +118,20 @@ class PowerStatsViewModel extends GetxController {
   bool get isLocal => currentNodeId.value.isEmpty;
 
   // 服务订阅
-  late final StreamSubscription _meterIdSub;
-  late final StreamSubscription _enabledSub;
-  late final StreamSubscription _intervalSub;
-  late final StreamSubscription _selectedNodeSub;
-  late final StreamSubscription _meterNameSub;
-  late final StreamSubscription _currentKwhSub;
-  late final StreamSubscription _currentYuanSub;
-  late final StreamSubscription _priceSub;
-  late final StreamSubscription _lastFetchSub;
-  late final StreamSubscription _lastResultSub;
-  late final StreamSubscription _sampleCountSub;
-  late final StreamSubscription _isPollingSub;
-  late final StreamSubscription _summarySub;
-  late final StreamSubscription _logsSub;
+  StreamSubscription? _meterIdSub;
+  StreamSubscription? _enabledSub;
+  StreamSubscription? _intervalSub;
+  StreamSubscription? _selectedNodeSub;
+  StreamSubscription? _meterNameSub;
+  StreamSubscription? _currentKwhSub;
+  StreamSubscription? _currentYuanSub;
+  StreamSubscription? _priceSub;
+  StreamSubscription? _lastFetchSub;
+  StreamSubscription? _lastResultSub;
+  StreamSubscription? _sampleCountSub;
+  StreamSubscription? _isPollingSub;
+  StreamSubscription? _summarySub;
+  StreamSubscription? _logsSub;
 
   Timer? _autoRefreshTimer;
 
@@ -327,20 +327,20 @@ class PowerStatsViewModel extends GetxController {
   @override
   void onClose() {
     _autoRefreshTimer?.cancel();
-    _meterIdSub.cancel();
-    _enabledSub.cancel();
-    _intervalSub.cancel();
-    _selectedNodeSub.cancel();
-    _meterNameSub.cancel();
-    _currentKwhSub.cancel();
-    _currentYuanSub.cancel();
-    _priceSub.cancel();
-    _lastFetchSub.cancel();
-    _lastResultSub.cancel();
-    _sampleCountSub.cancel();
-    _isPollingSub.cancel();
-    _summarySub.cancel();
-    _logsSub.cancel();
+    _meterIdSub?.cancel();
+    _enabledSub?.cancel();
+    _intervalSub?.cancel();
+    _selectedNodeSub?.cancel();
+    _meterNameSub?.cancel();
+    _currentKwhSub?.cancel();
+    _currentYuanSub?.cancel();
+    _priceSub?.cancel();
+    _lastFetchSub?.cancel();
+    _lastResultSub?.cancel();
+    _sampleCountSub?.cancel();
+    _isPollingSub?.cancel();
+    _summarySub?.cancel();
+    _logsSub?.cancel();
     super.onClose();
   }
 }

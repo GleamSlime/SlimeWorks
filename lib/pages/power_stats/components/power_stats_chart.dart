@@ -513,7 +513,7 @@ class PsChartTooltip extends StatelessWidget {
                   valueText,
                   style: TextStyle(
                     fontSize: m.fontSize13,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: color,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),

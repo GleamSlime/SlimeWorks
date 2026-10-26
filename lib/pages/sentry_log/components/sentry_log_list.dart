@@ -6,6 +6,7 @@ import 'package:slime_works/core/theme/app_colors.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/view_models/sentry_log/sentry_log_viewmodel.dart';
 import 'package:slime_works/pages/sentry_log/components/sentry_log_event_detail.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -491,7 +492,6 @@ class _EventCardHoverState extends State<_EventCardHover> {
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
-    final s = AppSemantic.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -500,22 +500,11 @@ class _EventCardHoverState extends State<_EventCardHover> {
         child: AnimatedContainer(
           duration: AppMotion.base,
           curve: AppMotion.standard,
-          decoration: BoxDecoration(
-            color: s.surface.withAlpha(_hovered ? 250 : 230),
+          decoration: AppCard.glassDecoration(
+            context,
             borderRadius: m.radiusCard,
-            border: Border.all(
-              color: _hovered ? widget.levelRole.containerBorder : s.border,
-              width: 0.5,
-            ),
-            boxShadow: [
-              ...s.elevation(_hovered ? Elevation.card : Elevation.raised),
-              if (_hovered)
-                BoxShadow(
-                  color: widget.levelRole.color.withAlpha(15),
-                  blurRadius: scaleW(16),
-                  offset: Offset(0, scaleW(4)),
-                ),
-            ],
+            // 悬停时发丝描边换成该级别的状态容器描边，保持原有的按级别高亮
+            borderColor: _hovered ? widget.levelRole.containerBorder : null,
           ),
           child: ClipRRect(
             borderRadius: m.radiusCard,

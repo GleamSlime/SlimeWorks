@@ -44,13 +44,20 @@ import 'case_41_banner_stacking.dart';
 import 'case_42_image_generation_placeholder.dart';
 import 'case_43_get_pro_button.dart';
 import 'case_44_voice_waveform.dart';
+import 'case_45_swipe_to_dismiss.dart';
+import 'case_46_pull_to_refresh.dart';
+import 'case_47_bottom_sheet_detents.dart';
+import 'case_48_drag_to_reorder.dart';
+import 'case_49_long_press_peek.dart';
+import 'case_50_edge_swipe_back.dart';
 
 /// 分类：只用于这张页面上的筛选，不参与任何全局配置
 enum LabCat {
   essential('基础'),
   texts('文本'),
   effects('效果'),
-  ai('AI');
+  ai('AI'),
+  gestures('手势');
 
   const LabCat(this.label);
 
@@ -399,5 +406,47 @@ final List<LabCase> kLabCases = <LabCase>[
     subtitle: 'Layered voicewave swells with the amplitude',
     cat: LabCat.effects,
     build: Case44VoiceWaveform.new,
+  ),
+  LabCase(
+    seq: 45,
+    title: 'Swipe to dismiss',
+    subtitle: 'Row slides aside, gray bar fills in, row collapses',
+    cat: LabCat.gestures,
+    build: Case45SwipeToDismiss.new,
+  ),
+  LabCase(
+    seq: 46,
+    title: 'Pull to refresh',
+    subtitle: 'List drags down, arc grows at the top, spins, drops back',
+    cat: LabCat.gestures,
+    build: Case46PullToRefresh.new,
+  ),
+  LabCase(
+    seq: 47,
+    title: 'Bottom sheet detents',
+    subtitle: 'Sheet winds up, snaps to the nearest of three heights',
+    cat: LabCat.gestures,
+    build: Case47BottomSheetDetents.new,
+  ),
+  LabCase(
+    seq: 48,
+    title: 'Drag to reorder',
+    subtitle: 'Row lifts in place, floats over the list, drops into a slot',
+    cat: LabCat.gestures,
+    build: Case48DragToReorder.new,
+  ),
+  LabCase(
+    seq: 49,
+    title: 'Long-press peek',
+    subtitle: 'Tile darkens, scrim fades, card grows out of the grid',
+    cat: LabCat.gestures,
+    build: Case49LongPressPeek.new,
+  ),
+  LabCase(
+    seq: 50,
+    title: 'Edge swipe back',
+    subtitle: 'Detail flies right, list slides in behind with a scrim',
+    cat: LabCat.gestures,
+    build: Case50EdgeSwipeBack.new,
   ),
 ];

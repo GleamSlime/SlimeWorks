@@ -11,6 +11,7 @@ import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/viewmodels/base_page.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_download_model.dart';
 import 'package:slime_works/pages/manga/view_models/manga_downloads_viewmodel.dart';
@@ -58,10 +59,10 @@ class _MangaDownloadsScreenState
             child: Container(
               padding: EdgeInsets.all(m.kSpace32),
               margin: EdgeInsets.symmetric(horizontal: m.kSpace24),
-              decoration: BoxDecoration(
-                color: s.surface,
+              decoration: AppCard.glassDecoration(
+                context,
                 borderRadius: m.radius16,
-                boxShadow: s.elevation(Elevation.floating),
+                lifted: true,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,

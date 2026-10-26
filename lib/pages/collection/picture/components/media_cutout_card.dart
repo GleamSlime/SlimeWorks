@@ -170,14 +170,11 @@ class MediaCutoutCard extends StatelessWidget {
     final s = AppSemantic.of(context);
     final lifted = selected || hovered;
     return Container(
-      decoration: BoxDecoration(
-        color: s.surface,
+      decoration: AppCard.glassDecoration(
+        context,
         borderRadius: appMetrics.radiusCard,
-        border: Border.all(
-          color: selected ? s.accent : (hovered ? s.borderStrong : s.border),
-          width: selected ? scaleW(2) : MediaCutoutGeometry.edge,
-        ),
-        boxShadow: s.elevation(lifted ? Elevation.card : Elevation.raised),
+        selected: selected,
+        lifted: lifted,
       ),
       // Container 已经把描边让进盒子，这里只补上圆角差
       child: ClipRRect(
@@ -243,7 +240,7 @@ class MediaCutoutCard extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: s.accent,
+                  color: s.accentSolid,
                   borderRadius: appMetrics.radiusPill,
                   boxShadow: s.elevation(Elevation.raised),
                 ),
@@ -410,7 +407,7 @@ class _CutoutTag extends StatelessWidget {
       children: [
         DecoratedBox(
           decoration: BoxDecoration(
-            color: s.accent,
+            color: s.accentSolid,
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(MediaCutoutGeometry.tagRadius),
             ),
@@ -447,12 +444,12 @@ class _CutoutTag extends StatelessWidget {
         Positioned(
           left: -over,
           top: 0,
-          child: _Flare(side: MediaCutoutGeometry.tagFlare, color: s.accent, flip: false),
+          child: _Flare(side: MediaCutoutGeometry.tagFlare, color: s.accentSolid, flip: false),
         ),
         Positioned(
           right: -MediaCutoutGeometry.edge,
           bottom: -over,
-          child: _Flare(side: MediaCutoutGeometry.tagFlare, color: s.accent, flip: false),
+          child: _Flare(side: MediaCutoutGeometry.tagFlare, color: s.accentSolid, flip: false),
         ),
       ],
     );

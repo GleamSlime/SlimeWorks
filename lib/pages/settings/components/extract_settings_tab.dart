@@ -8,6 +8,7 @@ import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class ExtractSettingsTab extends StatelessWidget {
@@ -141,16 +142,11 @@ class ExtractSettingsTab extends StatelessWidget {
   }
 
   Widget _buildSettingsCard(BuildContext context, {required Widget child}) {
-    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace16),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radius12,
-        border: Border.all(color: s.border),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
       child: child,
     );
   }

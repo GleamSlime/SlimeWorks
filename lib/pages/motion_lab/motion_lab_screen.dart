@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'cases/motion_lab_cases.dart';
 import 'lab_kit.dart';
 
-/// 动效实验室：43 个动效案例，一格一个组件
+/// 动效实验室：50 个动效案例，一格一个组件
 ///
 /// 这张页面的定位和样式总览页一样，是**看的东西**而不是**用的东西**：
 /// 它复刻外部参考稿的每一个案例，尺寸/圆角/颜色/时长/曲线全部本地自带，

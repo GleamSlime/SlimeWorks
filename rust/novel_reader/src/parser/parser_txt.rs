@@ -7,6 +7,17 @@ use std::path::Path;
 
 use crate::types::{NovelChapter, NovelContent, NovelFormat, NovelMetadata};
 
+/// 安全获取 UTF-8 字符边界索引，避免跨字符切片 panic
+fn clamp_char_boundary(s: &str, mut idx: usize) -> usize {
+    if idx >= s.len() {
+        return s.len();
+    }
+    while idx > 0 && !s.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
+}
+
 /// txt 文件解析器
 pub struct TxtParser;
 
@@ -158,22 +169,44 @@ impl TxtParser {
             chapter_positions.len()
         );
 
+        let mut chapter_idx = 0;
+
+        // 若正文开头至第一章之间存在引言、序言或简介内容，提取为前言章节，避免丢内容
+        if let Some(&(first_pos, _)) = chapter_positions.first() {
+            let safe_first_pos = clamp_char_boundary(content, first_pos);
+            if safe_first_pos > 0 {
+                let prologue_content = &content[0..safe_first_pos];
+                if !prologue_content.trim().is_empty() {
+                    chapters.push(NovelChapter {
+                        id: format!("{}_chapter_{}", novel_id, chapter_idx),
+                        title: "序言/前言".to_string(),
+                        index: chapter_idx,
+                        content: Some(prologue_content.to_string()),
+                    });
+                    chapter_idx += 1;
+                }
+            }
+        }
+
         for (i, (start_pos, title)) in chapter_positions.iter().enumerate() {
-            let end_pos = if i + 1 < chapter_positions.len() {
+            let safe_start = clamp_char_boundary(content, *start_pos);
+            let raw_end = if i + 1 < chapter_positions.len() {
                 chapter_positions[i + 1].0
             } else {
                 content.len()
             };
+            let safe_end = clamp_char_boundary(content, raw_end).max(safe_start);
 
-            // 提取章节内容（使用字节索引直接切片字符串）
-            let chapter_content = &content[*start_pos..end_pos];
+            // 提取章节内容（使用安全边界切片）
+            let chapter_content = &content[safe_start..safe_end];
 
             chapters.push(NovelChapter {
-                id: format!("{}_chapter_{}", novel_id, i),
+                id: format!("{}_chapter_{}", novel_id, chapter_idx),
                 title: title.to_string(),
-                index: i,
+                index: chapter_idx,
                 content: Some(chapter_content.to_string()),
             });
+            chapter_idx += 1;
         }
 
         chapters

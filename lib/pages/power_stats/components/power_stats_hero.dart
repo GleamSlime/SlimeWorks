@@ -75,7 +75,7 @@ class PsHeroPanel extends StatelessWidget {
           value: balanceYuan,
           majorStyle: TextStyle(
             fontSize: scaleW(52),
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             color: p.ink,
             height: 1.02,
             letterSpacing: scaleW(-1.5),
@@ -556,7 +556,7 @@ class _PsLivePillState extends State<PsLivePill>
             widget.isLive ? 'LIVE' : '停止',
             style: TextStyle(
               fontSize: m.fontSize11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               letterSpacing: scaleW(0.8),
               color: dot,
             ),
@@ -760,7 +760,7 @@ class _RangeStop extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: m.fontSize11,
-            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w600,
             color: active || passed ? Colors.white : c.withAlpha(160),
           ),
         ),

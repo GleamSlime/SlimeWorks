@@ -3,11 +3,14 @@ version: beta
 name: SlimeWorks Design System
 description: 柔彩氛围底 + 玻璃层 + 渐变强调的界面语言（v2）。取色只走 AppSemantic + AppAtmosphere，尺寸只走 AppTheme.metrics 的 scaleW/scaleS 两族，动效只走 AppMotion；本文是这三者的唯一口径来源，试验田是已验收的电量统计页。
 colors:
-  # ── 已确认：逐条采自 lib/pages/power_stats/power_stats_theme.dart（本页已出图验收）──
+  # ── 已确认：值取自 `app_colors.dart`（`AppBrand`/`AppSurfaces`），角色装配见
+  # `app_semantics.dart` 的明暗两套；材质层（渐变/玻璃/涨跌）见 `app_atmosphere.dart` ──
   ink: "#261A3A"
   ink-dark: "#F1EEFA"
   accent: "#2F65DE"
   accent-dark: "#7C9BFF"
+  accent-text: "#2A5BC9"
+  accent-text-dark: "#7C9BFF"
   accent-solid: "#2F65DE"
   accent-solid-dark: "#3B63D8"
   accent-on: "#FFFFFF"
@@ -304,7 +307,7 @@ v1 是"中性底 + 反相墨"，它的三条禁令正好是 v2 的三条主张�
 app_colors.dart      原始调色板：色值本身，不含判断
    ↓ 只被下一层引用
 app_semantics.dart   语义**角色**（ThemeExtension）：明暗在此一次性解析
-app_atmosphere.dart  语义**氛围**（ThemeExtension，🔧 待落地）：背景分层 / 玻璃配方 /
+app_atmosphere.dart  语义**氛围**（ThemeExtension，✅ 已落地）：背景分层 / 玻璃配方 /
    ↓                  成对渐变 / 水洗档 / 发光——只有渐变和 composite 装饰
 app_viz.dart         身份色（图表线成对色）
    ↓ 业务代码只碰这三层
@@ -332,7 +335,7 @@ app_viz.dart         身份色（图表线成对色）
 
 ```dart
 final s = AppSemantic.of(context);   // 或 context.semantic.surface
-final a = AppAtmosphere.of(context); // 背景层 / 玻璃配方 / 渐变——🔧 待落地
+final a = AppAtmosphere.of(context); // 背景层 / 玻璃配方 / 渐变——✅ 已落地
 final m = AppTheme.metrics;
 ```
 
@@ -384,15 +387,22 @@ final m = AppTheme.metrics;
 | 角色 | 亮色 | 暗色 | 用途 |
 |---|---|---|---|
 | `accent` | ✅ `#2F65DE` | ✅ `#7C9BFF` | 选中指示、滑轨游标、进度终点、刷新闪烁、图表线 |
-| `accentSolid` 🔧 | `#2F65DE` | **`#3B63D8`** | **实心胶囊/主按钮的底**（暗色档必须比 `accent` 深一档，见下方 ⚠️） |
+| `accentSolid` ✅ | `#2F65DE` | **`#3B63D8`** | **实心胶囊/主按钮的底**（暗色档必须比 `accent` 深一档，见下方 ⚠️） |
 | `accentOn` | ✅ `#FFFFFF` | ✅ `#FFFFFF` | 强调实心底上的文字——**配对对象是 `accentSolid`，不是 `accent`** |
 
 ⚠️ **暗色档的"实心底 + 白字"是算过的，不是看着像**：白字压 `#7C9BFF` 只有 **2.63:1**
 （WCAG AA 正文要 4.5:1），压 `#2F65DE` 是 **5.2:1**，压 `#3B63D8` 是 **5.3:1**。
 所以试验页那种"filled 胶囊用 `accent` 底 + 白字"在暗色档**不达标**，全局化时拆成两档：
 `accent` 负责"亮着的东西"（线、游标、闪烁、字），`accentSolid` 负责"要压白字的实心底"。
-亮色档两者同值。**任何新加的实心底都要回 `AppTheme._ensureContrast()` 走一遍**（§2.3）。
-| `accentText` | `#2F65DE` | `#7C9BFF` | 选中文字：**v2 起选中字要变色**（墨色语言才靠加粗，彩色语言靠同色） |
+亮色档这两者同值。**任何新加的实心底都要回 `AppTheme._ensureContrast()` 走一遍**（§2.3）。
+
+⚠️ **亮色档的"强调色文字"是第三条线，2026-10-14 实测补的**：画布从纯白换成暖底 `#F3E7E4`
+之后，`accent`(=`#2F65DE`) 压画布只剩 **4.30:1**（AA 正文要 4.5:1），压玻璃合成底 `#FAF5F4`
+是 4.81:1——同一支色忽达标忽不达标。所以 `accentText` 在亮档单独取深一档 **`#2A5BC9`**
+（压暖画布 **5.05:1**、压白 6.11:1，色相肉眼几乎不动），`AppBrand.accentTextLight`。
+非文字用途（线/游标/图标/洗底）按 WCAG 只卡 3:1，`accent` 本来就够，**不跟着深**。
+暗档 `accentText` = `accent`(`#7C9BFF`)，压玻璃合成底实测 6.32:1，不需要拆。
+| `accentText` | ✅ `#2A5BC9` | ✅ `#7C9BFF` | 选中文字：**v2 起选中字要变色**（墨色语言才靠加粗，彩色语言靠同色）；48 处消费点 + Text/Outlined 按钮前景 + 表单聚焦 label |
 | `accentContainer` | `#2F65DE` @ 13% | `#7C9BFF` @ 18% | 选中底 / 图标底（低浓度强调，浓度规则同 §2.5） |
 | `accentContainerBorder` | `#2F65DE` @ 26% | `#7C9BFF` @ 34% | 选中卡描边 |
 | `accentGradient` | ✅ `violet → accent`（峰值柱那档） | 同 | v2 起**是真的渐变**，不再是"当纯色用"的兼容档 |
@@ -473,7 +483,7 @@ ambient 层自动取 `blur×2`、`y×2`。停靠类控件（如底部播放条�
 - ⚠️ 旧的"**描边优先于投影**"从此只约束实色面：玻璃面的层次来自
   **顶缘高光 + 有色投影**两件事，描边只负责"这块玻璃有边"。
 
-### 2.5 状态色族（v2 不动）
+### 2.5 状态色族（主色只并了 info 一支，容器底换了合成口径）
 
 每个状态给两档：**主色**（点、图标、图表线）和**容器上的文字色**。
 文字必须单独压深/提亮：状态主色是给"点"用的，直接拿它当小字号文字，
@@ -484,13 +494,30 @@ ambient 层自动取 `blur×2`、`y×2`。停靠类控件（如底部播放条�
 | `success` | `#00BB7F` | `#004E3B` | `#00BB7F` | `#5EEAD4` |
 | `warning` | `#EDB200` | `#733E0A` | `#EDB200` | `#FCD34D` |
 | `danger` | `#E40014` | `#9F0712` | `#FF6568` | `#FFB4B6` |
-| `info` | `#8D54FF` | `#4D179A` | `#AC4BFF` | `#D6BBFE` |
+| `info` | `#715FFD` | `#4D179A` | `#9C8CFF` | `#D6BBFE` |
 | `neutral` | `#737373` | `#404040` | `#A1A1A1` | `#D4D4D4` |
 
 容器底与描边从主色派生，**不要手写 `withAlpha`**：
 `role.container` = 主色 @ 10%（亮）/ 16%（暗），`role.containerBorder` = @ 22%（亮）/ 28%（暗）。
 暗色浓度更高，否则在深灰表面上看不出层次。同一档浓度也是 §2.1 `accentContainer` 的算法，
 以及胶囊水洗的写法（`c.withAlpha(暗 46 / 亮 34)` 底、`c.withAlpha(暗 90 / 亮 70)` 描边）。
+
+⚠️ **2026-10-14 的修正：`role.container` 在返回前先跟画布合成成实色**（`AppStatus.container`
+里 `Color.alphaBlend(主色@浓度, canvas)`），描边 `containerBorder` 仍然留半透明。
+原先那层 10% 半透明洗底在 v1 的纯白画布上等价于一个固定浅水洗，v2 画布换成暖底 + 四团色团之后，
+**同一档 `warning.container` 会随背后色团漂**：账本首页"有 N 笔邮件账单等你确认"横幅实测
+`#733E0A` 压在横幅底上，v1 是 **7.82:1**，迁移后那片底被氛围紫染成 `(178,159,148)`，只剩
+**3.42:1**——AA 正文要 4.5，整条横幅的文字直接不合格。合成成实色后回到 **6.83:1**
+（出图复验：横幅带 `(242,226,205)` 已是不透明）。十档配对全测（`onContainer` vs 合成后的 container）：
+
+| | warning | danger | info | success | neutral |
+|---|---|---|---|---|---|
+| 亮 | 6.83 | 5.85 | 8.11 | 7.44 | 7.65 |
+| 暗 | 8.78 | 8.26 | 7.91 | 9.20 | 8.98 |
+
+> 为什么只合成 container 不合成 border：描边是**贴在自己那块水洗上**的发丝线，量的是 3:1 那条线
+> （图形/边界），半透明让它能顺着所在卡的深浅走，不会在玻璃卡上显出一条硬边。文字底是**承字的面**，
+> 承字的面颜色不能随背景漂——这是 §10 规则 26 的同一件事。
 
 > `danger` 只用于**破坏性**操作（删除、从库中移除）。收藏/喜欢这类"选中"状态
 > 用 `accent`，不是红——原先播放器里两处 `Colors.redAccent` 就是这个口径错位。
@@ -559,11 +586,13 @@ ambient 层自动取 `blur×2`、`y×2`。停靠类控件（如底部播放条�
 - `AppReaderPaper`（5 档纸张）：阅读页正文底色是**用户选的**内容主题，选了羊皮纸就一直是羊皮纸，
   不跟明暗翻。两处阅读器共用这一份清单，预设与默认值只有一处出处。
 
-### 2.9 氛围层 `AppAtmosphere`：v2 的材质档（🔧 待落地，源已验收）
+### 2.9 氛围层 `AppAtmosphere`：v2 的材质档（✅ 已落地，源已验收）
 
-这一档目前只存在于试验页（`lib/pages/power_stats/power_stats_theme.dart` 的
-`PowerStatsPalette`，✅ 已出图验收）。全局化的动作是**整体上收 + 换名**，不是重新设计：
-下表每一项都有实测出处，照抄即可，**不要顺手调色**。
+这一档的源是试验页（`lib/pages/power_stats/power_stats_theme.dart`，✅ 已出图验收），
+上收动作已完成：色值本体搬进 `lib/core/theme/app_atmosphere.dart` +
+`AppAtmosphereColors`（`app_colors.dart` 末段），试验页那份 `PowerStatsPalette`
+**只剩一层转发 getter**（`ink→s.textPrimary`、`green→a.rise`、`orange→a.warm`…），
+不再自带字面值。下表每一项都有实测出处，照抄即可，**不要顺手调色**。
 
 #### 2.9.1 背景：对角基色 + 四角色团
 
@@ -650,16 +679,17 @@ double sp = m.kSpace16;
   | `radiusControl` | 8 | 🔧 10 | 按钮 / 控件 |
   | `radiusField` | 8 | 🔧 10 | 输入框 |
   | `radiusCard` | 10 | 🔧 **16**（✅ 实测：`PsGlassCard` 默认就是 `m.radius16`，`power_stats_widgets.dart:197`） | 玻璃卡 / Hero 面板（列表行仍取 10） |
-  | `radiusPanel` | 14 | 🔧 **20**（✅ 实测 `radius20` 只出现在"大按钮"这一档：抓取按钮 `power_stats_screen.dart:216/230`） | 弹窗 / 抽屉 / 大按钮 |
+  | `radiusPanel` | 14 | 🔧 **20**（✅ 实测 `radius20` 只出现在"大按钮"这一档：抓取按钮 `power_stats_screen.dart:216/230`） | 面板 / 分栏 |
+  | `radiusOverlay` | 14 | 🔧 20 | 弹窗 / 抽屉 |
+  | `radiusPill` | 999 | 999 | 胶囊、徽标、轨道、滑轨游标 |
 
   ⚠️ **实测的例外档：密排小卡收一档。** 六列维度卡用的是 `radius14`（`power_stats_screen.dart:706`），
   不是 16——同一行里并排六颗，圆角再大一档就成六个胶囊，卡片之间的边界读不出来。
   规则：**一行 ≥ 4 张卡时降一档**（16→14），不是随手取数字。
-  | `radiusOverlay` | 14 | 🔧 20 | 弹窗 / 抽屉 |
-  | `radiusPill` | 999 | 999 | 胶囊、徽标、轨道、滑轨游标 |
 
-  ⚠️ 这三档一改是**全站重排**（56 个 screen/page 文件都会跟着变），必须和 §13 W0 同一批落地、
-  同一批出图；不要一边迁页面一边留着旧圆角，那会得到一版"卡片有的厚有的薄"。
+  ⚠️ 这三档一改是**全站重排**：五档语义圆角的业务读取点实测 **67 处 / 24 个文件**
+  （口径见 §14 C4），必须和 §13 W0 同一批落地、同一批出图；
+  不要一边迁页面一边留着旧圆角，那会得到一版"卡片有的厚有的薄"。
   列表行、菜单行（`GlassMenuItem` 行高 30 那一族）**不跟着升**——圆角一大，
   小尺寸控件就变成一颗颗胶囊，列表读不出边界。
 - **数值圆角**：`radius2/3/4/6/8/10/12/14/16/18/20/22/24/25/28/32/40/100/999`
@@ -1233,6 +1263,33 @@ shadow:  isSelected ? s.elevation(Elevation.raised) : const []
 没有它，玻璃卡读起来就是"贴了片半透明塑料"；有了它，光才像是从氛围层那边过来的。
 它必须 `IgnorePointer`，且**永远只在顶缘**——下沿来一道就成了描边，那是 v1 的语言。
 
+**卡片材质的落地口径（2026-10-14，"换表面"这一批）**——不做 143 处逐点重写，而是三个杠杆：
+
+1. `AppCard.glassDecoration(context, {borderRadius, color, borderColor, selected, lifted})`
+   —— 玻璃配方（`s.glassTint` + `a.glassBorder` 发丝 + `a.cardShadow` 同色相投影）的单一出处，
+   给"容器已经自己写着 `Container(decoration:)`"的调用点用，不要求换成 `AppCard`。
+   口径 `grep -rn "AppCard.glassDecoration(" lib --include='*.dart' | grep -v core/widgets/app_card.dart | grep -vE ":\s*//"`
+   → **56 处 / 31 个文件**（settings 16、game_library 11、sentry_log 10、manga 5、collection 4、
+   lan_transfer 3、aliyun_ddns 3、dashboard 2、tools 1、about 1）。
+2. 主题 `cardTheme` 直接换成玻璃（`color: s.glassTint` + `shadowColor: s.shadowKey` +
+   `elevation: scaleW(6)` + `radiusCard` 描边）——**这一条一次性把裸 `Card(` 并进新语言**：
+   口径 `grep -rEn "(^\|[^A-Za-z0-9_])Card\(" lib --include='*.dart'`（排除 `core/theme/`、`lib/gen/`）
+   → **39 处，全在 `lib/pages`**（`lib/components` 0 处）。其中只有 2 处自带 `color:`
+   （`game_detail_screen.dart:1094`、`ncm_decrypt_screen.dart:252`，都是 `s.success.container`
+   状态结果条，按 §2.5 本来就不该是玻璃），其余 37 处直接吃到主题档。
+3. `GlassSurface`（真磨砂那颗）在 Android/iOS 上降级：没有窗口振动层、背后只有静态柔彩底，
+   真磨砂白花 GPU 且列表滚到面板下会糊成一片；提前把着色压到画布上合成成一颗实心色。
+   口径：`Platform.isAndroid || Platform.isIOS` → 走 `Color.alphaBlend(tint, s.canvas)` 分支。
+
+`AppCard` 与 `glassDecoration` 都是**假玻璃**（不含 `BackdropFilter`）——这是 §7.4 那条 ≤8 预算能守住的前提：
+只有 Hero 级面板走真 `GlassSurface`。顶缘高光目前仍只在 `AppCard` 上（缺口见本节末尾的表）。
+
+**刻意没有玻璃化的地方**（避免"密度面也半透明"的倒挂）：`node_switcher_button.dart` 的底部抽屉外壳与
+toast 壳（已经是 v2 的 overlay 口径）、`popupMenuTheme`、theme 设置页的模式切换 chip、
+`playlist_sidebar.dart` 的面板层、`reader_toolbar`/`chapter_list` 的零圆角方向性阴影、
+`ledger_shared` 的底部导航，以及所有 `surfaceSunken/Hover/Active`、输入框、菜单、封面艺术上的
+`scrim`/`onMedia` 叠加层与 `AppReaderPaper` 纸张族、`theme_preview_screen.dart` 整页（它是色板本身）。
+
 | 档位（`WindowGlass`，`window_backdrop.dart`） | alpha | 生效条件 |
 |---|---|---|
 | `contentAlpha` | 180 | 仅 macOS（正文密度高，透明度已收敛得很低） |
@@ -1259,9 +1316,12 @@ shadow:  isSelected ? s.elevation(Elevation.raised) : const []
 
 ### 7.4 氛围层只画一次：收口位置与预算
 
-- **单一出处**：氛围层画在外壳（`DesktopScaffold` 正文区底 / `ScreenChrome` 的 body 之下），
-  页面**不得**再叠一层自己的背景渐变。试验页现在是自己画的（`_buildBackground`），
-  这是它在试验期的特权，W0 上收后取消（🔧）。理由见 §2.9.1：两张氛围皮叠着，滚动时色差会漂。
+- **单一出处（✅ 已收口，2026-10-14）**：氛围层只由外壳画——桌面是 `desktop_layout.dart` 的
+  `_ContentSurface`（`AtmosphereBackdrop`，默认 `layered: true` = 对角底 + 四团色团；
+  `MobileLayout` 传 `layered: false` 只留单层对角渐变，且 `alpha` 保持 255 不透明），
+  移动端的这一层由主题的 `scaffoldBackgroundColor: Colors.transparent`
+  让出来（填实色会把外壳的柔彩底整页盖掉）。试验页自己的 `_buildBackground` 已撤，
+  试验期特权取消。理由见 §2.9.1：两张氛围皮叠着，滚动时色差会漂。
 - **性能预算**：同屏 `BackdropFilter` 实例 **≤ 8**。试验页实测 5 张 `PsGlassCard` + 内部件，
   明暗两档出图和真机都跟得住；再往上加要先测帧时间，不要凭感觉加卡。
   需要"很多张卡"的页面（媒体库、账本明细）用**分组长卡**：一张玻璃包住 N 行实色内容。
@@ -1373,9 +1433,13 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
 
 ### 9.2 v2 的组件分工（谁顶掉谁）与数据面约定
 
-**卡片两族**：`GlassCard` 是**数据卡**的默认材质（概览、指标、图表、Hero）；
-`AppCard` 保留给**实色面**（列表里的行卡、玻璃卡内嵌的分组块、设置页的密集条目）。
-判据还是 §7.1 的密度：同屏可见元素多过 ~20 就往实色族走。两族共用
+**卡片两族（2026-10-14 起按材质分档，不再是"一个实色族"）**：
+`GlassSurface` 是**真磨砂**，只留给 Hero 级面板与浮层（同屏 ≤8 的那笔预算）；
+`AppCard` 是**假玻璃**（`glassDecoration` 配方 + 顶缘高光，无 `BackdropFilter`），
+它是全站数据卡的默认材质；需要实色的密度面**继续用 `AppCard`，显式传 `color: s.surface`**
+（列表行卡、玻璃卡内嵌的分组块、设置页密集条目）。页面里已经自己写 `Container(decoration:)`
+的卡不必换成 `AppCard`，只把 decoration 换成 `AppCard.glassDecoration(context)` 即可。
+判据还是 §7.1 的密度：同屏可见元素多过 ~20 就往实色档走。两族共用
 `radiusCard(16)` / `radiusPanel(20)` 两档圆角，**不要一页里厚薄混排**。
 
 **小节标题合并成一族**：`SectionLabel`（带字距的 overline，§4 `overline` 档）与
@@ -1462,8 +1526,8 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
 19. **取色三个入口，不许第四个**：角色走 `s.`（`AppSemantic`）、材质走 `a.`（`AppAtmosphere`）、
     图表身份走 `AppViz`（§1、§2.6）。判据是"这块颜色在回答**用途**还是**材质**"；
     同一段颜色在两处各写一遍就是债（`ink`/`textPrimary` 必须同一档值）。
-20. **氛围层只画一次**，画在外壳（§7.4）。页面自己叠一层 `DecoratedBox(gradient: …)` 当背景
-    就是违规——试验页那一层是试验期特权，W0 上收后取消。
+20. **氛围层只画一次**，画在外壳（§7.4，✅ 已收口）。页面自己叠一层 `DecoratedBox(gradient: …)` 当背景
+    就是违规——试验页那一层也已经撤了。
 21. **玻璃预算**：同屏 `BackdropFilter` ≤ 8，移动端与窄窗一律 0（走 `alpha=255` 实色分支）；
     **不许玻璃叠玻璃**，玻璃卡内的小块用水洗档（`slotRest`/`chipRest`）。
     新增玻璃卡前先数实例，不要等出图掉帧才发现。
@@ -1477,6 +1541,12 @@ tree-shake 掉，mac/windows/ios 三端同理。代价是多一个构建期步�
     并且**必须有一条 `fontScaleObs = 1.6` 的回归**断言 `takeException()` 为空。
 25. **时序图的四条数据面约定**（浮层、日期+周几标签、零值段不画、尾巴动画）见 §9.2，
     新做图表页照抄电量统计页，不要再发明一遍。
+26. **换画布底色 = 重算一遍强调色文字的对比度**（2026-10-14 的实测教训）：v2 把亮档画布从
+    纯白换成暖底 `#F3E7E4`，`accent` 压画布从 5.20:1 掉到 **4.30:1**，正文档直接跌破 AA，
+    而且压玻璃合成底是 4.81:1 —— 同一支色忽达标忽不达标，肉眼在出图里看不出来。
+    所以动 `canvas`/`glassTint` 任何一档时，必须把 `accentText`（以及所有"彩色当字色"的角色）
+    在**画布、玻璃合成底**两种底上各算一遍比值（两种底都要 ≥4.5），不达标就单独给文字拆一档，
+    不要去动品牌色本身。复算口径见 §2.1 的 ⚠️ 段落。
 
 ---
 
@@ -1544,7 +1614,7 @@ flutter test --update-goldens -t golden test/power_stats_render_test.dart       
 
 ## 12. 动效实验室（隔离案例集）
 
-`lib/pages/motion_lab/` 是一页 44 格的动效参考集：每格一个独立组件，照外部参考稿逐像素还原
+`lib/pages/motion_lab/` 是一页 50 格的动效参考集：每格一个独立组件，照外部参考稿逐像素还原
 尺寸/颜色/时长/曲线/关键帧。**它是只读参考，不是产品 UI**——§5.1 的禁令按 v2 收窄后在这里依然成立：
 粒子爆炸、多次回弹、**常驻装饰性发光**、把渐变铺在控件底上，搬进真页面仍然是违规。
 v2 新允许的只有两样：**事件驱动的一次性发光**（§5.5 的 20）和**三处容身的渐变**（§0.4）；
@@ -1553,7 +1623,7 @@ lab 里那些为"演示某种效果"而生的常驻 glow / 渐变底，属于实
 **v2 的样板页不是这三页 lab，是 `lib/pages/power_stats/`**（已验收的新语言整页实现）。
 要看"这块面该长什么样、该怎么动"，先查样板页，再查 lab；lab 只回答"这种动效怎么做"。
 
-同一套接线方式后来复用了两遍，长出了三页（`/motion-lab` 44 格、`/interaction-lab` 13 格、
+同一套接线方式后来复用了两遍，长出了三页（`/motion-lab` 50 格、`/interaction-lab` 13 格、
 `/surface-lab` 7 格）。**加一格或加一页照 `docs/ui_labs.md` §1 走**（目录骨架、本地令牌底座、
 单向隔离墙、注册表、路由四落点、每格四道验收），三页全部组件的功能与样式台账也在
 `docs/ui_labs.md` §2。本节只记坑：§12.1–12.6 是动效页，§12.7 交互页，§12.8 表面页。
@@ -1563,7 +1633,7 @@ lab 里那些为"演示某种效果"而生的常驻 glow / 渐变底，属于实
 - `lab_kit.dart`：这一页自己的 token 层（`LabColor` / `LabFont` / `LabEase` / `LabSize` /
   `LabShadow` / `LabText` / `LabStage` / `LabCard` / `LabAnimateButton` / `LabIconButton` /
   `LabStageFooter` / `LabBlur` / `LabTween` / `LabIcon`）。
-- `cases/case_NN_*.dart`：44 个文件，一格一个 class，互不引用。
+- `cases/case_NN_*.dart`：50 个文件（外加一格共用的手机屏底座 `lab_phone.dart`），一格一个 class，互不引用。
 - `cases/motion_lab_cases.dart`：注册表 `kLabCases`（`seq` / `title` / `subtitle` / `cat` / `build`），
   页面和测试都只认这张表——加一格只加文件 + 加一条注册。
 
@@ -1653,7 +1723,7 @@ lab 里那些为"演示某种效果"而生的常驻 glow / 渐变底，属于实
 ### 12.6 验收：一帧一个 test
 
 ```bash
-flutter test -t golden test/motion_lab_all_cases_test.dart              # 132 张 = 44 格 × 静止/途中/终态
+flutter test -t golden test/motion_lab_all_cases_test.dart              # 150 张 = 50 格 × 静止/途中/终态
 flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart
 flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --plain-name 'Confetti burst'  # 单格重出
 ```
@@ -1662,8 +1732,10 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
   可点、可拖的元素靠 `cursor: click|grab` 的 `MouseRegion` 找，比猜坐标可靠（拖拽格是 `grab`）。
 - **一帧一个 test**：出过图之后同一个 test 里的第二次点击就不再接到了。
 - 途中帧默认 150ms；还在 delay 里的慢启动格、以及刚炸开挤成一团的格子，另写进 `_midOverride`。
-- **只看静止帧证明不了动效存在**。审计口径：44 格的 idle / mid 两张取哈希比对，
-  `mid == idle` 必须为空集；`end == idle` 只允许是"落定后本来就该没有"的格子（6 号纸屑落完）。
+- **只看静止帧证明不了动效存在**。审计口径：50 格的 idle / mid / end 三张取哈希比对，
+  `mid == idle` 必须为空集；`end == idle` 只允许是"落定后本来就该没有"的格子（6 号纸屑落完、
+  36 号碎块掉完、48 号骨架行彼此长得一样所以换完序看不出差别）。46 号刷新终态帧**故意**停在
+  挂起转圈那一档（脚本 2460ms，终态帧只推进 2000ms），不算落定。
 - **三帧采样也证明不了"途中不炸"**：过冲顶出的非法透明度、只在某几帧出现的溢出断言，
   三帧全都恰好躲过去。所以每格还有一条不带 `golden` 标签的**逐帧扫**：按 16ms 推到 3000ms，
   任何一帧 `takeException()` 非空就 fail。`flutter test --exclude-tags golden` 单跑它。
@@ -2117,7 +2189,7 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
   `LabHoverRegion` / `SvHoverRegion`）：指尖点一下卡片当"指针进来并停在原地"、再点一下当离开；收不收仍走
   原来那套几何（交互 13 是 `_zone` 那条 path，点在钮与钮之间那块 reach 里算"还没走"）。
   **只认 `PointerDeviceKind.touch`**，桌面鼠标点击不改变悬停语义，两件事各走各的。
-- **跟手那几格会被整页滚走，而且是两种输法**（动效 20、交互 4/6）：① 交互 4/6 跟手走的是裸
+- **跟手那几格会被整页滚走，而且是两种输法**（动效 20 / 45–50、交互 4/6）：① 交互 4/6 跟手走的是裸
   `Listener`（要的是"按住就是我的"那种语义），它**不进手势竞技场**，外层
   `SingleChildScrollView` 那颗 `VerticalDragGestureRecognizer` 一过 slop 就把整笔赢走；
   ② 动效 20 的图块用的是 `onPan*`，**进了竞技场照样输** —— 页面那颗滚动的 slop 更短，先起步的
@@ -2130,7 +2202,10 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
   `PointerDeviceKind.touch`，只要挂的是**整页**（不是单格），竞技场、slop、滚动全是真的。
   `test/motion_lab_touch_trigger_test.dart` 20 号那条就是这样验的：按下读数 → 拖完页面
   `pixels` 没动 → 图块自己跟手 → 松手归还。44 号"按住说话"是同一验法的第二个实例，而且它
-  那一侧是**裸 `Listener`**（连竞技场都不进），锁只能靠按下那一下主动给出。裸 `Listener`
+  那一侧是**裸 `Listener`**（连竞技场都不进），锁只能靠按下那一下主动给出。45–50 六格共用
+  一颗 `LabDragZone`（锁就挂在那一处），所以逐格的指尖回归按单格挂载跑六条（按下给锁 →
+  位移真的改画面 → 松手还锁），整页挂载只再验 46 号那一格——挑它是因为往下划和页面滚动
+  **同方向**，是最容易被竞技场赢走的那一笔。裸 `Listener`
   会留 pending 微任务，收尾要
   `TestAsyncUtils.guard()` 包住 `up()` + 推帧，否则报的是铺垫造成的假红。
 - **受理区不能压在脸自己身上**（表面 4）：把透明命中层叠在脸上面，视觉对、静止帧 golden
@@ -2173,8 +2248,8 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 - **全站图标收敛**（§9.1）：`Icon(Icons.*)` 与 `assets/image/svg` 的 41 张自绘图标全部换成
   构建期生成的 `DrawIcon(StrokeIcons.*)` + 描边动画，122 个调用点一遍过；只保留品牌标
   `top_bar_logo.svg`。产物里"没引用的图标不进包"（mac/windows/ios 三端同理）
-- **动效实验室**（§12）：44 格参考案例全部落地，一格一个组件、零全局主题耦合，
-  132 张 golden（每格静止/途中/终态）可复现；途中帧哈希比对证明 44 格**全部**在动
+- **动效实验室**（§12）：50 格参考案例全部落地，一格一个组件、零全局主题耦合，
+  150 张 golden（每格静止/途中/终态）可复现；途中帧哈希比对证明 50 格**全部**在动
 
 - **媒体层 chrome 整族收编**（§2.7）：封面卡/看图器/播放器/朗读页/漫画阅读器的
   `Colors.white*`·`Colors.black*`·`Color(0x…)` 遮罩全部落进 `AppMediaChrome`（经 `s.` 暴露），
@@ -2228,6 +2303,18 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 每波结束跑 W0 的三件套：analyze 分域、golden 明暗重跑、玻璃预算与旧语言 grep 复账（§11 的命令口径）。
 **不要跨波混做**：令牌值没定稿就逐页换玻璃，会得到"卡片有的厚有的薄、有的透有的实"的中间态。
 
+> **2026-10-14 的实情：波次被打乱了，但只打乱了"换表面"这一半。**
+> W0 的令牌/地基七项已全部落地（逐项状态见"未完成"表第一列），W2/W3/W4 的**卡片材质**没有逐波走，
+> 而是用 §7.2 "卡片材质的落地口径"那三个杠杆（56 处 `glassDecoration` + `cardTheme` 换玻璃 +
+> 外壳铺底）一次性铺满全站，所以 W1–W4 里"只有卡族换玻璃"这一条**已经整体过了**；
+> W3 点名跳过的纸张族与媒体 chrome 也照旧没动。
+> 剩下的不是材质而是**编排与验收**：W0 的"§9 通用件上收"只做了一半——试验页 `power_stats_widgets.dart`
+> 里的 6 个 `Ps*` 组件（`PsGlassCard`/`PsRollingNumber`/`PsGradientBar`/`PsStagger`/`PsSectionLabel`/`PsPill`）
+> 加图表浮层与刻度标签格式化还留在页面目录（口径：`grep -rn "^class Ps" lib/pages/power_stats`），
+> W1 的浮层与把手玻璃化没复账，
+> W1–W4 每波的"出图 + 1.6 字阶回归 + 帧时间"三件套**一张都还没重拍**（384 张明暗基线现在全红），
+> W5 的死文件仍需用户确认才删。
+
 ### 未完成（按可见度排序）
 
 | 缺口 | 现状 | 复测方式 |
@@ -2238,13 +2325,16 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 | 图标残留：`IconData` 形参的-helper | `Icon(Icons.*)` 直接渲染只剩 5 处（`node_directory_picker` 2、看图器三个 part 各 1），但**私有 helper 用 `IconData` 收参数、内部再 `Icon(icon)`** 的写法在看图器那组 `part` 里成窝（`_GlassIconButton` 收 4 个 `Icons.*_rounded`）。§13 早先记的"图标全部收敛"指的是渲染点，这一类是漏网的签名层 | `rg -o 'Icon\(Icons\.[a-zA-Z_]+' lib --no-heading \| wc -l`；再逐处查 `final IconData` 形参 |
 | 历史取色的**残余豁免**（收编已到底，剩下的是记账） | 生产代码（排 `core/theme/`、`lib/gen/`、§12.3 实验室与两张展示页）里：① 裸 hex **21 处**全部在命名常量族内——黑胶盘面 `_DiscMaterial` 10、搜索高亮 `_SearchHighlight` 4、小说卡 3、漫画条按钮 `_BarBtn` 3、音频舞台渐变 1；② 裸 `Colors.*`（非 `transparent`）**26 处**各有豁免理由——启动图 5（`runApp` 前禁 `AppTheme.metrics`）、强调色选择器的原始色板 12（这个面的职责就是摆色板）、按亮度反差挑勾字 2（`computeLuminance()`）、死文件 7、设备头像 HSL 派生 1；③ `LightColors.`/`DarkColors.` **12 行** = 色板 10 + `live_frost` 窗口底 1 + 死文件 1；④ `Colors.transparent` 82 处不是取色，是"这里没底"，不进这套账。`brandColor` 已 0 处 | `grep -rn "Color(0x[0-9A-Fa-f]\{8\})" lib --include='*.dart' \| grep -vE "core/theme/\|lib/gen/" \| grep -v ":[ ]*//"`；`grep -rn "Colors\.[a-z]" lib --include='*.dart' \| grep -v Colors.transparent \| grep -vE "core/theme/\|pages/(backup\|demo\|surface_lab\|motion_lab\|interaction_lab\|theme_preview_screen\|style_showcase_screen)"` |
 | 死文件待清 | `lib/pages/novel_library_page.dart`（根级，10KB，路由实际指向 `pages/novel_library/novel_library_page.dart`，全仓零引用）带着 7 处裸 `Colors.*` + 1 处 `LightColors/DarkColors` 三元分支（另 2 处 `transparent`），收编时按"死代码"跳过 | `rg -n 'pages/novel_library_page' lib/ test/` 应为空 |
-| 其余 48 个页面仍是 **v1 语言**（中性底 + 实色卡 + 墨主色） | 与样板页并排会明显不一致；这是**预期中的中间态**。好消息是"换值"一步（W0）就能把它们整体带到 v2，剩下的全是"换表面" | §13 的 v2 波次表 W1–W5；单页判据三件事：卡片是否 `GlassCard`、氛围层是否只由外壳画、§9.2 四条数据面约定 |
-| **v2 地基四处待接线** | ① `AppAtmosphere` 尚未建（§2.9 全表还活在 `power_stats_theme.dart`）；② `AppSemantic` 的柔彩档值未替换（现在仍是 v1 灰阶）；③ 圆角三档升档未做（`radiusCard` 仍 10）；④ `AppMotion` 缺 `roll` / `scaleBlock` 两档 | W0；每项都要跟着重跑对应 golden |
-| **氛围层还在页面自画** | `desktop_scaffold.dart:180` 目前刷 `canvas` 实底，样板页自己叠了 5 层渐变；外壳收口后页面那一层要撤（§7.4） | W0/W1；`grep -rn "backgroundLayers\|RadialGradient(" lib/pages --include='*.dart'` 应当只剩外壳 |
+| 其余页面的**表面**已换，**编排**还没换 | 2026-10-14 把"换表面"做完了（口径见下一行）：卡片材质全站并进 v2，氛围底只由外壳画。剩下的不是材质而是 §5.5/§9.2 那两类编排——绝大多数 `AnimatedX` 仍挂 `standard`、退场还在倒放同一条时间轴，以及图表/列表这四类数据面还没按 §9.2 的约定走 | 单页判据三件事实测：卡片是否吃 `AppCard.glassDecoration`（✅ 已过）、氛围层是否只由外壳画（✅ 已过）、§9.2 四条数据面约定（🔧 未过）。波次见 §13 v2 表 W1–W4 |
+| **v2 地基已全部接线（2026-10-14 收口）** | ✅ ① `AppAtmosphere` 已建成独立 ThemeExtension（`core/theme/app_atmosphere.dart`：柔彩底 5 层 + 卡影 + 涨跌/冷暖档 + `glassHighlight`），`power_stats_theme.dart` 只剩转发 getter；✅ ② 柔彩档值已替换；✅ ③ 圆角五档已升（Control/Field 8→10、Card 10→16、Panel/Overlay 14→20）；✅ ④ `AppMotion` 已补 `roll` 720ms 与 `scaleBlock` 0.90；✅ ⑤ 17 处 `FontWeight.w800` 已收编到 `w700`；✅ ⑥ `s.accentOn` 取点的**实心底**已换 `s.accentSolid`——19 处取点 / 22 行（口径 `grep -rn "accentSolid" lib --include='*.dart' \| grep -v "core/theme/"`），另有 `s.accent` 的发光/描边类用法刻意留在亮档不动。剩下 33 行 `s.accentOn` 不用改：它们的前景压的底要么是已经转过的 `accentSolid`，要么是主题按钮（6 行 `foregroundColor:` 直接吃主题） | ②③④⑤ 的 golden 重拍量见 §14 C4；⑥ 逐处判据见 §14 C3 |
+| **氛围层已收口到外壳** | `desktop_layout.dart` 的 `_ContentSurface` 是全站唯一铺底点（`AtmosphereBackdrop`，桌面 `layered: true` / 移动 `false`），`scaffoldBackgroundColor` 已改透明、样板页自己的 5 层渐变已撤。`backgroundLayers` 归零，`lib/pages` 里剩下的 10 处 `RadialGradient(` 全是**局部效果**（实验室 case、黑胶盘面、终端辉光、空态图标光环、电量刻度带），不是页面底 | `grep -rn "backgroundLayers" lib --include='*.dart'` 应为空；`grep -rn "AtmosphereBackdrop" lib --include='*.dart'` 应只命中外壳与注释 |
 | **玻璃预算未实测** | 同屏 `BackdropFilter` ≤ 8 是按样板页（5 张卡）推的，没在 Windows / 低端机 / 大列表页验过帧时间 | W1 起每波首次出图时顺手记一次帧时间 |
-| **Inter 缺 800 档** | 资产只有 Regular/Medium/SemiBold/Bold（`pubspec.yaml` 181–187 行），17 处 `FontWeight.w800` 静默降 Bold（试验页 15 处 + `sentry_log` 2 处） | §4；要么补 `Inter-ExtraBold.ttf` 进 `pubspec.yaml`，要么 17 处收 `w700` |
-| **暗色实心胶囊对比度不达标**（实测算出来的，不是猜的） | 白字压 `#7C9BFF` 只有 **2.63:1**（WCAG 需 4.5:1）；压 `#2F65DE` 是 5.2:1。所以暗色档"实心底 + 白字"必须换深一档蓝 | 已定方案：新增 `accentSolid`（暗 `#3B63D8`，5.3:1），`accent` 在暗色档只承担线/游标/字（§2.1、§14 冲突 C3） |
-| 共享组件库未铺满 | 大量页面仍手搓卡片/空状态/小节标题（~25 套卡片、`_GlassCard` 两处重复、`EmptyState` 两套打架） | 见 §9 右列 |
+| **Inter 缺 800 档** | 资产只有 Regular/Medium/SemiBold/Bold（`pubspec.yaml` 181–187 行），`w800` 拿不到实体字面、静默降 Bold。**调用点已归零**（2026-10-14：试验页 15 处 + `sentry_log` 2 处收编到 `w700`，画面零变化——本来渲染的就是 Bold） | §4；仍禁止新增 `w800`，除非先把 `Inter-ExtraBold.ttf` 补进资产并登记四档→五档 |
+| **暗色实心胶囊对比度不达标**（实测算出来的，不是猜的） | 白字压 `#7C9BFF` 只有 **2.63:1**（WCAG 需 4.5:1）；压 `#2F65DE` 是 5.2:1。所以暗色档"实心底 + 白字"必须换深一档蓝 | 令牌已落地：`AppSemantic.accentSolid`（暗 `#3B63D8`，5.3:1），主题里 Elevated/Filled 两档实心按钮已改吃它（`app_theme.dart` 的 `_elevatedButton`/`_filledButton`）。业务侧 19 处取点已转完（2026-10-14，口径见上一节"v2 地基已全部接线"⑥）。🔧 待走查：`sentry_log_filter_bar` 的辉光 `boxShadow` 仍吃亮档 `s.accent`——它是外发光不是承墨面，判定为"故意留亮"，需要人眼确认一次 |
+| **顶缘高光只在 `AppCard` 上** | `AppCard.edgeHighlight`（§7.2 玻璃卡第 3 件）是 `Stack` 里的 `Positioned`，只有走 `AppCard` 的卡片带它；直接用 `AppCard.glassDecoration` 铺在自有容器上的 56 处没有顶缘高光，材质比样板薄一档。试过用更亮的上边 `BorderSide` 代替，圆角处会出现接缝断点，弃 | 口径 `grep -rn "edgeHighlight" lib --include='*.dart'` = 3 行（定义 + 调用 + 注释）。收口方案待定：给 `glassDecoration` 配一个 `glassStack(context, child:)` 便捷件，或把这 56 处逐点包进 `Stack` |
+| **sentry 事件卡悬停不再"抬一档"** | 玻璃化时把手写的 `BoxShadow` 列表换成了 `a.cardShadow`，代价是**悬停态的投影变化**没了：原代码是 `s.elevation(_hovered ? card : raised)` + 一枚 `levelRole.color.withAlpha(15)`、blur 16~20 的外发光。按级别的**描边**用 `borderColor:` 保住了（`sentry_log_list.dart` 的 `_hovered ? widget.levelRole.containerBorder : null`），丢的只有抬升与那枚 6% 发光——`glassDecoration` 的 `lifted` 是静态参数，不跟 `hovered` 走，要动必须给调用点传 `lifted: _hovered` | 口径：`git diff -- lib/pages/sentry_log | grep "^-.*boxShadow"` → 3 处。修法待定：给 `glassDecoration` 加一个 `hovered` 入参（内部选 `cardShadow(lifted:)` 档），比逐点回退手写阴影便宜 |
+| ~~出图里两处"看着淡"~~ **实测都排除了** | 走查 `ledger_home_desktop` 时怀疑两件事，算完都不是本次的债：① 暗档 ¥8,258.82 那类**压玻璃的强调色数字**实测 **6.32:1**（`#7C9BFF` 压 `#201B32`），大字号本来只要 3:1，达标得很；② 邮件账单那条横幅走的是 `s.warning.container` + `s.warning.onContainer` 状态角色对（`ledger_screen.dart:398` 的 `_PendingBanner`，`AppCard` 显式传了 `color:` 所以它**不是**玻璃），v1 就是这个浓度。真正的亮档问题在别处，见 §2.1 的 ⚠️ 与 §10 第 26 条 | 复算口径：`glassTint` 与 `canvas` 先 `Color.alphaBlend` 合成再算 WCAG 比值；别拿原始 hex  eyeball |
+| 共享组件库未铺满 | 大量页面仍手搓卡片/空状态/小节标题（~25 套卡片、`_GlassCard` 两处重复、`EmptyState` 两套打架）。2026-10-14 之后**材质统一了、实现还没**：卡片都吃到玻璃配方，但 `lib/pages` 仍有 136 处手写 `BoxShadow(`（口径 `grep -rn "BoxShadow(" lib/pages --include='*.dart'`，其中一部分是发光/描边而非卡影，不能全算债），`_GlassCard` 私有实现还有 7 处引用 | 见 §9 右列；复账时先把"卡影"与"发光"分开数 |
 | 动效**字面量已清零，编排还没统一** | 时长/曲线/描边/sigma 四类字面量都落档了（口径见 §5.3、§3.3、§5.4 的 grep），剩下的不是数字而是编排：① 绝大多数 `AnimatedX` 还挂 `standard`，弹簧档只接到 §5.5 点名的几面；② 退场普遍还在倒放同一条时间轴（该取相邻低档，§5.2）；③ 路由转场两条手写 builder 没并给 `AppPageTransitions.fadeUp`（260ms 与 0.985 因此还在档外，§5.3）；④ `StateTransitionAnimation.animationDuration` 默认仍是手写 400ms。另：`StateTransitionAnimation` 已随图标迁移换签名（`icon`/`hoverIcon` 现为 `StrokeIcon?`），图标固定 `StrokeTrigger.none`（§9.1 的"一个主角"） | §5.5 逐面 + §5.6 逐输入；字面量账：`grep -rn "Duration(milliseconds:\|Curves\.\|sigmaX: [0-9]\|Border\.all(.*width: [0-9]" lib/pages lib/components --include='*.dart'`（曲线 / sigma / 描边三项应只剩 §12.3 实验室页与图表几何两处；`Duration(milliseconds:` 剩下的 18 处全是 §5.2 划出去的"数据节奏"——超时、轮询、防抖、重试、逐帧节拍、idle 计时，逐处自解释） |
 | 自选强调色仍会覆盖新主色 | 用户以前存过自定义强调色的话，除非改选第一档"跟随主题"，否则旧色仍生效。**v2 起这条更要紧**：存过的品牌紫/旧墨色会直接顶掉柔彩蓝，整页看着还是 v1 | 设置页 → 主题 → 第一档；`AppTheme.kFollowThemeAccent` 哨兵（§2.3） |
 | `surfaceActive` 仍是实心 | 按压态会打断窗口磨砂（悬停已修，按压未修） | `app_colors.dart` |
@@ -2260,8 +2350,15 @@ flutter test --update-goldens -t golden test/motion_lab_all_cases_test.dart --pl
 ## 14. 冲突与待确认
 
 这一节只干一件事：**把"试验页已验收"和"全站现状"打架的地方列出来，并给出实测代价**。
-试验页证明的是这套语言**能成立**，不是它**能和现有 48 页无痛共存**。下面五条里，
-C3 已经当场解决（记录结论供复核），C1/C2/C4/C5 **需要你拍板**——我在 W0 动工前不会自己选。
+试验页证明的是这套语言**能成立**，不是它**能和现有页面无痛共存**。下面五条里，
+C3 已经当场解决（记录结论供复核），C1/C2/C4/C5 原先**需要拍板**——
+2026-10-14 的批复见下面的引用块，C1/C2/C3/C4 都已按建议动工，只有 C5 还没动。
+
+> **2026-10-14 批复与落地状态**：C4「圆角全站改」→ 已按建议的全站一起升档落地；
+> C1/C2「颜色按看情况改，先改后续走查有问题再订正」→ C2 已按建议 1 换值（`info` 归并到 violet，
+> 名字不动、38 处调用点零改动），C1 未动（`danger` 与方向色的分工已写进 §2.5，靠走查验）；
+> C3 令牌与主题两档实心按钮已接，**业务侧实心底也迁完了**（19 处取点 / 22 行，清单见 C3）；
+> C5「主题色保留」的两种读法（迁移旧存的值 vs 完全不动）**仍未确认**，所以一行代码没动。
 
 ### C1 `danger` 与"下跌"撞车：错误红 vs 走势rose  `needs-decision`
 
@@ -2282,7 +2379,7 @@ C3 已经当场解决（记录结论供复核），C1/C2/C4/C5 **需要你拍板
   记账页的收入/支出、电量的峰/谷一律走方向色，**不许借用 `success`/`danger` 当涨跌**——
   这条已经写进 §2.5，此处只是把代价说明白。
 
-### C2 `info` 的紫与 `violet` 的紫几乎是同一支  `needs-decision`
+### C2 `info` 的紫与 `violet` 的紫几乎是同一支  `已定：走 1，已落地`
 
 - **现状**：`AppSemantic.info` = `#8D54FF`（`app_colors.dart` 的 `lightInfo`）；
   试验页的 `violet` = `#715FFD`，暗档 `#9C8CFF`。相差不到一档明度，同屏放一起会被读成"同一个紫用错了"。
@@ -2295,6 +2392,8 @@ C3 已经当场解决（记录结论供复核），C1/C2/C4/C5 **需要你拍板
   3. **两者都留**：靠"info 只用于文字/图标点缀、violet 只用于渐变与身份"分工。
      代价：这条分工只能靠 §10 的规矩维持，最容易在后续页面破功。
 - **我的建议**：走 1，但**留 `info` 这个名字**（业务代码不动），只换值。这样 38 处调用点零改动。
+- **已定并落地（2026-10-14，批复口径"先改，走查有问题再订正"）**：走 1。`AppStatus.lightInfo`
+  `#8D54FF`→`#715FFD`、`darkInfo`→`#9C8CFF`（`app_colors.dart:320/331`），名字与 75 处调用点未动。
 
 ### C3 暗色实心胶囊的对比度（**已解**，记录供复核）
 
@@ -2303,17 +2402,41 @@ C3 已经当场解决（记录结论供复核），C1/C2/C4/C5 **需要你拍板
 - **结论**：拆两档——`accent` 负责"亮着的东西"（线、游标、字、洗底），
   新增 **`accentSolid`** 负责"要压白字的实心底"（实心胶囊、主按钮），暗档取深一档的 `#3B63D8`。
   已落 §2.1 表格与 frontmatter。
+- **落地进度（2026-10-14 收口）**：令牌已建（`AppSemantic.accentSolid`，含 `copyWith`/`lerp`），
+  主题里 Elevated/Filled 两档实心按钮已改吃它，`_applyCustomization` 保证用户自选色同步顶掉实心档。
+  业务侧逐处核对完毕并转掉 **19 处取点 / 22 行**（口径：`grep -rn "accentSolid" lib --include='*.dart' | grep -v "core/theme/"`；
+  其中 `sentry_log_filter_bar.dart` 的 4 行是同一处渐变 stops，`media_cutout_card.dart` 的 4 行是 2 处实心 + 2 处 `_Flare` 光斑）。
+  剩下 **33 行 `s.accentOn` 不改**（口径：同一 grep 去掉 `core/theme/`），逐条看完底之后的账是：
+  ① 2 行其实是注释（`transfer_chat.dart:440`、`lan_transfer_screen.dart:1202`），真实取点 **31 处**；
+  ② **29 处承的都是实心强调底**——18 处的底就在同一段代码里（正是上面转过的那 19 处之一，
+  含 ternary 里的 `isCurrent ? s.accentSolid : …` 这类），11 处是主题 Elevated/Filled 按钮的
+  `foregroundColor:` 或按钮 `icon:` 槽里的 `CircularProgressIndicator`，那头已经吃 `accentSolid`；
+  ③ **2 处是真正的例外**，都不涉及实心蓝：`game_detail_screen.dart:372` 把 `accentOn.withAlpha(60)`
+  当两个按钮之间的 1px 发丝分隔线用（按 v2 应该读 `s.glassBorder`），`manga_history_screen.dart:193`
+  是白字压 `s.danger.color` 红底（实测 4.6:1，达标）。这两条记进走查，不属于 C3。
+  `accentOn` 两档都是 `Colors.white`（`app_semantics.dart:73/128`），所以"白字压浅蓝"只可能出在底上。
+  判据是**这一处配对的是哪个底**，确实不能一把 sed：`s.accent` 的发光（`boxShadow`）、描边、洗底
+  按结论要**留在亮档**——它们不压白字，是"亮着的东西"。唯一一处需要人眼复核的是
+  `sentry_log_filter_bar.dart` 的辉光阴影仍吃 `s.accent`（刻意，外发光不是承墨面）。
+  参考量级：`grep -rn "color: s\.accent\b\|backgroundColor: s\.accent\b" lib --include='*.dart'` → 191 处
+  （含图标取色，不是都要改），其中与 `accentOn` 同文件的有 22 个。
 
-### C4 圆角整体升档是**全站重排**，不是一页的事  `needs-decision`
+### C4 圆角整体升档是**全站重排**，不是一页的事  `已定：全站一起升`
 
-- **现状**：`ThemeMetrics` 里 `radiusControl = scaleW(8)`、`radiusCard = scaleW(10)`
-  （`app_theme.dart:1177/1179`），试验页实测：所有玻璃卡走 `radius16`（`PsGlassCard` 默认），
-  六列维度卡走 `radius14`，抓取按钮走 `radius20`。v2 §3 把三档定为 `10 / 16 / 20`。
-- **实测代价**：`grep -rn "radiusCard\|radiusPanel\|radiusControl" lib --include='*.dart'` →
-  **66 处 / 20 个文件**，其中 `app_theme.dart` 主题自己占 **17 处**，业务调用点 **49 处 / 19 个文件**。
-  改值即**所有明暗基线重拍**，包括与 v2 无关的旧页面——它们会在同一次提交里变圆。
-- **待确认**：是接受"一次把 20 个文件一起变圆"，还是**只对上了玻璃的卡升档**（其余暂时留着旧 8/10）。
-  我建议前者：混用会得到"卡片有的厚有的薄"，而 §13 的波次表本来就是按"令牌先定稿"排的。
+- **v1 现状（已作废，留作对照）**：`ThemeMetrics` 里 `radiusControl = scaleW(8)`、`radiusCard = scaleW(10)`，
+  试验页实测：所有玻璃卡走 `radius16`（`PsGlassCard` 默认），六列维度卡走 `radius14`，抓取按钮走 `radius20`。
+  v2 §3 把三档定为 `10 / 16 / 20`。
+- **实测代价（口径钉死）**：五档语义圆角（`radiusControl/Field/Card/Panel/Overlay`）的**业务读取点**
+  = `grep -rn "\.radius\(Control\|Field\|Card\|Panel\|Overlay\)\b" lib --include='*.dart'`
+  再排除令牌定义所在的 `core/theme/app_theme.dart` → **67 处 / 24 个文件**
+  （分档：Control 16/11、Field 11/3、Card 24/13、Panel 10/5、Overlay 7/7；文件数按档分别统计，
+  一个文件常同时读两档，所以合计 24 而不是各档相加）。
+  ⚠️ 这一族**调用点一行都不用改**——改的是令牌值，数字量的是"会变圆的走查范围"。
+  改值即**所有明暗基线重拍**：`test/goldens/` 现有 **384 张**基线、24 个出图文件，
+  凡被测面用到这五档都会像素变，包括还没迁到 v2 的旧页面。
+- **已定并落地（2026-10-14）**：接受"一次把 24 个文件一起变圆"，五档值已在 `app_theme.dart` 的
+  `ThemeMetrics` 构造函数里换掉（`radiusControl/Field` 8→10、`radiusCard` 10→16、`radiusPanel/Overlay` 14→20）。
+  混用"有的厚有的薄"这条路被否。下一步是 §11/任务 #18 的 384 张基线重拍 + 逐张看图。
 
 ### C5 用户自选强调色会顶掉柔彩蓝  `needs-decision`
 

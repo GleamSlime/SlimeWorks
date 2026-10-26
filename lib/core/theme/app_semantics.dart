@@ -30,6 +30,7 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
     required this.textTertiary,
     required this.textDisabled,
     required this.accent,
+    required this.accentSolid,
     required this.accentOn,
     required this.accentText,
     required this.accentContainer,
@@ -65,14 +66,16 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
     textSecondary: AppSurfaces.lightTextSecondary,
     textTertiary: AppSurfaces.lightTextTertiary,
     textDisabled: AppSurfaces.lightTextDisabled,
-    // 主按钮/选中态走"反相墨色"：全站只留这一种实心强调底，
-    // 品牌紫退出主色位，只活在 info 与图表里当点缀。
-    accent: AppBrand.ink,
-    accentOn: AppBrand.inkOn,
-    accentText: AppSurfaces.lightTextPrimary,
-    accentContainer: Color(0xFFF5F5F5),
+    // v2 主色：柔彩蓝。`accent` 是"亮着的东西"（线、游标、闪烁、选中字），
+    // 要压白字的**实心**底走 `accentSolid`——暗档两者不是一个值，见下方 ⚠️。
+    accent: AppBrand.accentLight,
+    accentSolid: AppBrand.accentSolidLight,
+    accentOn: Colors.white,
+    // 亮档强调色文字单独一档：暖画布把 accentLight 的对比度拉到 4.30:1（AA 正文要 4.5）
+    accentText: AppBrand.accentTextLight,
+    accentContainer: Color(0xFFF0F2FE),
     accentContainerBorder: AppSurfaces.lightBorder,
-    accentGradient: AppBrand.inkLight,
+    accentGradient: AppBrand.accentLightGradient,
     success: AppStatusRole(
       color: AppStatus.lightSuccess,
       onContainer: AppStatus.lightSuccessText,
@@ -94,12 +97,13 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
       onContainer: AppStatus.lightNeutralText,
     ),
     scrim: LightColors.overlay,
-    shadowKey: Color(0x0F000000),
-    shadowAmbient: Color(0x07000000),
-    glassTint: Color(0xB8FFFFFF),
-    glassBorder: AppSurfaces.lightBorder,
+    // 现代精致自然阴影，剔除脏紫色投影
+    shadowKey: Color(0x0E0F172A),
+    shadowAmbient: Color(0x080F172A),
+    glassTint: Color(0xCCFFFFFF),
+    glassBorder: Color(0x80E2E8F0),
     glassBlur: AppGlass.blurMedium,
-    glassPanelTint: Color(0x8CFFFFFF),
+    glassPanelTint: Color(0xE6FFFFFF),
   );
 
   // ── 暗色解析 ──
@@ -118,14 +122,13 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
     textSecondary: AppSurfaces.darkTextSecondary,
     textTertiary: AppSurfaces.darkTextTertiary,
     textDisabled: AppSurfaces.darkTextDisabled,
-    // 暗色下"反相"就是提亮到近白：主按钮是一块亮底 + 墨色字，
-    // 而不是又回到一层面料般的紫。
-    accent: AppBrand.inkInverse,
-    accentOn: AppBrand.ink,
-    accentText: AppSurfaces.darkTextPrimary,
-    accentContainer: Color(0xFF262626),
-    accentContainerBorder: Color(0xFF404040),
-    accentGradient: AppBrand.inkDark,
+    accent: AppBrand.accentDark,
+    accentSolid: AppBrand.accentSolidDark,
+    accentOn: Colors.white,
+    accentText: AppBrand.accentDark,
+    accentContainer: Color(0xFF1E2638),
+    accentContainerBorder: Color(0xFF2D3748),
+    accentGradient: AppBrand.accentDarkGradient,
     success: AppStatusRole(
       color: AppStatus.darkSuccess,
       onContainer: AppStatus.darkSuccessText,
@@ -152,12 +155,12 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
       dark: true,
     ),
     scrim: DarkColors.overlay,
-    shadowKey: Color(0x66000000),
-    shadowAmbient: Color(0x33000000),
-    glassTint: Color(0x9E171717),
-    glassBorder: AppSurfaces.darkBorder,
+    shadowKey: Color(0x38000000),
+    shadowAmbient: Color(0x28000000),
+    glassTint: Color(0xCC161922),
+    glassBorder: Color(0x20FFFFFF),
     glassBlur: AppGlass.blurMedium,
-    glassPanelTint: Color(0x6B171717),
+    glassPanelTint: Color(0xD8161922),
   );
 
   static AppSemantic of(BuildContext context) {
@@ -190,6 +193,13 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
 
   // 强调色
   final Color accent;
+
+  /// 实心强调底（上面要压白字的那一档）
+  ///
+  /// 与 [accent] 分开是**对比度**要求，不是审美：暗档 `accent` 是 #7C9BFF，
+  /// 白字压上去只有 2.63:1；`accentSolid` 压深到 #3B63D8 才有 5.3:1。
+  /// 线/游标/闪烁/选中字用 `accent`，胶囊与主按钮的底用 `accentSolid`。
+  final Color accentSolid;
   final Color accentOn;
   final Color accentText;
   final Color accentContainer;
@@ -344,6 +354,7 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
     Color? textTertiary,
     Color? textDisabled,
     Color? accent,
+    Color? accentSolid,
     Color? accentOn,
     Color? accentText,
     Color? accentContainer,
@@ -378,6 +389,7 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
       textTertiary: textTertiary ?? this.textTertiary,
       textDisabled: textDisabled ?? this.textDisabled,
       accent: accent ?? this.accent,
+      accentSolid: accentSolid ?? this.accentSolid,
       accentOn: accentOn ?? this.accentOn,
       accentText: accentText ?? this.accentText,
       accentContainer: accentContainer ?? this.accentContainer,
@@ -418,6 +430,7 @@ class AppSemantic extends ThemeExtension<AppSemantic> {
       textTertiary: c(textTertiary, other.textTertiary),
       textDisabled: c(textDisabled, other.textDisabled),
       accent: c(accent, other.accent),
+      accentSolid: c(accentSolid, other.accentSolid),
       accentOn: c(accentOn, other.accentOn),
       accentText: c(accentText, other.accentText),
       accentContainer: c(accentContainer, other.accentContainer),

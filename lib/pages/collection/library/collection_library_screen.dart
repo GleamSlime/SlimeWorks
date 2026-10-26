@@ -146,7 +146,7 @@ class _CollectionLibraryScreenState
                           child: Container(
                             padding: EdgeInsets.all(AppTheme.metrics.kSpace3),
                             decoration: BoxDecoration(
-                              color: s.accent,
+                              color: s.accentSolid,
                               borderRadius: AppTheme.metrics.radius10,
                             ),
                             constraints: BoxConstraints(

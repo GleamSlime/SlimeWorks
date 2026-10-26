@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/core/services/extract_service.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -86,11 +87,7 @@ class ExtractResultDialog extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.all(m.kSpace16),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radius12,
-        border: Border.all(color: s.hairline, width: AppTheme.metrics.strokeHairline),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
       child: Column(
         children: [
           _buildStatRow(context, '压缩包总数', '${result.totalArchives} 个'),

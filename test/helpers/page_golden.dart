@@ -7,6 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:slime_works/components/window/desktop_scaffold.dart';
+import 'package:slime_works/core/widgets/atmosphere_backdrop.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/provider/screen_provider_impl.dart';
@@ -144,14 +145,22 @@ Future<void> pumpAppPage(
           home: Builder(
             builder: (context) => Material(
               color: AppSemantic.of(context).canvas,
-              child: withTopBar
-                  ? Column(
-                      children: [
-                        const DesktopTopBar(),
-                        Expanded(child: page),
-                      ],
-                    )
-                  : page,
+              // 真实窗口的这一层是 _ContentSurface 铺的柔彩氛围底，不是纯色 canvas。
+              // 铺垫少了这一层，出图看到的是"页面摘掉背景"的样子，玻璃卡的半透明
+              // 着色底下压的是实底，验收时根本判不出层次。
+              child: AtmosphereBackdrop(
+                // 真外壳的降级判据和这里一致：窄窗/移动端只留单层对角底
+                // （`MobileLayout` 传 layered:false），四团色团在小窗上会挤成一团脏色
+                layered: size.width > 600,
+                child: withTopBar
+                    ? Column(
+                        children: [
+                          const DesktopTopBar(),
+                          Expanded(child: page),
+                        ],
+                      )
+                    : page,
+              ),
             ),
           ),
         );
@@ -159,6 +168,13 @@ Future<void> pumpAppPage(
     ),
   );
 }
+
+/// 出图要框住的那一格：外壳的氛围底 + 顶栏 + 页面
+///
+/// 别再按 `find.byType(某Screen)` 出图：v2 起柔彩氛围底由外壳铺（`_ContentSurface`），
+/// 顶栏也是外壳的，页面自己的 box 里两样都没有——那样玻璃卡压在一片实底上，
+/// "玻璃透不透"根本判不出来，页面标题和工具栏也会从图里凭空消失。
+Finder pageSurface() => find.byType(AtmosphereBackdrop);
 
 /// 一小步一小步地推进时间
 ///

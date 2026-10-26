@@ -96,16 +96,10 @@ class MediaCollectionDetailView extends StatelessWidget {
           child: Container(
             padding: EdgeInsets.all(AppTheme.metrics.kSpace32),
             margin: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace24),
-            decoration: BoxDecoration(
-              color: s.surface,
+            decoration: AppCard.glassDecoration(
+              context,
               borderRadius: AppTheme.metrics.radius16,
-              boxShadow: [
-                BoxShadow(
-                  color: s.shadowKey,
-                  blurRadius: scaleW(16),
-                  offset: Offset(0, scaleW(6)),
-                ),
-              ],
+              lifted: true,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,

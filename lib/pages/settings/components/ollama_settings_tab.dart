@@ -9,6 +9,7 @@ import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/core/widgets/app_text_field.dart';
 
 class OllamaSettingsTab extends StatefulWidget {
@@ -87,16 +88,11 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
   }
 
   Widget _buildSettingsCard({required Widget child}) {
-    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace16),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radius12,
-        border: Border.all(color: s.border),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
       child: child,
     );
   }
@@ -207,11 +203,7 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
 
     return Container(
       margin: EdgeInsets.only(bottom: m.kSpace8),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radius12,
-        border: Border.all(color: s.border),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
       child: ClipRRect(
         borderRadius: m.radius12,
         child: Row(

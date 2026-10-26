@@ -487,7 +487,7 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                     width: scaleW(22),
                     height: scaleW(22),
                     decoration: BoxDecoration(
-                      color: widget.isSelected ? accent : s.scrim.withAlpha(60),
+                      color: widget.isSelected ? s.accentSolid : s.scrim.withAlpha(60),
                       shape: BoxShape.circle,
                       // 选中环压在封面 art 上，白环不随主题反转
                       border: Border.all(color: s.onMedia, width: AppTheme.metrics.strokeRegular),

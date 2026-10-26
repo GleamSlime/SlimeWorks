@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -52,6 +53,26 @@ class GlassSurface extends StatelessWidget {
     final radius = borderRadius ?? (asPanel ? m.radiusPanel : m.radiusCard);
     final effectiveTint =
         tint ?? (asPanel ? s.glassPanelTint : s.glassTint);
+
+    // 移动端没有窗口振动层，背后也只有静态的柔彩底：真磨砂白花 GPU，还会让
+    // 列表滚到面板下面时糊成一片。这里把着色提前压到画布上合成成一颗实心色，
+    // 观感和桌面端"透出氛围底"几乎一致，却省掉了整层 BackdropFilter（§7.4 预算）。
+    final bool blurEnabled = !Platform.isAndroid && !Platform.isIOS;
+    if (!blurEnabled) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(effectiveTint, s.canvas),
+          borderRadius: radius,
+          border: Border.all(
+            color: borderColor ?? s.glassBorder,
+            width: scaleW(1),
+          ),
+          boxShadow: elevated ? s.elevation(Elevation.floating) : null,
+        ),
+        padding: padding,
+        child: child,
+      );
+    }
 
     return ClipRRect(
       borderRadius: radius,

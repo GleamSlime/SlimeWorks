@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:slime_works/pages/motion_lab/cases/case_44_voice_waveform.dart';
+import 'package:slime_works/pages/motion_lab/cases/case_46_pull_to_refresh.dart';
 import 'package:slime_works/pages/motion_lab/cases/motion_lab_cases.dart';
 import 'package:slime_works/pages/motion_lab/lab_kit.dart';
 import 'package:slime_works/pages/motion_lab/motion_lab_screen.dart';
@@ -58,6 +59,40 @@ Future<void> _tapWithFingerAt(WidgetTester tester, Offset at) => tester.tapAt(at
 final _grabTile = find.byWidgetPredicate(
   (w) => w is MouseRegion && w.cursor == SystemMouseCursors.grab,
 );
+
+/// 45–50 这一批手势格共用的指尖回归
+///
+/// 六格的底座都是 [LabDragZone]（裸 `Listener` + grab 光标），差别只在往哪个方向划。
+/// 三步各验一次：按下要给锁、位移要真的改画面、松手要把锁还回来。
+/// [holdMs] 给长按那格用（没有位移，靠时间起效）。
+Future<void> _fingerDrag(
+  WidgetTester tester,
+  int seq,
+  Offset by, {
+  int holdMs = 100,
+}) async {
+  await _mount(tester, seq);
+  final zone = _grabTile;
+  expect(zone, findsWidgets, reason: '$seq 号没有可拖的手势面');
+  final idle = await _raster(tester);
+
+  final g = await tester.startGesture(tester.getCenter(zone.first));
+  await tester.pump();
+  expect(LabTouchLock.held.value, 1, reason: '$seq 号按下没锁住页面滚动');
+
+  if (by != Offset.zero) await g.moveBy(by);
+  await _advance(tester, holdMs);
+  expect(
+    listEquals(await _raster(tester), idle),
+    isFalse,
+    reason: '$seq 号手势没有画面响应',
+  );
+
+  await g.up();
+  await _advance(tester, 200);
+  expect(LabTouchLock.held.value, 0, reason: '$seq 号松手没归还滚动锁');
+  await unmountPage(tester);
+}
 
 void main() {
   testWidgets('13. 头像排：点一颗抬起，再点收回', (tester) async {
@@ -223,6 +258,66 @@ void main() {
     await _advance(tester, 200);
     expect(find.text('松开取消'), findsWidgets, reason: '上滑没进取消档');
     expect(page.position.pixels, scrolled0, reason: '上滑取消把整页滚走了');
+
+    await g.up();
+    await _advance(tester, 200);
+    expect(LabTouchLock.held.value, 0, reason: '松手没归还滚动锁');
+    await unmountPage(tester);
+  });
+
+  testWidgets('45. 横滑删除：指尖往左带，行跟着走', (tester) async {
+    await _fingerDrag(tester, 45, const Offset(-60, 0));
+  });
+
+  testWidgets('46. 下拉刷新：指尖往下带，页面跟着走', (tester) async {
+    await _fingerDrag(tester, 46, const Offset(0, 60));
+  });
+
+  testWidgets('47. 三档面板：指尖往上推，面板跟着走', (tester) async {
+    await _fingerDrag(tester, 47, const Offset(0, -60));
+  });
+
+  testWidgets('48. 拖拽排序：指尖拎起一行，副本跟着走', (tester) async {
+    await _fingerDrag(tester, 48, const Offset(0, -30));
+  });
+
+  testWidgets('49. 长按预览：指尖按住不放，卡片长出来', (tester) async {
+    // 430ms 才够过"长按"那道判定，早于它就只是普通按下
+    await _fingerDrag(tester, 49, Offset.zero, holdMs: 600);
+  });
+
+  testWidgets('50. 侧滑返回：指尖往右带，详情页跟着走', (tester) async {
+    await _fingerDrag(tester, 50, const Offset(60, 0));
+  });
+
+  // 上面六条是单格挂载，只证明"锁给得出、还得回"和"手势真的改画面"。
+  // 锁要拦的那颗 `SingleChildScrollView` 得在场才算数，所以整页挂载再验一条代表：
+  // 挑 46 号，因为它往下划和页面滚动**同方向**，是最容易被赢走的那一笔。
+  // 六格共用同一颗 [LabDragZone]，锁挂在那一处，验一格就等于验六格。
+  testWidgets('46. 下拉刷新：整页挂载下往下划，页面不跟着滚', (tester) async {
+    await loadAppFonts();
+    await pumpAppPage(tester, const MotionLabScreen());
+    await advance(tester);
+
+    final stage = find.descendant(
+      of: find.byType(Case46PullToRefresh),
+      matching: find.byType(LabStage),
+    );
+    await tester.ensureVisible(stage);
+    await tester.pump();
+    final page = tester.state<ScrollableState>(find.byType(Scrollable).first);
+    final scrolled0 = page.position.pixels;
+    expect(LabTouchLock.held.value, 0, reason: '起手前锁没归零');
+
+    final g = await tester.startGesture(tester.getCenter(stage));
+    await tester.pump();
+    expect(LabTouchLock.held.value, 1, reason: '按下没锁住页面滚动');
+
+    for (final dy in const [20.0, 20.0, 20.0]) {
+      await g.moveBy(Offset(0, dy));
+      await tester.pump();
+    }
+    expect(page.position.pixels, scrolled0, reason: '下拉刷新把整页滚走了');
 
     await g.up();
     await _advance(tester, 200);

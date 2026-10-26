@@ -8,6 +8,8 @@ import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/routes/role_manager.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -15,6 +17,7 @@ import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/src/rust/api/system_metrics.dart' as rust_sys;
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_viz.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 
 /// 概览页面
 class DashboardScreen extends StatefulWidget {
@@ -350,38 +353,44 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       _FeatureData(
         icon: StrokeIcons.accountTree,
         title: '数据捕获',
-        description: '强大的数据采集和处理功能',
+        description: '强大的数据采集和流量处理中心',
         viz: viz.sky,
+        onTap: () => const CaptureRoute().go(context),
       ),
       _FeatureData(
         icon: StrokeIcons.waterDrop,
         title: '流水账',
-        description: '清晰的财务流水记录',
+        description: '智能账单与资产收支流水概览',
         viz: viz.lagoon,
+        onTap: () => const LedgerRoute().go(context),
       ),
       _FeatureData(
         icon: StrokeIcons.cloud,
         title: '阿里云',
-        description: '云服务管理工具',
+        description: '动态域名解析与云服务状态监控',
         viz: viz.amber,
+        onTap: () => const AliyunDdnsRoute().go(context),
       ),
       _FeatureData(
         icon: StrokeIcons.buildCircle,
         title: '工具箱',
-        description: '丰富的实用工具集合',
+        description: '压缩解压与多格式解密实用工具',
         viz: viz.lilac,
+        onTap: () => const ToolsRoute().go(context),
       ),
       _FeatureData(
         icon: StrokeIcons.videoLibrary,
         title: '媒体库',
-        description: '媒体文件管理中心',
+        description: '本地及远程媒体资产分类归档',
         viz: viz.coral,
+        onTap: () => const CollectionPictureRoute().go(context),
       ),
       _FeatureData(
-        icon: StrokeIcons.note,
-        title: '笔记',
-        description: '快速记录和整理想法',
+        icon: StrokeIcons.lan,
+        title: '局域网传输',
+        description: '多端近场极速发现与双向流转',
         viz: viz.mint,
+        onTap: () => const LanTransferRoute().go(context),
       ),
     ];
 
@@ -430,12 +439,14 @@ class _FeatureData {
   final String title;
   final String description;
   final AppViz viz;
+  final VoidCallback? onTap;
 
   const _FeatureData({
     required this.icon,
     required this.title,
     required this.description,
     required this.viz,
+    this.onTap,
   });
 }
 
@@ -463,15 +474,16 @@ class _MetricCardWidgetState extends State<_MetricCardWidget> {
       child: AnimatedContainer(
         duration: AppMotion.base,
         curve: AppMotion.standard,
+        transform: Matrix4.translationValues(0, _hovered ? -2.0 : 0, 0),
         width: widget.width,
         padding: EdgeInsets.all(m.kSpace14),
-        decoration: BoxDecoration(
-          // 卡片不再半透明叠背景模糊：实色表面 + 1px 描边 + 中性抬升就是它全部的
-          // 高度信息，身份色只留在图标底和折线图上。
-          color: s.surface,
+        // 卡片不再半透明叠背景模糊：实色表面 + 1px 描边 + 中性抬升就是它全部的
+        // 高度信息，身份色只留在图标底和折线图上。
+        decoration: AppCard.glassDecoration(
+          context,
           borderRadius: m.radiusCard,
-          border: Border.all(color: _hovered ? s.borderStrong : s.border),
-          boxShadow: s.elevation(_hovered ? Elevation.card : Elevation.raised),
+          borderColor: _hovered ? s.borderStrong : null,
+          lifted: _hovered,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -588,19 +600,21 @@ class _FeatureCardWidgetState extends State<_FeatureCardWidget> {
     final s = AppSemantic.of(context);
     final viz = widget.feature.viz;
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: () {},
+        onTap: widget.feature.onTap,
         child: AnimatedContainer(
           duration: AppMotion.base,
           curve: AppMotion.standard,
+          transform: Matrix4.translationValues(0, _hovered ? -2.0 : 0, 0),
           padding: EdgeInsets.all(m.kSpace20),
-          decoration: BoxDecoration(
-            color: s.surface,
+          decoration: AppCard.glassDecoration(
+            context,
             borderRadius: m.radiusCard,
-            border: Border.all(color: _hovered ? s.borderStrong : s.border),
-            boxShadow: s.elevation(_hovered ? Elevation.card : Elevation.raised),
+            borderColor: _hovered ? s.borderStrong : null,
+            lifted: _hovered,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

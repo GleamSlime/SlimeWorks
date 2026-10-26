@@ -83,7 +83,15 @@ pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, 
         }
     };
 
+    // 基础路径安全防御：禁止包含空字符，要求必须是绝对路径
+    if file_path.contains('\0') {
+        return Ok(error_plain(StatusCode::BAD_REQUEST, "invalid path"));
+    }
+
     let path = Path::new(&file_path);
+    if !path.is_absolute() {
+        return Ok(error_plain(StatusCode::BAD_REQUEST, "path must be absolute"));
+    }
     if !path.exists() {
         return Ok(error_plain(StatusCode::NOT_FOUND, "file not found"));
     }
@@ -139,8 +147,20 @@ pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, 
         );
     }
 
-    // 图片/普通文件：直接读取返回（通常体积小，不必切片）
-    match fs::read(path) {
+    // 图片/普通文件：在后台线程异步读取，避免阻塞 tokio worker，并限制单次内存读取上限（50MB）
+    const MAX_DIRECT_READ_BYTES: u64 = 50 * 1024 * 1024;
+    if total_length > MAX_DIRECT_READ_BYTES {
+        return Ok(error_plain(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "file too large for direct read, please use range request",
+        ));
+    }
+    let path_buf = path.to_path_buf();
+    let read_result = tokio::task::spawn_blocking(move || fs::read(&path_buf))
+        .await
+        .unwrap_or_else(|e| Err(std::io::Error::new(std::io::ErrorKind::Other, e)));
+
+    match read_result {
         Ok(bytes) => Ok(Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", &content_type)

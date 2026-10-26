@@ -16,6 +16,7 @@ import 'package:slime_works/view_models/aliyun_ddns_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/widgets/app_text_field.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 
 class AliyunDdnsScreen extends StatefulWidget {
   const AliyunDdnsScreen({super.key});
@@ -178,11 +179,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
     return Obx(
       () => Container(
         padding: EdgeInsets.all(m.kSpace16),
-        decoration: BoxDecoration(
-          color: s.surface,
-          borderRadius: m.radius12,
-          border: Border.all(color: s.hairline),
-        ),
+        decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -332,11 +329,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
     return Obx(
       () => Container(
         padding: EdgeInsets.all(m.kSpace16),
-        decoration: BoxDecoration(
-          color: s.surface,
-          borderRadius: m.radius12,
-          border: Border.all(color: s.hairline),
-        ),
+        decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -663,11 +656,7 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
     return Obx(
       () => Container(
         padding: EdgeInsets.all(m.kSpace16),
-        decoration: BoxDecoration(
-          color: s.surface,
-          borderRadius: m.radius12,
-          border: Border.all(color: s.hairline),
-        ),
+        decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

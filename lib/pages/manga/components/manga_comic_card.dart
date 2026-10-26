@@ -6,6 +6,7 @@ import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/pages/manga/components/manga_image_view.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -68,10 +69,9 @@ class _MangaComicCardState extends State<MangaComicCard> with SingleTickerProvid
         animation: _scaleAnim,
         builder: (context, child) => Transform.scale(scale: _scaleAnim.value, child: child),
         child: Container(
-          decoration: BoxDecoration(
-            color: s.surface,
+          decoration: AppCard.glassDecoration(
+            context,
             borderRadius: metrics.radius12,
-            boxShadow: s.elevation(Elevation.card),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -93,7 +93,7 @@ class _MangaComicCardState extends State<MangaComicCard> with SingleTickerProvid
                               vertical: metrics.kSpace2,
                             ),
                             decoration: BoxDecoration(
-                              color: s.accent,
+                              color: s.accentSolid,
                               borderRadius: metrics.radius4,
                             ),
                             child: Text(
@@ -263,7 +263,7 @@ class MangaComicListTile extends StatelessWidget {
                             vertical: metrics.kSpace1,
                           ),
                           decoration: BoxDecoration(
-                            color: s.accent,
+                            color: s.accentSolid,
                             borderRadius: metrics.radius3,
                           ),
                           child: Text(

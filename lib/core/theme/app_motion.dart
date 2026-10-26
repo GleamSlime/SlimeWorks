@@ -23,6 +23,11 @@ class AppMotion {
   static const Duration slow = Duration(milliseconds: 320);
   static const Duration emphasis = Duration(milliseconds: 460);
 
+  /// 数据补间专档：滚动数字、渐变条推满
+  ///
+  /// 必须比 [emphasis] 慢——数字是要读完的，不是闪过的。试验页实测 720ms。
+  static const Duration roll = Duration(milliseconds: 720);
+
   /// 列表/卡片批量入场的逐条间隔
   static const Duration stagger = Duration(milliseconds: 45);
 
@@ -126,6 +131,12 @@ class AppMotion {
   /// 整块画面换脸要看得出"推近"，比浮层的 [scaleEnter] 再退一档；
   /// 三处入口（合集卡、缩略图、集合详情）必须同一档，否则同一个看图器有三种进场。
   static const double scaleStage = 0.93;
+
+  /// 整块内容错位进场（面板、柱状带、TOP5 槽位）
+  ///
+  /// 比 [scaleStage] 再退一档：一块卡片的面积远小于全屏舞台，同样的缩放比例
+  /// 看不出来，要多给一点位移才读得出"这是被推上来的"。
+  static const double scaleBlock = 0.90;
 
   /// 收起终态：差一点就是 1，留着这 1% 才看得出是"同一个东西缩回去"
   static const double scaleRetreat = 0.99;

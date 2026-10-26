@@ -574,16 +574,10 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       child: Container(
         padding: EdgeInsets.all(appMetrics.kSpace32),
         margin: EdgeInsets.symmetric(horizontal: appMetrics.kSpace24),
-        decoration: BoxDecoration(
-          color: s.surface,
+        decoration: AppCard.glassDecoration(
+          context,
           borderRadius: appMetrics.radius16,
-          boxShadow: [
-            BoxShadow(
-              color: s.shadowKey,
-              blurRadius: scaleW(16),
-              offset: Offset(0, scaleW(6)),
-            ),
-          ],
+          lifted: true,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

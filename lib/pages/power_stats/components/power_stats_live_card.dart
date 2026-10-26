@@ -263,7 +263,7 @@ class _PsLiveMeterCardState extends State<PsLiveMeterCard>
                           value: widget.headlineValue,
                           majorStyle: TextStyle(
                             fontSize: scaleW(34),
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: p.green,
                             height: 1.05,
                             fontFeatures: const [FontFeature.tabularFigures()],
@@ -298,7 +298,7 @@ class _PsLiveMeterCardState extends State<PsLiveMeterCard>
                         widget.subValue,
                         style: TextStyle(
                           fontSize: scaleW(26),
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: p.ink,
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
@@ -356,7 +356,7 @@ class _PsLiveMeterCardState extends State<PsLiveMeterCard>
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: scaleW(20),
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: p.ink,
                   letterSpacing: scaleW(-0.2),
                 ),
@@ -496,7 +496,7 @@ class _Choice extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: dense ? m.fontSize10 : m.fontSize11,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
             color: selected ? color : p.ink.withAlpha(150),
           ),
         ),
@@ -538,7 +538,7 @@ class _Banner extends StatelessWidget {
               event.title,
               style: TextStyle(
                 fontSize: m.fontSize13,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 letterSpacing: scaleW(1),
                 color: Colors.white,
               ),
@@ -560,7 +560,7 @@ class _Banner extends StatelessWidget {
               event.amount,
               style: TextStyle(
                 fontSize: scaleW(24),
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: Colors.white,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),

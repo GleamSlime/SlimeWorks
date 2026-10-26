@@ -120,7 +120,6 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
   @override
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
-    final p = PowerStatsPalette.of(context);
     final isNarrow = PlatformUtil.isMobile || MediaQuery.of(context).size.width < 720;
 
     return ScreenChrome(
@@ -133,64 +132,45 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
           SizedBox(width: m.kSpace8),
         ],
       ),
-      child: Stack(
-        children: [
-          Positioned.fill(child: _buildBackground(p)),
-          Positioned.fill(
-            child: FadeTransition(
-              opacity: _entranceAnimation,
-              child: Obx(() {
-                if (!_viewModel.isConfigLoaded.value) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                return SingleChildScrollView(
-                  padding: EdgeInsets.all(m.kSpace16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      PsStagger(
-                        index: 0,
-                        child: PsGlassCard(child: _buildHero(context)),
-                      ),
-                      SizedBox(height: m.kSpace12),
-                      PsStagger(index: 1, child: _buildStatusStrip(m, isNarrow)),
-                      SizedBox(height: m.kSpace12),
-                      PsStagger(index: 2, child: _buildLiveCard(m, isNarrow)),
-                      SizedBox(height: m.kSpace12),
-                      PsStagger(index: 3, child: _buildTape(m, isNarrow)),
-                      SizedBox(height: m.kSpace12),
-                      PsStagger(index: 4, child: _buildTopSlots()),
-                      SizedBox(height: m.kSpace16),
-                      PsStagger(
-                        index: 5,
-                        child: _buildDimensionGrid(context, m),
-                      ),
-                      SizedBox(height: m.kSpace16),
-                      PsStagger(index: 6, child: _buildConfigCard(context, m)),
-                      SizedBox(height: m.kSpace12),
-                      PsStagger(index: 7, child: _buildLogCard(context, m)),
-                      SizedBox(height: m.kSpace8),
-                    ],
-                  ),
-                );
-              }),
+      // 氛围底由外壳（_ContentSurface → AtmosphereBackdrop）统一铺，页面不再自铺，
+      // 否则滚动时两张渐变叠着色差会漂。
+      child: FadeTransition(
+        opacity: _entranceAnimation,
+        child: Obx(() {
+          if (!_viewModel.isConfigLoaded.value) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(m.kSpace16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PsStagger(
+                  index: 0,
+                  child: PsGlassCard(child: _buildHero(context)),
+                ),
+                SizedBox(height: m.kSpace12),
+                PsStagger(index: 1, child: _buildStatusStrip(m, isNarrow)),
+                SizedBox(height: m.kSpace12),
+                PsStagger(index: 2, child: _buildLiveCard(m, isNarrow)),
+                SizedBox(height: m.kSpace12),
+                PsStagger(index: 3, child: _buildTape(m, isNarrow)),
+                SizedBox(height: m.kSpace12),
+                PsStagger(index: 4, child: _buildTopSlots()),
+                SizedBox(height: m.kSpace16),
+                PsStagger(
+                  index: 5,
+                  child: _buildDimensionGrid(context, m),
+                ),
+                SizedBox(height: m.kSpace16),
+                PsStagger(index: 6, child: _buildConfigCard(context, m)),
+                SizedBox(height: m.kSpace12),
+                PsStagger(index: 7, child: _buildLogCard(context, m)),
+                SizedBox(height: m.kSpace8),
+              ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 页面底：对角柔彩基色 + 四角色团。色板只交分层数据
-  /// （见 [PowerStatsPalette.backgroundLayers]），叠放这件事留在这儿。
-  /// IgnorePointer 保证这层纯装饰永远不参与命中。
-  Widget _buildBackground(PowerStatsPalette p) {
-    return IgnorePointer(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          for (final d in p.backgroundLayers) DecoratedBox(decoration: d),
-        ],
+          );
+        }),
       ),
     );
   }
@@ -399,7 +379,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                   value: data.value,
                   majorStyle: TextStyle(
                     fontSize: m.fontSize16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: data.color,
                     height: 1.1,
                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -732,7 +712,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
                     value: data.consumption,
                     majorStyle: TextStyle(
                       fontSize: m.fontSize18,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: viz.amber.base,
                       height: 1.1,
                       fontFeatures: const [FontFeature.tabularFigures()],

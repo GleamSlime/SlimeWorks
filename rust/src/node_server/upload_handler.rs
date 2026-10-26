@@ -51,12 +51,16 @@ fn validate_dest(raw: &str) -> Result<(), String> {
     Ok(())
 }
 
+static UPLOAD_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn temp_zip_path() -> std::path::PathBuf {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
-    std::env::temp_dir().join(format!("sw_upload_{millis}.zip"))
+    let counter = UPLOAD_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let pid = std::process::id();
+    std::env::temp_dir().join(format!("sw_upload_{pid}_{millis}_{counter}.zip"))
 }
 
 /// 处理归档上传：流式落盘 → 解压 → 删除临时 zip。

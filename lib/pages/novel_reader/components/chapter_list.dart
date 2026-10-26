@@ -121,7 +121,7 @@ class _ChapterListState extends State<ChapterList> {
                                 width: m.kSpace32,
                                 height: m.kSpace32,
                                 decoration: BoxDecoration(
-                                  color: isCurrent ? s.accent : s.surfaceSunken,
+                                  color: isCurrent ? s.accentSolid : s.surfaceSunken,
                                   borderRadius: m.radius4,
                                 ),
                                 child: Center(

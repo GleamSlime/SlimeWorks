@@ -69,9 +69,8 @@ class _TransferHistoryCard extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-      decoration: BoxDecoration(
-        color: s.surface,
-        border: Border.all(color: s.border),
+      decoration: AppCard.glassDecoration(
+        context,
         borderRadius: AppTheme.metrics.radius14,
       ),
       child: Column(

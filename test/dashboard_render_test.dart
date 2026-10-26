@@ -59,7 +59,7 @@ Future<void> _mount(
   await advance(tester, steps: 45);
 
   await expectLater(
-    find.byType(DashboardScreen),
+    pageSurface(),
     matchesGoldenFile(file),
   );
 

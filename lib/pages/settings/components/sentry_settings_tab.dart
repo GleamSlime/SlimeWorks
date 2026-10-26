@@ -7,6 +7,7 @@ import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
@@ -71,16 +72,11 @@ class _SentrySettingsTabState extends State<SentrySettingsTab> {
   }
 
   Widget _buildSettingsCard({required Widget child}) {
-    final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(m.kSpace16),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: m.radius12,
-        border: Border.all(color: s.border),
-      ),
+      decoration: AppCard.glassDecoration(context, borderRadius: m.radius12),
       child: child,
     );
   }

@@ -1,5 +1,6 @@
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/widgets/app_card.dart';
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -19,11 +20,7 @@ class SettingsTabPlaceholder extends StatelessWidget {
       child: Container(
         margin: EdgeInsets.all(m.kSpace32),
         padding: EdgeInsets.symmetric(horizontal: m.kSpace32, vertical: m.kSpace40),
-        decoration: BoxDecoration(
-          color: s.surfaceRaised,
-          borderRadius: m.radius16,
-          border: Border.all(color: s.hairline),
-        ),
+        decoration: AppCard.glassDecoration(context, borderRadius: m.radius16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

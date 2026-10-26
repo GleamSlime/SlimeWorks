@@ -14,7 +14,8 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:path_drawing/path_drawing.dart';
 
-import 'package:flutter/gestures.dart' show PointerDeviceKind, TapUpDetails;
+import 'package:flutter/gestures.dart'
+    show PointerDeviceKind, TapUpDetails, kTouchSlop;
 import 'package:flutter/material.dart';
 
 /// 参考稿的浅色盘（`--*` 变量原值）
@@ -405,6 +406,129 @@ abstract final class LabTouchLock {
   static void acquire() => held.value = held.value + 1;
 
   static void release() => held.value = math.max(0, held.value - 1);
+}
+
+/// 跟手拖拽区：把指针位移按**本区坐标**连续交出去
+///
+/// 手势类案例要的是 CSS `setPointerCapture` 那种"按住就是我的"语义——位移一路不断，
+/// 不等竞技场裁决，所以用裸 `Listener`。触屏上必须同时挂 [LabTouchLock]：`Listener`
+/// 不进竞技场，手指一上下划就被页面外层那颗 `SingleChildScrollView` 赢走，"拖这一条"
+/// 变成"滚整页"。[onEnd] 带抬起瞬间的速度，甩动（fling）判定要用它。
+class LabDragZone extends StatefulWidget {
+  const LabDragZone({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.onStart,
+    this.onUpdate,
+    this.onEnd,
+    this.cursor,
+    this.lockWhileDragging = true,
+  });
+
+  final Widget child;
+
+  /// 按下没位移 = 一次点击（跟手案例也要给指尖留这条路，golden 环境同样走它）
+  final void Function(Offset at)? onTap;
+
+  /// 按下：落点
+  final void Function(Offset at)? onStart;
+
+  /// 跟手：[total] 是相对按下点的累计位移，[at] 是当前落点
+  final void Function(Offset total, Offset at)? onUpdate;
+
+  /// 松手/取消：[velocity] 为抬起瞬间的 px/s
+  final void Function(Offset total, Offset velocity)? onEnd;
+
+  final MouseCursor? cursor;
+
+  /// 按住期间锁掉页面滚动
+  final bool lockWhileDragging;
+
+  @override
+  State<LabDragZone> createState() => _LabDragZoneState();
+}
+
+class _LabDragZoneState extends State<LabDragZone> {
+  int? _pointer;
+  Offset _down = Offset.zero;
+  Offset _total = Offset.zero;
+  Offset _velocity = Offset.zero;
+  Offset _lastAt = Offset.zero;
+  Duration _lastStamp = Duration.zero;
+  bool _locked = false;
+  bool _moved = false;
+
+  void _lock() {
+    if (_locked) return;
+    _locked = true;
+    LabTouchLock.acquire();
+  }
+
+  void _unlock() {
+    if (!_locked) return;
+    _locked = false;
+    LabTouchLock.release();
+  }
+
+  void _start(PointerDownEvent e) {
+    if (_pointer != null) return;
+    _pointer = e.pointer;
+    _down = e.localPosition;
+    _lastAt = e.localPosition;
+    _lastStamp = e.timeStamp;
+    _total = Offset.zero;
+    _velocity = Offset.zero;
+    _moved = false;
+    // 锁要在按下这一下就给：页面那颗滚动的 slop 比案例的判定短，晚一步就被抢走
+    if (widget.lockWhileDragging) _lock();
+    widget.onStart?.call(e.localPosition);
+  }
+
+  void _move(PointerMoveEvent e) {
+    if (e.pointer != _pointer) return;
+    final dt = e.timeStamp - _lastStamp;
+    if (dt > Duration.zero) {
+      final pxs = (e.localPosition - _lastAt) / (dt.inMicroseconds / 1e6);
+      // 停顿后再起步不算甩动：隔太久直接把瞬时值当作当前速度
+      _velocity = dt.inMilliseconds > 80 ? pxs : Offset.lerp(_velocity, pxs, 0.6)!;
+      _lastAt = e.localPosition;
+      _lastStamp = e.timeStamp;
+    }
+    _total = e.localPosition - _down;
+    if (!_moved && _total.distance >= kTouchSlop) _moved = true;
+    widget.onUpdate?.call(_total, e.localPosition);
+  }
+
+  void _end(PointerEvent e) {
+    if (e.pointer != _pointer) return;
+    _pointer = null;
+    _unlock();
+    if (!_moved && e is PointerUpEvent) widget.onTap?.call(e.localPosition);
+    widget.onEnd?.call(_total, _velocity);
+  }
+
+  @override
+  void dispose() {
+    // 抬起事件没送到也要把锁交回去，否则整页滚不动
+    _unlock();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final zone = Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: _start,
+      onPointerMove: _move,
+      onPointerUp: _end,
+      onPointerCancel: _end,
+      child: widget.child,
+    );
+    final cursor = widget.cursor;
+    if (cursor == null) return zone;
+    return MouseRegion(cursor: cursor, child: zone);
+  }
 }
 
 /// 触屏兼容的悬停区：把只认 hover 的动效也交给指尖

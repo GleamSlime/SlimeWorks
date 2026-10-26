@@ -8,6 +8,7 @@ import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 
+import 'app_atmosphere.dart';
 import 'app_colors.dart';
 import 'app_semantics.dart';
 
@@ -120,6 +121,10 @@ class AppTheme {
         : _ensureContrast(accent, semantic.surface);
     final onAccent = _contrastColor(fill);
     final accentText = fill;
+    // `fill` 是"亮着的东西"（线、游标、选中字）；实心底另走 solid，理由见
+    // [AppSemantic.accentSolid]：暗档 accent 压白字只有 2.63:1。自定义色已经过
+    // _ensureContrast，本身就够深，两档合一。
+    final solid = followTheme ? semantic.accentSolid : fill;
 
     final cs = base.colorScheme.copyWith(
       primary: fill,
@@ -135,11 +140,17 @@ class AppTheme {
         ...base.extensions.values,
         semantic.copyWith(
           accent: fill,
+          // 实心档跟着自定义色走，否则用户换了主题色、胶囊和主按钮还是柔彩蓝。
+          accentSolid: solid,
           accentOn: onAccent,
           accentText: accentText,
           accentContainer: Color.alphaBlend(fill.withValues(alpha: isDark ? 0.18 : 0.10), cs.surface),
           accentContainerBorder: fill.withValues(alpha: isDark ? 0.34 : 0.26),
         ),
+        // 材质层的渐变端点也吃自定义色，否则轨道/进度条/迷你趋势还是柔彩蓝——
+        // 和上面 accentSolid 那条是同一个理由："改了主题色但有些地方不变"。
+        (base.extension<AppAtmosphere>() ?? AppAtmosphere.forBrightness(isDark))
+            .copyWith(accent: fill),
       ],
     );
 
@@ -158,8 +169,8 @@ class AppTheme {
       ),
       textTheme: _scaleTextTheme(base.textTheme, scale),
       primaryTextTheme: _scaleTextTheme(base.primaryTextTheme, scale),
-      elevatedButtonTheme: ElevatedButtonThemeData(style: _elevatedButton(fill, onAccent)),
-      filledButtonTheme: FilledButtonThemeData(style: _filledButton(fill, onAccent)),
+      elevatedButtonTheme: ElevatedButtonThemeData(style: _elevatedButton(solid, onAccent)),
+      filledButtonTheme: FilledButtonThemeData(style: _filledButton(solid, onAccent)),
       textButtonTheme: TextButtonThemeData(style: _textButton(accentText)),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: _outlinedButton(accentText, semantic.border),
@@ -370,7 +381,9 @@ class AppTheme {
 
     return base.copyWith(
       primaryColor: accent,
-      scaffoldBackgroundColor: s.canvas,
+      // 和下面的 canvasColor 同一条理由：Scaffold 不自己铺底。移动端 ScreenChrome
+      // 用的就是主题默认值，填上实心 canvas 会把外壳画的柔彩氛围底整页盖掉。
+      scaffoldBackgroundColor: Colors.transparent,
       // canvasColor 是"没有显式声明颜色的 Material 的默认底色"。本项目所有表面
       // 都必须走 AppSemantic 显式取色，所以这里留透明：任何漏配颜色的 Material
       // 只会画不出来，不会像之前那样在窗口最底下铺一层不透明白，把 macOS 的
@@ -410,7 +423,9 @@ class AppTheme {
         scrim: s.scrim,
       ),
 
-      extensions: [s],
+      // 角色层（AppSemantic）+ 材质层（AppAtmosphere）两个入口：前者答"报告了什么"，
+      // 后者答"是什么做的"。材质层的渐变插不了值，所以不能并进角色层，见其文档。
+      extensions: [s, AppAtmosphere.forBrightness(s.isDark)],
 
       // ── 应用栏：底色交给页面自己控制，避免与磨砂层叠加出双层背景 ──
       appBarTheme: AppBarTheme(
@@ -432,14 +447,18 @@ class AppTheme {
       ),
 
       // ── 卡片：修复原先"白底 + white80 描边"不可见 / 暗色刺眼的问题 ──
+      // v2 把 Material `Card` 的默认材质也换成玻璃（着色 + 发丝描边 + 有色投影）：
+      // 全站还有 47 处直接用 `Card(` 的调用点，靠这条一次性并进新语言，
+      // 不必逐点改写。需要抬一档厚度的卡走 AppCard.glassDecoration(lifted:)。
       cardTheme: CardThemeData(
-        color: s.surface,
-        elevation: 0,
+        color: s.glassTint,
+        elevation: scaleW(6),
+        shadowColor: s.shadowKey,
         margin: EdgeInsets.zero,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: m.radiusCard,
-          side: BorderSide(color: s.hairline, width: m.strokeHairline),
+          side: BorderSide(color: s.glassBorder, width: m.strokeHairline),
         ),
       ),
 
@@ -447,8 +466,9 @@ class AppTheme {
       textTheme: _textTheme(s),
 
       // ── 按钮：四档（主/填充/文字/线框）共用同一圆角与内距，只差配色 ──
-      elevatedButtonTheme: ElevatedButtonThemeData(style: _elevatedButton(accent, onAccent)),
-      filledButtonTheme: FilledButtonThemeData(style: _filledButton(accent, onAccent)),
+      // 实心两档吃 accentSolid（白字要压得住），文字/线框两档吃 accent 当字色。
+      elevatedButtonTheme: ElevatedButtonThemeData(style: _elevatedButton(s.accentSolid, onAccent)),
+      filledButtonTheme: FilledButtonThemeData(style: _filledButton(s.accentSolid, onAccent)),
       textButtonTheme: TextButtonThemeData(style: _textButton(s.accentText)),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: _outlinedButton(s.accentText, s.border),
@@ -1172,13 +1192,15 @@ class ThemeMetrics {
       radius100 = BorderRadius.all(Radius.circular(scaleW(100.r))),
       radius999 = BorderRadius.all(Radius.circular(scaleW(999.r))),
 
-      // 语义圆角整体收小：控件与输入框同为一档，卡片只比控件多两像素。
-      // 圆角一大，小尺寸控件就变成一颗颗胶囊，列表也读不出边界。
-      radiusControl = BorderRadius.all(Radius.circular(scaleW(8.r))),
-      radiusField = BorderRadius.all(Radius.circular(scaleW(8.r))),
-      radiusCard = BorderRadius.all(Radius.circular(scaleW(10.r))),
-      radiusPanel = BorderRadius.all(Radius.circular(scaleW(14.r))),
-      radiusOverlay = BorderRadius.all(Radius.circular(scaleW(14.r))),
+      // v2 柔彩玻璃语言：层次靠半透明底 + 发丝描边拉开，不再靠棱角，所以整档放大。
+      // 控件与输入框同档（10），卡片 16，面板与浮层 20——玻璃卡圆角小了会露出
+      // "贴了块不透明板子"的边界，柔彩底也托不住。
+      // 例外：一行并排 ≥4 张的密集卡降一档（14），否则相邻卡的圆角会读成一条波浪。
+      radiusControl = BorderRadius.all(Radius.circular(scaleW(10.r))),
+      radiusField = BorderRadius.all(Radius.circular(scaleW(10.r))),
+      radiusCard = BorderRadius.all(Radius.circular(scaleW(16.r))),
+      radiusPanel = BorderRadius.all(Radius.circular(scaleW(20.r))),
+      radiusOverlay = BorderRadius.all(Radius.circular(scaleW(20.r))),
       radiusPill = BorderRadius.all(Radius.circular(scaleW(999.r))),
 
       iconSize12 = scaleSWithUserFont(12),

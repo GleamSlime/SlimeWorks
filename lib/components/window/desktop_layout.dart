@@ -8,7 +8,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/routes/app_sidebars.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
-import 'package:slime_works/core/theme/app_semantics.dart';
+import 'package:slime_works/core/widgets/atmosphere_backdrop.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 
 class DesktopLayout extends StatefulWidget {
@@ -102,16 +102,27 @@ class _DesktopShell extends StatelessWidget {
 ///
 /// macOS 上根 Material 已经改成透明以便透出原生振动层，所以内容区必须自己铺
 /// 一层底色——页面基类 BasePage 的 Scaffold 也是 transparent，完全不铺的话文字
-/// 会直接压在桌面上。alpha=255 时就是原来的实心底。
+/// 会直接压在桌面上。
+///
+/// v2 起这一层不再是纯色 `canvas`，而是**全站唯一的氛围层出处**（柔彩对角底 +
+/// 四团色团）。`alpha < 255`（内容区要透出桌面）时整层一起降不透明度，
+/// 不是只把基色调透——那样色团会盖过基色、层次倒挂。
 class _ContentSurface extends StatelessWidget {
-  const _ContentSurface({required this.child, this.alpha = 255});
+  const _ContentSurface({required this.child, this.alpha = 255, this.layered = true});
 
   final Widget child;
   final int alpha;
 
+  /// false = 移动端/窄窗：只留单层对角渐变
+  final bool layered;
+
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(color: AppSemantic.of(context).canvas.withAlpha(alpha), child: child);
+    return AtmosphereBackdrop(
+      layered: layered,
+      opacity: alpha / 255,
+      child: child,
+    );
   }
 }
 
@@ -128,6 +139,8 @@ class MobileLayout extends StatelessWidget {
       // 这个分支里侧栏是浮在内容之上的，不是贴在桌面之上，所以整窗都要不透明；
       // 否则窄窗口下根 Material 一透明，正文就直接压在桌面背景上了。
       return _ContentSurface(
+        // 窄窗/移动端：颜色语言保留、四团色团裁掉（§8），整窗仍不透明
+        layered: false,
         child: Stack(
           children: [
             // 内容区（侧边栏展开时缩放）

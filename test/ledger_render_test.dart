@@ -642,7 +642,7 @@ void main() {
       );
       await _pinMonth(tester, find.byType(LedgerScreen), 'home');
       await expectLater(
-        find.byType(LedgerScreen),
+        pageSurface(),
         matchesGoldenFile('goldens/ledger_home_dark.png'),
       );
       await unmountPage(tester);
@@ -661,7 +661,7 @@ void main() {
       // 空的是这个月，不是整本账：月份条必须还在，不然用户没法翻到有账的那个月
       expect(find.text('2026年3月'), findsOneWidget);
       await expectLater(
-        find.byType(LedgerScreen),
+        pageSurface(),
         matchesGoldenFile('goldens/ledger_home_empty.png'),
       );
       await unmountPage(tester);
@@ -677,7 +677,7 @@ void main() {
       );
       expect(find.text('没有等你确认的账单'), findsOneWidget);
       await expectLater(
-        find.byType(LedgerPendingScreen),
+        pageSurface(),
         matchesGoldenFile('goldens/ledger_pending_empty.png'),
       );
       await unmountPage(tester);
@@ -976,7 +976,7 @@ void main() {
       await vmOf(tester).setCalendarMode(true);
       await advance(tester);
       await expectLater(
-        find.byType(LedgerRecordsScreen),
+        pageSurface(),
         matchesGoldenFile('goldens/ledger_records_calendar_mobile.png'),
       );
       await unmountPage(tester);
@@ -1290,7 +1290,7 @@ void main() {
       _seedTree();
       await openOrganize(tester);
       await expectLater(
-        find.byType(LedgerOrganizeScreen),
+        pageSurface(),
         matchesGoldenFile('goldens/ledger_organize_tree_desktop.png'),
       );
       await unmountPage(tester);
