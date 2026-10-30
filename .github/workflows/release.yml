@@ -15,6 +15,10 @@ concurrency:
 env:
   FLUTTER_VERSION: "3.47.5"
   RUST_VERSION: "1.92.0"
+  # pubspec.lock 里的下载地址是国内镜像，runner 默认 pub.dev；两者不一致时 pub
+  # 会整包重新解析，把依赖漂到最新版（曾把 shared_preferences_foundation 升到
+  # 2.6.1，四平台编译统一报 ObjCObjectImpl 不是类型）。指定镜像源才能锁定现有版本。
+  PUB_HOSTED_URL: "https://pub.flutter-io.cn"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:

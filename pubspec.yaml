@@ -105,6 +105,9 @@ dependencies:
 dependency_overrides:
   objective_c: 7.0.0
   path_provider_foundation: 2.4.0
+  # 2.6.x 改用 objective_c 9.x 的 ObjCObjectImpl，与上面的 7.0.0 覆盖冲突；
+  # 依赖解析一漂到 2.6.1，四平台编译都会报 "ObjCObjectImpl isn't a type"
+  shared_preferences_foundation: 2.5.7
 
 dev_dependencies:
   flutter_test:
