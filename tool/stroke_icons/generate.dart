@@ -54,6 +54,19 @@ void main(List<String> args) {
       }
       exit(1);
     }
+    // StrokeIcons.* 的别名同样要校验，否则漏一条映射要到编译时才炸
+    final aliases = <String>{
+      ..._aliasKeys(material, asset).keys,
+      for (final m in _svgMarks) m.alias,
+    };
+    final unresolvedStroke = _scanUnresolvedStroke(aliases);
+    if (unresolvedStroke.isNotEmpty) {
+      stderr.writeln('✗ lib 里这些 StrokeIcons.* 没有映射，补 icon_map.json 后重跑：');
+      for (final n in unresolvedStroke) {
+        stderr.writeln('    缺少别名 $n（icon_map.json 的键需转成 camelCase 后同名）');
+      }
+      exit(1);
+    }
     stdout.writeln('✓ 映射完整（${material.length} 条 Material + ${asset.length} 条 asset）');
     return;
   }
@@ -91,6 +104,20 @@ List<String> _scanUnresolved(Map<String, String> material) {
     }
   }
   return found.difference(material.keys.toSet()).toList()..sort();
+}
+
+/// 扫 lib，找出没有别名的 StrokeIcons 引用（生成物自身跳过）
+List<String> _scanUnresolvedStroke(Set<String> aliases) {
+  final pattern = RegExp(r'\bStrokeIcons\.([a-zA-Z0-9_]+)');
+  final found = <String>{};
+  for (final entity in Directory(_libDir).listSync(recursive: true)) {
+    if (entity is! File || !entity.path.endsWith('.dart')) continue;
+    if (entity.path == _outFile) continue;
+    for (final m in pattern.allMatches(entity.readAsStringSync())) {
+      found.add(m.group(1)!);
+    }
+  }
+  return found.difference(aliases).toList()..sort();
 }
 
 /// `delete_outline_rounded` -> `delete_outline` -> `deleteOutline`

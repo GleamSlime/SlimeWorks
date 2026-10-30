@@ -38,6 +38,18 @@ class RustFFmpeg {
     return result;
   }
 
+  /// Windows 下直接扫 PATH 找可执行文件，避免探测时弹出控制台窗口
+  static String? _findInWindowsPath(String exeName) {
+    final pathVar = Platform.environment['PATH'] ?? '';
+    for (final raw in pathVar.split(';')) {
+      final dir = raw.replaceAll('"', '').trim();
+      if (dir.isEmpty) continue;
+      final exe = File('$dir${Platform.pathSeparator}$exeName.exe');
+      if (exe.existsSync()) return exe.path;
+    }
+    return null;
+  }
+
   static Future<String?> _resolvePathImpl() async {
     if (!(Platform.isWindows || Platform.isMacOS)) {
       _logger.info('[FFmpeg] 非 Windows/macOS 平台，跳过');
@@ -45,15 +57,25 @@ class RustFFmpeg {
     }
 
     // ① 优先探测系统 PATH（用户用 brew/包管理器等安装的 ffmpeg）
-    try {
-      final r = await Process.run('ffmpeg', ['-version']);
-      if (r.exitCode == 0) {
-        _logger.info('[FFmpeg] 使用系统 PATH 中的 ffmpeg');
-        return 'ffmpeg';
+    // Windows 下 Process.run 会闪出控制台黑窗，改用文件系统直接扫 PATH
+    if (Platform.isWindows) {
+      final found = _findInWindowsPath('ffmpeg');
+      if (found != null) {
+        _logger.info('[FFmpeg] 使用系统 PATH 中的 ffmpeg: $found');
+        return found;
       }
-      _logger.info('[FFmpeg] 系统 ffmpeg 检测失败 exitCode=${r.exitCode}');
-    } catch (e) {
-      _logger.info('[FFmpeg] 系统 PATH 未发现 ffmpeg: $e');
+      _logger.info('[FFmpeg] 系统 PATH 未发现 ffmpeg');
+    } else {
+      try {
+        final r = await Process.run('ffmpeg', ['-version']);
+        if (r.exitCode == 0) {
+          _logger.info('[FFmpeg] 使用系统 PATH 中的 ffmpeg');
+          return 'ffmpeg';
+        }
+        _logger.info('[FFmpeg] 系统 ffmpeg 检测失败 exitCode=${r.exitCode}');
+      } catch (e) {
+        _logger.info('[FFmpeg] 系统 PATH 未发现 ffmpeg: $e');
+      }
     }
 
     // ② 系统 PATH 未命中，检查内置模块
@@ -90,15 +112,24 @@ class RustFFmpeg {
     if (!(Platform.isWindows || Platform.isMacOS)) return null;
 
     // ① 优先探测系统 PATH
-    try {
-      final r = await Process.run('ffprobe', ['-version']);
-      if (r.exitCode == 0) {
-        _logger.info('[FFmpeg] 使用系统 PATH 中的 ffprobe');
-        return 'ffprobe';
+    if (Platform.isWindows) {
+      final found = _findInWindowsPath('ffprobe');
+      if (found != null) {
+        _logger.info('[FFmpeg] 使用系统 PATH 中的 ffprobe: $found');
+        return found;
       }
-      _logger.info('[FFmpeg] 系统 ffprobe 检测失败 exitCode=${r.exitCode}');
-    } catch (e) {
-      _logger.info('[FFmpeg] 系统 PATH 未发现 ffprobe: $e');
+      _logger.info('[FFmpeg] 系统 PATH 未发现 ffprobe');
+    } else {
+      try {
+        final r = await Process.run('ffprobe', ['-version']);
+        if (r.exitCode == 0) {
+          _logger.info('[FFmpeg] 使用系统 PATH 中的 ffprobe');
+          return 'ffprobe';
+        }
+        _logger.info('[FFmpeg] 系统 ffprobe 检测失败 exitCode=${r.exitCode}');
+      } catch (e) {
+        _logger.info('[FFmpeg] 系统 PATH 未发现 ffprobe: $e');
+      }
     }
 
     // ② 系统 PATH 未命中，检查内置模块

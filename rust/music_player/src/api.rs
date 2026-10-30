@@ -5,6 +5,17 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::scanner;
 use crate::types::{CueSheet, EqualizerPreset, Folder, MusicItem, PathMappingNode, PlayRecord, Playlist, RemoteMusicItem};
 
+/// Windows 下 GUI 程序启动 ffmpeg 会弹出控制台黑窗，批量出封面时连闪
+#[cfg(windows)]
+fn suppress_console(cmd: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn suppress_console(_cmd: &mut std::process::Command) {}
+
 // ── 内存缓存 ──────────────────────────────────────────────────────────────────
 static PLAYLISTS: OnceLock<Arc<Mutex<Vec<Playlist>>>> = OnceLock::new();
 static MUSIC_ITEMS: OnceLock<Mutex<Option<Vec<MusicItem>>>> = OnceLock::new();
@@ -934,26 +945,25 @@ pub fn ensure_music_cover_thumbnail(file_path: String, width: u32) -> Option<Str
     }
     // 生成缩略图
     for _seek in &["00:00:00.000", "00:00:03.000", "00:00:00.000"] {
-        let ok = std::process::Command::new("ffmpeg")
-            .args([
-                "-i",
-                &file_path,
-                "-map",
-                "0:v:0",
-                "-vf",
-                &format!("scale={}:-1", width),
-                "-q:v",
-                "3",
-                "-frames:v",
-                "1",
-                "-y",
-                &cache_path.to_string_lossy(),
-            ])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        let mut cmd = std::process::Command::new("ffmpeg");
+        cmd.args([
+            "-i",
+            &file_path,
+            "-map",
+            "0:v:0",
+            "-vf",
+            &format!("scale={}:-1", width),
+            "-q:v",
+            "3",
+            "-frames:v",
+            "1",
+            "-y",
+            &cache_path.to_string_lossy(),
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+        suppress_console(&mut cmd);
+        let ok = cmd.status().map(|s| s.success()).unwrap_or(false);
         if ok && cache_path.exists() {
             return Some(cache_path.to_string_lossy().into_owned());
         }

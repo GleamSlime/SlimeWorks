@@ -139,11 +139,12 @@ pub fn kill_all_ffmpeg_processes() {
         #[cfg(windows)]
         {
             // Windows: 使用 taskkill 强制终止进程树
-            let _ = std::process::Command::new("taskkill")
-                .args(["/F", "/T", "/PID", &pid.to_string()])
+            let mut kill = std::process::Command::new("taskkill");
+            kill.args(["/F", "/T", "/PID", &pid.to_string()])
                 .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status();
+                .stderr(std::process::Stdio::null());
+            suppress_console(&mut kill);
+            let _ = kill.status();
         }
         #[cfg(not(windows))]
         {
@@ -161,9 +162,21 @@ pub fn kill_all_ffmpeg_processes() {
 
 /// 启动 ffmpeg/ffprobe 子进程并跟踪 PID，等待其完成后返回退出状态。
 /// 使用 spawn + wait 代替 .status()，以便在启动后立即获取 PID 用于清理跟踪。
+/// Windows 下 GUI 程序启动控制台子进程会弹出黑窗，ffmpeg 批量出图时会连闪
+#[cfg(windows)]
+fn suppress_console(cmd: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn suppress_console(_cmd: &mut std::process::Command) {}
+
 pub fn run_tracked_command(
     cmd: &mut std::process::Command,
 ) -> std::io::Result<std::process::ExitStatus> {
+    suppress_console(cmd);
     let mut child = cmd.spawn()?;
     let pid = child.id();
     if pid > 0 {
@@ -182,6 +195,7 @@ pub fn run_tracked_command(
 pub fn run_tracked_command_output(
     cmd: &mut std::process::Command,
 ) -> std::io::Result<std::process::Output> {
+    suppress_console(cmd);
     let child = cmd.spawn()?;
     let pid = child.id();
     if pid > 0 {

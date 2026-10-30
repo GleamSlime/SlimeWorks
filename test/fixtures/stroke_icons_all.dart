@@ -204,6 +204,7 @@ const List<(String, StrokeIcon)> kAllStrokeIcons = [
   ('keyboardDoubleArrowDown', StrokeIcons.keyboardDoubleArrowDown),
   ('label', StrokeIcons.label),
   ('labelOutline', StrokeIcons.labelOutline),
+  ('lan', StrokeIcons.lan),
   ('language', StrokeIcons.language),
   ('laptopMac', StrokeIcons.laptopMac),
   ('laptopWindows', StrokeIcons.laptopWindows),
