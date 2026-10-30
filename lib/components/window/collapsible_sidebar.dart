@@ -1334,15 +1334,25 @@ class _SidebarMenuItemButtonState extends State<_SidebarMenuItemButton> {
               // 选中项不再染一层品牌色，而是抬起成一张白卡：侧栏底就是画布色，
               // 白卡 + 1px 描边 + 一层极轻投影本身就是它的选中态。
               color: widget.isSelected
-                  ? s.surface.withAlpha(100)
+                  ? (s.isDark ? s.surfaceRaised : s.surface)
                   : _hovered
                   ? s.surfaceHover
                   : Colors.transparent,
               borderRadius: m.radiusControl,
-              // 只有选中项描边：每行都套一个框的话，一列看下去全是格子，
-              // 抬升关系反而读不出来；悬停有水洗，未选中不需要常驻描边。
-              border: widget.isSelected ? Border.all(color: s.accentContainerBorder) : null,
-              boxShadow: [if (widget.isSelected) ...s.elevation(Elevation.raised)],
+              border: widget.isSelected
+                  ? Border.all(
+                      color: s.border.withValues(alpha: s.isDark ? 0.35 : 0.85),
+                      width: scaleW(1),
+                    )
+                  : null,
+              boxShadow: [
+                if (widget.isSelected)
+                  BoxShadow(
+                    color: s.shadowKey,
+                    blurRadius: scaleW(8),
+                    offset: Offset(0, scaleW(2)),
+                  ),
+              ],
             ),
             child: Row(
               spacing: m.kSpace8,
