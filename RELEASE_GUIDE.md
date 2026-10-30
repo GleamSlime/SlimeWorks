@@ -112,6 +112,9 @@ SUPublicEDKey: yAXFDhgJ/LYFRcYsW/UT/gLJ4hm4IE2wT6aiJW71kNg=
 
 ### 4.2 Info.plist 添加 Sparkle 公钥
 
+> 当前仓库**已移除** `SUPublicEDKey`，Sparkle 不再校验更新包签名。
+> 恢复校验时再按下面方式加回去，并让 CI 用私钥生成 `sparkle:edSignature`。
+
 在 `macos/Runner/Info.plist` 的 `</dict>` 前添加：
 ```xml
 <key>SUPublicEDKey</key>
@@ -284,31 +287,19 @@ https://gleamslime.github.io/slime_works/appcast.xml
 
 ### 8.5 版本号来源
 
-自动从 `pubspec.yaml` 的 `version` 字段提取，格式为 `x.y.z+n`：
-- Release tag: `v1.0.0+25`
-- Release name: `史莱姆工坊 1.0.0`
+`version` 从 `pubspec.yaml` 提取（`x.y.z+n` 的 `x.y.z` 部分），构建号由 CI 统一覆盖：
 
-### 8.6 Sparkle 签名说明
+- 展示用构建号（About 页 / Release tag）：`YYYYMMDD.commit短hash`
+- 数字构建号（macOS CFBundleVersion、Windows 文件版本、appcast `sparkle:version`）：`github.run_number`
 
-> ⚠️ **重要**：CI 环境中的 Sparkle EdDSA 签名目前需要额外配置。
+两者分开是有意为之：tag 需要可读，Sparkle / WinSparkle 只认单调递增的数字。
+若数字构建号与安装包内的版本不一致，客户端会永远提示"发现新版本"。
 
-由于 EdDSA 私钥存储在 macOS Keychain 中，CI 环境无法直接访问。有两种方案：
+### 8.6 更新签名现状
 
-**方案 A：将私钥导出为 CI 环境变量（推荐）**
-
-1. 在本地导出私钥：
-   ```bash
-   # 从 Keychain 导出 Sparkle 私钥
-   security find-generic-password -s "Sparkle Private Key" -a "ed25519" -w > sparkle_private_key.txt
-   ```
-
-2. 添加到 GitHub Secrets：`SPARKLE_PRIVATE_KEY`
-
-3. 在 CI 中使用 `dart run auto_updater:sign` 时传入密钥
-
-**方案 B：本地签名后推送**
-
-CI 仅负责构建，下载产物后在本地签名再上传。
+- macOS：`Info.plist` 未配置 `SUPublicEDKey`，Sparkle 跳过 EdDSA 校验，`appcast.xml` 不写 `edSignature`
+- Windows：`Runner.rc` 未嵌入 DSAPub，WinSparkle 跳过验签，`appcast.xml` 不写 `dsaSignature`
+- 本次改动前的旧版本内置了公钥，升级到第一个"关闭验签"的版本需要手动下载安装一次
 
 ### 8.7 本地发版（备选）
 

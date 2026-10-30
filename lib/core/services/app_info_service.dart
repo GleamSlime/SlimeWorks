@@ -8,6 +8,8 @@ class AppInfoService {
   static String appName = '史莱姆工坊';
   static String version = '1.0.0';
   static String buildNumber = '1';
+  /// 更新比较用的纯数字构建号（appcast 的 sparkle:version 也是这个值）
+  static int buildCode = 1;
   static String versionWithBuild = 'v1.0.0+1';
 
   /// CI 打包时间（北京时间 UTC+8），仅 GitHub Actions 分发的构建非空
@@ -22,12 +24,17 @@ class AppInfoService {
       appName = info.appName.isNotEmpty ? info.appName : '史莱姆工坊';
       version = info.version;
       buildNumber = info.buildNumber;
+      buildCode = int.tryParse(info.buildNumber) ?? 0;
     } catch (_) {}
     // CI 注入的构建号优先：pubspec 里的 +N 是手动档，和 GitHub Release
     // tag（日期.commit短hash）对不上，关于页要显示用户实际装的那个版本
     if (CiBuildInfo.buildNumber.isNotEmpty) {
       buildNumber = CiBuildInfo.buildNumber;
       buildTime = CiBuildInfo.buildTime;
+    }
+    // 纯数字构建号用于判断更新，必须和 appcast sparkle:version 同源
+    if (CiBuildInfo.buildCode.isNotEmpty) {
+      buildCode = int.tryParse(CiBuildInfo.buildCode) ?? buildCode;
     }
     versionWithBuild = 'v$version+$buildNumber';
     _initialized = true;

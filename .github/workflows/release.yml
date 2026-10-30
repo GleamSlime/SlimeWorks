@@ -185,12 +185,11 @@ jobs:
       - name: 写入 CI 构建信息
         shell: bash
         run: |
-          # 关于页显示用：构建号与 Release tag 同规则（日期.commit短hash），
-          # 打包时间取此刻北京时间（UTC+8）。直接整份重写 build_info.dart（BSD/GNU sed 的
-          # -i 语法不通用，macOS runner 上会翻车）；本地构建仓库里保持空串
-          BUILD_DATE=$(date -u +"%Y%m%d")
-          COMMIT_SHORT=$(git rev-parse --short HEAD)
-          BUILD_NUMBER="${BUILD_DATE}.${COMMIT_SHORT}"
+          # 构建号直接取 detect-version 的输出：各 job 自己算日期/哈希会在跨零点时
+          # 与 Release tag 对不上；buildCode 是更新比较用的纯数字（GitHub run_number）。
+          # 直接整份重写 build_info.dart（BSD/GNU sed 的 -i 语法不通用）。
+          BUILD_NUMBER="${{ needs.detect-version.outputs.build_number }}"
+          BUILD_CODE="${{ github.run_number }}"
           BUILD_TIME=$(TZ=Asia/Shanghai date +"%Y-%m-%d %H:%M UTC+8")
           cat > lib/core/build_info.dart <<EOF
           /// CI 打包信息：由 release.yml"写入 CI 构建信息"步骤在打包前生成。
@@ -199,11 +198,22 @@ jobs:
           CiBuildInfo._();
           /// CI 构建号，格式 YYYYMMDD.commit短hash（与 GitHub Release tag 一致）
           static const String buildNumber = '${BUILD_NUMBER}';
+          /// CI 数字构建号（GitHub run_number），与 appcast 的 sparkle:version 一致
+          static const String buildCode = '${BUILD_CODE}';
           /// CI 打包时间（北京时间 UTC+8）
           static const String buildTime = '${BUILD_TIME}';
           }
           EOF
           grep "static const" lib/core/build_info.dart
+
+      - name: 覆盖 CI 构建号
+        run: |
+          # 构建号统一用 run_number：macOS 的 CFBundleVersion 与 appcast 的
+          # sparkle:version 必须同源，否则装完最新版仍会被判定有新版本
+          VERSION="${{ needs.detect-version.outputs.version }}"
+          BUILD_CODE="${{ github.run_number }}"
+          sed -i '' -E "s/^version: .*/version: ${VERSION}+${BUILD_CODE}/" pubspec.yaml
+          grep '^version:' pubspec.yaml
 
       - name: 创建 .env 文件（占位）
         run: |
@@ -296,12 +306,11 @@ jobs:
       - name: 写入 CI 构建信息
         shell: bash
         run: |
-          # 关于页显示用：构建号与 Release tag 同规则（日期.commit短hash），
-          # 打包时间取此刻北京时间（UTC+8）。直接整份重写 build_info.dart（BSD/GNU sed 的
-          # -i 语法不通用，macOS runner 上会翻车）；本地构建仓库里保持空串
-          BUILD_DATE=$(date -u +"%Y%m%d")
-          COMMIT_SHORT=$(git rev-parse --short HEAD)
-          BUILD_NUMBER="${BUILD_DATE}.${COMMIT_SHORT}"
+          # 构建号直接取 detect-version 的输出：各 job 自己算日期/哈希会在跨零点时
+          # 与 Release tag 对不上；buildCode 是更新比较用的纯数字（GitHub run_number）。
+          # 直接整份重写 build_info.dart（BSD/GNU sed 的 -i 语法不通用）。
+          BUILD_NUMBER="${{ needs.detect-version.outputs.build_number }}"
+          BUILD_CODE="${{ github.run_number }}"
           BUILD_TIME=$(TZ=Asia/Shanghai date +"%Y-%m-%d %H:%M UTC+8")
           cat > lib/core/build_info.dart <<EOF
           /// CI 打包信息：由 release.yml"写入 CI 构建信息"步骤在打包前生成。
@@ -310,11 +319,23 @@ jobs:
           CiBuildInfo._();
           /// CI 构建号，格式 YYYYMMDD.commit短hash（与 GitHub Release tag 一致）
           static const String buildNumber = '${BUILD_NUMBER}';
+          /// CI 数字构建号（GitHub run_number），与 appcast 的 sparkle:version 一致
+          static const String buildCode = '${BUILD_CODE}';
           /// CI 打包时间（北京时间 UTC+8）
           static const String buildTime = '${BUILD_TIME}';
           }
           EOF
           grep "static const" lib/core/build_info.dart
+
+      - name: 覆盖 CI 构建号
+        shell: bash
+        run: |
+          # 构建号统一用 run_number：Windows 文件版本与 appcast 的
+          # sparkle:version 必须同源，否则装完最新版仍会被判定有新版本
+          VERSION="${{ needs.detect-version.outputs.version }}"
+          BUILD_CODE="${{ github.run_number }}"
+          sed -i -E "s/^version: .*/version: ${VERSION}+${BUILD_CODE}/" pubspec.yaml
+          grep '^version:' pubspec.yaml
 
       - name: 创建 .env 文件（占位）
         shell: bash
@@ -423,12 +444,11 @@ jobs:
       - name: 写入 CI 构建信息
         shell: bash
         run: |
-          # 关于页显示用：构建号与 Release tag 同规则（日期.commit短hash），
-          # 打包时间取此刻北京时间（UTC+8）。直接整份重写 build_info.dart（BSD/GNU sed 的
-          # -i 语法不通用，macOS runner 上会翻车）；本地构建仓库里保持空串
-          BUILD_DATE=$(date -u +"%Y%m%d")
-          COMMIT_SHORT=$(git rev-parse --short HEAD)
-          BUILD_NUMBER="${BUILD_DATE}.${COMMIT_SHORT}"
+          # 构建号直接取 detect-version 的输出：各 job 自己算日期/哈希会在跨零点时
+          # 与 Release tag 对不上；buildCode 是更新比较用的纯数字（GitHub run_number）。
+          # 直接整份重写 build_info.dart（BSD/GNU sed 的 -i 语法不通用）。
+          BUILD_NUMBER="${{ needs.detect-version.outputs.build_number }}"
+          BUILD_CODE="${{ github.run_number }}"
           BUILD_TIME=$(TZ=Asia/Shanghai date +"%Y-%m-%d %H:%M UTC+8")
           cat > lib/core/build_info.dart <<EOF
           /// CI 打包信息：由 release.yml"写入 CI 构建信息"步骤在打包前生成。
@@ -437,6 +457,8 @@ jobs:
           CiBuildInfo._();
           /// CI 构建号，格式 YYYYMMDD.commit短hash（与 GitHub Release tag 一致）
           static const String buildNumber = '${BUILD_NUMBER}';
+          /// CI 数字构建号（GitHub run_number），与 appcast 的 sparkle:version 一致
+          static const String buildCode = '${BUILD_CODE}';
           /// CI 打包时间（北京时间 UTC+8）
           static const String buildTime = '${BUILD_TIME}';
           }
@@ -847,12 +869,11 @@ jobs:
       - name: 写入 CI 构建信息
         shell: bash
         run: |
-          # 关于页显示用：构建号与 Release tag 同规则（日期.commit短hash），
-          # 打包时间取此刻北京时间（UTC+8）。直接整份重写 build_info.dart（BSD/GNU sed 的
-          # -i 语法不通用，macOS runner 上会翻车）；本地构建仓库里保持空串
-          BUILD_DATE=$(date -u +"%Y%m%d")
-          COMMIT_SHORT=$(git rev-parse --short HEAD)
-          BUILD_NUMBER="${BUILD_DATE}.${COMMIT_SHORT}"
+          # 构建号直接取 detect-version 的输出：各 job 自己算日期/哈希会在跨零点时
+          # 与 Release tag 对不上；buildCode 是更新比较用的纯数字（GitHub run_number）。
+          # 直接整份重写 build_info.dart（BSD/GNU sed 的 -i 语法不通用）。
+          BUILD_NUMBER="${{ needs.detect-version.outputs.build_number }}"
+          BUILD_CODE="${{ github.run_number }}"
           BUILD_TIME=$(TZ=Asia/Shanghai date +"%Y-%m-%d %H:%M UTC+8")
           cat > lib/core/build_info.dart <<EOF
           /// CI 打包信息：由 release.yml"写入 CI 构建信息"步骤在打包前生成。
@@ -861,6 +882,8 @@ jobs:
           CiBuildInfo._();
           /// CI 构建号，格式 YYYYMMDD.commit短hash（与 GitHub Release tag 一致）
           static const String buildNumber = '${BUILD_NUMBER}';
+          /// CI 数字构建号（GitHub run_number），与 appcast 的 sparkle:version 一致
+          static const String buildCode = '${BUILD_CODE}';
           /// CI 打包时间（北京时间 UTC+8）
           static const String buildTime = '${BUILD_TIME}';
           }
@@ -1012,21 +1035,28 @@ jobs:
           prerelease: false
 
       - name: 更新 appcast.xml
+        env:
+          VERSION: ${{ needs.detect-version.outputs.version }}
+          BUILD_NUMBER: ${{ needs.detect-version.outputs.build_number }}
+          BUILD_CODE: ${{ github.run_number }}
+          TAG: ${{ needs.detect-version.outputs.tag }}
         run: |
-          VERSION="${{ needs.detect-version.outputs.version }}"
-          BUILD_NUMBER="${{ needs.detect-version.outputs.build_number }}"
-          # Sparkle 要求单调递增的整数版本号，使用 GitHub run_number 保证唯一递增
-          SPARKLE_VERSION="${{ github.run_number }}"
-          FILE_SIZE="${{ steps.dmg-info.outputs.file_size }}"
-          TAG="${{ needs.detect-version.outputs.tag }}"
           REPO="GleamSlime/SlimeWorks"
           DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
+          DMG_PATH=$(find dist/ -name "*.dmg" -type f | head -1)
+          EXE_PATH=$(find dist/ -name "*.exe" -type f | head -1)
+          DMG_FILENAME=$(basename "$DMG_PATH")
+          EXE_FILENAME=$(basename "$EXE_PATH")
+          DMG_SIZE=$(stat -c%s "$DMG_PATH")
+          EXE_SIZE=$(stat -c%s "$EXE_PATH")
+          # macOS 的 sparkle:version 用纯数字构建号（与 CFBundleVersion 同源）；
+          # Windows 的 WinSparkle 读 exe 的 4 段文件版本，所以补成 1.0.0.N
+          WIN_VERSION="${VERSION}.${BUILD_CODE}"
 
-          DMG_FILENAME=$(find dist/ -name "*.dmg" -type f -exec basename {} \; | head -1)
-
+          # 两个 item 分别用 sparkle:os 标记平台，避免 Windows 端抓到 macOS 的 DMG
           cat > docs/appcast.xml << EOF
           <?xml version="1.0" encoding="UTF-8"?>
-          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/rss-sparkle-1.0">
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
             <channel>
               <title>SlimeWorks</title>
               <language>zh-CN</language>
@@ -1037,12 +1067,23 @@ jobs:
                   <![CDATA[Auto build v${VERSION}+${BUILD_NUMBER}]]>
                 </description>
                 <pubDate>${DATE}</pubDate>
+                <sparkle:version>${BUILD_CODE}</sparkle:version>
+                <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
                 <enclosure
                   url="https://github.com/${REPO}/releases/download/${TAG}/${DMG_FILENAME}"
-                  sparkle:version="${SPARKLE_VERSION}"
+                  sparkle:os="macos"
+                  length="${DMG_SIZE}"
+                  type="application/octet-stream" />
+              </item>
+              <item>
+                <title>${VERSION}</title>
+                <pubDate>${DATE}</pubDate>
+                <enclosure
+                  url="https://github.com/${REPO}/releases/download/${TAG}/${EXE_FILENAME}"
+                  sparkle:os="windows"
+                  sparkle:version="${WIN_VERSION}"
                   sparkle:shortVersionString="${VERSION}"
-                  sparkle:edSignature=""
-                  length="${FILE_SIZE}"
+                  length="${EXE_SIZE}"
                   type="application/octet-stream" />
               </item>
             </channel>

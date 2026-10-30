@@ -159,7 +159,7 @@ class AppUpdateService {
         return;
       }
 
-      final currentBuild = int.tryParse(AppInfoService.buildNumber) ?? 0;
+      final currentBuild = AppInfoService.buildCode;
       final remoteBuild = int.tryParse(info.buildNumber) ?? 0;
       if (remoteBuild <= currentBuild) {
         _logger.info('[应用更新] 自动检查：已是最新版本');
@@ -211,7 +211,7 @@ class AppUpdateService {
         return;
       }
 
-      final currentBuild = int.tryParse(AppInfoService.buildNumber) ?? 0;
+      final currentBuild = AppInfoService.buildCode;
       final remoteBuild = int.tryParse(info.buildNumber) ?? 0;
 
       if (remoteBuild <= currentBuild) {
@@ -268,17 +268,23 @@ class AppUpdateService {
       final descMatch =
           RegExp(r'<!\[CDATA\[(.*?)\]\]>').firstMatch(xml) ??
           RegExp(r'<description>\s*(.*?)\s*</description>').firstMatch(xml);
-      final versionMatch = RegExp(
-        r'sparkle:shortVersionString="([^"]+)"',
-      ).firstMatch(xml);
-      final buildMatch = RegExp(r'sparkle:version="([^"]+)"').firstMatch(xml);
+      // appcast 里既能写成 item 子元素，也能写成 enclosure 属性，两种都认
+      String? pick(String tag) {
+        final asElement =
+            RegExp('<$tag>\\s*([^<]+?)\\s*</$tag>').firstMatch(xml);
+        if (asElement != null) return asElement.group(1);
+        return RegExp('$tag="([^"]+)"').firstMatch(xml)?.group(1);
+      }
+
+      final version = pick('sparkle:shortVersionString');
+      final build = pick('sparkle:version');
       final urlMatch = RegExp(r'url="([^"]+)"').firstMatch(xml);
 
-      if (versionMatch == null || buildMatch == null) return null;
+      if (version == null || build == null) return null;
 
       return AppUpdateInfo(
-        version: versionMatch.group(1) ?? '',
-        buildNumber: buildMatch.group(1) ?? '',
+        version: version,
+        buildNumber: build,
         title: titleMatch?.group(1) ?? '',
         description: descMatch?.group(1)?.trim() ?? '',
         downloadUrl: urlMatch?.group(1) ?? '',
