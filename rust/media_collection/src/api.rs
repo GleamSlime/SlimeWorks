@@ -84,9 +84,10 @@ fn max_concurrent_ffmpeg() -> usize {
 
 fn acquire_thumb_permit() {
     let (lock, cvar) = THUMB_PERMITS.get_or_init(|| (Mutex::new(0), Condvar::new()));
+    let guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     let mut count = cvar
-        .wait_while(lock.lock().unwrap(), |c| *c >= max_concurrent_ffmpeg())
-        .unwrap();
+        .wait_while(guard, |c| *c >= max_concurrent_ffmpeg())
+        .unwrap_or_else(|e| e.into_inner());
     *count += 1;
     sw_info!(
         "[thumb-permit] acquired | current={}/{}",
@@ -97,8 +98,8 @@ fn acquire_thumb_permit() {
 
 fn release_thumb_permit() {
     if let Some((lock, cvar)) = THUMB_PERMITS.get() {
-        let mut count = lock.lock().unwrap();
-        *count -= 1;
+        let mut count = lock.lock().unwrap_or_else(|e| e.into_inner());
+        *count = count.saturating_sub(1);
         sw_info!(
             "[thumb-permit] released | current={}/{}",
             *count,

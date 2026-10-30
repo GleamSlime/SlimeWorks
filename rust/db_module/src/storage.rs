@@ -32,7 +32,7 @@ impl DbStorage {
 
     /// 注册表（必须在使用前调用）
     pub fn register_table(&self, table_name: &'static str) -> Result<()> {
-        let mut tables = self.tables.lock().unwrap();
+        let mut tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
         if !tables.contains_key(table_name) {
             let table_def = TableDefinition::new(table_name);
             tables.insert(table_name.to_string(), table_def);
@@ -42,12 +42,12 @@ impl DbStorage {
 
     /// 设置键值
     pub fn set(&self, table_name: &str, key: &str, value: &str) -> Result<()> {
-        let tables = self.tables.lock().unwrap();
+        let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
         let table_def = tables
             .get(table_name)
             .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let write_txn = db.begin_write()?;
 
         {
@@ -61,12 +61,12 @@ impl DbStorage {
 
     /// 获取值
     pub fn get(&self, table_name: &str, key: &str) -> Result<Option<String>> {
-        let tables = self.tables.lock().unwrap();
+        let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
         let table_def = tables
             .get(table_name)
             .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(*table_def)?;
 
@@ -79,12 +79,12 @@ impl DbStorage {
 
     /// 删除键
     pub fn delete(&self, table_name: &str, key: &str) -> Result<bool> {
-        let tables = self.tables.lock().unwrap();
+        let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
         let table_def = tables
             .get(table_name)
             .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let write_txn = db.begin_write()?;
 
         let existed = {
@@ -102,12 +102,12 @@ impl DbStorage {
 
     /// 列出所有键
     pub fn list_keys(&self, table_name: &str) -> Result<Vec<String>> {
-        let tables = self.tables.lock().unwrap();
+        let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
         let table_def = tables
             .get(table_name)
             .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(*table_def)?;
 
@@ -122,12 +122,12 @@ impl DbStorage {
 
     /// 列出所有键值对
     pub fn list_all(&self, table_name: &str) -> Result<Vec<(String, String)>> {
-        let tables = self.tables.lock().unwrap();
+        let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
         let table_def = tables
             .get(table_name)
             .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(*table_def)?;
 
@@ -143,12 +143,12 @@ impl DbStorage {
 
     /// 批量设置
     pub fn batch_set(&self, table_name: &str, records: &[(String, String)]) -> Result<()> {
-        let tables = self.tables.lock().unwrap();
+        let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
         let table_def = tables
             .get(table_name)
             .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let write_txn = db.begin_write()?;
 
         {
@@ -177,12 +177,12 @@ impl DbStorage {
             return Ok(0);
         }
 
-        let tables = self.tables.lock().unwrap();
+        let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
         let table_def = tables
             .get(table_name)
             .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let write_txn = db.begin_write()?;
 
         {
@@ -201,12 +201,12 @@ impl DbStorage {
 
     /// 获取表中的记录总数
     pub fn count(&self, table_name: &str) -> Result<usize> {
-        let tables = self.tables.lock().unwrap();
+        let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
         let table_def = tables
             .get(table_name)
             .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(*table_def)?;
 
@@ -220,12 +220,12 @@ impl DbStorage {
 
     /// 清空表
     pub fn clear_table(&self, table_name: &str) -> Result<()> {
-        let tables = self.tables.lock().unwrap();
+        let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
         let table_def = tables
             .get(table_name)
             .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
 
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let write_txn = db.begin_write()?;
 
         {
