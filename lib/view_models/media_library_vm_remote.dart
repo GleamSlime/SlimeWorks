@@ -37,6 +37,7 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
       }
       if (total > 0 && completed < total) {
         remoteThumbProgress.value = (completed, total);
+        _scheduleRemoteThumbPoll(const Duration(seconds: 2));
       } else if (total > 0 && completed >= total) {
         // 100% 完成时短暂显示再清空，给用户视觉反馈
         remoteThumbProgress.value = (completed, total);
@@ -47,8 +48,10 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
             remoteThumbProgress.value = null;
           }
         });
+        _scheduleRemoteThumbPoll(const Duration(seconds: 15));
       } else {
         remoteThumbProgress.value = null;
+        _scheduleRemoteThumbPoll(const Duration(seconds: 15));
       }
     } finally {
       trace.end(slowOnlyMs: 1000);

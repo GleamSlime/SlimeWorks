@@ -428,8 +428,13 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 浏览层派生缓存失效监听的 worker 列表（onClose 时统一销毁）。
   List<Worker>? _visibleInvalidationWorkers;
 
-  /// 远程节点缩略图进度轮询定时器（每 2 秒）。
+  /// 远程节点缩略图进度自适应轮询调度（繁忙时2s，空闲时15s退避）
   Timer? _remoteThumbPollTimer;
+
+  void _scheduleRemoteThumbPoll([Duration delay = const Duration(seconds: 2)]) {
+    _remoteThumbPollTimer?.cancel();
+    _remoteThumbPollTimer = Timer(delay, () => _pollRemoteThumbProgress());
+  }
 
   /// 上一轮远程缩略图进度轮询是否仍在执行（防重叠）。
   bool _remoteThumbPolling = false;
@@ -613,12 +618,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _restorePendingThumbnailTasks();
     });
-    // 启动远程节点缩略图进度轮询（节点端生成封面时客户端可见状态与进度）
-    _remoteThumbPollTimer?.cancel();
-    _remoteThumbPollTimer = Timer.periodic(
-      const Duration(seconds: 2),
-      (_) => _pollRemoteThumbProgress(),
-    );
+    // 启动远程节点缩略图进度自适应轮询
+    _scheduleRemoteThumbPoll();
   }
 
   @override
