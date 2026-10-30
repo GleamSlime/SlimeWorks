@@ -79,6 +79,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
     final source = widget.source;
     if (source == null || source.isEmpty) return;
     debugPrint('[MVP] _VideoPreview._initPlayer source=$source');
+    // 视频预览按需初始化 media_kit，避免应用启动就加载 libmpv
+    MediaKit.ensureInitialized();
     _playerReady = false;
     _readySub?.cancel();
     _player = Player(configuration: const PlayerConfiguration(bufferSize: 128 * 1024 * 1024));

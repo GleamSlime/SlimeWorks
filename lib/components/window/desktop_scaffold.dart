@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/components/window/floating_task_progress.dart';
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/live_frost.dart';
@@ -132,17 +133,21 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
     // 失焦期间背后的桌面可能已经变了（别的窗口开关、移动、换内容），心跳只盯
     // 自身矩形发现不了这些；重新聚焦时强制补抓一帧，让磨砂和桌面保持同步。
     LiveFrost.refresh();
+    // 托盘里点“显示主窗口”走的是 show + focus，不一定触发 restore
+    getIt<SystemMetricsService>().setBackground(false);
   }
 
   @override
   void onWindowMinimize() {
-    // 看不见的时候别闪帧，也省掉无谓的抓帧开销
+    // 看不见的时候别闪帧，也停掉每秒一次的指标采集
     LiveFrost.setPaused(true);
+    getIt<SystemMetricsService>().setBackground(true);
   }
 
   @override
   void onWindowRestore() {
     LiveFrost.setPaused(false);
+    getIt<SystemMetricsService>().setBackground(false);
   }
 
   @override
@@ -160,6 +165,7 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
   void onWindowClose() async {
     // 关闭窗口时隐藏到系统托盘，而非退出应用
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      getIt<SystemMetricsService>().setBackground(true);
       await windowManager.hide();
     } else {
       await windowManager.destroy();

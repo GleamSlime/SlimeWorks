@@ -67,6 +67,16 @@ class SystemMetricsService extends ChangeNotifier {
     _isRunning = false;
   }
 
+  /// 窗口最小化/隐藏到托盘时暂停采集，回到前台再恢复。
+  /// 后台每秒起一个 isolate 跑 sysinfo 是纯浪费，也是常驻内存的主要抖动来源。
+  void setBackground(bool background) {
+    if (background) {
+      stop();
+    } else {
+      start();
+    }
+  }
+
   Future<void> _refresh() async {
     try {
       // 系统资源快照（sysinfo 的 CPU/内存/进程扫描）是较重的同步 FFI，

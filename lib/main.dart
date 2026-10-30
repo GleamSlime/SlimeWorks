@@ -7,7 +7,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:media_kit/media_kit.dart';
 // ignore: implementation_imports
 import 'package:media_kit/src/player/native/utils/native_reference_holder.dart';
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
@@ -81,8 +80,8 @@ Future<void> main() async {
   // 注册 ffmpeg/ffprobe 路径到 media_collection 模块，确保视频封面生成可用
   _registerFfmpegPaths();
 
-  // 初始化 media_kit（视频播放）
-  MediaKit.ensureInitialized();
+  // media_kit 延迟到首次播放再初始化：libmpv 一加载就常驻十几 MB，
+  // 不碰音视频的用户没必要为此买单（见 MusicPlayerViewModel / 视频预览）
 
   // 恢复 Manga 下载元数据
   await getIt<MangaDownloadService>().init();
@@ -91,8 +90,8 @@ Future<void> main() async {
   unawaited(getIt<MangaService>().init());
 
   // 限制 Flutter imageCache 最大字节数（默认 ~100MB 可能被大量远程图片撑满），
-  // 设为 80MB 缓解远程媒体库浏览时内存持续增长问题。
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 80 * 1024 * 1024;
+  // 设为 48MB：缩略图浏览够用，同时把常驻后台的解码图上限压下来。
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 48 * 1024 * 1024;
 
   // 在 UI 启动前完成 NodeSettingsService 初始化，避免 ViewModel 与 _postAppInit 并发竞争
   await getIt<NodeSettingsService>().init();

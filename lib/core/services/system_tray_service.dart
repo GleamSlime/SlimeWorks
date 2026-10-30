@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:get/get.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -86,9 +88,11 @@ class SystemTrayService extends GetxService with TrayListener {
   Future<void> _showWindow() async {
     await windowManager.show();
     await windowManager.focus();
+    getIt<SystemMetricsService>().setBackground(false);
   }
 
   Future<void> _hideWindow() async {
+    getIt<SystemMetricsService>().setBackground(true);
     await windowManager.hide();
   }
 

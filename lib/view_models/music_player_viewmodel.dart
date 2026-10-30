@@ -255,7 +255,9 @@ class MusicPlayerViewModel extends BaseViewModel {
   // ── 音频播放器（media_kit） ───────────────────────────────────────────────
   // 注意：_player 必须是 final，热重载时不能替换或 dispose，
   // 否则 mpv 的 C 线程回调会触发 DLRT_GetFfiCallbackMetadata 崩溃。
-  final Player _player = Player(
+  // 延迟到 _initPlayer 里第一次访问再创建：media_kit 不再随应用启动加载，
+  // 没进过音乐页就不会把 libmpv 的常驻内存背在身上
+  late final Player _player = Player(
     configuration: const PlayerConfiguration(bufferSize: 64 * 1024 * 1024),
   );
   StreamSubscription? _positionSub;
@@ -283,6 +285,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   }
 
   void _initPlayer() {
+    MediaKit.ensureInitialized();
     // 监听播放位置
     _positionSub = _player.stream.position.listen((pos) {
       currentPositionMs.value = pos.inMilliseconds;
