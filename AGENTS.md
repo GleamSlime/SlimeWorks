@@ -147,6 +147,7 @@ rust/
 | 注释 | 必须中文, 不要删除已有注释 |
 | 弹窗 | `showDialog` 而非 `Get.dialog` |
 | 校验 | Flutter → `flutter analyze`，Rust → `cargo build` |
+| 提交 | 改完代码通过校验（`flutter analyze` / `cargo build` / 相关测试）确认无问题后，直接 `git commit` 并 `git push`，无需再询问 |
 | 新模块 | 静态链接参考 `ws_module/`，动态载入参考 `capture_proxy/` |
 
 ---

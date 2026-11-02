@@ -716,10 +716,11 @@ class _CollectionLibraryScreenState
     super.dispose();
   }
 
-  late final NovelLibraryViewModel _persistentViewModel = Get.put(
-    NovelLibraryViewModel(),
-    permanent: true,
-  );
+  // 已经注册过就复用，避免每次进页面都多造一份 ViewModel
+  late final NovelLibraryViewModel _persistentViewModel =
+      Get.isRegistered<NovelLibraryViewModel>()
+      ? Get.find<NovelLibraryViewModel>()
+      : Get.put(NovelLibraryViewModel(), permanent: true);
 
   @override
   NovelLibraryViewModel createViewModel() => _persistentViewModel;

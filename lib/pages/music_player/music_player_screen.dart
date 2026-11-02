@@ -37,10 +37,11 @@ class MusicPlayerScreen extends BasePage<MusicPlayerViewModel> {
 class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicPlayerScreen> {
   bool _isDraggingFiles = false;
 
-  late final MusicPlayerViewModel _persistentViewModel = Get.put(
-    MusicPlayerViewModel(),
-    permanent: true,
-  );
+  // 已经注册过就复用，避免每次进页面都多造一份播放队列与监听
+  late final MusicPlayerViewModel _persistentViewModel =
+      Get.isRegistered<MusicPlayerViewModel>()
+      ? Get.find<MusicPlayerViewModel>()
+      : Get.put(MusicPlayerViewModel(), permanent: true);
 
   @override
   MusicPlayerViewModel createViewModel() => _persistentViewModel;

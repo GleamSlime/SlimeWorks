@@ -525,8 +525,12 @@ class MediaLibraryViewModel extends BaseViewModel {
     // 初始化媒体偏好设置，并将并发量同步到 Rust 端和队列
     await mediaPrefs.init();
     _syncConcurrency(mediaPrefs.concurrency.value);
-    // 监听并发量变化，动态更新 Rust 端信号量和队列并发限制
-    ever(mediaPrefs.concurrency, _syncConcurrency);
+    // 监听并发量变化，动态更新 Rust 端信号量和队列并发限制。
+    // 只在首次初始化时注册：permanent VM 每次进页面都会重跑 onInitAsync，
+    // 重复注册会让监听器随进出次数一路累积。
+    if (!isInitialized) {
+      ever(mediaPrefs.concurrency, _syncConcurrency);
+    }
 
     // 缩略图生成完成后，防抖 1 分钟触发一次缓存大小检查
     void scheduleTrimCache() {

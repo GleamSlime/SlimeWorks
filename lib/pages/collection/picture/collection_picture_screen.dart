@@ -57,10 +57,12 @@ class _CollectionPictureScreenState
   /// 导航方向：true = 向前（进入子页），false = 向后（返回上级）。
   bool _navForward = true;
 
-  late final MediaLibraryViewModel _persistentViewModel = Get.put(
-    MediaLibraryViewModel(),
-    permanent: true,
-  );
+  // 已经注册过就复用：Get.put 对已存在的 key 不会替换实例，
+  // 再 new 一个只会多出一份没人用的队列与监听（每次进页面都会漏）。
+  late final MediaLibraryViewModel _persistentViewModel =
+      Get.isRegistered<MediaLibraryViewModel>()
+      ? Get.find<MediaLibraryViewModel>()
+      : Get.put(MediaLibraryViewModel(), permanent: true);
 
   @override
   MediaLibraryViewModel createViewModel() => _persistentViewModel;

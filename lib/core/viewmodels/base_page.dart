@@ -260,7 +260,14 @@ abstract class BasePageState<VM extends BaseViewModel, T extends BasePage<VM>> e
         try {
           final registered = Get.find<VM>();
           if (identical(registered, viewModel)) {
-            Get.delete<VM>(force: true);
+            // permanent 注册的 ViewModel 要跨页面存活（如媒体库封面队列、播放进度），
+            // 而 Get.delete 的 force 会绕过 permanent 标记把它连同定时器一起销毁；
+            // 不拦这一下，切页后任务队列与进度状态会全部重建归零。
+            final isPermanent =
+                GetInstance().getInstanceInfo<VM>(tag: viewModelTag).isPermanent;
+            if (isPermanent != true) {
+              Get.delete<VM>(force: true);
+            }
           } else {
             viewModel.onClose();
           }
