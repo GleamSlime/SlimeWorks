@@ -30,6 +30,7 @@ class MediaFolderCard extends StatefulWidget {
     this.onPullToLocal,
     this.onDeleteNodeFiles,
     this.isLost = false,
+    this.coverLoading = false,
   });
 
   final media_api.MediaFolder folder;
@@ -57,6 +58,9 @@ class MediaFolderCard extends StatefulWidget {
   final VoidCallback? onPullToLocal;
   final VoidCallback? onDeleteNodeFiles;
   final bool isLost;
+
+  /// 文件夹封面来自某个集合，该集合封面正在生成时显示加载态。
+  final bool coverLoading;
 
   @override
   State<MediaFolderCard> createState() => _MediaFolderCardState();
@@ -186,6 +190,7 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
             placeholderIcon: StrokeIcons.folder,
             lostIcon: StrokeIcons.folderOff,
             isLost: widget.isLost,
+            loading: widget.coverLoading,
           ),
           mediaOverlay: widget.isLost
               ? Align(

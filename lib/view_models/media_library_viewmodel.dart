@@ -346,6 +346,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 落盘的负缓存标记由 Rust 侧按文件身份维护，这里只做本页实例内的去重。
   final _audioCoverEmptyCollections = <String>{};
 
+  /// 集合封面已尝试但无结果（视频抽帧为空/提取异常）的集合 id。
+  /// 用于让卡片的加载态及时收敛为占位图标，避免永久转圈。
+  final _collectionCoverFailed = <String>{};
+
   /// 正在执行中的封面任务 key（contains() 只覆盖等待中任务，运行中任务需单独去重）。
   final _inFlightCoverKeys = <String>{};
 
@@ -617,6 +621,9 @@ class MediaLibraryViewModel extends BaseViewModel {
     // 延后到首屏渲染后执行，避免大量任务入队阻塞首帧绘制
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _restorePendingThumbnailTasks();
+      // 本地集合封面没有持久化任务表：按当前集合列表主动预热，
+      // 否则要等用户点进文件夹、卡片 build 时才惰性生成。
+      prewarmLocalCollectionCovers();
     });
     // 启动远程节点缩略图进度自适应轮询
     _scheduleRemoteThumbPoll();

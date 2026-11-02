@@ -255,6 +255,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       isRemote: isRemoteFolder,
       nodeName: data.nodeName,
       isLost: data.isLost,
+      coverLoading: data.coverLoading,
       onTap: () {
         if (vm.isSelecting.value) {
           vm.toggleSelection(folder.id);
@@ -307,6 +308,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       isSelected: isSelected,
       nodeName: data.nodeName,
       isLost: data.isLost,
+      coverLoading: data.coverLoading,
       onTap: () {
         if (vm.isSelecting.value) {
           vm.toggleSelection(sf.id);
@@ -359,6 +361,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       totalSize: data.totalSize,
       isFavorited: data.isFavorited,
       isLost: data.isLost,
+      coverLoading: data.coverLoading,
       displayTitle: data.displayTitle,
       hoverCoverSources: isRemote
           ? null

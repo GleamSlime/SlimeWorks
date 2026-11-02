@@ -209,6 +209,11 @@ class _MediaItemTileState extends State<MediaItemTile> {
   bool get _isAudio => widget.item.kind == media_api.MediaKind.audio;
   bool get _isImage => widget.item.kind == media_api.MediaKind.image;
 
+  /// 封面是否正在本地生成（视频抽帧 / 音频提取）：此时 source 为空应显示加载态。
+  bool get _coverLoading =>
+      (_isVideo && widget.onRequestScrubFrames != null && _loadingFrames) ||
+      (_isAudio && widget.onRequestAudioCover != null && _loadingAudioCover);
+
   /// 左下镂空标签用的类型名
   String get _kindLabel => _isAudio ? '音频' : _isVideo ? '视频' : '图片';
 
@@ -465,6 +470,7 @@ class _MediaItemTileState extends State<MediaItemTile> {
             placeholderIcon: _isAudio ? StrokeIcons.musicNote : StrokeIcons.smartDisplay,
             lostIcon: StrokeIcons.brokenImage,
             isLost: widget.isLost,
+            loading: _coverLoading,
           ),
           mediaOverlay: (widget.isLost || showTimeline)
               ? Stack(

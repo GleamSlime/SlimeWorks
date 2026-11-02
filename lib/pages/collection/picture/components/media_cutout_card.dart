@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -622,13 +623,18 @@ class _FlarePainter extends CustomPainter {
 ///
 /// 四类卡的封面逻辑本来各抄了一份同样的四段（http/本地、隐私模糊、占位、debug 尺寸），
 /// 收到这里一份。镂空样式只关心"图区里放什么"，图源怎么解码归这里管。
-class MediaCardCover extends StatelessWidget {
+///
+/// 生成中的封面必须走加载态而不是错误图标：`source` 为空只代表"还没有图"，
+/// 不等于"图坏了"；远程封面首次请求时节点可能正在按需生成（或忙回 503），
+/// 因此对 http 源保留有限次退避重试，生成完成后无需用户退出重进页面。
+class MediaCardCover extends StatefulWidget {
   const MediaCardCover({
     super.key,
     required this.source,
     required this.placeholderIcon,
     this.lostIcon,
     this.isLost = false,
+    this.loading = false,
   });
 
   final String? source;
@@ -641,6 +647,52 @@ class MediaCardCover extends StatelessWidget {
 
   final bool isLost;
 
+  /// 封面正在生成（本地视频抽帧 / 音频提取 / 远程节点按需生成）：
+  /// `source` 仍为空时显示加载指示器，而不是占位图标。
+  final bool loading;
+
+  @override
+  State<MediaCardCover> createState() => _MediaCardCoverState();
+}
+
+class _MediaCardCoverState extends State<MediaCardCover> {
+  /// 远程封面解码失败后的重试次数（节点首次按需生成可能超时，重试即可命中缓存）。
+  int _retryCount = 0;
+
+  /// 重试上限：超过后按「封面损坏」处理，避免对真实失效的资源无限打请求。
+  static const int _kMaxRetries = 3;
+
+  Timer? _retryTimer;
+
+  @override
+  void didUpdateWidget(covariant MediaCardCover oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.source != widget.source) {
+      _retryTimer?.cancel();
+      _retryTimer = null;
+      _retryCount = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    super.dispose();
+  }
+
+  /// 远程封面加载失败后按 0.6s、1.2s、2.4s 退避重试，并清掉失败的图片缓存。
+  void _scheduleRetry(ImageProvider provider) {
+    if (_retryCount >= _kMaxRetries) return;
+    if (_retryTimer?.isActive ?? false) return;
+    _retryTimer = Timer(Duration(milliseconds: 600 * (1 << _retryCount)), () async {
+      _retryTimer = null;
+      if (!mounted) return;
+      // 失败结果可能仍挂在 ImageCache 上，先驱逐再重建才能重新发起请求
+      await provider.evict();
+      if (mounted) setState(() => _retryCount++);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // 用 Obx 自己监听隐私开关，而不是靠宿主卡片那几个 ever(prefs.privacyMode) worker：
@@ -650,17 +702,27 @@ class MediaCardCover extends StatelessWidget {
 
   Widget _cover(BuildContext context) {
     final s = AppSemantic.of(context);
-    final src = source;
+    final src = widget.source;
     final prefs = getIt.isRegistered<MediaPrefsService>() ? getIt.get<MediaPrefsService>() : null;
     // 两个开关在任何提前 return 之前无条件读一遍：Obx 只登记本次构建真读到的 Rx，
     // 写在 return 后面会让没有封面的卡片这次构建漏听，之后切换开关不再重绘。
     final fakeCover = prefs?.fakeCover.value ?? false;
     final privacyOn = prefs?.privacyMode.value ?? false;
-    final broken = _CoverPlaceholder(
-      icon: lostIcon ?? placeholderIcon,
+    // 「还没有封面」与「封面丢了/解码失败」是两回事：
+    // 前者显示占位图标（或在生成中显示加载态），后者才显示 lostIcon。
+    final placeholder = _CoverPlaceholder(
+      icon: widget.placeholderIcon,
       background: s.surfaceSunken,
     );
-    if (isLost || src == null || src.isEmpty) return broken;
+    final broken = _CoverPlaceholder(
+      icon: widget.lostIcon ?? widget.placeholderIcon,
+      background: s.surfaceSunken,
+    );
+    final loading = _CoverLoading(background: s.surfaceSunken);
+    if (widget.isLost) return broken;
+    if (src == null || src.isEmpty) {
+      return widget.loading ? loading : placeholder;
+    }
 
     // 伪封面：整张换成设置里指定的那张无害图片，不糊也不加锁角标，优先于隐私模糊
     if (fakeCover) return const FakeCover();
@@ -678,7 +740,24 @@ class MediaCardCover extends StatelessWidget {
       null,
       isHttp ? NetworkImage(src) : FileImage(File(src)),
     );
-    final image = Image(image: provider, fit: BoxFit.cover, errorBuilder: (_, _, _) => broken);
+    final image = Image(
+      image: provider,
+      fit: BoxFit.cover,
+      // 远程封面首帧到达前显示加载态：节点生成封面可能需要数秒，空白/占位会像加载失败
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded || frame != null) return child;
+        return loading;
+      },
+      errorBuilder: (_, _, _) {
+        // 本地文件解码失败不可恢复；远程多半是节点还在生成或瞬时 503，退避后重试
+        final willRetry = isHttp && _retryCount < _kMaxRetries;
+        if (willRetry) {
+          _scheduleRetry(provider);
+          return loading;
+        }
+        return broken;
+      },
+    );
 
     if (privacyOn) {
       final sigma = prefs?.privacyBlurSigma.value ?? 15.0;
@@ -719,6 +798,30 @@ class MediaCardCover extends StatelessWidget {
           child: DebugImageSizeBadge(provider: provider),
         ),
       ],
+    );
+  }
+}
+
+/// 封面生成中：实色底 + 居中加载指示器
+class _CoverLoading extends StatelessWidget {
+  const _CoverLoading({required this.background});
+
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: background,
+      child: Center(
+        child: SizedBox(
+          width: scaleW(28),
+          height: scaleW(28),
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: AppSemantic.of(context).textTertiary,
+          ),
+        ),
+      ),
     );
   }
 }

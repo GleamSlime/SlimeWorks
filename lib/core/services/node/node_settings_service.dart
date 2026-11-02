@@ -922,6 +922,7 @@ class NodeSettingsService extends GetxService {
     bool generateThumbnails = false,
     bool preserveStructure = false,
     String? baseFolderId,
+    int? coverWidth,
   }) async {
     final node = getNodeById(nodeId);
     if (node == null) {
@@ -936,6 +937,10 @@ class NodeSettingsService extends GetxService {
         'generate_thumbnails': generateThumbnails,
         'preserve_structure': preserveStructure,
         'base_folder_id': baseFolderId,
+        // 预生成缩略图的宽度必须与客户端封面请求宽度一致，
+        // 否则节点内存缓存 key（含 width）不同，导入预热等于白跑。
+        // 0 = 原图档（客户端请求不带宽度），节点据此跳过预生成。
+        'cover_width': ?coverWidth,
       },
     );
 

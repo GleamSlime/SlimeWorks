@@ -96,6 +96,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
         return _collectionVideoThumbnails[collection.id];
       }
       if (!thumbGenerationPaused.value &&
+          !_collectionCoverFailed.contains(collection.id) &&
           !_coverQueue.contains(collection.id) &&
           !_inFlightCoverKeys.contains(collection.id)) {
         _generateCollectionVideoThumbnailAsync(collection.id, coverPath);
@@ -109,6 +110,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
       }
       if (!thumbGenerationPaused.value &&
           !_audioCoverEmptyCollections.contains(collection.id) &&
+          !_collectionCoverFailed.contains(collection.id) &&
           !_coverQueue.contains(collection.id) &&
           !_inFlightCoverKeys.contains(collection.id)) {
         _generateCollectionAudioCoverAsync(collection.id, coverPath);
@@ -116,6 +118,106 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
       return null;
     }
     return coverPath;
+  }
+
+  /// 该集合的封面是否正在生成（本地视频抽帧 / 音频提取，且尚无结果）。
+  /// 卡片据此在 source 为空时显示加载态，而不是「图片错误」图标。
+  bool isCollectionCoverGenerating(media_api.MediaCollection collection) {
+    // 注册响应式依赖：生成完成后卡片能重建
+    _asyncCoverVersion.value;
+    final coverPath = collection.coverPath;
+    if (coverPath == null || coverPath.isEmpty) return false;
+    // 远程封面有 URL，由节点按需生成；图区用图片首帧加载态即可
+    if (isRemoteCollection(collection.id)) return false;
+    if (thumbGenerationPaused.value) return false;
+    final isVideo = MediaLibraryViewModel._isVideoPath(coverPath);
+    final isAudio = MediaLibraryViewModel._isAudioPath(coverPath);
+    if (!isVideo && !isAudio) return false;
+    if (_collectionVideoThumbnails.containsKey(collection.id)) return false;
+    if (_collectionCoverFailed.contains(collection.id)) return false;
+    if (isAudio && _audioCoverEmptyCollections.contains(collection.id)) {
+      return false;
+    }
+    return true;
+  }
+
+  /// 文件夹封面取第一个集合；与 [buildFolderCoverSource] 的选中规则同源。
+  media_api.MediaCollection? _firstCoverCollectionForFolder(
+    media_api.MediaFolder folder,
+  ) {
+    if (isDupGroup(folder.id)) {
+      final grouped = dupGroupCollections(folder.id);
+      if (grouped.isEmpty) return null;
+      final sorted = _applySortOrder(List.of(grouped), folder.id);
+      return sorted.isEmpty ? null : sorted.first;
+    }
+    return _findFirstCollectionForFolder(folder.id);
+  }
+
+  /// 文件夹封面是否正在生成（封面来自该文件夹下的首个集合）。
+  bool isFolderCoverGenerating(media_api.MediaFolder folder) {
+    final collection = _firstCoverCollectionForFolder(folder);
+    return collection == null ? false : isCollectionCoverGenerating(collection);
+  }
+
+  /// 智能文件夹封面是否正在生成（封面来自命中的首个集合）。
+  bool isSmartFolderCoverGenerating(SmartFolder sf) {
+    final sorted = _applySortOrder(
+      List.of(collectionsMatchingSmartFolder(sf)),
+      sf.id,
+    );
+    if (sorted.isEmpty) return false;
+    return isCollectionCoverGenerating(sorted.first);
+  }
+
+  /// 为本地集合入队封面生成（导入时勾选「全文件生成缩略图」与启动预热共用）。
+  /// [trackFolder] = false 时任务不进入当前文件夹取消组，离开文件夹不会中断。
+  void enqueueLocalCollectionCover(
+    media_api.MediaCollection collection, {
+    bool trackFolder = true,
+  }) {
+    if (thumbGenerationPaused.value) return;
+    if (isRemoteCollection(collection.id)) return;
+    final coverPath = collection.coverPath;
+    if (coverPath == null || coverPath.isEmpty) return;
+    if (MediaLibraryViewModel._isVideoPath(coverPath)) {
+      _generateCollectionVideoThumbnailAsync(
+        collection.id,
+        coverPath,
+        trackFolder: trackFolder,
+      );
+    } else if (MediaLibraryViewModel._isAudioPath(coverPath)) {
+      _generateCollectionAudioCoverAsync(
+        collection.id,
+        coverPath,
+        trackFolder: trackFolder,
+      );
+    }
+  }
+
+  /// 应用启动后预热本地集合封面：不再等用户点进文件夹才由卡片惰性触发。
+  void prewarmLocalCollectionCovers() {
+    if (thumbGenerationPaused.value) return;
+    int count = 0;
+    for (final collection in collections) {
+      if (isRemoteCollection(collection.id)) continue;
+      final coverPath = collection.coverPath;
+      if (coverPath == null || coverPath.isEmpty) continue;
+      if (!MediaLibraryViewModel._isVideoPath(coverPath) &&
+          !MediaLibraryViewModel._isAudioPath(coverPath)) {
+        continue;
+      }
+      if (_collectionVideoThumbnails.containsKey(collection.id) ||
+          _collectionCoverFailed.contains(collection.id) ||
+          _audioCoverEmptyCollections.contains(collection.id)) {
+        continue;
+      }
+      enqueueLocalCollectionCover(collection, trackFolder: false);
+      count++;
+    }
+    if (count > 0) {
+      _logger.info('[CoverPrewarm] 启动预热 $count 个本地集合封面');
+    }
   }
 
   /// 从帧列表中挑选封面帧：优先选第一个文件体积大于 1KB 的帧，
@@ -131,14 +233,22 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
 
   void _generateCollectionVideoThumbnailAsync(
     String collectionId,
-    String videoPath,
-  ) {
+    String videoPath, {
+    bool trackFolder = true,
+  }) {
+    if (_collectionVideoThumbnails.containsKey(collectionId) ||
+        _collectionCoverFailed.contains(collectionId) ||
+        _coverQueue.contains(collectionId) ||
+        _inFlightCoverKeys.contains(collectionId)) {
+      return;
+    }
     _logger.info('[VideoThumb] 入队封面: collectionId=$collectionId');
-    _currentFolderCoverKeys.add(collectionId);
+    // 仅卡片惰性触发的任务跟随文件夹取消；导入/启动预热任务必须跑完
+    if (trackFolder) _currentFolderCoverKeys.add(collectionId);
     _inFlightCoverKeys.add(collectionId);
     _coverQueue
         .enqueue(collectionId, () async {
-          _currentFolderCoverKeys.remove(collectionId);
+          if (trackFolder) _currentFolderCoverKeys.remove(collectionId);
           _inFlightCoverKeys.remove(collectionId);
           try {
             // 「预生成视频悬停帧」关闭时，只提取单帧默认封面，不抽整套 scrub 帧；
@@ -152,6 +262,8 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
                 _logger.info(
                   '[VideoThumb] 单帧封面为空，不缓存: collectionId=$collectionId',
                 );
+                _collectionCoverFailed.add(collectionId);
+                _notifyCoverChanged();
                 return;
               }
               _collectionVideoThumbnails[collectionId] = single;
@@ -161,6 +273,8 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
             final frames = await _doGetScrubFrames(videoPath);
             if (frames.isEmpty) {
               _logger.info('[VideoThumb] 帧为空，不缓存: collectionId=$collectionId');
+              _collectionCoverFailed.add(collectionId);
+              _notifyCoverChanged();
               return;
             }
             final thumb = _pickCoverFrame(frames);
@@ -173,25 +287,37 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
             _logger.error(
               '[VideoThumb] 封面生成失败: collectionId=$collectionId err=$e',
             );
+            // 记录失败，避免卡片永久停在加载态；重启/重建 VM 后可再次尝试
+            _collectionCoverFailed.add(collectionId);
+            _notifyCoverChanged();
           }
         })
         .whenComplete(() {
           // 任务被取消时闭包不会执行，此处兜底清理 key，避免永久阻断重新入队
-          _currentFolderCoverKeys.remove(collectionId);
+          if (trackFolder) _currentFolderCoverKeys.remove(collectionId);
           _inFlightCoverKeys.remove(collectionId);
         });
   }
 
   void _generateCollectionAudioCoverAsync(
     String collectionId,
-    String audioPath,
-  ) {
+    String audioPath, {
+    bool trackFolder = true,
+  }) {
+    if (_collectionVideoThumbnails.containsKey(collectionId) ||
+        _audioCoverEmptyCollections.contains(collectionId) ||
+        _collectionCoverFailed.contains(collectionId) ||
+        _coverQueue.contains(collectionId) ||
+        _inFlightCoverKeys.contains(collectionId)) {
+      return;
+    }
     _logger.info('[AudioCover] 入队集合封面: collectionId=$collectionId');
-    _currentFolderCoverKeys.add(collectionId);
+    // 仅卡片惰性触发的任务跟随文件夹取消；导入/启动预热任务必须跑完
+    if (trackFolder) _currentFolderCoverKeys.add(collectionId);
     _inFlightCoverKeys.add(collectionId);
     _coverQueue
         .enqueue(collectionId, () async {
-          _currentFolderCoverKeys.remove(collectionId);
+          if (trackFolder) _currentFolderCoverKeys.remove(collectionId);
           _inFlightCoverKeys.remove(collectionId);
           try {
             final coverPath = await getAudioCoverSource(audioPath);
@@ -199,6 +325,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
               // 文件没变就不可能从无封面变成有封面：记住，页内不再重投
               _audioCoverEmptyCollections.add(collectionId);
               _logger.info('[AudioCover] 无嵌入封面: collectionId=$collectionId');
+              _notifyCoverChanged();
               return;
             }
             _logger.info('[AudioCover] 封面提取成功: collectionId=$collectionId');
@@ -208,11 +335,13 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
             _logger.error(
               '[AudioCover] 封面提取失败: collectionId=$collectionId err=$e',
             );
+            _collectionCoverFailed.add(collectionId);
+            _notifyCoverChanged();
           }
         })
         .whenComplete(() {
           // 任务被取消时闭包不会执行，此处兜底清理 key，避免永久阻断重新入队
-          _currentFolderCoverKeys.remove(collectionId);
+          if (trackFolder) _currentFolderCoverKeys.remove(collectionId);
           _inFlightCoverKeys.remove(collectionId);
         });
   }
@@ -285,19 +414,12 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
   String? buildFolderCoverSource(media_api.MediaFolder folder) {
     // 注册响应式依赖：集合排序变更时同步更新文件夹封面
     collectionOrderVersion.value;
-    // 同名集合分组封面：取分组内排序后的第一个集合封面；
-    // 依赖 _asyncCoverVersion 使视频封面异步生成后能触发重建。
-    if (isDupGroup(folder.id)) {
-      _asyncCoverVersion.value;
-      final grouped = dupGroupCollections(folder.id);
-      if (grouped.isEmpty) return null;
-      final sorted = _applySortOrder(List.of(grouped), folder.id);
-      return buildCollectionCoverSource(sorted.first);
-    }
-    final collection = _findFirstCollectionForFolder(folder.id);
+    final collection = _firstCoverCollectionForFolder(folder);
     if (collection == null) {
       return null;
     }
+    // buildCollectionCoverSource 内部已注册封面版本依赖，
+    // 视频/音频封面异步生成后文件夹卡也会重建。
     return buildCollectionCoverSource(collection);
   }
 

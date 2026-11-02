@@ -40,6 +40,7 @@ class MediaCollectionCard extends StatefulWidget {
     this.onHoverEnter,
     this.onRequestVideoFrame,
     this.isLost = false,
+    this.coverLoading = false,
     this.displayTitle,
   });
 
@@ -92,6 +93,9 @@ class MediaCollectionCard extends StatefulWidget {
   final String? Function(double fraction)? onRequestVideoFrame;
 
   final bool isLost;
+
+  /// 集合封面正在生成（本地视频/音频封面尚未就绪）：图区显示加载态。
+  final bool coverLoading;
 
   @override
   State<MediaCollectionCard> createState() => _MediaCollectionCardState();
@@ -432,6 +436,7 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
                   placeholderIcon: StrokeIcons.collections,
                   lostIcon: StrokeIcons.brokenImage,
                   isLost: widget.isLost,
+                  loading: widget.coverLoading,
                 ),
               ),
               mediaOverlay: (widget.isLost || showTimeline)

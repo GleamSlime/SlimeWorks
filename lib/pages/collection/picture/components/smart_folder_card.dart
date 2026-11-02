@@ -31,6 +31,7 @@ class SmartFolderCard extends StatefulWidget {
     this.onTransfer,
     this.nodeName,
     this.isLost = false,
+    this.coverLoading = false,
   });
 
   final SmartFolder smartFolder;
@@ -56,6 +57,9 @@ class SmartFolderCard extends StatefulWidget {
   final String? nodeName;
 
   final bool isLost;
+
+  /// 封面来自命中集合的首个集合，该集合封面正在生成时显示加载态。
+  final bool coverLoading;
 
   @override
   State<SmartFolderCard> createState() => _SmartFolderCardState();
@@ -193,6 +197,7 @@ class _SmartFolderCardState extends State<SmartFolderCard> {
             placeholderIcon: StrokeIcons.autoAwesome,
             lostIcon: StrokeIcons.brokenImage,
             isLost: widget.isLost,
+            loading: widget.coverLoading,
           ),
           mediaOverlay: widget.isLost
               ? Align(

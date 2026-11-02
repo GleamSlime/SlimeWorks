@@ -256,6 +256,9 @@ pub async fn dispatch_action(
             let folder_path = params["folder_path"].as_str().unwrap_or("").to_string();
             let generate_thumbnails = params["generate_thumbnails"].as_bool().unwrap_or(false);
             let preserve_structure = params["preserve_structure"].as_bool().unwrap_or(false);
+            // 缩略图预生成宽度：客户端按自己的封面请求宽度传入，
+            // 保证节点内存缓存 key 命中；缺省 240 与封面请求的默认宽度一致。
+            let cover_width = params["cover_width"].as_u64().unwrap_or(240) as u32;
             // 归档目标文件夹（库内 ID）：客户端在某个远程文件夹内导入时带上，
             // 集合就落在该文件夹下，而不是节点库根目录。
             let base_folder_id = params["base_folder_id"]
@@ -269,7 +272,7 @@ pub async fn dispatch_action(
                 let imported =
                     import_collections_with_structure(&folder_path, collections, &base_folder_id)?;
                 if generate_thumbnails {
-                    spawn_import_thumbnail_generation(&imported);
+                    spawn_import_thumbnail_generation(&imported, cover_width);
                 }
                 return Ok(json!({
                     "id": "",
@@ -291,7 +294,7 @@ pub async fn dispatch_action(
                 folder_id = Some(pid.clone());
             }
             if generate_thumbnails {
-                spawn_import_thumbnail_generation(std::slice::from_ref(&collection));
+                spawn_import_thumbnail_generation(std::slice::from_ref(&collection), cover_width);
             }
             Ok(json!({
                 "id": collection.id,
@@ -1438,15 +1441,31 @@ fn pick_folder_target_dir(
     (String::new(), all_parents)
 }
 
-/// 导入后全量生成缩略图：收集集合内全部媒体文件，后台线程逐个生成并计入进度统计。
-fn spawn_import_thumbnail_generation(collections: &[media_collection::MediaCollection]) {
+/// 导入后全量生成缩略图：收集集合内全部媒体文件与集合封面，
+/// 后台线程按客户端封面请求宽度逐个生成并计入进度统计。
+fn spawn_import_thumbnail_generation(
+    collections: &[media_collection::MediaCollection],
+    cover_width: u32,
+) {
     let mut files = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for collection in collections {
+        // 集合封面（视频首帧/音频内嵌封面）也一并预生成：
+        // 否则客户端打开文件夹时仍要现场生成，表现为「点进去才开始出图」。
+        if let Some(cover) = collection.cover_path.as_ref() {
+            if !cover.is_empty() && seen.insert(cover.clone()) {
+                files.push(cover.clone());
+            }
+        }
         if let Ok(items) = media_api::get_media_collection_items(collection.id.clone()) {
-            files.extend(items.into_iter().map(|item| item.file_path));
+            for item in items {
+                if seen.insert(item.file_path.clone()) {
+                    files.push(item.file_path);
+                }
+            }
         }
     }
-    super::media_handler::spawn_bulk_thumbnail_generation(files);
+    super::media_handler::spawn_bulk_thumbnail_generation(files, cover_width);
 }
 
 /// 处理文件上传请求（待完善 multipart 解析）

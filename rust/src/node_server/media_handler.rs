@@ -30,11 +30,15 @@ fn generate_thumbnail_bytes_tracked(file_path: &str, width: u32) -> Option<Vec<u
 
 /// 后台为一批媒体文件生成缩略图并计入进度统计（导入后全量生成用）。
 ///
+/// [width] 必须与客户端封面请求的实际宽度一致：内存缓存 key 含宽度，
+/// 预热用别的宽度会导致客户端请求仍然未命中、只能现场重新生成。
+///
 /// 并发度取 CPU 逻辑核数：缩略图生成是 CPU 密集（解码+缩放）而非纯 IO 等待，
 /// 单线程串行时 N 张图的总耗时就是 N 倍。ffmpeg 子进程另有全局信号量限流，
 /// 因此并行的是「常规位图的纯 Rust 缩放」这条大头路径。
-pub fn spawn_bulk_thumbnail_generation(files: Vec<String>) {
-    if files.is_empty() {
+pub fn spawn_bulk_thumbnail_generation(files: Vec<String>, width: u32) {
+    // 原图档（width=0）无需预生成；空列表直接返回，不白起线程、不动计数器
+    if files.is_empty() || width == 0 {
         return;
     }
     THUMB_TOTAL.fetch_add(files.len() as u64, Ordering::Relaxed);
@@ -60,7 +64,7 @@ pub fn spawn_bulk_thumbnail_generation(files: Vec<String>) {
                     else {
                         break;
                     };
-                    media_api::generate_thumbnail_bytes(file_path, 480);
+                    media_api::generate_thumbnail_bytes(file_path, width);
                     THUMB_COMPLETED.fetch_add(1, Ordering::Relaxed);
                 });
             }
@@ -770,7 +774,7 @@ mod tests {
     fn bulk_thumbnail_empty_input_is_noop() {
         // 空列表必须直接返回，不给 runtime 白起线程、不动计数器
         let (before_total, before_completed) = thumb_generation_progress();
-        spawn_bulk_thumbnail_generation(vec![]);
+        spawn_bulk_thumbnail_generation(vec![], 480);
         let (after_total, after_completed) = thumb_generation_progress();
         assert_eq!((before_total, before_completed), (after_total, after_completed));
     }

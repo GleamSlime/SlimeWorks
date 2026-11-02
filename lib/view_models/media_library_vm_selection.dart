@@ -18,6 +18,7 @@ class BrowseCardData {
     required this.totalSize,
     required this.childCount,
     required this.matchCount,
+    this.coverLoading = false,
     this.displayTitle,
   });
 
@@ -52,6 +53,9 @@ class BrowseCardData {
 
   /// 智能文件夹卡的命中集合数（其余卡为 0）
   final int matchCount;
+
+  /// 封面是否正在生成：卡片据此在 source 为空时显示加载态而不是错误图标。
+  final bool coverLoading;
 }
 
 /// 浏览层选择通知器与派生缓存失效。
@@ -148,6 +152,7 @@ extension BrowseSelectionExt on MediaLibraryViewModel {
         totalSize: live.size,
         childCount: 0,
         matchCount: 0,
+        coverLoading: isRemote ? false : isCollectionCoverGenerating(collection),
         displayTitle: dupGroupDisplayTitle(collection.id),
       );
     }
@@ -167,6 +172,7 @@ extension BrowseSelectionExt on MediaLibraryViewModel {
         totalSize: summary.size,
         childCount: summary.childCards,
         matchCount: 0,
+        coverLoading: isRemote ? false : isFolderCoverGenerating(folder),
       );
     }
     final sf = (item as MediaLibrarySmartFolderItem).smartFolder;
@@ -186,6 +192,7 @@ extension BrowseSelectionExt on MediaLibraryViewModel {
       totalSize: sfResources.size,
       childCount: 0,
       matchCount: collectionsMatchingSmartFolder(sf).length,
+      coverLoading: isRemote ? false : isSmartFolderCoverGenerating(sf),
     );
   }
 

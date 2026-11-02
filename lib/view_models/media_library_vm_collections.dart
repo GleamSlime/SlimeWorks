@@ -326,6 +326,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           preserveStructure: preserveStructure,
           // 按目录结构导入时节点只回一个计数，靠它把整批集合挂到当前文件夹下
           baseFolderId: resolvedTargetRawId,
+          // 节点预生成按客户端实际封面请求宽度执行，导入后即刻命中缓存
+          coverWidth: mediaPrefs.effectiveRemoteCoverWidth,
         );
         final rawId = payload == null ? null : _stringOrNull(payload['id']);
         // 单集合场景再移一次：旧版节点不认识 base_folder_id，这里是兼容兜底
@@ -464,9 +466,13 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   }
 
   /// 为一批集合内的全部媒体文件入队缩略图生成（导入后全量生成用）。
+  /// 同时入队集合自身的封面（视频抽帧/音频内嵌封面），而不是只处理逐文件缩略图——
+  /// 否则集合卡封面仍要等到点进文件夹、卡片 build 时才惰性生成。
   Future<void> _enqueueBulkItemThumbnails(List<media_api.MediaCollection> collections) async {
     for (final collection in collections) {
       try {
+        // 导入/批量任务不挂到当前文件夹取消组：离开该文件夹也不能中断生成
+        enqueueLocalCollectionCover(collection, trackFolder: false);
         final items = await media_api.getMediaCollectionItems(collectionId: collection.id);
         for (final item in items) {
           _enqueueItemThumbnail(item.filePath);
@@ -817,6 +823,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           generateThumbnails: generateThumbnails,
           preserveStructure: preserveStructure,
           baseFolderId: rawFolderId,
+          // 与客户端封面请求宽度对齐，避免节点预热缓存未命中
+          coverWidth: mediaPrefs.effectiveRemoteCoverWidth,
         );
         // item_count：单集合模式是文件数，按目录结构模式是集合数；0 都表示没有有效媒体
         final importedCount = payload == null ? null : _parseIntLike(payload['item_count']);
