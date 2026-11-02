@@ -76,7 +76,10 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // 封面加载态是无限旋转的进度指示器，widget 测试里 FileImage 解码不会真正完成，
+    // pumpAndSettle 永远等不到稳定帧；这里只推进固定帧数，断言只看挂出的 Image。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
   }
 
   testWidgets('伪封面关闭：封面照常解码真实图片', (tester) async {
