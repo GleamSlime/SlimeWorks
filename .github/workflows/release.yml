@@ -257,11 +257,44 @@ jobs:
             codesign --force --deep --sign - "$DMG_PATH"
           fi
 
+      - name: Sparkle EdDSA 签名
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::error::缺少 SPARKLE_PRIVATE_KEY secret：需放入 generate_keys -x 导出的私钥内容，否则 Sparkle 会判定更新未正确签名"
+            exit 1
+          fi
+          DMG_PATH=$(find dist/ -name "*.dmg" -type f | head -1)
+          if [ -z "$DMG_PATH" ]; then
+            echo "::error::未找到 DMG，无法签名"
+            exit 1
+          fi
+          KEY_FILE="$RUNNER_TEMP/sparkle_private_key"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          SIGN_TOOL=$(find macos/Pods -name sign_update -type f | head -1)
+          if [ -z "$SIGN_TOOL" ]; then
+            echo "::error::pod install 后未找到 Sparkle 的 sign_update"
+            exit 1
+          fi
+          # 必须在 Ad-hoc 代码签名之后：codesign 会改动 DMG 字节，先签就验不过
+          "$SIGN_TOOL" --ed-key-file "$KEY_FILE" -p "$DMG_PATH" > dist/sparkle_ed_signature.txt
+          rm -f "$KEY_FILE"
+          echo "✅ EdDSA 签名: $(cat dist/sparkle_ed_signature.txt)"
+
       - name: 上传 macOS 产物
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
           path: dist/**/*.dmg
+          retention-days: 7
+
+      - name: 上传 Sparkle 签名
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparkle-signature
+          path: dist/sparkle_ed_signature.txt
           retention-days: 7
 
   build-windows:
@@ -1053,6 +1086,13 @@ jobs:
           EXE_FILENAME=$(basename "$EXE_PATH")
           DMG_SIZE=$(stat -c%s "$DMG_PATH")
           EXE_SIZE=$(stat -c%s "$EXE_PATH")
+          # macOS 的 EdDSA 签名由 build-macos 产出，必须原样写进 enclosure，
+          # 否则 Sparkle 会报「此更新未正确签名，无法验证其真实性」
+          ED_SIGNATURE=$(tr -d '\r\n' < dist/sparkle_ed_signature.txt 2>/dev/null || true)
+          if [ -z "$ED_SIGNATURE" ]; then
+            echo "::error::缺少 Sparkle 签名文件 dist/sparkle_ed_signature.txt"
+            exit 1
+          fi
           # macOS 的 sparkle:version 用纯数字构建号（与 CFBundleVersion 同源）；
           # Windows 的 WinSparkle 读 exe 的 4 段文件版本，所以补成 1.0.0.N
           WIN_VERSION="${VERSION}.${BUILD_CODE}"
@@ -1076,6 +1116,7 @@ jobs:
                 <enclosure
                   url="https://github.com/${REPO}/releases/download/${TAG}/${DMG_FILENAME}"
                   sparkle:os="macos"
+                  sparkle:edSignature="${ED_SIGNATURE}"
                   length="${DMG_SIZE}"
                   type="application/octet-stream" />
               </item>

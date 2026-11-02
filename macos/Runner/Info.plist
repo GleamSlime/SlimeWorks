@@ -41,5 +41,7 @@
 	</array>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUPublicEDKey</key>
+	<string>yAXFDhgJ/LYFRcYsW/UT/gLJ4hm4IE2wT6aiJW71kNg=</string>
 </dict>
 </plist>

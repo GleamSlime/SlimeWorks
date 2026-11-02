@@ -112,8 +112,10 @@ SUPublicEDKey: yAXFDhgJ/LYFRcYsW/UT/gLJ4hm4IE2wT6aiJW71kNg=
 
 ### 4.2 Info.plist 添加 Sparkle 公钥
 
-> 当前仓库**已移除** `SUPublicEDKey`，Sparkle 不再校验更新包签名。
-> 恢复校验时再按下面方式加回去，并让 CI 用私钥生成 `sparkle:edSignature`。
+> 当前仓库**已启用** EdDSA 校验：`SUPublicEDKey` 固定为本机钥匙串中那把私钥
+> 对应的公钥，CI 用仓库 Secret `SPARKLE_PRIVATE_KEY` 为 DMG 生成
+> `sparkle:edSignature`。缺 Secret 时 `build-macos` 会直接失败，避免发出
+> 客户端无法验证的更新包。
 
 在 `macos/Runner/Info.plist` 的 `</dict>` 前添加：
 ```xml
@@ -297,9 +299,10 @@ https://gleamslime.github.io/slime_works/appcast.xml
 
 ### 8.6 更新签名现状
 
-- macOS：`Info.plist` 未配置 `SUPublicEDKey`，Sparkle 跳过 EdDSA 校验，`appcast.xml` 不写 `edSignature`
+- macOS：`Info.plist` 配置了 `SUPublicEDKey`，`build-macos` 用 `sign_update`
+  + Secret `SPARKLE_PRIVATE_KEY` 生成 `sparkle:edSignature`，再写入 appcast
 - Windows：`Runner.rc` 未嵌入 DSAPub，WinSparkle 跳过验签，`appcast.xml` 不写 `dsaSignature`
-- 本次改动前的旧版本内置了公钥，升级到第一个"关闭验签"的版本需要手动下载安装一次
+- 旧版本内置的就是这把公钥，因此升级链路可连续，无需手动重装
 
 ### 8.7 本地发版（备选）
 
