@@ -25,6 +25,7 @@ class PictureLibraryToolbar extends StatelessWidget {
     required this.onScanFolder,
     required this.onImportFolder,
     required this.onRescanCollection,
+    required this.onRescanCovers,
     required this.onRefresh,
     required this.onClearLibrary,
     required this.onCreateSmartFolder,
@@ -39,6 +40,7 @@ class PictureLibraryToolbar extends StatelessWidget {
   final VoidCallback onScanFolder;
   final VoidCallback onImportFolder;
   final VoidCallback onRescanCollection;
+  final VoidCallback onRescanCovers;
   final VoidCallback onRefresh;
   final VoidCallback onClearLibrary;
   final VoidCallback onCreateSmartFolder;
@@ -134,6 +136,14 @@ class PictureLibraryToolbar extends StatelessWidget {
                           icon: DrawIcon(StrokeIcons.createNewFolder),
                           size: AppTheme.metrics.kSpace40,
                           onTap: onCreateFolder,
+                        ),
+                      ),
+                      Tooltip(
+                        message: '重新扫描封面',
+                        child: DesktopHeadToolsButton(
+                          icon: DrawIcon(StrokeIcons.autorenew),
+                          size: AppTheme.metrics.kSpace40,
+                          onTap: onRescanCovers,
                         ),
                       ),
                       Tooltip(

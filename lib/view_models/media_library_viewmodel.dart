@@ -450,6 +450,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 避免从 (n-1)/n 直接消失，给用户视觉反馈再清空。
   Timer? _thumbCompleteTimer;
 
+  /// 远程节点进度「100% 完成」短暂显示的独立定时器。
+  /// 与本地进度分开：共用同一个定时器会让两边的完成态互相清掉。
+  Timer? _remoteThumbCompleteTimer;
+
   /// 浏览层派生缓存失效监听：任一派生输入变化 → 清缓存 + visibleVersion++。
   /// 网格唯一数据 Obx 只订阅 visibleVersion，Rx 变化从「N 路全网格重建」
   /// 收敛为「1 路一次重建」。_itemPathsEpoch 为非 Rx 计数，在写入点手动调用失效。
@@ -535,33 +539,46 @@ class MediaLibraryViewModel extends BaseViewModel {
     _coverQueue.onTaskComplete = scheduleTrimCache;
     _scrubQueue.onTaskComplete = scheduleTrimCache;
 
-    // 缩略图进度回调：合并两个队列的进度
-    void updateProgress(int completed, int total) {
+    // 缩略图进度回调：两个队列各自上报，合并时只统计「仍在跑」的队列。
+    // 旧实现直接相加两队列的累计 completed/total：已结束的旧批次会一直留在分母里，
+    // cancelGroup 取消的任务也不扣减，导致状态栏时有时无、数字长期失真。
+    (int, int)? lastActiveProgress;
+
+    void recomputeProgress() {
       // 暂停期间忽略在途任务的进度回调，保持状态栏停留在暂停状态
       if (thumbGenerationPaused.value) return;
-      final c = _coverQueue.completed + _scrubQueue.completed;
-      final t = _coverQueue.total + _scrubQueue.total;
-      if (t > 0 && c < t) {
-        thumbProgress.value = (c, t);
-        _logger.info('[ThumbProgress] $c/$t');
-      } else if (t > 0 && c >= t) {
-        // 100% 完成时短暂显示再清空，避免从 (n-1)/n 直接消失无反馈
-        thumbProgress.value = (c, t);
-        _thumbCompleteTimer?.cancel();
-        _thumbCompleteTimer = Timer(const Duration(seconds: 2), () {
-          // 2 秒内若有新任务进入，thumbProgress 已被新值覆盖，此处只在仍为完成态时清空
-          final cur = thumbProgress.value;
-          if (cur != null && cur.$1 >= cur.$2) {
-            thumbProgress.value = null;
-          }
-        });
-      } else {
-        thumbProgress.value = null;
+      final coverActive = _coverQueue.pending > 0;
+      final scrubActive = _scrubQueue.pending > 0;
+      if (!coverActive && !scrubActive) {
+        // 全部结束：把最后一次进度补成完成态短暂展示，避免直接消失无反馈
+        final last = lastActiveProgress;
+        lastActiveProgress = null;
+        if (last != null && last.$2 > 0) {
+          thumbProgress.value = (last.$2, last.$2);
+          _thumbCompleteTimer?.cancel();
+          _thumbCompleteTimer = Timer(const Duration(seconds: 2), () {
+            final cur = thumbProgress.value;
+            if (cur != null && cur.$1 >= cur.$2) {
+              thumbProgress.value = null;
+            }
+          });
+        }
+        return;
       }
+      // 已完成数只取活跃队列（队列按批复位，空闲队列的数字属于上一批，不能计入）
+      final c =
+          (coverActive ? _coverQueue.completed : 0) +
+          (scrubActive ? _scrubQueue.completed : 0);
+      final t = c + _coverQueue.pending + _scrubQueue.pending;
+      lastActiveProgress = (c, t);
+      _thumbCompleteTimer?.cancel();
+      _thumbCompleteTimer = null;
+      thumbProgress.value = (c, t);
+      _logger.info('[ThumbProgress] $c/$t');
     }
 
-    _coverQueue.onProgress = updateProgress;
-    _scrubQueue.onProgress = updateProgress;
+    _coverQueue.onProgress = (_, _) => recomputeProgress();
+    _scrubQueue.onProgress = (_, _) => recomputeProgress();
 
     // 无论是否已初始化都重建 worker（onClose 后 worker 会被置 null）
     _nodeMutationWorker ??= ever<int>(nodeSettingsService.libraryMutationTick, (
@@ -648,6 +665,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     _trimCacheTimer = null;
     _thumbCompleteTimer?.cancel();
     _thumbCompleteTimer = null;
+    _remoteThumbCompleteTimer?.cancel();
+    _remoteThumbCompleteTimer = null;
     _coverNotifyTimer?.cancel();
     _coverNotifyTimer = null;
     _searchDebounceTimer?.cancel();

@@ -73,9 +73,20 @@ class VideoThumbQueue {
   /// key → task（仅在等待中，执行中不在此 map 内）。
   final _pending = <String, _ThumbTask>{};
 
+  /// 新一批任务开始前清空上一批的计数。
+  /// 队列空闲时 completed/total 都停留在上一批；不归零的话，下一批的进度
+  /// 会把历史任务算进分母（例如新任务 3 个却显示 40/43）。
+  void _resetBatchIfIdle() {
+    if (_running == 0 && _queue.isEmpty) {
+      _totalEnqueued = 0;
+      _completed = 0;
+    }
+  }
+
   /// 将任务推入队尾；若 key 已存在（等待或执行）则忽略。
   /// 返回 future，任务完成时 resolve。
   Future<void> enqueue(String key, Future<void> Function() work) {
+    _resetBatchIfIdle();
     if (_pending.containsKey(key)) {
       _logger.info('[Queue] enqueue skip (已存在) key=$key');
       return _pending[key]!.done;
@@ -92,6 +103,7 @@ class VideoThumbQueue {
 
   /// 将 key 对应任务移到队首（高优先级），若不存在则新建任务插入队首。
   Future<void> prioritize(String key, Future<void> Function() work) {
+    _resetBatchIfIdle();
     // 若已在等待中，移到队首
     if (_pending.containsKey(key)) {
       final existing = _pending[key]!;
@@ -117,19 +129,29 @@ class VideoThumbQueue {
 
   /// 取消单个 key 的等待任务。正在执行的任务不中断。
   void cancel(String key) {
-    final task = _pending.remove(key);
-    if (task == null) return;
-    task._cancelled = true;
-    _queue.remove(task);
-    if (!task._completer.isCompleted) task._completer.complete();
-    _logger.info('[Queue] cancel key=$key');
+    if (_cancelWithoutNotify(key)) _notifyProgress();
   }
 
-  /// 批量取消 [keys] 中每个 key 的等待任务。
+  /// 批量取消 [keys] 中每个 key 的等待任务（只发一次进度通知）。
   void cancelGroup(Iterable<String> keys) {
+    var removed = false;
     for (final k in keys) {
-      cancel(k);
+      if (_cancelWithoutNotify(k)) removed = true;
     }
+    if (removed) _notifyProgress();
+  }
+
+  /// 取消等待中的任务：未执行就取消的任务要从本批总数里扣除，
+  /// 否则进度分母永远包含这些不会执行的任务（表现为卡在 2/10 不动）。
+  bool _cancelWithoutNotify(String key) {
+    final task = _pending.remove(key);
+    if (task == null) return false;
+    task._cancelled = true;
+    _queue.remove(task);
+    _totalEnqueued--;
+    if (!task._completer.isCompleted) task._completer.complete();
+    _logger.info('[Queue] cancel key=$key');
+    return true;
   }
 
   /// 取消全部等待中（未执行）的任务。

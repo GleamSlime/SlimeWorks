@@ -105,6 +105,40 @@ pub async fn dispatch_action(
             }))
         }
 
+        // 重新扫描封面：客户端指定范围（集合 id 列表 / 文件夹子树 / 不传=全部），
+        // 后台按客户端封面宽度补生成缺失的封面，进度由 get_thumb_progress 上报。
+        "rescan_media_covers" => {
+            let width = params["width"].as_u64().unwrap_or(240) as u32;
+            let collections = media_api::get_all_media_collections()
+                .map_err(|e| format!("获取媒体集合失败: {}", e))?;
+            let wanted_ids: Option<std::collections::HashSet<String>> = params
+                ["collection_ids"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .collect()
+                });
+            let targets: Vec<_> = if let Some(wanted) = wanted_ids {
+                collections
+                    .into_iter()
+                    .filter(|c| wanted.contains(&c.id))
+                    .collect()
+            } else if let Some(folder_id) = params["folder_id"].as_str().filter(|s| !s.is_empty()) {
+                let subtree = collect_descendant_folder_ids(folder_id);
+                collections
+                    .into_iter()
+                    .filter(|c| c.folder_id.as_ref().is_some_and(|f| subtree.contains(f)))
+                    .collect()
+            } else {
+                collections
+            };
+            let count = targets.len();
+            spawn_import_thumbnail_generation(&targets, width);
+            Ok(json!({ "count": count.to_string() }))
+        }
+
         "list_media_collections" => {
             let collections = media_api::get_all_media_collections()
                 .map_err(|e| format!("获取媒体集合失败: {}", e))?;
@@ -1439,6 +1473,21 @@ fn pick_folder_target_dir(
         return (String::new(), own_parents);
     }
     (String::new(), all_parents)
+}
+
+/// 收集某文件夹及其全部子孙文件夹的库内 ID（用于按子树重扫封面）。
+fn collect_descendant_folder_ids(root_id: &str) -> std::collections::HashSet<String> {
+    let mut ids = std::collections::HashSet::new();
+    let mut stack = vec![root_id.to_string()];
+    while let Some(cur) = stack.pop() {
+        if !ids.insert(cur.clone()) {
+            continue;
+        }
+        if let Ok(children) = media_api::get_child_media_folders(cur) {
+            stack.extend(children.into_iter().map(|f| f.id));
+        }
+    }
+    ids
 }
 
 /// 导入后全量生成缩略图：收集集合内全部媒体文件与集合封面，

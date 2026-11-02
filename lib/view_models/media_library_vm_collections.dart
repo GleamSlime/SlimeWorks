@@ -554,6 +554,227 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
   }
 
+  // ── 封面重新扫描 ─────────────────────────────────────────────────────────
+
+  /// 重新扫描当前文件夹（含所有层级）的封面：逐个集合检查集合封面与资源缩略图，
+  /// 缺失的重新加入生成队列；远程集合下发到对应节点后台补生成。
+  ///
+  /// 范围口径与浏览层一致：根目录=整个本地库 + 全部启用节点；普通文件夹=整棵子树；
+  /// 智能文件夹=命中集合；同名分组=组内集合；远程文件夹=节点按子树扫描。
+  Future<void> rescanFolderCovers() async {
+    if (isScanning.value) return;
+    // 用户主动点击即表示要生成：暂停状态下先恢复，否则新任务会被入队入口直接拦掉
+    if (thumbGenerationPaused.value) resumeThumbGeneration();
+
+    final folderId = currentFolderId.value;
+
+    // 远程文件夹：整棵子树交给节点扫描（节点并发执行，进度走远程进度条）
+    if (folderId != null && isRemoteFolder(folderId)) {
+      final nodeId = getRemoteFolderNodeId(folderId);
+      final rawId = getRemoteRawFolderId(folderId);
+      if (nodeId == null || rawId == null) {
+        showSnack('错误', '远程文件夹映射不存在');
+        return;
+      }
+      await _rescanRemoteFolderCovers(nodeId: nodeId, folderId: rawId);
+      return;
+    }
+
+    final localTargets = <media_api.MediaCollection>[];
+    // nodeId → 节点原始集合 ID（按节点归组，一次调用下发一批）
+    final remoteTargets = <String, List<String>>{};
+    var scanAllRemoteNodes = false;
+
+    if (folderId == null) {
+      // 根目录 = 整个媒体库
+      localTargets.addAll(collections);
+      scanAllRemoteNodes = true;
+    } else if (isSmartFolder(folderId)) {
+      final sf = getSmartFolder(folderId);
+      if (sf == null) {
+        showSnack('错误', '智能文件夹不存在');
+        return;
+      }
+      _splitCoverTargets(
+        collectionsMatchingSmartFolder(sf),
+        localTargets,
+        remoteTargets,
+      );
+    } else if (isDupGroup(folderId)) {
+      _splitCoverTargets(dupGroupCollections(folderId), localTargets, remoteTargets);
+    } else {
+      // 普通本地文件夹：包含自身及全部子孙层级的集合
+      final subtree = _collectLocalFolderSubtree(folderId);
+      localTargets.addAll(
+        collections.where(
+          (c) => c.folderId != null && subtree.contains(c.folderId),
+        ),
+      );
+    }
+
+    isScanning.value = true;
+    var checked = 0;
+    var itemCount = 0;
+    var fail = 0;
+    var remoteCount = 0;
+    try {
+      if (localTargets.isNotEmpty) {
+        // 先清掉上轮的失败/无封面负缓存，否则这些集合不会重新尝试
+        for (final collection in localTargets) {
+          _collectionCoverFailed.remove(collection.id);
+          _audioCoverEmptyCollections.remove(collection.id);
+        }
+        // 清负缓存后「生成中」加载态需要立刻反映到卡片上
+        _notifyCoverChanged();
+        for (var i = 0; i < localTargets.length; i++) {
+          final collection = localTargets[i];
+          scanStatusText.value =
+              '检查封面 ${i + 1}/${localTargets.length}: ${collection.title}';
+          try {
+            // 不挂当前文件夹取消组：扫描是显式操作，离开文件夹也不应中断
+            enqueueLocalCollectionCover(collection, trackFolder: false);
+            final items = await media_api.getMediaCollectionItems(
+              collectionId: collection.id,
+            );
+            for (final item in items) {
+              itemCount++;
+              switch (item.kind) {
+                case media_api.MediaKind.image:
+                  _itemThumbFailed.remove(item.filePath);
+                  _enqueueItemThumbnail(item.filePath);
+                case media_api.MediaKind.video:
+                  _enqueueOrPrioritizeScrub(item.filePath);
+                case media_api.MediaKind.audio:
+                  // 音频封面走独立缓存：删掉旧结果才能重新提取
+                  _audioCoverCache.remove(item.filePath);
+                  getAudioCoverSource(item.filePath).ignore();
+              }
+            }
+            checked++;
+          } catch (e) {
+            fail++;
+            _logger.error('[RescanCover] 集合 ${collection.title} 检查失败: $e');
+          }
+          // 让出 UI 线程：集合很多时保持进度文本可刷新
+          if (i % 5 == 4) await Future.delayed(Duration.zero);
+        }
+      }
+
+      if (scanAllRemoteNodes) {
+        final nodes = enabledRemoteNodes;
+        for (var i = 0; i < nodes.length; i++) {
+          scanStatusText.value = '节点检查 ${i + 1}/${nodes.length}: ${nodes[i].name}';
+          try {
+            remoteCount += await nodeSettingsService.rescanNodeMediaCovers(
+              nodeId: nodes[i].id,
+              width: mediaPrefs.effectiveRemoteCoverWidth,
+            );
+          } catch (e) {
+            fail++;
+            _logger.error('[RescanCover] 节点 ${nodes[i].name} 检查失败: $e');
+          }
+        }
+      }
+      for (final entry in remoteTargets.entries) {
+        if (entry.value.isEmpty) continue;
+        scanStatusText.value = '节点检查 ${entry.value.length} 个集合';
+        try {
+          remoteCount += await nodeSettingsService.rescanNodeMediaCovers(
+            nodeId: entry.key,
+            collectionIds: entry.value,
+            width: mediaPrefs.effectiveRemoteCoverWidth,
+          );
+        } catch (e) {
+          fail++;
+          _logger.error('[RescanCover] 节点 ${entry.key} 检查失败: $e');
+        }
+      }
+      if (remoteCount > 0) {
+        // 节点已开始后台生成，立刻切到繁忙轮询（2s）
+        _scheduleRemoteThumbPoll(const Duration(seconds: 2));
+      }
+    } finally {
+      isScanning.value = false;
+      scanStatusText.value = '';
+    }
+
+    _logger.info(
+      '[RescanCover] 本地集合 $checked 个/资源 $itemCount 个，远程集合 $remoteCount 个，失败 $fail 个',
+    );
+    if (checked == 0 && remoteCount == 0 && fail > 0) {
+      showSnack('错误', '封面扫描失败，请检查目录是否存在');
+      return;
+    }
+    final parts = <String>[
+      if (checked > 0) '已检查 $checked 个集合（$itemCount 个资源）',
+      if (remoteCount > 0) '节点已开始检查 $remoteCount 个集合',
+    ];
+    showSnack(
+      '完成',
+      parts.isEmpty ? '当前范围没有可扫描的集合' : '${parts.join('，')}，缺失封面已加入生成队列',
+    );
+  }
+
+  /// 远程文件夹封面扫描：节点按文件夹子树自行收集集合并后台生成。
+  Future<void> _rescanRemoteFolderCovers({
+    required String nodeId,
+    required String folderId,
+  }) async {
+    isScanning.value = true;
+    scanStatusText.value = '节点检查封面...';
+    try {
+      final count = await nodeSettingsService.rescanNodeMediaCovers(
+        nodeId: nodeId,
+        folderId: folderId,
+        width: mediaPrefs.effectiveRemoteCoverWidth,
+      );
+      if (count > 0) {
+        _scheduleRemoteThumbPoll(const Duration(seconds: 2));
+      }
+      showSnack(
+        count > 0 ? '完成' : '提示',
+        count > 0 ? '节点已开始检查 $count 个集合的封面' : '当前文件夹下没有可扫描的集合',
+      );
+    } catch (e) {
+      showSnack('错误', '节点封面扫描失败: $e');
+    } finally {
+      isScanning.value = false;
+      scanStatusText.value = '';
+    }
+  }
+
+  /// 把一批集合按「本地 / 远程节点」拆开，供重扫封面分别入队与下发。
+  void _splitCoverTargets(
+    Iterable<media_api.MediaCollection> source,
+    List<media_api.MediaCollection> local,
+    Map<String, List<String>> remote,
+  ) {
+    for (final collection in source) {
+      if (!isRemoteCollection(collection.id)) {
+        local.add(collection);
+        continue;
+      }
+      final nodeId = getRemoteNodeId(collection.id);
+      final rawId = getRemoteRawCollectionId(collection.id);
+      if (nodeId == null || rawId == null) continue;
+      (remote[nodeId] ??= <String>[]).add(rawId);
+    }
+  }
+
+  /// 收集 [rootId] 及其全部子孙文件夹 ID（仅文件夹层级，不含集合）。
+  Set<String> _collectLocalFolderSubtree(String rootId) {
+    final ids = <String>{};
+    final queue = <String>[rootId];
+    while (queue.isNotEmpty) {
+      final id = queue.removeLast();
+      if (!ids.add(id)) continue;
+      for (final folder in mergedFolders) {
+        if (folder.parentId == id) queue.add(folder.id);
+      }
+    }
+    return ids;
+  }
+
   // ── 集合 CRUD ────────────────────────────────────────────────────────────
 
   /// 处理桌面端拖入的文件或文件夹路径列表。

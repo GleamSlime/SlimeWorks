@@ -20,12 +20,28 @@ pub fn thumb_generation_progress() -> (u64, u64) {
     )
 }
 
-/// 带统计包装的节点缩略图生成：只走内存缓存（1 小时 TTL），不落盘、不污染本地邻近缓存。
-fn generate_thumbnail_bytes_tracked(file_path: &str, width: u32) -> Option<Vec<u8>> {
-    THUMB_TOTAL.fetch_add(1, Ordering::Relaxed);
-    let result = media_api::generate_thumbnail_bytes(file_path.to_string(), width);
-    THUMB_COMPLETED.fetch_add(1, Ordering::Relaxed);
-    result
+/// 按需生成节点缩略图：只走内存缓存（1 小时 TTL），不落盘、不污染本地邻近缓存。
+///
+/// 不计入批量进度：浏览时每个封面请求都会走到这里，若一并计数，
+/// 客户端状态栏会长期显示「节点封面生成中」且数字只增不减。
+fn generate_thumbnail_bytes_on_demand(file_path: &str, width: u32) -> Option<Vec<u8>> {
+    media_api::generate_thumbnail_bytes(file_path.to_string(), width)
+}
+
+/// 开始一批批量生成任务：上一批已全部完成时先清零，再累加本批总数。
+///
+/// 节点进度计数器是进程级累计值；不复位的话客户端看到的永远是
+/// 「已完成数与历史总数的比例」，比如新一批 10 个任务却显示 400/500。
+fn begin_bulk_batch(count: u64) {
+    static BATCH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = BATCH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let completed = THUMB_COMPLETED.load(Ordering::Relaxed);
+    let total = THUMB_TOTAL.load(Ordering::Relaxed);
+    if completed >= total {
+        THUMB_TOTAL.store(0, Ordering::Relaxed);
+        THUMB_COMPLETED.store(0, Ordering::Relaxed);
+    }
+    THUMB_TOTAL.fetch_add(count, Ordering::Relaxed);
 }
 
 /// 后台为一批媒体文件生成缩略图并计入进度统计（导入后全量生成用）。
@@ -41,7 +57,7 @@ pub fn spawn_bulk_thumbnail_generation(files: Vec<String>, width: u32) {
     if files.is_empty() || width == 0 {
         return;
     }
-    THUMB_TOTAL.fetch_add(files.len() as u64, Ordering::Relaxed);
+    begin_bulk_batch(files.len() as u64);
 
     let workers = std::thread::available_parallelism()
         .map(|n| n.get())
@@ -203,7 +219,7 @@ async fn serve_resized_cover(file_path: &str, width: u32) -> Result<Response<Bod
 /// 读取（必要时生成）封面缩略图字节。返回 None 表示音视频无内嵌封面。
 fn read_cover_bytes_blocking(file_path: &str, width: u32) -> Option<(Vec<u8>, String)> {
     // 节点服务期缩略图只走内存缓存（1 小时 TTL），不写资源旁邻近缓存，避免污染本地资源缩略图
-    if let Some(bytes) = generate_thumbnail_bytes_tracked(file_path, width) {
+    if let Some(bytes) = generate_thumbnail_bytes_on_demand(file_path, width) {
         return Some((bytes, "image/jpeg".to_string()));
     }
 
@@ -454,7 +470,7 @@ fn handle_media_query_blocking(
         let width = requested_width.unwrap_or(if is_cover_mode { 240 } else { 0 });
         if width > 0 {
             // 节点服务期缩略图只走内存缓存，不落盘、不污染本地邻近缓存
-            if let Some(bytes) = generate_thumbnail_bytes_tracked(file_path, width) {
+            if let Some(bytes) = generate_thumbnail_bytes_on_demand(file_path, width) {
                 return Ok(bytes);
             }
         }

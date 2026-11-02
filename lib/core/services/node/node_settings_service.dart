@@ -951,6 +951,40 @@ class NodeSettingsService extends GetxService {
     return Map<String, dynamic>.from(data);
   }
 
+  /// 让节点重新检查指定范围内的集合封面，缺失的由节点后台补生成。
+  ///
+  /// [folderId]：节点原始文件夹 ID，扫描其整棵子树（含所有层级）；
+  /// [collectionIds]：节点原始集合 ID 列表；
+  /// 两者都不传表示节点上的全部集合。
+  /// 返回本次纳入扫描的集合数（生成进度由 `get_thumb_progress` 上报）。
+  Future<int> rescanNodeMediaCovers({
+    required String nodeId,
+    String? folderId,
+    List<String>? collectionIds,
+    int? width,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) {
+      throw StateError('节点不存在: $nodeId');
+    }
+
+    final response = await _callNode(
+      node: node,
+      action: 'rescan_media_covers',
+      params: <String, dynamic>{
+        // 两种范围互斥：传了集合列表就按列表，否则按文件夹子树
+        'folder_id': ?folderId,
+        'collection_ids': ?collectionIds,
+        // 生成宽度必须与客户端封面请求一致，否则节点缓存 key 不同、等于白生成
+        'width': ?width,
+      },
+    );
+
+    final data = response['data'];
+    if (data is! Map) return 0;
+    return int.tryParse('${data['count']}') ?? 0;
+  }
+
   Future<void> renameNodeMediaCollection({
     required String nodeId,
     required String collectionId,
