@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/rss-sparkle-1.0">
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
     <title>SlimeWorks</title>
     <language>zh-CN</language>
@@ -7,15 +7,26 @@
     <item>
       <title>1.0.0</title>
       <description>
-        <![CDATA[Auto build v1.0.0+20261014.0540bdc]]>
+        <![CDATA[Auto build v1.0.0+20261030.7d0ace6]]>
       </description>
-      <pubDate>Wed, 14 Oct 2026 04:42:56 +0000</pubDate>
+      <pubDate>Fri, 30 Oct 2026 08:57:24 +0000</pubDate>
+      <sparkle:version>130</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
       <enclosure
-        url="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0+20261014.0540bdc/slime_works-1.0.0+31-macos.dmg"
-        sparkle:version="127"
+        url="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0+20261030.7d0ace6/slime_works-1.0.0+130-macos.dmg"
+        sparkle:os="macos"
+        length="68055147"
+        type="application/octet-stream" />
+    </item>
+    <item>
+      <title>1.0.0</title>
+      <pubDate>Fri, 30 Oct 2026 08:57:24 +0000</pubDate>
+      <enclosure
+        url="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0+20261030.7d0ace6/史莱姆工坊_1.0.0+130_windows_x64.exe"
+        sparkle:os="windows"
+        sparkle:version="1.0.0.130"
         sparkle:shortVersionString="1.0.0"
-        sparkle:edSignature=""
-        length="67991783"
+        length="36298631"
         type="application/octet-stream" />
     </item>
   </channel>
