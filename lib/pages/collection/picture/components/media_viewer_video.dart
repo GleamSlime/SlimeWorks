@@ -60,6 +60,27 @@ class _VideoPreviewState extends State<_VideoPreview> {
   /// 纯音频的就绪监听（没有视频轨道，只能等 playing 事件）。
   StreamSubscription? _audioReadySub;
 
+  /// 播放器音量变化订阅：把用户调节结果写回持久化设置。
+  StreamSubscription? _volumeSub;
+
+  /// 音量写盘防抖：拖动滑块会连续触发几十次，合并成停手后写一次。
+  Timer? _volumeSaveTimer;
+
+  /// 音量偏好（预览页专用：音量跨集、跨会话沿用，不影响音乐播放器的音量）。
+  MediaPrefsService get _volumePrefs => getIt<MediaPrefsService>();
+
+  /// 立即把当前播放器音量落盘（防抖窗口内离开页面时调用，否则这次调节会丢）。
+  void _flushVolume() {
+    final hadPending = _volumeSaveTimer?.isActive ?? false;
+    _volumeSaveTimer?.cancel();
+    _volumeSaveTimer = null;
+    if (!hadPending) return;
+    final v = _player?.state.volume;
+    if (v != null && (v - _volumePrefs.videoVolume.value).abs() >= 0.5) {
+      _volumePrefs.setVideoVolume(v);
+    }
+  }
+
   // 应用内迷你悬浮窗（画中画）：复用同一 Player 的第二个视频输出
   VideoController? _miniController;
   bool _miniMode = false;
@@ -92,9 +113,23 @@ class _VideoPreviewState extends State<_VideoPreview> {
     _readySub?.cancel();
     _player = Player(configuration: const PlayerConfiguration(bufferSize: 128 * 1024 * 1024));
     _videoController = VideoController(_player!);
+    // 套用上次记住的音量：Player 每个实例都是全新状态，不在这里恢复就会回到 100%
+    _player!
+      ..setVolume(_volumePrefs.videoVolume.value)
+      ..setPlaylistMode(PlaylistMode.single);
+    // 用户在面板里拖动后写回设置，下次打开预览沿用。
+    // 与 videoVolume 同值的事件直接跳过：既避免自己 setVolume 的回声，也防重入。
+    _volumeSub?.cancel();
+    _volumeSub = _player!.stream.volume.listen((v) {
+      if ((v - _volumePrefs.videoVolume.value).abs() < 0.5) return;
+      _volumeSaveTimer?.cancel();
+      _volumeSaveTimer = Timer(const Duration(milliseconds: 400), () {
+        if (!mounted) return;
+        _volumePrefs.setVideoVolume(v);
+      });
+    });
     final uri = source.startsWith('http') ? source : Uri.file(source).toString();
     _player!.open(Media(uri));
-    _player!.setPlaylistMode(PlaylistMode.single);
     _readySub = _player!.stream.videoParams.listen((params) {
       if ((params.dw ?? 0) > 0 && !_playerReady) {
         _readySub?.cancel();
@@ -133,6 +168,9 @@ class _VideoPreviewState extends State<_VideoPreview> {
       _readySub?.cancel();
       _audioReadySub?.cancel();
       _audioReadySub = null;
+      _volumeSub?.cancel();
+      _volumeSub = null;
+      _flushVolume();
       _miniController = null;
       _player?.dispose();
       _player = null;
@@ -165,6 +203,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
   void dispose() {
     _readySub?.cancel();
     _audioReadySub?.cancel();
+    _volumeSub?.cancel();
+    _flushVolume();
     _player?.dispose();
     super.dispose();
   }

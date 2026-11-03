@@ -1580,6 +1580,78 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     PaintingBinding.instance.imageCache.clearLiveImages();
   }
 
+  /// 收集 [rootFolderId] 及其全部子孙文件夹的 ID（BFS，含自身）。
+  Set<String> _folderSubtreeIds(String rootFolderId) {
+    final ids = <String>{};
+    final queue = <String>[rootFolderId];
+    while (queue.isNotEmpty) {
+      final id = queue.removeLast();
+      if (!ids.add(id)) continue;
+      for (final folder in mergedFolders) {
+        if (folder.parentId == id) queue.add(folder.id);
+      }
+    }
+    return ids;
+  }
+
+  /// 收集 [rootFolderId] 整棵子树（含自身与全部子孙文件夹）下的远程集合。
+  ///
+  /// 远程文件夹经常只是层级容器：集合挂在更深的子文件夹里，只看直接子级
+  /// 会把一个明明装满内容的文件夹判成「暂无集合」。
+  List<media_api.MediaCollection> _collectionsInFolderSubtree(String rootFolderId) {
+    final folderIds = _folderSubtreeIds(rootFolderId);
+    return mergedCollections
+        .where(
+          (c) =>
+              isRemoteCollection(c.id) &&
+              c.folderId != null &&
+              folderIds.contains(c.folderId),
+        )
+        .toList();
+  }
+
+  /// 清理子树里已被删空的远程文件夹（自底向上：先删空子级，父级才能跟着变空）。
+  ///
+  /// 删除节点文件只会移除集合记录，子文件夹会原样留在库中；
+  /// 不清掉的话，删完一个装满内容的文件夹还会剩下一批空壳目录。
+  /// [rootFolderId] 自身不在这里处理，交由调用方决定。
+  Future<void> _pruneEmptyRemoteSubfolders(
+    Set<String> subtreeIds,
+    String rootFolderId,
+  ) async {
+    // 按层级深度倒序：先处理最深的，父级才可能在同一轮里也变空
+    final ordered = subtreeIds.where((id) => id != rootFolderId).toList()
+      ..sort((a, b) => _folderDepth(b).compareTo(_folderDepth(a)));
+    for (final folderId in ordered) {
+      final hasCollection = mergedCollections.any(
+        (c) => c.folderId == folderId,
+      );
+      final hasChild = mergedFolders.any((f) => f.parentId == folderId);
+      if (hasCollection || hasChild) continue;
+      if (currentFolderId.value == folderId) {
+        currentFolderId.value = mergedFolders
+            .firstWhereOrNull((f) => f.id == folderId)
+            ?.parentId;
+      }
+      await deleteFolder(folderId);
+    }
+  }
+
+  /// 文件夹在树中的深度（根下的文件夹为 1），用于自底向上清理。
+  int _folderDepth(String folderId) {
+    var depth = 0;
+    var cursor = mergedFolders.firstWhereOrNull((f) => f.id == folderId);
+    final visited = <String>{};
+    while (cursor != null && visited.add(cursor.id)) {
+      depth++;
+      final parentId = cursor.parentId;
+      cursor = parentId == null
+          ? null
+          : mergedFolders.firstWhereOrNull((f) => f.id == parentId);
+    }
+    return depth;
+  }
+
   /// 删除远程节点上某个文件夹内所有集合的本地物理文件。
   /// 全部删完后统一重取一次节点元数据（体积/条数来自节点侧聚合表，不重取就是旧值），
   /// 再把节点已无现存资源的集合移出库；文件夹变空后自动删除文件夹。
@@ -1590,11 +1662,14 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       return;
     }
 
-    final folderCollections = mergedCollections
-        .where((c) => c.folderId == folderId && isRemoteCollection(c.id))
-        .toList();
+    final folderCollections = _collectionsInFolderSubtree(folderId);
+    // 子树 ID 要在删除前先取：集合删光后 deleteFolder 会改 mergedFolders
+    final subtreeIds = _folderSubtreeIds(folderId);
 
     if (folderCollections.isEmpty) {
+      // 「暂无集合」原本只查直接子级，但远程文件夹常是空壳——集合都挂在子文件夹里，
+      // 表现为对一个明明有内容的文件夹报「暂无集合」。这里递归收集整棵子树，
+      // 顺带把子文件夹里的集合并进删除范围。
       showSnack('提示', '该远程文件夹暂无集合');
       return;
     }
@@ -1644,10 +1719,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         (sum, count) => sum + count,
       );
 
-      // 若文件夹现在已空则一并删除
-      final remainingInFolder = mergedCollections
-          .where((c) => c.folderId == folderId)
-          .toList();
+      // 若文件夹现在已空则一并删除；若还有内容，顺带清掉已被删空的子文件夹
+      await _pruneEmptyRemoteSubfolders(subtreeIds, folderId);
+      final remainingInFolder = _collectionsInFolderSubtree(folderId);
       if (remainingInFolder.isEmpty) {
         await deleteFolder(folderId);
         showSnack('完成', '已从节点删除 $totalDeleted 个文件，文件夹已清空并移除');

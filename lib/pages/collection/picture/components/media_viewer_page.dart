@@ -14,6 +14,8 @@ import 'package:media_kit_video/media_kit_video_controls/media_kit_video_control
     as media_controls;
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/index.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/media_prefs_service.dart';
 
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';

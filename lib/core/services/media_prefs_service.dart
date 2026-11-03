@@ -107,6 +107,11 @@ class MediaPrefsService {
   static const _keyFileCheckDepth = 'media_file_check_depth';
   static const _keyFakeCover = 'media_fake_cover';
   static const _keyFakeCoverPath = 'media_fake_cover_path';
+  static const _keyVideoVolume = 'media_video_volume';
+
+  /// 预览页视频/音频的播放音量（0~100，默认 100）。
+  /// 每换一个 Player 实例都要重新套用，否则调过的音量在切页后就丢了。
+  final videoVolume = 100.0.obs;
 
   /// 伪封面的出厂默认图：只是开发机上的一张壁纸，换台机器读不到时封面退成实色底，
   /// 在媒体设置里换成任意本地图片即可。
@@ -183,6 +188,7 @@ class MediaPrefsService {
     privacyBlurSigma.value = (prefs.getDouble(_keyPrivacyBlurSigma) ?? 15.0).clamp(5.0, 40.0);
     fakeCover.value = prefs.getBool(_keyFakeCover) ?? false;
     fakeCoverPath.value = prefs.getString(_keyFakeCoverPath) ?? defaultFakeCoverPath;
+    videoVolume.value = (prefs.getDouble(_keyVideoVolume) ?? 100.0).clamp(0.0, 100.0);
     final depthStr = prefs.getString(_keyFileCheckDepth) ?? 'coverOnly';
     fileCheckDepth.value = FileCheckDepth.values.firstWhere(
       (e) => e.name == depthStr,
@@ -267,6 +273,13 @@ class MediaPrefsService {
     fileCheckDepth.value = v;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyFileCheckDepth, v.name);
+  }
+
+  /// 设置预览页播放音量（0~100），写入后下次打开预览直接沿用。
+  Future<void> setVideoVolume(double v) async {
+    videoVolume.value = v.clamp(0.0, 100.0);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keyVideoVolume, videoVolume.value);
   }
 
   /// 返回所有媒体缓存目录（视频帧缩略图 + 封面图缩略图）。
