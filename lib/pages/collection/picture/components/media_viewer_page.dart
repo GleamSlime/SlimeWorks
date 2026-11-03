@@ -92,6 +92,9 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
   int _wheelZoomSeq = 0;
   final _wheelZoomNotifier = ValueNotifier<(int, int, Offset, double)>((0, -1, Offset.zero, 0));
 
+  /// 左边缘右滑返回的横向累积位移（松手时按它判定是否提交）。
+  double _edgeBackAccum = 0.0;
+
   bool get _isMobile => Platform.isAndroid || Platform.isIOS;
 
   void _resetImmersiveTimer() {
@@ -195,7 +198,47 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
         _isDragging = false;
         _pendingIndex = null;
       });
+      // 翻到新的一页后立刻预热它的下一项，继续滑不会卡在空白画面上
+      _preloadNeighborMedia();
     }
+  }
+
+  /// 预加载下一项的媒体数据（图片解码 / 视频封面图）。
+  ///
+  /// 由当前项的「首帧就绪」回调触发：当前图还没出来就去抢下一张的解码与带宽，
+  /// 首屏只会更慢。视频不预建播放器（libmpv 实例很重），只把封面图先塞进图片缓存，
+  /// 真正切过去时画面已有底图。
+  void _preloadNeighborMedia() {
+    if (!mounted) return;
+    final nextIndex = _currentIndex + 1;
+    if (nextIndex >= widget.items.length) return;
+    final item = widget.items[nextIndex];
+    final coverSource = widget.viewModel.buildMediaSource(
+      item,
+      collectionId: widget.collectionId,
+      isCover: true,
+    );
+    final isVideoLike =
+        item.kind == media_api.MediaKind.video || item.kind == media_api.MediaKind.audio;
+    // 本地视频/音频的「封面」就是原始文件本身，当图片预解码必然失败；
+    // 真正的封帧要在切页后由播放器出画面，这里直接跳过。
+    if (isVideoLike && !(coverSource?.startsWith('http') ?? false)) return;
+    // 视频/音频只预热封面；图片预热的是预览原图（详情页看的是全图，不是缩略图）
+    final target = isVideoLike
+        ? coverSource
+        : widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
+    if (target == null || target.isEmpty) return;
+    final ImageProvider provider = target.startsWith('http')
+        ? NetworkImage(target)
+        : FileImage(File(target));
+    // 失败交给正式加载时再报：预加载只是加速，不该产生错误日志。
+    // 放到下一帧：本方法常由 Image 的 frameBuilder 在 build 期间回调，
+    // 直接在 build 里解码会挤占同一帧的布局开销。
+    final context = this.context;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      precacheImage(provider, context, onError: (_, _) {}).catchError((_) {});
+    });
   }
 
   // ── 即时跳转（键盘 / 滚轮，不需要跟手） ──────────────────────────────────
@@ -359,6 +402,7 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
         title: item.title,
         coverSource: coverSource,
         isActive: isActive,
+        onReady: index == _currentIndex ? _preloadNeighborMedia : null,
         onDragStart: () => _onDragStart(horizontal: false),
         onDragUpdate: (dy) => _onDragUpdate(dy),
         onDragEnd: (velocity, screenExtent) => _onDragEnd(velocity, screenExtent),
@@ -381,6 +425,8 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
       wheelZoomNotifier: _wheelZoomNotifier,
       onSwipeDelta: _handleSwipeDelta,
       onSwipeEnd: () => _scrollAccum = 0,
+      // 当前图首帧就绪后再预热下一项，避免抢首屏的解码与带宽
+      onLoaded: index == _currentIndex ? _preloadNeighborMedia : null,
       onSave: isMobile ? () => _saveCurrentItem(context) : null,
       onZoomChanged: (zoomed) {
         if (_imageIsZoomed != zoomed) setState(() => _imageIsZoomed = zoomed);
@@ -605,6 +651,33 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
                 ),
               ),
             ),
+
+            // ── 左边缘右滑返回（关闭预览回到列表）──────────────────────────
+            // 压在翻页手势层之上，窄条独占指针；图片已缩放时让位给平移手势。
+            // 仅移动端启用：桌面端鼠标从左侧拖拽是平移/框选习惯，不该关页面。
+            if (_isMobile && !_imageIsZoomed)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: AppTheme.metrics.kSpace24,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragStart: (_) => _edgeBackAccum = 0.0,
+                  onHorizontalDragUpdate: (d) =>
+                      _edgeBackAccum += d.delta.dx,
+                  onHorizontalDragEnd: (d) {
+                    final velocity = d.velocity.pixelsPerSecond.dx;
+                    // 拖过屏宽 1/4 或快速右甩都算提交，其余视为误触
+                    final committed =
+                        _edgeBackAccum > size.width * 0.25 || velocity > 400;
+                    _edgeBackAccum = 0.0;
+                    if (committed) Navigator.of(context).maybePop();
+                  },
+                  onHorizontalDragCancel: () => _edgeBackAccum = 0.0,
+                  child: const SizedBox.expand(),
+                ),
+              ),
 
             // ── 右下角：浮动操作菜单（视频/音频页自带控制栏，隐藏以免遮挡）────
             if (!_currentIsVideo)

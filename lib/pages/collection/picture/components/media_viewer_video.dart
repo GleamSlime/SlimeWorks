@@ -22,6 +22,7 @@ class _VideoPreview extends StatefulWidget {
     this.isAudio = false,
     this.title,
     this.coverSource,
+    this.onReady,
   });
 
   final String? source;
@@ -41,6 +42,9 @@ class _VideoPreview extends StatefulWidget {
   /// 封面图路径或 URL（用于系统播放控件显示）
   final String? coverSource;
 
+  /// 播放器就绪（画面尺寸已确定）时回调一次，父级据此预热下一项。
+  final VoidCallback? onReady;
+
   @override
   State<_VideoPreview> createState() => _VideoPreviewState();
 }
@@ -52,6 +56,9 @@ class _VideoPreviewState extends State<_VideoPreview> {
   bool _swiping = false;
   bool _playerReady = false;
   StreamSubscription? _readySub;
+
+  /// 纯音频的就绪监听（没有视频轨道，只能等 playing 事件）。
+  StreamSubscription? _audioReadySub;
 
   // 应用内迷你悬浮窗（画中画）：复用同一 Player 的第二个视频输出
   VideoController? _miniController;
@@ -97,9 +104,20 @@ class _VideoPreviewState extends State<_VideoPreview> {
           if (!mounted) return;
           _playerReady = true;
           setState(() {});
+          widget.onReady?.call();
         });
       }
     });
+    // 纯音频没有视频轨道，videoParams 永远不会到：用「开始播放」当作就绪信号
+    if (widget.isAudio) {
+      _audioReadySub?.cancel();
+      _audioReadySub = _player!.stream.playing.listen((playing) {
+        if (!playing || !mounted || _playerReady) return;
+        _playerReady = true;
+        setState(() {});
+        widget.onReady?.call();
+      });
+    }
     _updateNowPlaying();
   }
 
@@ -113,6 +131,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
     }
     if (!widget.isActive && oldWidget.isActive) {
       _readySub?.cancel();
+      _audioReadySub?.cancel();
+      _audioReadySub = null;
       _miniController = null;
       _player?.dispose();
       _player = null;
@@ -144,6 +164,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
   @override
   void dispose() {
     _readySub?.cancel();
+    _audioReadySub?.cancel();
     _player?.dispose();
     super.dispose();
   }

@@ -16,6 +16,7 @@ class _ImageViewer extends StatefulWidget {
     required this.onSwipeEnd,
     this.onSave,
     this.onZoomChanged,
+    this.onLoaded,
     this.pageIndex = -1,
     this.wheelZoomNotifier,
   });
@@ -28,6 +29,9 @@ class _ImageViewer extends StatefulWidget {
 
   /// 移动端长按时触发保存。
   final VoidCallback? onSave;
+
+  /// 图片首帧就绪时回调一次（父级据此预热下一项）。
+  final VoidCallback? onLoaded;
 
   /// 图片缩放状态变化时回调（true = 已缩放/变换，false = 恢复原样）。
   final void Function(bool isZoomed)? onZoomChanged;
@@ -71,6 +75,16 @@ class _ImageViewerState extends State<_ImageViewer> {
   // 已处理的滚轮缩放通知序号（去重）
   int _lastWheelSeq = 0;
 
+  /// 首帧就绪回调是否已发出（图片源变化时重置）。
+  bool _loadedNotified = false;
+
+  /// 图片首帧解码完成：通知父级可以开始预热下一项。
+  void _notifyLoaded() {
+    if (_loadedNotified) return;
+    _loadedNotified = true;
+    widget.onLoaded?.call();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -80,6 +94,9 @@ class _ImageViewerState extends State<_ImageViewer> {
   @override
   void didUpdateWidget(_ImageViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.source != widget.source) {
+      _loadedNotified = false;
+    }
     if (oldWidget.wheelZoomNotifier != widget.wheelZoomNotifier) {
       oldWidget.wheelZoomNotifier?.removeListener(_onWheelZoomRequest);
       widget.wheelZoomNotifier?.addListener(_onWheelZoomRequest);
@@ -248,7 +265,10 @@ class _ImageViewerState extends State<_ImageViewer> {
                     width: w,
                     height: h,
                     loadingBuilder: (_, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
+                      if (loadingProgress == null) {
+                        _notifyLoaded();
+                        return child;
+                      }
                       final total = loadingProgress.expectedTotalBytes;
                       final loaded = loadingProgress.cumulativeBytesLoaded;
                       final pct = total != null ? loaded / total : null;
@@ -297,7 +317,10 @@ class _ImageViewerState extends State<_ImageViewer> {
                     width: w,
                     height: h,
                     frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
-                      if (wasSynchronouslyLoaded || frame != null) return child;
+                      if (wasSynchronouslyLoaded || frame != null) {
+                        _notifyLoaded();
+                        return child;
+                      }
                       return Stack(
                         alignment: Alignment.center,
                         children: [

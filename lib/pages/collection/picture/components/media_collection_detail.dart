@@ -46,6 +46,9 @@ class MediaCollectionDetailView extends StatelessWidget {
     // 独立 Obx：加载 / 条目变化时仅内部重建，不触发外层 AnimatedSwitcher 闪烁
     return Obx(() {
       final s = AppSemantic.of(context);
+      // 在 Obx 的收集窗口内读一次封面版本：缩略图落地/失败时整体重建一次，
+      // 卡片才能从加载态换成真实图片（itemBuilder 里的读取建立不了订阅）。
+      viewModel.coverVersionTick;
       final isLoading = viewModel.isLoadingItems.value;
       final sortedItems = viewModel.sortedCurrentItems;
       final collectionId = viewModel.currentCollectionId.value ?? '';
@@ -239,6 +242,10 @@ class MediaCollectionDetailView extends StatelessWidget {
                           : null,
                   showOverlay: viewModel.showMediaOverlay.value,
                   isLost: viewModel.checkItemLost(item),
+                  coverLoading: viewModel.isItemCoverGenerating(
+                    item,
+                    collectionId: collectionId,
+                  ),
                   onSaveToGallery: (PlatformUtil.isMobile && item.kind == media_api.MediaKind.image)
                       ? () => MasonryMediaGridState.saveToGallery(context, fullSource)
                       : null,

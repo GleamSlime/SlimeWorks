@@ -32,6 +32,7 @@ class MediaItemTile extends StatefulWidget {
     this.fixedHeight,
     this.showOverlay = true,
     this.isLost = false,
+    this.coverLoading = false,
     this.coverFallbackSource,
   });
 
@@ -77,6 +78,9 @@ class MediaItemTile extends StatefulWidget {
   final bool showOverlay;
 
   final bool isLost;
+
+  /// 本地图片缩略图仍在生成：由 VM 统一给出，`source` 为空时据此显示加载态。
+  final bool coverLoading;
 
   @override
   State<MediaItemTile> createState() => _MediaItemTileState();
@@ -209,10 +213,12 @@ class _MediaItemTileState extends State<MediaItemTile> {
   bool get _isAudio => widget.item.kind == media_api.MediaKind.audio;
   bool get _isImage => widget.item.kind == media_api.MediaKind.image;
 
-  /// 封面是否正在本地生成（视频抽帧 / 音频提取）：此时 source 为空应显示加载态。
+  /// 封面是否正在生成（视频抽帧 / 音频提取 / 本地图片缩略图）：此时 source 为空应显示加载态。
+  /// 图片这一档优先用宿主传入的 [MediaItemTile.coverLoading]（与 VM 的缩略图判定同源）。
   bool get _coverLoading =>
       (_isVideo && widget.onRequestScrubFrames != null && _loadingFrames) ||
-      (_isAudio && widget.onRequestAudioCover != null && _loadingAudioCover);
+      (_isAudio && widget.onRequestAudioCover != null && _loadingAudioCover) ||
+      (_isImage && widget.coverLoading);
 
   /// 左下镂空标签用的类型名
   String get _kindLabel => _isAudio ? '音频' : _isVideo ? '视频' : '图片';

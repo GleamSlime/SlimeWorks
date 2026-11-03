@@ -256,6 +256,10 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       fixedHeight: tileHeight,
       showOverlay: widget.viewModel.showMediaOverlay.value,
       isLost: widget.isRemote ? false : widget.viewModel.checkItemLost(item),
+      coverLoading: widget.viewModel.isItemCoverGenerating(
+        item,
+        collectionId: widget.collectionId,
+      ),
       onTap: () => widget.onOpenViewer(globalIndex),
       onRequestScrubFrames: (isVideo && !widget.isRemote)
           ? () => widget.viewModel.getVideoScrubFrames(item.filePath)

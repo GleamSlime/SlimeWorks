@@ -21,7 +21,15 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
         _asyncCoverVersion.value;
         final cached = _itemThumbnails[item.filePath];
         if (cached != null) return cached;
+        // 缩略图还没就绪时返回 null，让卡片显示加载态：
+        // 原图动辄数千万像素，拿去当封面解码慢、占内存，解码失败还会闪一下「无图片」图标。
+        // 只有缩略图生成失败或用户暂停生成时才退回原图，否则这张图会一直空着。
+        if (_itemThumbFailed.contains(item.filePath) ||
+            thumbGenerationPaused.value) {
+          return item.filePath;
+        }
         _enqueueItemThumbnail(item.filePath);
+        return null;
       }
       return item.filePath;
     }
@@ -118,6 +126,32 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
       return null;
     }
     return coverPath;
+  }
+
+  /// 封面异步版本号（读取即注册响应式依赖）。
+  ///
+  /// 详情页的 Obx 需要在 build 期间读一次：GridView 的 itemBuilder 在布局阶段执行，
+  /// 那时已不在 Rx 的依赖收集窗口内，卡片里读版本号不会真正建立订阅。
+  int get coverVersionTick => _asyncCoverVersion.value;
+
+  /// 该图片条目的网格缩略图是否仍在生成（供卡片显示加载态而不是占位图标）。
+  ///
+  /// 远程图片由节点按需生成，交给图片自身的首帧加载态，这里一律返回 false。
+  bool isItemCoverGenerating(
+    media_api.MediaItem item, {
+    String? collectionId,
+  }) {
+    // 注册响应式依赖：缩略图落地后卡片能重建
+    _asyncCoverVersion.value;
+    if (item.kind != media_api.MediaKind.image) return false;
+    final targetCollectionId = collectionId ?? currentCollectionId.value;
+    if (targetCollectionId != null && isRemoteCollection(targetCollectionId)) {
+      return false;
+    }
+    if (_itemThumbnails.containsKey(item.filePath)) return false;
+    if (_itemThumbFailed.contains(item.filePath)) return false;
+    if (thumbGenerationPaused.value) return false;
+    return true;
   }
 
   /// 该集合的封面是否正在生成（本地视频抽帧 / 音频提取，且尚无结果）。
@@ -370,6 +404,8 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
             );
             if (thumb == null || thumb.isEmpty) {
               _itemThumbFailed.add(filePath);
+              // 失败也要通知：卡片此刻停在加载态，不重建就会一直转圈
+              _notifyCoverChanged();
               return;
             }
             _logger.info('[ItemThumb] 缩略图已生成: $thumb');
@@ -378,6 +414,8 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
           } catch (e) {
             _logger.error('[ItemThumb] 缩略图生成失败: $filePath err=$e');
             _itemThumbFailed.add(filePath);
+            // 同失败分支：让卡片退回原图，而不是永久停留在加载态
+            _notifyCoverChanged();
           }
         })
         .whenComplete(() {

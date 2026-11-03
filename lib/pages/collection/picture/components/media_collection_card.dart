@@ -429,6 +429,13 @@ class _MediaCollectionCardState extends State<MediaCollectionCard> {
               trailingAtRest: widget.isFavorited,
               media: AnimatedSwitcher(
                 duration: AppMotion.fast,
+                // 默认 layoutBuilder 用 Stack 的松约束，子级会按图片自身尺寸排布，
+                // BoxFit.cover 就变成「按原图宽度铺」，撑不满格子；
+                // 收紧成 StackFit.expand 才能和文件夹卡一样按格宽铺满裁切。
+                layoutBuilder: (currentChild, previousChildren) => Stack(
+                  fit: StackFit.expand,
+                  children: [...previousChildren, ?currentChild],
+                ),
                 // 悬停翻封面时按图源换页，不做淡入淡出会变成硬切闪屏
                 child: MediaCardCover(
                   key: ValueKey('${widget.collection.id}_$displaySource'),
