@@ -150,8 +150,12 @@ lazy_static::lazy_static! {
     static ref NODE_SERVER: Mutex<Option<NodeServerHandle>> = Mutex::new(None);
 }
 
-/// 最大并发连接数，防止 FD 耗尽
-const MAX_CONNECTIONS: usize = 30;
+/// 最大并发连接数，防止 FD 耗尽。
+///
+/// 远端列表页一屏几十张封面是同时发起的：上限压得太低（原 30）时，超出部分
+/// 直接被回 503 让客户端重试，表现为「封面一张张慢慢出、上行跑不满」。
+/// 每个连接只是一个阻塞线程 + 一个 socket，128 路对桌面节点完全吃得下。
+const MAX_CONNECTIONS: usize = 128;
 static ACTIVE_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
 /// 因并发打满而拒绝连接的次数（只用于日志节流）
 static BUSY_REJECTIONS: AtomicUsize = AtomicUsize::new(0);
@@ -258,6 +262,10 @@ fn trace_elapsed(started: std::time::Instant, label: &str) {
 /// 「远程节点取数要卡 10 秒以上」的根因。
 fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
     let conn_started = std::time::Instant::now();
+    // 关闭 Nagle：一屏封面是几十个几十 KB 的小响应，Nagle 会把它们攒着等 ACK，
+    // 叠加对端延迟确认后每条连接要多等一个 RTT。表现是上行长期跑不满、
+    // 预览大图的连续 Range 请求却不受影响（分块足够大）。
+    let _ = stream.set_nodelay(true);
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(10)))
         .ok();

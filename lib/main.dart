@@ -93,6 +93,12 @@ Future<void> main() async {
   // 设为 48MB：缩略图浏览够用，同时把常驻后台的解码图上限压下来。
   PaintingBinding.instance.imageCache.maximumSizeBytes = 48 * 1024 * 1024;
 
+  // 网络图片的连接并发：dart:io 默认对同一 host 最多 6 条连接，远端列表一屏
+  // 几十张封面会在客户端就排成一条长队，表现为「上行永远跑不满」。
+  // 用 HttpOverrides 对进程内所有 HttpClient 生效——release 构建也有效，
+  // 而 debugNetworkImageHttpClientProvider 只在 debug 的断言块里被读取。
+  HttpOverrides.global = _MediaHttpOverrides();
+
   // 在 UI 启动前完成 NodeSettingsService 初始化，避免 ViewModel 与 _postAppInit 并发竞争
   await getIt<NodeSettingsService>().init();
 
@@ -209,6 +215,19 @@ void _registerFfmpegPaths({String? ffmpegPath, String? ffprobePath}) {
   _logger.info(
     '[FFmpeg] 已注册到 Rust 端 | ffmpeg=$ffmpegPath | ffprobe=$ffprobePath',
   );
+}
+
+/// 放开 HTTP 连接并发上限的全局覆盖。
+///
+/// dart:io 默认对同一 host 只开 6 条连接（[HttpClient.maxConnectionsPerHost]），
+/// 媒体库远程封面一屏几十张时，客户端自己就把请求排成了长队——节点侧再快、
+/// 带宽再大也只能一条条走。图片解码与列表加载都是「小响应 × 大批量」，
+/// 放宽到 32 路既能把管道填满，又不至于把节点连接池（128）打满。
+class _MediaHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)..maxConnectionsPerHost = 32;
+  }
 }
 
 class MyApp extends StatefulWidget {

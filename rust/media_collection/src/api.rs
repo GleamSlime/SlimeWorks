@@ -109,6 +109,49 @@ fn release_thumb_permit() {
     }
 }
 
+/// 节点出图的 ffmpeg 并发池，与本地生成（[FFMPEG_CONCURRENCY]）分开计数。
+///
+/// 本地那档是用户可调的「本地缩略图并发」（默认 5），用来保护本机交互体验；
+/// 节点是服务端，吞吐优先，按 CPU 逻辑核数封顶。两条路径各占一个池：
+/// 远程列表批量出图不会被客户端的本地设置限死在 5 路，
+/// 本机浏览也不会被远程批量请求拖慢。
+static NODE_THUMB_PERMITS: OnceLock<(Mutex<usize>, Condvar)> = OnceLock::new();
+static NODE_THUMB_CONCURRENCY: OnceLock<usize> = OnceLock::new();
+
+fn node_thumb_concurrency() -> usize {
+    *NODE_THUMB_CONCURRENCY.get_or_init(|| {
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+            .clamp(4, 16)
+    })
+}
+
+fn acquire_node_thumb_permit() {
+    let (lock, cvar) = NODE_THUMB_PERMITS.get_or_init(|| (Mutex::new(0), Condvar::new()));
+    let guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let mut count = cvar
+        .wait_while(guard, |c| *c >= node_thumb_concurrency())
+        .unwrap_or_else(|e| e.into_inner());
+    *count += 1;
+}
+
+fn release_node_thumb_permit() {
+    if let Some((lock, cvar)) = NODE_THUMB_PERMITS.get() {
+        let mut count = lock.lock().unwrap_or_else(|e| e.into_inner());
+        *count = count.saturating_sub(1);
+        cvar.notify_all();
+    }
+}
+
+/// 节点出图的信号量守卫：与本地 [ThumbPermit] 分开，各回各的池。
+struct NodeThumbPermit;
+impl Drop for NodeThumbPermit {
+    fn drop(&mut self) {
+        release_node_thumb_permit();
+    }
+}
+
 /// 全局 ffmpeg/ffprobe 子进程 PID 集合，用于应用退出时清理残留进程。
 static FFMPEG_PIDS: RwLock<Vec<u32>> = RwLock::new(Vec::new());
 
@@ -904,11 +947,100 @@ static NODE_THUMB_CACHE: OnceLock<Mutex<HashMap<String, NodeThumbEntry>>> = Once
 static NODE_THUMB_TOTAL_BYTES: AtomicU64 = AtomicU64::new(0);
 static NODE_THUMB_TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// 节点缩略图的磁盘缓存目录：`<AppData>/SlimeWorks/node_thumbs/`。
+///
+/// 内存缓存（1 小时 TTL）扛不住「关掉重开」：客户端的 imageCache 也只在
+/// 当前会话有效，一旦节点重启或 TTL 过期，整屏封面就要重新解码生成一遍，
+/// 那段时间上行几乎是空的。落一份到 AppData 后，第二次浏览直接读文件秒发。
+///
+/// 文件名带「源文件身份（大小+mtime）+ 宽度」，源文件被替换后自动失配重建，
+/// 不需要任何失效逻辑。目录独立于用户的媒体目录，不污染资源原位置。
+///
+/// 目录本身只创建一次：这一层是每张封面都会走的路径，
+/// 每次都 create_dir_all 等于每张图多付两次 stat。
+fn node_thumb_disk_dir() -> &'static std::path::Path {
+    static DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+    DIR.get_or_init(|| {
+        let dir = std::path::Path::new(&app_data_base())
+            .join("SlimeWorks")
+            .join("node_thumbs");
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    })
+}
+
+/// 磁盘缓存 key：路径 + 源文件身份 + 宽度，用 FNV-1a 压成定长文件名。
+///
+/// 不用 sha2 是为了省一次依赖调用：这里只做缓存寻址，不需要抗碰撞强度。
+fn node_thumb_disk_path(file_path: &str, width: u32, identity: &str) -> std::path::PathBuf {
+    let key = format!("{}|{}|{}", file_path, identity, width);
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in key.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x1000_0000_01b3);
+    }
+    node_thumb_disk_dir().join(format!("{hash:016x}_w{width}.jpg"))
+}
+
+fn node_thumb_disk_get(path: &std::path::Path) -> Option<Vec<u8>> {
+    let meta = std::fs::metadata(path).ok()?;
+    if !meta.is_file() || meta.len() == 0 {
+        return None;
+    }
+    std::fs::read(path).ok().filter(|b| !b.is_empty())
+}
+
+/// 写磁盘缓存：失败不影响本次响应（只少了一次后续加速）。
+fn node_thumb_disk_put(path: &std::path::Path, bytes: &[u8]) {
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    // 先写临时文件再改名：避免进程在写一半时被杀，留下半张图被当作有效缓存
+    let tmp = path.with_extension("jpg.part");
+    if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, path).is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+}
+
+/// 清理过期的磁盘缩略图缓存（7 天未访问）。由内存清扫线程顺带执行。
+///
+/// 缓存是按「源文件身份」命名的，源文件改动会留下旧条目；不清理的话
+/// 用户反复编辑资源时目录会无限膨胀。
+fn prune_node_thumb_disk() {
+    const MAX_AGE_SECS: u64 = 7 * 24 * 60 * 60;
+    let dir = node_thumb_disk_dir();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let now = std::time::SystemTime::now();
+    let mut removed = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        let stale = meta
+            .modified()
+            .ok()
+            .and_then(|m| now.duration_since(m).ok())
+            .map(|d| d.as_secs() >= MAX_AGE_SECS)
+            .unwrap_or(false);
+        if stale && std::fs::remove_file(&path).is_ok() {
+            removed += 1;
+        }
+    }
+    if removed > 0 {
+        sw_info!("[node-thumb] 清理过期磁盘缓存 {} 个", removed);
+    }
+}
+
 /// 获取（并按需启动）节点内存缓存的锁；首次初始化时拉起清扫线程。
 fn node_thumb_lock() -> &'static Mutex<HashMap<String, NodeThumbEntry>> {
     NODE_THUMB_CACHE.get_or_init(|| {
         std::thread::spawn(|| loop {
             std::thread::sleep(std::time::Duration::from_secs(NODE_THUMB_SWEEP_SECS));
+            prune_node_thumb_disk();
             if let Some(lock) = NODE_THUMB_CACHE.get() {
                 let mut map = lock.lock().unwrap_or_else(|e| e.into_inner());
                 let expired: Vec<String> = map
@@ -980,8 +1112,15 @@ fn node_thumb_put(key: &str, bytes: Vec<u8>) {
     NODE_THUMB_TOTAL_BYTES.store(total as u64, Ordering::Relaxed);
 }
 
-/// 生成节点服务用的 JPEG 缩略图字节：命中内存缓存直接返回；未命中则现场生成，
-/// 只存内存缓存，**绝不写资源旁邻近缓存**（与 ensure_cover_thumbnail 的关键区别）。
+/// 生成节点服务用的 JPEG 缩略图字节：命中缓存直接返回，未命中则现场生成。
+///
+/// 三级缓存，从上到下逐级变慢：
+/// 1. 进程内内存缓存（1 小时 TTL）—— 浏览期间重复请求走这里；
+/// 2. AppData 下的磁盘缓存（按源文件身份寻址，7 天清理）—— 节点重启后不必重算；
+/// 3. 现场生成（ffmpeg 优先，纯 Rust 兜底）。
+///
+/// **绝不写资源旁邻近缓存**（与 ensure_cover_thumbnail 的关键区别）：
+/// 那是本机浏览用的路径，节点不该污染用户媒体目录。
 /// 不支持的扩展名或生成失败返回 None。
 pub fn generate_thumbnail_bytes(file_path: String, width: u32) -> Option<Vec<u8>> {
     let lower = file_path.to_lowercase();
@@ -1012,10 +1151,39 @@ pub fn generate_thumbnail_bytes(file_path: String, width: u32) -> Option<Vec<u8>
         return Some(cached);
     }
 
+    let src_meta = std::fs::metadata(&file_path).ok();
+    let orig_size = src_meta.as_ref().map(|m| m.len()).unwrap_or(0);
+    // 磁盘缓存：源文件身份没变就直接读文件，跳过整条解码/转码链路。
+    // 这一层决定「节点重启后第一次浏览」是否还要重新生成整屏封面。
+    let identity = src_meta.as_ref().map(file_identity).unwrap_or_default();
+    let disk_path = node_thumb_disk_path(&file_path, width, &identity);
+    if let Some(bytes) = node_thumb_disk_get(&disk_path) {
+        sw_debug!(
+            "[node-thumb] cache-hit(disk) | src={} | w={} | bytes={}B",
+            file_path,
+            width,
+            bytes.len()
+        );
+        // 回填内存缓存，后续命中不再付一次读盘
+        node_thumb_put(&key, bytes.clone());
+        return Some(bytes);
+    }
+
     let t0 = std::time::Instant::now();
-    let orig_size = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
+    // 统一先走 ffmpeg：常规位图用纯 Rust 的 image crate 解码缩放，release 约 196ms/张、
+    // debug 约 1.9s/张，而 ffmpeg 子进程不受构建 profile 影响（实测快一个数量级）。
+    // 远程列表一屏几十张封面时，这一档直接决定上行能不能被喂饱。
+    // ffmpeg 缺失或解码失败时再回退纯 Rust，不丢功能。
     let generated = if is_plain_image {
-        resize_to_jpeg_bytes(&file_path, width)
+        // 先 ffmpeg（内部自己取池），失败再回退纯 Rust 解码；
+        // 回退路径同样占池：解码+缩放是 CPU 密集的，不设上限时一屏几十张
+        // 同时解码会把节点 CPU 打满、其它请求一起被拖慢。
+        generate_via_ffmpeg_temp(&file_path, width, is_video, is_audio, t0, orig_size)
+            .or_else(|| {
+                acquire_node_thumb_permit();
+                let _permit = NodeThumbPermit;
+                resize_to_jpeg_bytes(&file_path, width)
+            })
     } else {
         // 视频/音频/HEIC/AVIF：ffmpeg 只能输出到文件，写系统临时文件、读完立即删除，不留持久产物
         generate_via_ffmpeg_temp(&file_path, width, is_video, is_audio, t0, orig_size)
@@ -1030,6 +1198,8 @@ pub fn generate_thumbnail_bytes(file_path: String, width: u32) -> Option<Vec<u8>
                 bytes.len(),
                 t0.elapsed()
             );
+            // 落盘一份，下次（含节点重启后）直接读文件发出
+            node_thumb_disk_put(&disk_path, &bytes);
             let out = bytes.clone();
             node_thumb_put(&key, bytes);
             Some(out)
@@ -1045,7 +1215,7 @@ pub fn generate_thumbnail_bytes(file_path: String, width: u32) -> Option<Vec<u8>
     }
 }
 
-/// 纯内存位图缩放：解码 → Triangle 缩放 → JPEG 编码到内存缓冲，全程不落盘。
+/// 纯内存位图缩放：解码 → 快速重采样 → JPEG 编码到内存缓冲，全程不落盘。
 fn resize_to_jpeg_bytes(src: &str, width: u32) -> Option<Vec<u8>> {
     let bytes = std::fs::read(src).ok()?;
     let img = image::load_from_memory(&bytes).ok()?;
@@ -1056,7 +1226,10 @@ fn resize_to_jpeg_bytes(src: &str, width: u32) -> Option<Vec<u8>> {
     }
     let target_w = width.min(orig_w);
     let target_h = ((orig_h as f64) * (target_w as f64) / (orig_w as f64)) as u32;
-    let resized = img.resize_exact(target_w, target_h, image::imageops::FilterType::Triangle);
+    // thumbnail 是专为大比例缩小设计的快速重采样（整数箱式滤波），
+    // 在「2400 万像素 → 240 宽」这种 20 倍以上缩小时比 resize_exact(Triangle)
+    // 快数倍，观感差别在缩略图尺寸下看不出来。
+    let resized = img.thumbnail(target_w.max(1), target_h.max(1));
     let mut buf = std::io::Cursor::new(Vec::new());
     resized.write_to(&mut buf, image::ImageFormat::Jpeg).ok()?;
     Some(buf.into_inner())
@@ -1091,8 +1264,8 @@ fn generate_via_ffmpeg_temp(
             return None;
         }
     }
-    acquire_thumb_permit();
-    let _permit = ThumbPermit;
+    acquire_node_thumb_permit();
+    let _permit = NodeThumbPermit;
     let ok = if is_video {
         try_ffmpeg_video_frame(src, &dst, width, t0, orig_size)
     } else if is_audio {
