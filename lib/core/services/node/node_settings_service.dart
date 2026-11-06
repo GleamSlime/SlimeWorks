@@ -11,6 +11,7 @@ import 'package:get/get.dart' hide FormData, MultipartFile;
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:slime_works/mock/mock_mode.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/timing_trace.dart';
@@ -248,6 +249,7 @@ class NodeSettingsService extends GetxService {
 
   /// 应用初始化完毕后调用：确认节点连通 + 预取远程媒体元数据。
   Future<void> warmUpAfterLaunch() async {
+    if (MockMode.enabled) return;
     if (!isInitialized) {
       await init();
     }
@@ -485,6 +487,7 @@ class NodeSettingsService extends GetxService {
   }
 
   Future<void> refreshNodeConnectivity() async {
+    if (MockMode.enabled) return;
     final trace = TimingTrace('节点连通性全量确认');
     final enabledNodes = remoteNodes.where((n) => n.enabled).toList();
     final disabledNodes = remoteNodes.where((n) => !n.enabled).toList();
@@ -498,6 +501,7 @@ class NodeSettingsService extends GetxService {
   }
 
   Future<void> checkNodeConnectivity(String nodeId) async {
+    if (MockMode.enabled) return;
     final node = getNodeById(nodeId);
     if (node == null) {
       return;
@@ -713,6 +717,8 @@ class NodeSettingsService extends GetxService {
       _logger.info('移动端不支持启动本地节点服务，已跳过');
       return;
     }
+    // 演示模式不启动真实节点服务
+    if (MockMode.enabled) return;
 
     if (localNodeAuthCode.value.isEmpty) {
       localNodeAuthCode.value = generateLocalAuthCode();
@@ -1794,6 +1800,16 @@ class NodeSettingsService extends GetxService {
   }
 
   Future<void> _load() async {
+    // 演示模式不读取真实节点，避免离线时发起探测
+    if (MockMode.enabled) {
+      remoteNodes.clear();
+      nodeConnectivity.clear();
+      localNodeEnabled.value = true;
+      localNodeName.value = '演示本机节点';
+      localNodePort.value = 17888;
+      localNodeAuthCode.value = 'DEMO-2026';
+      return;
+    }
     final prefs = _prefs;
     if (prefs == null) {
       return;
@@ -1883,6 +1899,12 @@ class NodeSettingsService extends GetxService {
   }
 
   Future<void> _refreshLocalApiList() async {
+    if (MockMode.enabled) {
+      localNodeApiList.assignAll([
+        'http://192.168.1.20:${localNodePort.value}/node/call',
+      ]);
+      return;
+    }
     final values = <String>[];
 
     try {

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/mock/mock_mode.dart';
 
 /// Ollama API 服务
 /// 负责与 Ollama 服务器交互，支持多服务器轮询
@@ -47,6 +48,7 @@ class OllamaService {
 
   /// 测试服务器连接
   Future<bool> testServer(OllamaServer server) async {
+    if (MockMode.enabled) return true;
     try {
       final response = await _dio.get(
         '${server.url}/api/tags',
@@ -63,6 +65,13 @@ class OllamaService {
 
   /// 轮询查找可用服务器
   Future<OllamaServer?> findAvailableServer() async {
+    if (MockMode.enabled) {
+      return OllamaServer(
+        url: 'http://mock-ollama.local',
+        isAvailable: true,
+        lastChecked: DateTime.now(),
+      );
+    }
     if (_servers.isEmpty) {
       const Loggers(name: 'Ollama').info('没有配置 Ollama 服务器');
       return null;
@@ -99,6 +108,13 @@ class OllamaService {
 
   /// 获取可用模型列表
   Future<List<OllamaModel>> getModels() async {
+    if (MockMode.enabled) {
+      return <OllamaModel>[
+        OllamaModel(name: 'qwen2.5:7b', description: '演示：中文翻译推荐'),
+        OllamaModel(name: 'llama3.1:8b', description: '演示：通用对话'),
+        OllamaModel(name: 'gemma2:9b', description: '演示：轻量摘要'),
+      ];
+    }
     final server = _currentServer ?? await findAvailableServer();
     if (server == null) {
       throw Exception('没有可用的 Ollama 服务器');
@@ -138,6 +154,19 @@ class OllamaService {
     void Function(String chunk)? onChunk,
     CancelToken? cancelToken,
   }) async {
+    if (MockMode.enabled) {
+      final text = prompt.length > 200 ? '${prompt.substring(0, 200)}…' : prompt;
+      final result = '（演示译文）$text';
+      if (onChunk != null) {
+        for (var i = 0; i < result.length; i += 12) {
+          if (cancelToken?.isCancelled ?? false) break;
+          final end = i + 12 > result.length ? result.length : i + 12;
+          onChunk(result.substring(i, end));
+          await Future<void>.delayed(const Duration(milliseconds: 12));
+        }
+      }
+      return result;
+    }
     final server = _currentServer ?? await findAvailableServer();
     if (server == null) {
       throw Exception('没有可用的 Ollama 服务器');

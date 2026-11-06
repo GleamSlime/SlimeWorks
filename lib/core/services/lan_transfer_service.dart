@@ -8,7 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
-import 'package:slime_works/src/rust/api/lan_transfer.dart' as rust_api;
+import 'package:slime_works/mock/seams/lan_api_seam.dart' as rust_api;
 import 'package:slime_works/src/rust/frb_generated.dart';
 const Loggers _logger = Loggers(name: '局域网互传');
 
