@@ -315,6 +315,8 @@ class PowerStatsService extends GetxService {
         lastFetch.value = status['last_fetch'] as String? ?? '';
         lastResult.value = status['last_result'] as String? ?? '';
         sampleCount.value = (status['sample_count'] as num?)?.toInt() ?? 0;
+        // 远程节点的轮询状态也要同步，否则页面一直显示未轮询
+        isPolling.value = status['polling'] as bool? ?? false;
       }
     } catch (e) {
       _logger.error('获取状态失败: $e');

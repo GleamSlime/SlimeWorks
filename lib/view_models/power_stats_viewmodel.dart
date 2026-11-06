@@ -135,6 +135,10 @@ class PowerStatsViewModel extends GetxController {
 
   Timer? _autoRefreshTimer;
 
+  /// 聚合刷新代际：每次发起自增，旧请求返回后据此丢弃结果，
+  /// 避免切范围/切节点时旧数据覆盖当前图表。
+  int _aggregatedGeneration = 0;
+
   @override
   void onInit() {
     super.onInit();
@@ -241,8 +245,13 @@ class PowerStatsViewModel extends GetxController {
 
   Future<void> refreshAggregated() async {
     if (!_service.isInitialized) return;
+    final generation = ++_aggregatedGeneration;
+    // 以发起时的范围为准：await 期间用户可能已切到别的范围
+    final range = selectedRange.value;
     try {
-      await _service.refreshAggregated(selectedRange.value);
+      await _service.refreshAggregated(range);
+      // 期间又发起了新请求（切范围/切节点）：本次结果已过时，不再写共享图表状态
+      if (generation != _aggregatedGeneration) return;
       final data = _service.aggregated;
       final list = data['buckets'] as List<dynamic>? ?? [];
       buckets.value = list.map((e) => PowerStatBucket.fromMap(e as Map<String, dynamic>)).toList();
