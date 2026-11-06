@@ -32,6 +32,7 @@
 | 音乐播放器 | [docs/music_player.md](music_player.md) | `lib/pages/music_player/` · `rust/music_player/` |
 | 流水账 | [docs/ledger.md](ledger.md) | `lib/pages/ledger/` · `lib/core/services/ledger_service.dart` · `rust/ledger_module/` · `rust/email_module/` |
 | 节点服务安全（**仅方案文档，未实施**） | [docs/node_server_security.md](node_server_security.md) | `rust/src/node_server/` · `lib/core/services/node/` |
+| 性能/隐藏 Bug/UI 修复台账（含待办） | [docs/ui_perf_fix_todo.md](ui_perf_fix_todo.md) | `lib/core/theme/` · `rust/src/node_server/` · `rust/novel_reader/` |
 
 ---
 

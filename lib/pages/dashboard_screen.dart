@@ -9,7 +9,6 @@ import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
-import 'package:slime_works/core/routes/role_manager.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
