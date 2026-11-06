@@ -5,7 +5,7 @@ import 'package:get/get.dart';
 
 import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
-import 'package:slime_works/src/rust/api/game_library.dart' as rust_api;
+import 'package:slime_works/mock/seams/game_api_seam.dart' as rust_api;
 const Loggers _logger = Loggers(name: '游戏进程追踪');
 
 

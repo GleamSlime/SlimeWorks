@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/services/game_library_metadata_api.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/pages/game_library/models/game_library_models.dart';
-import 'package:slime_works/src/rust/api/game_library.dart' as rust_api;
+import 'package:slime_works/mock/seams/game_api_seam.dart' as rust_api;
 import 'package:slime_works/src/rust/frb_generated.dart';
 
 const Loggers _log = Loggers(name: '游戏库服务');

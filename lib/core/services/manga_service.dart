@@ -8,7 +8,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:slime_works/src/rust/api/manga.dart' as rust;
+import 'package:slime_works/mock/mock_mode.dart';
+import 'package:slime_works/mock/seams/manga_api_seam.dart' as rust;
 import 'package:slime_works/pages/manga/models/manga_models.dart';
 import 'package:slime_works/core/utils/logger.dart';
 const Loggers _logger = Loggers(name: 'Manga');
@@ -96,6 +97,18 @@ class MangaService {
       _logger.info('Manga 历史记录数据库初始化: $dbPath');
     } catch (e) {
       _logger.error('Manga 历史记录数据库初始化失败: $e');
+    }
+
+    // 演示模式直接进入已登录状态，免账号密码
+    if (MockMode.enabled) {
+      try {
+        _currentUser = await getUserProfile();
+        _isLoggedIn = true;
+        _logger.info('Manga 演示模式已登录');
+      } catch (e) {
+        _logger.error('Manga 演示登录失败: $e');
+      }
+      return;
     }
 
     try {

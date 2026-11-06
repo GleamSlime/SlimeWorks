@@ -11,7 +11,7 @@ import 'package:get/get.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
-import 'package:slime_works/src/rust/api/manga.dart' as rust;
+import 'package:slime_works/mock/seams/manga_api_seam.dart' as rust;
 const Loggers _logger = Loggers(name: '观看记录');
 
 /// 单条观看记录数据
