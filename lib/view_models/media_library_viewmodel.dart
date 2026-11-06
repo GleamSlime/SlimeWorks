@@ -136,6 +136,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 远程集合加载进度（0.0~1.0），null 表示未开始或无进度信息可用。
   final itemLoadProgress = Rxn<double>();
 
+  /// 集合条目加载代数：每次加载自增，旧请求返回后据此丢弃结果，避免覆盖新集合。
+  int _collectionLoadGeneration = 0;
+
   /// 远程节点数据是否正在后台异步加载中。
   final isLoadingRemote = false.obs;
 

@@ -237,15 +237,17 @@ extension MediaLibraryRefreshExt on MediaLibraryViewModel {
 
   /// 批量预热当前集合内所有条目的丢失状态缓存。
   /// 在 loadCurrentCollectionItems 中调用，避免 build 期间每张卡片单独调 FFI 阻塞 UI。
-  Future<void> _prewarmItemLostCache() async {
-    if (currentItems.isEmpty) return;
-    final paths = currentItems.map((i) => i.filePath).toList();
+  /// [snapshot] 为该次加载的条目快照：await 期间列表可能已被其它集合替换。
+  Future<void> _prewarmItemLostCache(List<media_api.MediaItem> snapshot) async {
+    if (snapshot.isEmpty) return;
+    final paths = snapshot.map((i) => i.filePath).toList();
     if (paths.isEmpty) return;
     try {
       final exists = await media_api.checkPathsExist(paths: paths);
+      if (exists.length != snapshot.length) return;
       final now = DateTime.now().millisecondsSinceEpoch;
-      for (int i = 0; i < currentItems.length; i++) {
-        final item = currentItems[i];
+      for (int i = 0; i < snapshot.length; i++) {
+        final item = snapshot[i];
         final cacheKey = 'item:${item.id}:${item.filePath}';
         _lostItems[cacheKey] = !exists[i];
         _itemCheckTimestamps[cacheKey] = now;

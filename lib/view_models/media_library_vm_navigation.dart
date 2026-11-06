@@ -3,8 +3,15 @@ part of 'media_library_viewmodel.dart';
 /// 导航与加载：进入/退出集合、文件夹、根目录，加载集合条目，封面生成暂停/恢复。
 /// 通过 extension 挂载到 [MediaLibraryViewModel]，共享同一库私有成员。
 extension MediaLibraryNavigationExt on MediaLibraryViewModel {
+  /// 本次加载是否仍然有效：代际与集合都没变才允许写共享状态。
+  bool _isCurrentLoad(int generation, String collectionId) =>
+      generation == _collectionLoadGeneration &&
+      currentCollectionId.value == collectionId;
+
   Future<void> loadCurrentCollectionItems() async {
     final collectionId = currentCollectionId.value;
+    // 每次加载都自增：旧请求无论成功还是失败，返回后都不再影响当前集合
+    final generation = ++_collectionLoadGeneration;
     if (collectionId == null) {
       currentItems.clear();
       return;
@@ -26,26 +33,36 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
               nodeId: nodeId,
               collectionId: rawId,
               onReceiveProgress: (count, total) {
-                if (total > 0) itemLoadProgress.value = count / total;
+                if (total > 0 && _isCurrentLoad(generation, collectionId)) {
+                  itemLoadProgress.value = count / total;
+                }
               },
             );
         itemsTrace.end(note: '条目=${payloads.length}');
+        if (!_isCurrentLoad(generation, collectionId)) return;
         currentItems.assignAll(
           payloads.map((payload) => _buildRemoteItem(payload, collectionId)),
         );
       } else {
-        currentItems.assignAll(
-          await media_api.getMediaCollectionItems(collectionId: collectionId),
+        final items = await media_api.getMediaCollectionItems(
+          collectionId: collectionId,
         );
+        if (!_isCurrentLoad(generation, collectionId)) return;
+        currentItems.assignAll(items);
         // 预热 item 丢失状态：一次 FFI 批量检查，避免 build 期间每张卡片同步调 FFI 阻塞 UI
-        await _prewarmItemLostCache();
+        await _prewarmItemLostCache(items);
       }
     } catch (error) {
+      // 旧集合的失败不能清空当前集合的列表
+      if (!_isCurrentLoad(generation, collectionId)) return;
       currentItems.clear();
       showSnack('错误', '加载集合内容失败: $error');
     } finally {
-      isLoadingItems.value = false;
-      itemLoadProgress.value = null;
+      // 只有当前加载自己拥有加载态时才复位，避免提前掐掉新集合的进度
+      if (_isCurrentLoad(generation, collectionId)) {
+        isLoadingItems.value = false;
+        itemLoadProgress.value = null;
+      }
     }
   }
 
@@ -107,7 +124,11 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
       '[Scroll] exitCollection: restored browse offset: savedScrollOffset=$browseOffset, scrollRestoreTarget=$browseOffset',
     );
     currentCollectionId.value = null;
+    // 退出即作废在途加载，并复位它留下的加载态，避免浏览层一直显示“加载中”
+    _collectionLoadGeneration++;
     currentItems.clear();
+    isLoadingItems.value = false;
+    itemLoadProgress.value = null;
     // 回到浏览层：若正是收起搜索词的那一层，把结果原样还回来
     if (restoreBrowseSearch) _restoreBrowseSearchForLevel(currentFolderId.value);
     exitSelection();
