@@ -124,7 +124,8 @@ void main() {
         ),
       );
       expect(service.isNodeCircuitBreaked('node-a'), isFalse);
-      expect(service.nodeConnectivity['node-a'], isFalse);
+      // 节点回了 HTTP 应答，业务失败不代表离线
+      expect(service.nodeConnectivity['node-a'], isTrue);
       expect(service.nodeConnectivityError['node-a'], contains('集合不存在'));
     });
 

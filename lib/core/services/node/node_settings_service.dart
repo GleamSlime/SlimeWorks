@@ -1572,9 +1572,12 @@ class NodeSettingsService extends GetxService {
         _circuitBreakedNodes.add(node.id);
         nodeConnectivityError[node.id] = '节点已熔断（多次超时），请在设置中手动重试';
       }
-    } else if (!isNetworkTimeout && !nodeAnswered) {
-      // 只有确实没拿到任何 HTTP 应答的传输层失败才判离线；
-      // 业务失败、401、4xx/5xx 都已有应答，节点在线，只保留错误文案。
+    } else if (nodeAnswered) {
+      // 业务失败、401、4xx/5xx 都已拿到 HTTP 应答，节点在线；
+      // 只保留错误文案，否则切换器会按"不可达"把节点灰掉并拦下选择。
+      nodeConnectivity[node.id] = true;
+    } else if (!isNetworkTimeout) {
+      // 只有确实没拿到任何 HTTP 应答的传输层失败才判离线
       nodeConnectivity[node.id] = false;
     }
 
