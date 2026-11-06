@@ -1,17 +1,22 @@
 # SlimeWorks 性能 · 隐藏 Bug · UI 修复台账
 
-> 状态：**已落地的批次已合并进主干**（`a8e7d34` 与 `1dfc859` / `e9b9c59` / `43f09ce`）。
-> 本文分三段：**① 已修复（含落点与验证方式）**、**② 待办（含精确文件行号与验收口径）**、
-> **③ 回归清单**。第 ② 段是本轮评审确认「问题成立、但本轮刻意未改」的条目，
-> 不是「猜测」；每条都附了核对过的代码位置，照着改即可。
+> 状态：已落地的批次均已合并进主干，最近的节点加固批次见 `git log -- rust/src/node_server`。
+> 本文分四段：**① 已修复（含落点与验证方式）**、**② 待办（含精确文件行号与验收口径）**、
+> **③ 回归清单**、**④ 已确认不是问题**。第 ② 段是本轮评审确认「问题成立、但刻意未改」
+> 的条目，不是「猜测」；每条都附了核对过的代码位置，照着改即可。
 
 ---
 
 ## 0. 一句话结论
 
-这轮改动把三件事分开了：**能当场改对的（崩溃、并发、脏色）** 已经改；
-**需要协议变更或要换语言库（鉴权、上传落点白名单）** 单独列进 `docs/node_server_security.md`；
-**本文第 ② 段** 是「性能/健壮性缺口」，改动小、风险低，但不属于本轮 UI 主题，留作待办。
+这轮改动把三件事分开了：**能当场改对的（崩溃、并发、脏色、无界分配）** 已经改；
+**需要协议变更或产品决策（鉴权体系、上传落点白名单）** 单独列进 `docs/node_server_security.md`；
+**本文第 ② 段** 剩下四条「性能/维护成本」缺口，改动小、风险低，但没有本轮的紧迫性。
+
+第二轮（节点加固）额外修掉了三条**「修在没人走的路上」**的问题——
+`/node/call` 的 body 无界分配、生产媒体路径缺校验与体积上限、非音视频文件被静默
+截断到 2 MB。三条的共同点是「代码里看着有防护，实际请求走的不是那条分支」，
+所以每条都补了**能区分两种顺序 / 两条分支**的测试，而不是只测正常路径。
 
 ---
 
@@ -34,12 +39,16 @@
 | # | 问题 | 根因 | 落点 | 验证 |
 |---|------|------|------|------|
 | R1 | 并发上传归档时临时 zip 撞名 → 上传直接失败 | `temp_zip_path()` 只用毫秒时间戳拼 `sw_upload_<millis>.zip`，配合 `create_new(true)` 一撞就 `AlreadyExists` | `rust/src/node_server/upload_handler.rs:54-64`（加 PID + `AtomicU64` 计数） | 并发 8 路上传同一目录全部成功 |
-| R2 | 媒体端点接受相对路径 | 只判了 `path.exists()` | `rust/src/node_server/media_handler.rs:106-116`（拒 NUL、要求绝对路径） | `?path=../../etc/passwd` 返回 400 |
+| R2 | 媒体端点接受相对路径 / NUL / 目录 | 只判了 `path.exists()`；且校验只写在 hyper 分支（见 R8） | `rust/src/node_server/media_handler.rs:106-116`，抽成 `validate_media_path()` | `?path=../../etc/passwd` 返回 400 |
 | R3 | 大文件直读把 worker 线程堵住 | 同步 `fs::read` 在 async 上下文里跑 | `rust/src/node_server/media_handler.rs:170-190`（`spawn_blocking` + 50MB 上限） | 拉取 200MB 文件返回 413，其它请求不受影响 |
 | R4 | 小说 txt 首个章节之前的正文被丢弃 | 切片从第一个章节标题开始 | `rust/novel_reader/src/parser/parser_txt.rs:11-20`（`clamp_char_boundary`）、`:174-193`（序言/前言分支） | 造一份「简介 + 第1章」的 txt，章节数应为 2 |
 | R5 | 章节切片可能跨 UTF-8 字符边界 panic | 直接用正则给的字节偏移切片 | 同上 `clamp_char_boundary` 在 `:176`、`:192`、`:198` 三处兜底 | 中文/日文/emoji 混排 txt 解析不 panic |
 | R6 | 一处 panic 让数据库互斥锁永久中毒 | `lock().unwrap()` | `rust/db_module/src/storage.rs`（全文改 `unwrap_or_else(|e| e.into_inner())`）、`rust/media_collection/src/api.rs:85-110` | 注入一次 panic 后续写入仍可用 |
 | R7 | 缩略图许可计数可能下溢 | `*count -= 1` | `rust/media_collection/src/api.rs:102`（`saturating_sub`） | release 构建下反复 acquire/release 无 panic |
+| R8 | **R2/R3 原先修在了没人走的 hyper 分支上** | `handle_media_request` 只被 `router.rs` 引用，而 `route_request` 全仓仅测试在调；生产是 `mod.rs` 的原生 TCP → `handle_media_query_blocking` / `serve_media_file_with_range` | `media_handler.rs` 抽公共 `validate_media_path()`（`:97-145` 枚举 + `:130` 函数），生产两条路径（`:513`、`:583`）改为调它 | 新增 `production_paths_reject_relative_path` 钉住；相对路径在生产路径返回 `must be absolute` |
+| R9 | `/node/call` 请求体无长度上限，`vec![0u8; n]` 按声明值直接分配 | `Content-Length` 由客户端声明，读完才判等于没判 | `rust/src/node_server/mod.rs:173`（`MAX_BODY_BYTES = 8 MiB`）、`:368-380`（读体**之前**判超限并回 413） | 新增 `oversized_body_rejected_before_allocation`（只发头也收到 413）+ `body_at_limit_passes_the_size_gate`（边界值不被误挡） |
+| R10 | 非音视频文件不带 Range 被静默截断到 2 MB | `serve_media_file_with_range` 的 `None` 分支对**所有**文件统一 `clamp_range(0, 2MB-1, …)`，且仍回 206 | `media_handler.rs:588-620`：按 `is_av` 分档，非 AV 给整份并回 `200 OK` | 新增 `non_av_without_range_returns_whole_file_not_2mb_chunk`（3 MiB 字幕整份返回；mp4 仍 2 MiB 首切片） |
+| R11 | 直读原图（不带 width）无体积上限 | `handle_media_query_blocking` 末尾直接 `fs::read` 整个文件 | `media_handler.rs:547`（`MAX_DIRECT_READ_BYTES = 50 MiB`）、`:534-538`（超限报 `payload too large`）；`mod.rs:479-488` 按前缀映射 413/400/404 | 新增 `oversized_direct_read_reports_payload_too_large`（稀疏文件声明 50 MiB+1） |
 
 ### 1.3 视觉体系（v2 → 现代通透）
 
@@ -55,7 +64,7 @@
 | 投影 | 单层泛紫硬影 `0x265B4A7F` | 双层弥散（主影 + 贴地） | `lib/core/theme/app_atmosphere.dart` `cardShadow()` |
 | 玻璃着色 | `0x96FFFFFF`（透到发飘） | `0xCCFFFFFF`（实到能压字） | `lib/core/theme/app_semantics.dart:103-106`、`:160-163` |
 
-> ⚠️ **已知不一致（见 §2.7）**：`DESIGN.md` 的 front-matter 仍记着旧值
+> ⚠️ **已知不一致（见 §2.4）**：`DESIGN.md` 的 front-matter 仍记着旧值
 > （`canvas: "#F3E7E4"`、`atmosphere-warm: "#F9DAC4"` 等），与 `app_colors.dart`
 > 现有取值对不上。DESIGN.md 自称「唯一口径来源」，这一条得补。
 
@@ -63,62 +72,11 @@
 
 ## 2. 待办（问题成立，本轮未改）
 
-### 2.1 【高】节点 `POST /node/call` 请求体无长度上限
+> 上一版这里列了 10 条。其中 **2.1（`/node/call` body 上限）、2.2 / 2.8（生产路径校验与
+> 体积上限）、2.3（非 AV 文件 2MB 截断）已经落地**，见 §1.2 的 R8~R11。
+> 剩下的四条按优先级排在这里。
 
-**现状**：`rust/src/node_server/mod.rs:352` 是 `vec![0u8; content_length]`，
-`content_length` 直接取自客户端声明的 `Content-Length` 头（`:314`）。
-申报 1 GiB 就真的分配 1 GiB，10 秒读超时救不了**已经完成的分配**。
-
-**为什么本轮没改**：需要同时定「上限多少」与「超限返回什么」，属协议决定。
-
-**建议**：加 `MAX_BODY_BYTES = 8 MiB`（`/node/call` 全是 JSON，8 MiB 已经很宽松），
-超限在**读体之前**返回 413，与授权检查同一位置（`:327-339` 那一段之后）。
-
-**验收**：`curl -X POST /node/call -H 'Content-Length: 2147483648'` 立即 413，
-进程 RSS 不涨。
-
----
-
-### 2.2 【高】生产媒体路径缺体积上限与路径白名单（与 R2/R3 同族，但落点不同）
-
-**现状**：R2/R3 改的是 `handle_media_request`（hyper 版），
-但**实际在跑的**是原生 TCP 服务器 → `handle_media_query`（`:432`）→
-`handle_media_query_blocking`（`:457`）。后者：
-
-- `:482` `std::fs::read(path)` 无体积上限（50MB 上限在 hyper 分支，没覆盖到这里）；
-- `:464-467` 只判 `path.exists()`，不要求绝对路径（路径校验也没覆盖到）。
-
-**为什么本轮没改**：改 `handle_media_query_blocking` 会影响所有封面/预览请求，
-需要连 `serve_media_file_with_range`（`:493`）一起过一遍回归。
-
-**建议**：
-1. 把 `validate_media_path()` 抽成公共函数（NUL 检查 + 绝对路径），
-   hyper 分支（`:104`）与原生分支（`:464`）都调它；
-2. `:482` 前加体积判断：超过 `MAX_DIRECT_READ_BYTES`（复用 50 MiB）返回错误字符串，
-   由 `mod.rs` 转成 413；
-3. 顺带统一错误语义（现在 hyper 版文案是英文、原生版是 `file not found: <path>`）。
-
-**验收**：`/node/media?path=相对路径` → 400；超大图片 → 413；一屏 60 张封面仍全部出图。
-
----
-
-### 2.3 【中】非音视频文件的无 Range 请求被截断到 2 MB
-
-**现状**：`rust/src/node_server/media_handler.rs:512-519`，无 Range 时一律
-`clamp_range(0, VIDEO_CHUNK_SIZE - 1, …)`，把**任何**文件都截到 2 MB。
-注释写的是「促使播放器转用 Range 请求」，但这条分支对普通文件（非 AV）也生效。
-
-**为什么本轮没改**：需要确认客户端到底有没有「非 AV + 无 Range」的调用方；
-盲改会影响现有媒体预览。
-
-**建议**：分成两支——AV 保留 2 MB 首切片；非 AV 直接 200 + 全长
-（或也走 Range，但 `Content-Range` 要给全量）。
-
-**验收**：请求一张 5 MB 的 PNG（不带 Range），`Content-Length` 应为 5242880 而非 2097152。
-
----
-
-### 2.4 【中】共享日志写盘：每条日志一次 `lock + flush`
+### 2.1 【中】共享日志写盘：每条日志一次 `lock + flush`
 
 **现状**：`rust/slime_logger/src/lib.rs:49-59`，`write_log` 每条都 `flush()`，
 且 `LOG_FILE` 是全局 `Mutex`。媒体库缩略图热路径上有 `sw_info!`
@@ -136,7 +94,7 @@
 
 ---
 
-### 2.5 【中】电量统计页双 30 秒定时器
+### 2.2 【中】电量统计页双 30 秒定时器
 
 **现状**：两处独立的 `Timer.periodic(30s)`：
 - `lib/pages/power_stats/power_stats_screen.dart:97` → `refreshAggregated()`
@@ -150,9 +108,15 @@
 
 **验收**：进页面 90 秒，抓 `/api/power/*` 请求应为 3 次而非 6 次。
 
+**实现细节提醒**：VM 的 `_autoRefreshTimer` 是在
+`_service.ensureInitialized().then(...)` 里创建的（`power_stats_viewmodel.dart:149`），
+若 `ensureInitialized()` 抛错，这个 `.then` 不会执行，但 `onClose()` 里的
+`_autoRefreshTimer?.cancel()` 是安全的（可空）。这处已经是对的，
+只是提醒：**新加的异步初始化也要走同一套可空/可选收尾**，别再退回 `late final`。
+
 ---
 
-### 2.6 【低】Dashboard 卡片动画用 `Opacity` + `Transform` 包整棵树
+### 2.3 【低】Dashboard 卡片动画用 `Opacity` + `Transform` 包整棵树
 
 **现状**：`lib/pages/dashboard_screen.dart` 每张卡外层
 `AnimatedBuilder → Opacity → Transform.translate`。11 张卡 = 11 个独立保存图层，
@@ -165,7 +129,7 @@
 
 ---
 
-### 2.7 【低】`DESIGN.md` 与 `app_colors.dart` 取值已分叉
+### 2.4 【低】`DESIGN.md` 与 `app_colors.dart` 取值已分叉
 
 **现状**：`DESIGN.md:27-43` 的 front-matter 仍是旧调色板：
 
@@ -180,46 +144,24 @@
 
 而 DESIGN.md 第 4 行自称「本文是这三者的唯一口径来源」。
 
-**建议**：三选一——
-1. 把 front-matter 更新成现值（最快，但 §11 的「出图确认」流程要重跑）；
-2. 在 front-matter 顶部加一行 `# ⚠️ 本节为 v2 存档，现值见 app_colors.dart`；
-3. 把 front-matter 直接删掉，只留正文引用代码常量。
-
-推荐 **2**：保留历史，同时不会误导下一个读文档的人。
+**建议**：推荐在 front-matter 顶部加一行
+`# ⚠️ 本节为 v2 存档，现值见 app_colors.dart`——保留历史，
+同时不会误导下一个读文档的人。（另两个选项：直接更新成现值，
+或删掉 front-matter 只留正文引用代码常量。）
 
 ---
 
-### 2.8 【低】`handle_media_request`（hyper 版）已成死代码
+### 2.5 【低】`handle_media_request`（hyper 版）仍是死代码
 
 **现状**：`rust/src/node_server/media_handler.rs:92` 的 `handle_media_request`
 只被 `router.rs:29` 引用，而 `router.rs` 的 `route_request` 全仓只有
 `router.rs:113`（测试）在调——生产路径是 `mod.rs` 里的原生 TCP 服务器。
 
-R2/R3 的修复改在这个死代码分支上，**修得对，但没生效**。
+R8 已经把那套校验逻辑搬到了生产路径，**功能上不再是缺口**；这条剩下的只是
+「同一件事有两份实现」的维护成本：改一处忘一处仍是隐患。
 
-**建议**：二选一——
-1. 把 `handle_media_request` 的校验逻辑搬进 `handle_media_query_blocking`（并做 2.2）；
-2. 删掉 hyper 分支与 `router.rs`，同步删对应测试，减少一处「两套实现」的坑。
-
-推荐 **1**：删代码风险更大，而校验逻辑本身是对的。
-
----
-
-### 2.9 【已修复，见 F7】~~`lib/pages/dashboard_screen.dart` 有未使用的 import~~
-
-本轮已顺手删掉 `role_manager.dart` 那一行，`dart analyze lib/pages/dashboard_screen.dart`
-已返回 `No issues found!`。留这一节只为记录「为什么曾经有这行」：
-卡片列表早先按 `RoleManager` 做权限过滤，后来改成静态列表、判断移除，import 忘删。
-
----
-
-### 2.10 【低】`power_stats_screen` 与 ViewModel 的刷新职责重叠
-
-见 2.5。补一条实现细节：VM 的 `_autoRefreshTimer` 是在
-`_service.ensureInitialized().then(...)` 里创建的（`power_stats_viewmodel.dart:149`），
-若 `ensureInitialized()` 抛错，这个 `.then` 不会执行，但 `onClose()` 里的
-`_autoRefreshTimer?.cancel()` 是安全的（可空）。这处已经是对的，
-只是提醒：**新加的异步初始化也要走同一套可空/可选收尾**，别再退回 `late final`。
+**建议**：删掉 hyper 分支与 `router.rs`，同步删对应测试。
+（R8 之后风险已大幅下降，所以优先级从【高】降到【低】。）
 
 ---
 
@@ -244,6 +186,11 @@ flutter test test/dashboard_render_test.dart test/ledger_render_test.dart \
 确认新图目视正确后一次性提交，别只提交一部分——半新半旧的基线会让
 `flutter test` 间歇性失败。
 
+**本轮实测结果**（2026-11-06）：
+- `dart analyze lib/` → 0 error（11 条既存 warning，无一条在本轮改动文件中）
+- `cargo check -p rust_lib_slime_works` → 通过
+- `cargo test --workspace` → 全绿；主 crate 58 passed（含本轮新增 6 条）
+
 ---
 
 ## 4. 已确认「不是问题」（避免下一轮重复排查）
@@ -256,3 +203,6 @@ flutter test test/dashboard_render_test.dart test/ledger_render_test.dart \
 | `_SparklinePainter.shouldRepaint` | 有实现且比较了 `data` 与两端色；不是每帧重绘 |
 | `serve_media_file_with_range` 的 u64 下溢 | 已有 `clamp_range` 保证 `start <= capped_end`，且 `resolve_range` 有测试 |
 | `Range` 正则每请求重编译 | `RANGE_RE` 已是 `OnceLock` |
+| `lib/core/services/node/node_media_handler.dart` 里那套 Dart 侧媒体服务 | **不再被启动**：`_handleRequest` 已标注 `unused_element`，HTTP 服务由 Rust `start_node_server` 负责。该文件保留为历史参考，改媒体逻辑去 Rust 那边 |
+| 客户端是否需要适配新的 413 响应 | 不需要。413 只出现在「原图 > 50 MiB」与「`/node/call` body > 8 MiB」两种边界，Dio 会把非 2xx 抛成异常，走的是既有的「节点取数失败」分支；正常尺寸的请求行为未变 |
+

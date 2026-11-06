@@ -160,6 +160,18 @@ static ACTIVE_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
 /// 因并发打满而拒绝连接的次数（只用于日志节流）
 static BUSY_REJECTIONS: AtomicUsize = AtomicUsize::new(0);
 
+/// 通用请求体（非归档上传）的体积上限。
+///
+/// 通用 body 路径是 `vec![0u8; content_length]`——长度完全由客户端声明的
+/// `Content-Length` 决定，先分配再读。申报 1 GiB 就真分配 1 GiB，
+/// 10 秒读超时救不了**已经完成的分配**，一个请求就能把节点 RSS 顶起来。
+///
+/// 8 MiB 的现实依据：走这条路径的只有 `POST /node/call`（纯 JSON 动作参数）
+/// 与 Sentry 兼容端点，最大的调用方是 `ledger_import` 一类批量导入，
+/// 实测最大的备份 JSON 也在 2 MiB 以内。归档上传走独立通道
+/// （`/node/upload/archive`，上限 8 GiB 且流式落盘），不受此限。
+const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
+
 /// 并发打满时回一个 503，而不是静默断开。
 ///
 /// 静默 RST 在客户端看来和「节点死了」完全一样，会让一次偶发的连接数峰值
@@ -349,6 +361,26 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
     }
 
     // 读 body
+    //
+    // 体积上限必须卡在**分配之前**：`vec![0u8; content_length]` 是按客户端
+    // 声明值直接分配，等读完再判等于没判。超限时连 body 都不读——
+    // 连接随即 close，客户端写不完只会拿到 RST，不存在半截请求进业务层。
+    if content_length > MAX_BODY_BYTES {
+        let body_str = types::NodeResponse::error(format!(
+            "请求体过大: {} 字节，上限 {} 字节",
+            content_length, MAX_BODY_BYTES
+        ))
+        .to_json();
+        let _ = stream.write_all(
+            format!(
+                "HTTP/1.1 413 Payload Too Large\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{}",
+                body_str.len(),
+                body_str
+            )
+            .as_bytes(),
+        );
+        return;
+    }
     let mut body = vec![0u8; content_length];
     if content_length > 0 {
         use std::io::Read;
@@ -443,9 +475,21 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                         return;
                     }
                     Err(e) => {
+                        // 出图失败的语义分三档，客户端据此决定下一步：
+                        // - 体积超限 → 413（客户端应改带 width 走缩略图，不必重试原图）
+                        // - 路径非法 → 400（调用方拼错了 URL，重试无意义）
+                        // - 其余（文件缺失、无内嵌封面）→ 404
+                        let status_line = if media_handler::is_payload_too_large_error(&e) {
+                            "413 Payload Too Large"
+                        } else if e.starts_with("path must be absolute") || e == "missing path" {
+                            "400 Bad Request"
+                        } else {
+                            "404 Not Found"
+                        };
                         let err_body = format!("media error: {}", e);
                         let header = format!(
-                            "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                            "HTTP/1.1 {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                            status_line,
                             err_body.len()
                         );
                         let _ = stream.write_all(header.as_bytes());
@@ -1290,6 +1334,110 @@ mod tests {
             &miss[..miss.len().min(40)]
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 通用 body 的体积上限必须卡在**分配之前**。
+    ///
+    /// 这条只发请求头、不发 body：若上限判断在读体之后，服务端会先按声明值
+    /// 分配 `vec![0u8; content_length]` 再阻塞在 read 上直到超时；
+    /// 判在读体之前则会立刻回 413 并关连接。测试靠「不发 body 也能收到 413」
+    /// 反过来钉住顺序——这是这条修复唯一可观测的行为差异。
+    #[test]
+    fn oversized_body_rejected_before_allocation() {
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+
+        let config = Arc::new(config_with_code("slime-node"));
+        let digest = config.auth_code_hash.clone().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let server_cfg = Arc::clone(&config);
+        let _server = std::thread::spawn(move || {
+            for incoming in listener.incoming() {
+                match incoming {
+                    Ok(stream) => handle_connection(stream, Arc::clone(&server_cfg)),
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect");
+        // 只发头，一个 body 字节都不发；声明远超上限的长度
+        stream
+            .write_all(
+                format!(
+                    "POST /node/call HTTP/1.1\r\nHost: x\r\nX-SW-Auth: {digest}\r\nContent-Length: {}\r\n\r\n",
+                    MAX_BODY_BYTES + 1
+                )
+                .as_bytes(),
+            )
+            .expect("write");
+
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).expect("read");
+        let text = String::from_utf8_lossy(&response);
+        assert!(
+            text.starts_with("HTTP/1.1 413"),
+            "超限必须在读体前回 413，实际: {}",
+            &text[..text.len().min(60)]
+        );
+        assert!(text.contains("请求体过大"), "错误文案应说明原因: {text}");
+        // 上限数字要能对上，方便客户端据此调整
+        assert!(
+            text.contains(&MAX_BODY_BYTES.to_string()),
+            "响应里应带出上限值: {text}"
+        );
+    }
+
+    /// 上限之内的请求仍然正常走完整链路（防止 `>` 写反成 `>=` 把边界值挡掉）。
+    ///
+    /// 用**恰好等于上限**的请求体：内容故意不是合法 JSON，所以过了体积这道门
+    /// 会被解析层拒掉（400/500 都算到达业务层）。只要不是 413，就说明边界值
+    /// 没被误挡——这正是 `>` 与 `>=` 的区别所在。
+    #[test]
+    fn body_at_limit_passes_the_size_gate() {
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+
+        let config = Arc::new(config_with_code("slime-node"));
+        let digest = config.auth_code_hash.clone().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let server_cfg = Arc::clone(&config);
+        let _server = std::thread::spawn(move || {
+            for incoming in listener.incoming() {
+                match incoming {
+                    Ok(stream) => handle_connection(stream, Arc::clone(&server_cfg)),
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let body = "x".repeat(MAX_BODY_BYTES);
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect");
+        stream
+            .write_all(
+                format!(
+                    "POST /node/call HTTP/1.1\r\nHost: x\r\nX-SW-Auth: {digest}\r\nContent-Length: {}\r\n\r\n",
+                    body.len()
+                )
+                .as_bytes(),
+            )
+            .expect("write");
+        stream.write_all(body.as_bytes()).expect("write body");
+
+        let mut response = String::new();
+        stream.read_to_string(&mut response).expect("read");
+        assert!(
+            !response.starts_with("HTTP/1.1 413"),
+            "恰好等于上限不该被挡，实际: {}",
+            &response[..response.len().min(60)]
+        );
+        assert!(
+            response.starts_with("HTTP/1.1 400") || response.starts_with("HTTP/1.1 500"),
+            "应到达解析层并报解析失败，实际: {}",
+            &response[..response.len().min(60)]
+        );
     }
 
     /// ping 是连通性探测用的，必须在连接线程就地回答（不进共享 runtime 队列），

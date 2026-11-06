@@ -88,6 +88,62 @@ pub fn spawn_bulk_thumbnail_generation(files: Vec<String>, width: u32) {
     });
 }
 
+/// 媒体路径校验的失败类别。
+///
+/// 只给语义、不绑状态码：两个调用方对状态码的映射不同——
+/// hyper 分支能直接回 400/404，原生 TCP 分支只能返回错误字符串再由
+/// `mod.rs` 拼响应，所以判定逻辑放在这里共用，映射各自处理。
+#[derive(Debug, PartialEq, Eq)]
+pub enum MediaPathError {
+    /// 缺 `path` 参数
+    Missing,
+    /// 含 NUL 或不是绝对路径
+    Invalid,
+    /// 路径不存在，或存在但不是普通文件
+    NotFound,
+}
+
+impl MediaPathError {
+    pub fn message(&self) -> String {
+        match self {
+            MediaPathError::Missing => "missing path".to_string(),
+            MediaPathError::Invalid => "path must be absolute without NUL".to_string(),
+            MediaPathError::NotFound => "file not found".to_string(),
+        }
+    }
+}
+
+/// 媒体路径的唯一校验口。
+///
+/// **为什么必须共用**：这段逻辑原先只写在 hyper 分支
+/// （`handle_media_request`）里，而生产跑的是原生 TCP 分支
+/// （`handle_media_query_blocking`）——两套实现各写一份的结果就是
+/// 「修在了没人走的路上，真在跑的路径照样不校验」。
+///
+/// 三道检查缺一不可：
+/// 1. NUL——`Path::new` 收 NUL 后到系统调用才报错，报错位置更靠近 IO 层，
+///    不利于回一个干净 400；
+/// 2. 绝对路径——相对路径会按节点进程的 CWD 解析，等于让调用方借节点的工作目录
+///    猜文件位置；
+/// 3. 存在且是普通文件——目录也能通过 `exists()`，但后续 `fs::read` 会失败，
+///    提前判掉能让错误语义准确（404 而不是 500）。
+pub fn validate_media_path(raw: &str) -> Result<&Path, MediaPathError> {
+    if raw.is_empty() {
+        return Err(MediaPathError::Missing);
+    }
+    if raw.contains('\0') {
+        return Err(MediaPathError::Invalid);
+    }
+    let path = Path::new(raw);
+    if !path.is_absolute() {
+        return Err(MediaPathError::Invalid);
+    }
+    if !path.is_file() {
+        return Err(MediaPathError::NotFound);
+    }
+    Ok(path)
+}
+
 /// 处理媒体文件请求 GET /node/media
 pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, Infallible> {
     let query = req.uri().query().unwrap_or("");
@@ -96,25 +152,18 @@ pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, 
             .into_owned()
             .collect();
 
-    let file_path = match params.get("path") {
-        Some(path) if !path.is_empty() => path.clone(),
-        _ => {
-            return Ok(error_plain(StatusCode::BAD_REQUEST, "missing path"));
+    let file_path = params.get("path").cloned().unwrap_or_default();
+
+    let path = match validate_media_path(&file_path) {
+        Ok(p) => p,
+        Err(e) => {
+            let status = match e {
+                MediaPathError::Missing | MediaPathError::Invalid => StatusCode::BAD_REQUEST,
+                MediaPathError::NotFound => StatusCode::NOT_FOUND,
+            };
+            return Ok(error_plain(status, &e.message()));
         }
     };
-
-    // 基础路径安全防御：禁止包含空字符，要求必须是绝对路径
-    if file_path.contains('\0') {
-        return Ok(error_plain(StatusCode::BAD_REQUEST, "invalid path"));
-    }
-
-    let path = Path::new(&file_path);
-    if !path.is_absolute() {
-        return Ok(error_plain(StatusCode::BAD_REQUEST, "path must be absolute"));
-    }
-    if !path.exists() {
-        return Ok(error_plain(StatusCode::NOT_FOUND, "file not found"));
-    }
 
     let metadata = match fs::metadata(path) {
         Ok(m) => m,
@@ -167,8 +216,7 @@ pub async fn handle_media_request(req: Request<Body>) -> Result<Response<Body>, 
         );
     }
 
-    // 图片/普通文件：在后台线程异步读取，避免阻塞 tokio worker，并限制单次内存读取上限（50MB）
-    const MAX_DIRECT_READ_BYTES: u64 = 50 * 1024 * 1024;
+    // 图片/普通文件：在后台线程异步读取，避免阻塞 tokio worker，并限制单次内存读取上限
     if total_length > MAX_DIRECT_READ_BYTES {
         return Ok(error_plain(
             StatusCode::PAYLOAD_TOO_LARGE,
@@ -459,12 +507,10 @@ fn handle_media_query_blocking(
     requested_width: Option<u32>,
     is_cover_mode: bool,
 ) -> Result<Vec<u8>, String> {
-    use std::path::Path;
-
-    let path = Path::new(file_path);
-    if !path.exists() {
-        return Err(format!("file not found: {}", file_path));
-    }
+    // 生产路径的入口校验：与 hyper 分支共用同一个判定函数。
+    // 历史上这段逻辑只写在 hyper 分支，而真实请求走的是这里，
+    // 等于「校验写在没人走的路上」——详见 validate_media_path 的注释。
+    let path = validate_media_path(file_path).map_err(|e| e.message())?;
 
     if is_cover_mode || is_image_file(file_path) {
         let width = requested_width.unwrap_or(if is_cover_mode { 240 } else { 0 });
@@ -479,7 +525,43 @@ fn handle_media_query_blocking(
         }
     }
 
+    // 回退读原图前先卡体积：整文件读进内存是这条路径唯一的无界分配点。
+    // 超限交给调用方回 413（mod.rs 按错误文案前缀分流），
+    // 与 hyper 分支的 MAX_DIRECT_READ_BYTES 保持同一个阈值。
+    let file_size = std::fs::metadata(path)
+        .map_err(|e| format!("metadata error: {}", e))?
+        .len();
+    if file_size > MAX_DIRECT_READ_BYTES {
+        return Err(payload_too_large_message(file_size));
+    }
+
     std::fs::read(path).map_err(|e| format!("read file failed: {}", e))
+}
+
+/// 内部整文件读取的体积上限（50 MiB）。
+///
+/// 这条路径是「不带 width 的图片/普通文件直读」，超限后不回退到整读，
+/// 而是让调用方回 413 提示改用缩略图或 Range。50 MiB 的依据：
+/// 走这条路径的是原图预览（最大一般是相机 RAW 转出的 30 MiB 级 JPG/PNG），
+/// 再大的文件客户端本就该带 width 参数走缩略图分支。
+const MAX_DIRECT_READ_BYTES: u64 = 50 * 1024 * 1024;
+
+/// 体积超限的错误文案前缀。
+///
+/// `mod.rs` 靠它把错误映射成 413 而不是 404：字符串错误在两个进程内模块之间
+/// 流转，只能靠前缀区分语义，改前缀时两处必须同改（有测试钉住）。
+const PAYLOAD_TOO_LARGE_PREFIX: &str = "payload too large";
+
+fn payload_too_large_message(size: u64) -> String {
+    format!(
+        "{}: {} bytes exceeds limit {} bytes",
+        PAYLOAD_TOO_LARGE_PREFIX, size, MAX_DIRECT_READ_BYTES
+    )
+}
+
+/// 错误文案是否属于「体积超限」。
+pub fn is_payload_too_large_error(message: &str) -> bool {
+    message.starts_with(PAYLOAD_TOO_LARGE_PREFIX)
 }
 
 /// 判断文件路径是否为图片（公开，供 mod.rs 调用）。
@@ -496,10 +578,9 @@ pub fn serve_media_file_with_range(
 ) -> Result<(String, Vec<(String, String)>, Vec<u8>), String> {
     use std::io::{Read, Seek, SeekFrom};
 
-    let path = std::path::Path::new(file_path);
-    if !path.exists() {
-        return Err(format!("file not found: {}", file_path));
-    }
+    // 与出图分支共用同一个入口校验：这条路径是真正的文件流服务，
+    // 同样不能接受相对路径/NUL/目录。
+    let path = validate_media_path(file_path).map_err(|e| e.message())?;
     let metadata = std::fs::metadata(path).map_err(|e| format!("metadata error: {}", e))?;
     let total_length = metadata.len();
     let content_type = guess_media_content_type(file_path);
@@ -509,13 +590,18 @@ pub fn serve_media_file_with_range(
     let (start, capped_end) = match range {
         Some(range_str) => resolve_range(range_str, total_length, is_av)
             .ok_or_else(|| "invalid range header".to_string())?,
-        // 无 Range 时主动返回首个切片，促使播放器转用 Range 请求
-        None => clamp_range(
+        // 无 Range 时的分档：
+        // - 音视频：主动只回首个切片，促使播放器改用 Range 请求，避免整片进内存；
+        // - 其它文件（字幕、文档、小图）：**整份给完**。历史上这里不分档，
+        //   一律截到 2 MB，结果超过 2 MB 的非音视频文件被静默截断——
+        //   客户端拿到的是一份残缺文件却仍然 206，属于静默数据损坏。
+        None if is_av => clamp_range(
             0,
             (VIDEO_CHUNK_SIZE - 1).min(total_length.saturating_sub(1)),
             total_length,
             false,
         ),
+        None => (0, total_length.saturating_sub(1)),
     };
     let range_length = (capped_end - start + 1) as usize;
 
@@ -526,8 +612,11 @@ pub fn serve_media_file_with_range(
     file.read_exact(&mut buffer)
         .map_err(|e| format!("read failed: {}", e))?;
 
-    let status = if range.is_some() {
-        "206 Partial Content"
+    // 非音视频且客户端没要 Range：这是「整份文件」的语义，回 200 才准确。
+    // 回 206 会让严格实现的分片下载器认为「还有后续片段」，反复重拉同一段。
+    let whole_file = range.is_none() && !is_av;
+    let status = if whole_file {
+        "200 OK"
     } else {
         "206 Partial Content"
     };
@@ -773,8 +862,126 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    // ── 纯函数：内容类型猜测 ──────────────────────────────────────────────
+    // ── validate_media_path：生产路径与 hyper 路径共用的唯一入口 ──────────
 
+    #[test]
+    fn validate_media_path_rejects_missing_relative_nul_and_dir() {
+        let dir = test_dir("validate");
+        let file = dir.join("ok.txt");
+        fs::write(&file, b"hi").unwrap();
+
+        // 正常绝对路径 + 普通文件
+        assert!(validate_media_path(file.to_str().unwrap()).is_ok());
+
+        // 缺参数
+        assert_eq!(validate_media_path("").unwrap_err(), MediaPathError::Missing);
+
+        // 相对路径：会按节点进程 CWD 解析，必须拒绝
+        assert_eq!(validate_media_path("a.txt").unwrap_err(), MediaPathError::Invalid);
+        assert_eq!(
+            validate_media_path("./a.txt").unwrap_err(),
+            MediaPathError::Invalid
+        );
+
+        // 含 NUL：到系统调用才报错，提前拦下换干净的 400
+        let nul = format!("{}\0hack", dir.display());
+        assert_eq!(validate_media_path(&nul).unwrap_err(), MediaPathError::Invalid);
+
+        // 目录能过 exists() 但不是普通文件：要判 404 而不是让后面 fs::read 报 500
+        assert_eq!(
+            validate_media_path(dir.to_str().unwrap()).unwrap_err(),
+            MediaPathError::NotFound
+        );
+
+        // 不存在的绝对路径
+        assert_eq!(
+            validate_media_path("/tmp/sw_no_such_validate_file.txt").unwrap_err(),
+            MediaPathError::NotFound
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// 生产路径（handle_media_query / serve_media_file_with_range）必须同享校验，
+    /// 否则等于「校验写在没人走的 hyper 分支上」，这一条就是钉住那件事。
+    #[test]
+    fn production_paths_reject_relative_path() {
+        let err = block_on(handle_media_query(&path_query("relative/a.jpg"))).unwrap_err();
+        assert!(err.contains("must be absolute"), "got: {err}");
+
+        let err = serve_media_file_with_range("relative/a.srt", None).unwrap_err();
+        assert!(err.contains("must be absolute"), "got: {err}");
+
+        // 目录同样要拒绝（不是「能打开就往下走」）
+        let dir = test_dir("prod_dir");
+        let err = block_on(handle_media_query(&path_query(dir.to_str().unwrap()))).unwrap_err();
+        assert!(err.contains("file not found"), "got: {err}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── 非音视频文件不带 Range 时整份返回，不再被截到 2MB ─────────────────
+
+    #[test]
+    fn non_av_without_range_returns_whole_file_not_2mb_chunk() {
+        let dir = test_dir("whole");
+        // 3 MiB：超过 VIDEO_CHUNK_SIZE（2 MiB），历史上会被静默截断
+        let file = dir.join("big.srt");
+        let payload = vec![b'a'; 3 * 1024 * 1024];
+        fs::write(&file, &payload).unwrap();
+
+        let (status, headers, body) = serve_media_file_with_range(file.to_str().unwrap(), None).unwrap();
+        // 整份语义要回 200，回 206 会让分片下载器反复重拉同一段
+        assert_eq!(status, "200 OK");
+        let content_length = headers
+            .iter()
+            .find(|(k, _)| k == "Content-Length")
+            .map(|(_, v)| v.clone())
+            .expect("必须有 Content-Length");
+        assert_eq!(content_length, payload.len().to_string());
+        assert_eq!(body.len(), payload.len(), "非音视频文件被截断了");
+
+        // 音视频仍保留 2 MiB 首切片的行为，不受这条改动影响
+        let av = dir.join("clip.mp4");
+        fs::write(&av, vec![0u8; 3 * 1024 * 1024]).unwrap();
+        let (av_status, av_headers, av_body) =
+            serve_media_file_with_range(av.to_str().unwrap(), None).unwrap();
+        assert_eq!(av_status, "206 Partial Content");
+        assert_eq!(av_body.len(), (VIDEO_CHUNK_SIZE) as usize);
+        assert_eq!(
+            av_headers
+                .iter()
+                .find(|(k, _)| k == "Content-Length")
+                .unwrap()
+                .1,
+            VIDEO_CHUNK_SIZE.to_string()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── 直读原图：超 50 MiB 时报 payload too large 供上层映射 413 ─────────
+
+    #[test]
+    fn oversized_direct_read_reports_payload_too_large() {
+        let dir = test_dir("oversize");
+        let file = dir.join("huge.bin");
+        // 稀疏文件：只声明长度，不真写 50 MiB，避免测试变慢吃磁盘
+        {
+            let f = fs::File::create(&file).unwrap();
+            f.set_len(MAX_DIRECT_READ_BYTES + 1).unwrap();
+        }
+
+        let err = block_on(handle_media_query(&path_query(file.to_str().unwrap())))
+            .expect_err("超限必须报错");
+        assert!(is_payload_too_large_error(&err), "got: {err}");
+
+        // 前缀与判定函数必须同源：改文案忘了改判定会让上层错回 404
+        assert!(err.starts_with(PAYLOAD_TOO_LARGE_PREFIX));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── 纯函数：内容类型猜测 ──────────────────────────────────────────────
     #[test]
     fn guess_content_type_basics() {
         assert_eq!(guess_media_content_type("/x/a.JPG"), "image/jpeg");
