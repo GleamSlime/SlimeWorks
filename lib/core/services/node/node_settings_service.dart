@@ -1487,6 +1487,8 @@ class NodeSettingsService extends GetxService {
     Object? lastError;
     StackTrace? lastStackTrace;
     int busyRetries = 0;
+    // 是否拿到过 HTTP 应答：业务失败、4xx/5xx 也说明节点在线，不应改在线位
+    bool nodeAnswered = false;
 
     for (int index = 0; index < candidateUrls.length; index++) {
       final url = candidateUrls[index];
@@ -1500,6 +1502,7 @@ class NodeSettingsService extends GetxService {
           onReceiveProgress: onReceiveProgress,
         );
         attemptTrace.end(note: 'HTTP ${response.statusCode}');
+        nodeAnswered = true;
         // 有 HTTP 应答就说明这一路是通的（业务失败也一样），后续调用不必再试别的地址。
         _nodeAnsweredBase[node.id] = _baseUrlFromNodeCallUrl(url);
         final body = response.data ?? <String, dynamic>{};
@@ -1514,6 +1517,8 @@ class NodeSettingsService extends GetxService {
         throw Exception((body['error'] ?? '节点返回失败').toString());
       } catch (e, st) {
         attemptTrace.end(note: '失败=${e.runtimeType}');
+        // 4xx/5xx 在 Dio 里是异常，但已带回 HTTP 应答，节点本身是在线的
+        if (e is DioException && e.response != null) nodeAnswered = true;
         // 节点回「并发已满」（503/429）说明连接是通的，只是服务端在背压：
         // 等一小会儿重来一次，否则一次偶发的并发峰值就变成用户可见的失败。
         if (e is DioException && _isNodeBusyError(e) && busyRetries < _nodeBusyRetries) {
@@ -1561,7 +1566,9 @@ class NodeSettingsService extends GetxService {
         _circuitBreakedNodes.add(node.id);
         nodeConnectivityError[node.id] = '节点已熔断（多次超时），请在设置中手动重试';
       }
-    } else if (!isNetworkTimeout) {
+    } else if (!isNetworkTimeout && !nodeAnswered) {
+      // 只有确实没拿到任何 HTTP 应答的传输层失败才判离线；
+      // 业务失败、401、4xx/5xx 都已有应答，节点在线，只保留错误文案。
       nodeConnectivity[node.id] = false;
     }
 
