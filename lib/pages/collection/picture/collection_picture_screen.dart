@@ -16,7 +16,7 @@ import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
-import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
+import 'package:slime_works/mock/seams/media_api_seam.dart' as media_api;
 import 'package:slime_works/pages/collection/picture/components/media_browse_grid.dart';
 import 'package:slime_works/pages/collection/picture/components/media_collection_detail.dart';
 import 'package:slime_works/pages/collection/picture/components/media_selection_bar.dart';

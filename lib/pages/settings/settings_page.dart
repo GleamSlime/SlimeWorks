@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
@@ -14,6 +15,7 @@ import 'package:slime_works/pages/settings/components/music_player_settings_tab.
 import 'package:slime_works/pages/settings/components/node_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/ollama_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/manga_settings_tab.dart';
+import 'package:slime_works/pages/settings/components/mock_mode_tab.dart';
 import 'package:slime_works/pages/settings/components/sentry_settings_tab.dart';
 import 'package:slime_works/pages/settings/components/settings_tab_placeholder.dart';
 import 'package:slime_works/pages/settings/components/theme_settings_tab.dart';
@@ -123,6 +125,7 @@ class _OtherSettingsWrapper extends StatelessWidget {
       '游戏设置',
       if (!isMobile) '播放器设置',
       if (!isMobile) 'Sentry',
+      if (kDebugMode) 'Mock 演示',
     ];
     final children = <Widget>[
       const _ResourcesSettingsTab(),
@@ -130,6 +133,7 @@ class _OtherSettingsWrapper extends StatelessWidget {
       const GameSettingsTab(),
       if (!isMobile) const MusicPlayerSettingsTab(),
       if (!isMobile) const SentrySettingsTab(),
+      if (kDebugMode) const MockModeTab(),
     ];
 
     return DefaultTabController(

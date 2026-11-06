@@ -31,6 +31,7 @@ import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/mock/mock_mode.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart';
 import 'package:slime_works/src/rust/api/sentry_log.dart';
@@ -49,6 +50,9 @@ Future<void> main() async {
 
   // 加载环境变量（.env 为可选文件，CI 环境可能不存在）
   await dotenv.load(fileName: '.env', isOptional: true);
+
+  // 演示模式开关（编译期或 debug 运行时偏好）
+  await MockMode.load();
 
   getItInit();
 
