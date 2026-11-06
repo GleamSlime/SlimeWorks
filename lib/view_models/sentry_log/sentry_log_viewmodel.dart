@@ -4,7 +4,7 @@ import 'package:get_it/get_it.dart';
 import 'package:slime_works/core/services/sentry_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
-import 'package:slime_works/src/rust/api/sentry_log.dart';
+import 'package:slime_works/mock/seams/sentry_api_seam.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 const Loggers _logger = Loggers(name: 'Sentry日志VM');

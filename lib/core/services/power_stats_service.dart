@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 
-import 'package:slime_works/src/rust/api/power_stats.dart' as rust_api;
+import 'package:slime_works/mock/seams/power_api_seam.dart' as rust_api;
 
 const Loggers _logger = Loggers(name: '电力统计');
 

@@ -34,7 +34,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/mock/mock_mode.dart';
 import 'package:slime_works/src/rust/api/capture.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart';
-import 'package:slime_works/src/rust/api/sentry_log.dart';
+import 'package:slime_works/mock/seams/sentry_api_seam.dart';
 import 'package:slime_works/src/rust/frb_generated.dart';
 
 const Loggers _logger = Loggers(name: '主程序');

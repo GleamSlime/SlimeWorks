@@ -13,6 +13,8 @@ import 'package:slime_works/core/services/ledger_stub_store.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/pages/ledger/models/ledger_models.dart';
+import 'package:slime_works/mock/data/ledger_mock_data.dart';
+import 'package:slime_works/mock/mock_mode.dart';
 import 'package:slime_works/src/rust/api/ledger.dart' as rust_api;
 import 'package:slime_works/src/rust/frb_generated.dart';
 
@@ -112,6 +114,11 @@ class LedgerService extends GetxService {
   }
 
   Future<void> _initLocal() async {
+    // 演示模式不落库，直接标记就绪
+    if (MockMode.enabled) {
+      ready.value = true;
+      return;
+    }
     if (!RustLib.instance.initialized) await RustLib.init();
     if (rust_api.ledgerIsReady()) {
       ready.value = true;
@@ -639,6 +646,7 @@ class LedgerService extends GetxService {
     Map<String, dynamic> params,
     FutureOr<String> Function() local,
   ) async {
+    if (MockMode.enabled) return MockLedgerData.instance.text(action, params);
     if (_useLocal) return await local();
     final data = await _nodeCall(action, params);
     if (data is Map<String, dynamic> && data['text'] != null) return data['text'].toString();
@@ -650,6 +658,7 @@ class LedgerService extends GetxService {
     Map<String, dynamic> params,
     FutureOr<int> Function() local,
   ) async {
+    if (MockMode.enabled) return MockLedgerData.instance.id(action, params);
     if (_useLocal) return await local();
     final data = await _nodeCall(action, params);
     return _asInt(data);
@@ -660,6 +669,7 @@ class LedgerService extends GetxService {
     Map<String, dynamic> params,
     FutureOr<bool> Function() local,
   ) async {
+    if (MockMode.enabled) return MockLedgerData.instance.boolean(action, params);
     if (_useLocal) return await local();
     final data = await _nodeCall(action, params);
     if (data is bool) return data;
@@ -672,6 +682,10 @@ class LedgerService extends GetxService {
     Map<String, dynamic> params,
     FutureOr<Object?> Function() local,
   ) async {
+    if (MockMode.enabled) {
+      MockLedgerData.instance.run(action, params);
+      return;
+    }
     if (_useLocal) {
       await local();
       return;
@@ -686,6 +700,7 @@ class LedgerService extends GetxService {
     Map<String, dynamic> params,
     FutureOr<String> Function() local,
   ) async {
+    if (MockMode.enabled) return MockLedgerData.instance.raw(action, params);
     if (_useLocal) return await local();
     return jsonEncode(await _nodeCall(action, params));
   }
