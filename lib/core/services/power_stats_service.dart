@@ -106,7 +106,10 @@ class PowerStatsService extends GetxService {
   );
 
   bool get isInitialized => _isInitialized;
-  bool get isLocal => selectedNodeId.value.isEmpty;
+
+  /// 演示模式下一律按本机节点解析：残留的远程节点 id 在这边没有对应节点，
+  /// 拿来取数只会报「未选择远程节点」。持久化的选择本身不动，关掉 Mock 即恢复。
+  bool get isLocal => MockMode.enabled || selectedNodeId.value.isEmpty;
 
   String? get currentNodeBaseUrl {
     if (isLocal) return null;
@@ -239,6 +242,8 @@ class PowerStatsService extends GetxService {
   }
 
   Future<void> setSelectedNodeId(String nodeId) async {
+    // 演示模式下不覆盖用户真实的选择，关掉 Mock 后要能回到原先的节点
+    if (MockMode.enabled) return;
     selectedNodeId.value = nodeId;
     await _savePrefs();
   }

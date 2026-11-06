@@ -115,7 +115,11 @@ class PowerStatsViewModel extends GetxController {
   final RxBool isFetching = false.obs;
   final RxBool isConfigLoaded = false.obs;
 
-  bool get isLocal => currentNodeId.value.isEmpty;
+  /// 以服务层为准：演示模式下即使存有远程节点 id 也按本机处理
+  bool get isLocal => _service.isLocal;
+
+  /// 节点切换器展示用的 id：演示模式下恒为「本机」，关掉 Mock 后回到已选节点
+  String get displayNodeId => _service.isLocal ? '' : currentNodeId.value;
 
   // 服务订阅
   StreamSubscription? _meterIdSub;

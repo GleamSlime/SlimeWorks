@@ -180,7 +180,7 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
     if (_nodeService == null) return const SizedBox.shrink();
     return NodeSwitcherButton(
       nodeService: _nodeService!,
-      currentNodeId: _viewModel.currentNodeId.value,
+      currentNodeId: _viewModel.displayNodeId,
       availabilityChecker: _viewModel.checkNodePowerStatsAvailable,
       onNodeSelected: (nodeId) => _viewModel.switchNode(nodeId),
     );
