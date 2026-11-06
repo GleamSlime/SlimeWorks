@@ -9,7 +9,7 @@ import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/utils/logger.dart';
-import 'package:slime_works/src/rust/api/novel_reader.dart';
+import 'package:slime_works/mock/seams/novel_api_seam.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';

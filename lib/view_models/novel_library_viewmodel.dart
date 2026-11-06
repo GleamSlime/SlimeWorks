@@ -13,8 +13,8 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:slime_works/pages/collection/library/components/library_item.dart';
-import 'package:slime_works/src/rust/api/novel_reader.dart' hide cancelSearch;
-import 'package:slime_works/src/rust/api/novel_reader.dart' as rust_api;
+import 'package:slime_works/mock/seams/novel_api_seam.dart';
+import 'package:slime_works/mock/seams/novel_api_seam.dart' as rust_api;
 
 part 'novel_library_viewmodel_novel.dart';
 part 'novel_library_viewmodel_actions.dart';
