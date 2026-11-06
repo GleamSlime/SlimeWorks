@@ -206,8 +206,13 @@ class MockMediaData {
       final kind = kinds[i % kinds.length];
       final index = i + 1;
       final (:path, :suffix) = switch (kind) {
+        // 同一集合复用 4 张占位图，避免生成过多大图拖慢首屏
         MediaKind.image => (
-          path: MockAssets.imagePath('$seed-$index', width: 1200, height: 800),
+          path: MockAssets.imagePath(
+            '$seed-${i % 4}',
+            width: 640,
+            height: 427,
+          ),
           suffix: 'JPG',
         ),
         MediaKind.video => (
@@ -228,8 +233,8 @@ class MockMediaData {
           kind: kind,
           fileSize: BigInt.from(1024 * (240 + index * 37)),
           modifiedAt: 1735689600000 + index * 3600000,
-          width: kind == MediaKind.image ? 1200 : null,
-          height: kind == MediaKind.image ? 800 : null,
+          width: kind == MediaKind.image ? 640 : null,
+          height: kind == MediaKind.image ? 427 : null,
           durationMs: kind == MediaKind.image ? null : BigInt.from(18000 + index * 700),
           order: index,
         ),

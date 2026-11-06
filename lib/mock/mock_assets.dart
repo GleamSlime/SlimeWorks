@@ -156,7 +156,7 @@ class MockAssets {
       raw.addByte(0); // filter: none
       raw.add(Uint8List.sublistView(rgb, y * stride, (y + 1) * stride));
     }
-    final compressed = ZLibCodec(level: 6).encode(raw.toBytes());
+    final compressed = ZLibCodec(level: 4).encode(raw.toBytes());
 
     final out = BytesBuilder();
     out.add(const [137, 80, 78, 71, 13, 10, 26, 10]);
