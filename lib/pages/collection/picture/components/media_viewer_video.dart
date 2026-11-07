@@ -437,9 +437,10 @@ class _VideoPreviewState extends State<_VideoPreview> {
     // 振幅覆盖层：开关开 + 本机可提取 + 未失败。数据未到期间先挂转圈，
     // 让"切换"立刻可见；提取失败则整体退回普通条（不再空转骗人）。
     final waveCover = _waveMode && _waveAvailable && !_waveFailed;
-    final bottomBar = [
-      const media_controls.MaterialPositionIndicator(),
-      const Spacer(),
+
+    const double buttonBarH = 52.0;
+    // 自定义功能按钮组（两套控件共用）：振幅开关 + 速度 + 适应 + 音量
+    final customButtons = <Widget>[
       // 振幅进度条开关：仅桌面端本地文件可见（远程/移动端无解码兜底，藏起来免得点了没反应）
       if (_waveAvailable)
         _VideoWaveButton(active: _waveMode, onToggle: _toggleWaveMode),
@@ -454,6 +455,22 @@ class _VideoPreviewState extends State<_VideoPreview> {
         panelOpen: _showVolumePanel,
         onTogglePanel: () => setState(() => _showVolumePanel = !_showVolumePanel),
       ),
+    ];
+    final seekBarMargin = EdgeInsets.only(
+      bottom: bottomInset + AppTheme.metrics.kSpace12 + buttonBarH,
+      left: AppTheme.metrics.kSpace12,
+      right: AppTheme.metrics.kSpace12,
+    );
+    final barMargin = EdgeInsets.only(
+      bottom: bottomInset + AppTheme.metrics.kSpace12,
+      left: AppTheme.metrics.kSpace8,
+      right: AppTheme.metrics.kSpace8,
+    );
+    // 移动端（MaterialVideoControls）底栏
+    final bottomBar = [
+      const media_controls.MaterialPositionIndicator(),
+      const Spacer(),
+      ...customButtons,
       // 应用内画中画（迷你悬浮窗）
       if (isMobile)
         _GlassControlIcon(
@@ -463,38 +480,59 @@ class _VideoPreviewState extends State<_VideoPreview> {
         ),
       const media_controls.MaterialFullscreenButton(),
     ];
-
-    const double buttonBarH = 52.0;
-    final videoWidget = media_controls.MaterialVideoControlsTheme(
-      normal: media_controls.MaterialVideoControlsThemeData(
+    // 桌面端（MaterialDesktopVideoControls）底栏：AdaptiveVideoControls 在
+    // macOS/Windows 走 desktop 分支且只认 MaterialDesktopVideoControlsTheme，
+    // 之前只包了移动端那套主题，桌面端整条自定义栏（含振幅开关）都被默认栏顶掉了。
+    final desktopBottomBar = [
+      const media_controls.MaterialDesktopPlayOrPauseButton(),
+      const media_controls.MaterialDesktopPositionIndicator(),
+      const Spacer(),
+      ...customButtons,
+      const media_controls.MaterialDesktopFullscreenButton(),
+    ];
+    final videoWidget = media_controls.MaterialDesktopVideoControlsTheme(
+      normal: media_controls.MaterialDesktopVideoControlsThemeData(
         topButtonBar: const [],
         topButtonBarMargin: EdgeInsets.zero,
         // 振幅模式下关掉原生横条，由我们叠在正上方的波形条接管点击/拖动
         displaySeekBar: !waveCover,
-        seekBarMargin: EdgeInsets.only(
-          bottom: bottomInset + AppTheme.metrics.kSpace12 + buttonBarH,
-          left: AppTheme.metrics.kSpace12,
-          right: AppTheme.metrics.kSpace12,
-        ),
+        seekBarMargin: seekBarMargin,
         seekBarHeight: 3.2,
         seekBarThumbSize: 14.0,
         seekBarColor: s.onMedia.withValues(alpha: 0.15),
         seekBarPositionColor: s.info.color,
         seekBarBufferColor: s.onMedia.withValues(alpha: 0.25),
         seekBarThumbColor: s.onMedia,
-        bottomButtonBar: bottomBar,
-        bottomButtonBarMargin: EdgeInsets.only(
-          bottom: bottomInset + AppTheme.metrics.kSpace12,
-          left: AppTheme.metrics.kSpace8,
-          right: AppTheme.metrics.kSpace8,
-        ),
+        bottomButtonBar: desktopBottomBar,
+        bottomButtonBarMargin: barMargin,
         buttonBarHeight: buttonBarH,
         buttonBarButtonColor: s.onMedia.withValues(alpha: 0.85),
-        backdropColor: s.mediaStage.withValues(alpha: 0.45),
         bufferingIndicatorBuilder: (_) => const _GlassPulseLoader(),
       ),
-      fullscreen: const media_controls.MaterialVideoControlsThemeData(),
-      child: Video(controller: controller, fit: _videoFit),
+      fullscreen: const media_controls.MaterialDesktopVideoControlsThemeData(),
+      child: media_controls.MaterialVideoControlsTheme(
+        normal: media_controls.MaterialVideoControlsThemeData(
+          topButtonBar: const [],
+          topButtonBarMargin: EdgeInsets.zero,
+          // 振幅模式下关掉原生横条，由我们叠在正上方的波形条接管点击/拖动
+          displaySeekBar: !waveCover,
+          seekBarMargin: seekBarMargin,
+          seekBarHeight: 3.2,
+          seekBarThumbSize: 14.0,
+          seekBarColor: s.onMedia.withValues(alpha: 0.15),
+          seekBarPositionColor: s.info.color,
+          seekBarBufferColor: s.onMedia.withValues(alpha: 0.25),
+          seekBarThumbColor: s.onMedia,
+          bottomButtonBar: bottomBar,
+          bottomButtonBarMargin: barMargin,
+          buttonBarHeight: buttonBarH,
+          buttonBarButtonColor: s.onMedia.withValues(alpha: 0.85),
+          backdropColor: s.mediaStage.withValues(alpha: 0.45),
+          bufferingIndicatorBuilder: (_) => const _GlassPulseLoader(),
+        ),
+        fullscreen: const media_controls.MaterialVideoControlsThemeData(),
+        child: Video(controller: controller, fit: _videoFit),
+      ),
     );
 
     return Stack(
@@ -1134,7 +1172,7 @@ class _VideoWaveformBar extends StatelessWidget {
       valueListenable: posMs,
       builder: (context, pos, _) => ValueListenableBuilder<int>(
         valueListenable: durMs,
-        builder: (context, dur, __) => WaveformSeekBar(
+        builder: (context, dur, _) => WaveformSeekBar(
           waveform: wave,
           positionMs: pos,
           durationMs: dur,
