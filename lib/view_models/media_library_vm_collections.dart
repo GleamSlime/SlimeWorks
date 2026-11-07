@@ -430,8 +430,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
   }
 
-  /// 按原始目录结构归档导入的集合：按集合目录相对导入根目录的层级
-  /// 创建（或复用）文件夹并将集合移入；[baseFolderId] 为层级挂载的起始父文件夹。
+  /// 按原始目录结构归档导入的集合：以导入根目录名在 [baseFolderId] 下**新建**
+  /// 同名包裹文件夹（同名允许共存，不与既有文件夹合并），再按相对层级建树移入集合。
   Future<List<media_api.MediaCollection>> _archiveImportedCollectionsByStructure({
     required String root,
     required List<media_api.MediaCollection> collections,
@@ -439,6 +439,13 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   }) async {
     // 统一分隔符后做前缀匹配，计算相对层级段
     final rootNorm = root.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+    // 每次导入独立成树：根层新建同名夹（与拖拽普通模式一致），
+    // 树内层级只复用本次新建的节点，绝不落进用户既有的同名旧夹
+    final rootName = rootNorm.split('/').where((s) => s.isNotEmpty).lastOrNull ?? '';
+    String? effectiveBase = baseFolderId;
+    if (rootName.isNotEmpty) {
+      effectiveBase = await _createLocalFolder(rootName, baseFolderId);
+    }
     final folderCache = <String, String>{};
     final result = <media_api.MediaCollection>[];
     for (final collection in collections) {
@@ -446,7 +453,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       final segments = pathNorm.startsWith('$rootNorm/')
           ? pathNorm.substring(rootNorm.length + 1).split('/').where((s) => s.isNotEmpty).toList()
           : const <String>[];
-      var parentId = baseFolderId;
+      var parentId = effectiveBase;
       final acc = StringBuffer();
       for (final segment in segments) {
         if (acc.isNotEmpty) acc.write('/');
@@ -454,6 +461,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         final cacheKey = acc.toString();
         var folderId = folderCache[cacheKey];
         if (folderId == null) {
+          // 父节点必然是本次新建的夹：同名复用只发生在本次导入树内部
           folderId = await _findOrCreateLocalFolder(segment, parentId);
           folderCache[cacheKey] = folderId;
         }
@@ -467,7 +475,17 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     return result;
   }
 
-  /// 在 [parentId]（null = 根目录）下查找同名子文件夹，不存在时创建；返回文件夹 ID。
+  /// 在 [parentId]（null = 根目录）下无条件新建文件夹（同名允许共存）；返回 ID。
+  Future<String> _createLocalFolder(String name, String? parentId) async {
+    final folder = parentId == null
+        ? media_api.createMediaFolder(name: name)
+        : media_api.createChildMediaFolder(name: name, parentId: parentId);
+    return folder.id;
+  }
+
+  /// 在 [parentId] 下查找同名子文件夹，不存在时创建；返回文件夹 ID。
+  /// 仅供「同一棵导入树内部」的层级复用（父节点是本次新建的夹，
+  /// 或软链重新扫描时重建已知镜像树）；跨次导入的根层一律走 [_createLocalFolder]。
   Future<String> _findOrCreateLocalFolder(String name, String? parentId) async {
     final siblings = parentId == null
         ? (await media_api.getAllMediaFolders()).where((f) => f.parentId == null).toList()
@@ -476,10 +494,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     if (existing != null) {
       return existing.id;
     }
-    final folder = parentId == null
-        ? media_api.createMediaFolder(name: name)
-        : media_api.createChildMediaFolder(name: name, parentId: parentId);
-    return folder.id;
+    return _createLocalFolder(name, parentId);
   }
 
   /// 为一批集合内的全部媒体文件入队缩略图生成（导入后全量生成用）。
@@ -861,7 +876,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     final allValidCollections = <media_api.MediaCollection>[];
 
     // 目录：使用 scanMediaFolders，每个子目录创建独立集合；
-    // - preserveStructure=false：在当前目标位置下创建（或复用）与拖入目录同名的包裹文件夹，集合统一移入
+    // - preserveStructure=false：在当前目标位置下新建与拖入目录同名的包裹文件夹，
+    //   集合统一移入；同名不合并——每次导入独立成夹，允许同名共存
     // - preserveStructure=true：按拖入目录相对层级归档（与点击导入一致）
     for (final dir in directoryPaths) {
       final dirName = dir.split(Platform.pathSeparator).last;
@@ -899,24 +915,16 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         } else if (validCollections.isNotEmpty &&
             dirName.isNotEmpty &&
             (targetFolderId == null || !isRemoteFolder(targetFolderId))) {
-          // 查找/创建同名包裹文件夹（同名已存在则复用，不重复创建）
-          String? wrapperFolderId;
-          final existing = folders.firstWhereOrNull(
-            (f) => f.parentId == targetFolderId && f.name == dirName,
-          );
-          if (existing != null) {
-            wrapperFolderId = existing.id;
-          } else {
-            final created = targetFolderId == null
-                ? media_api.createMediaFolder(name: dirName)
-                : media_api.createChildMediaFolder(name: dirName, parentId: targetFolderId);
-            wrapperFolderId = created.id;
-            foldersChanged = true;
-          }
+          // 每次导入都新建同名包裹文件夹：同名文件夹允许共存（UI 按 ID 渲染），
+          // 不再按名字复用旧夹——复用会把新导入的内容混进旧夹，等于变相合并
+          final created = targetFolderId == null
+              ? media_api.createMediaFolder(name: dirName)
+              : media_api.createChildMediaFolder(name: dirName, parentId: targetFolderId);
+          foldersChanged = true;
           for (final collection in validCollections) {
             media_api.moveMediaCollectionToFolder(
               collectionId: collection.id,
-              folderId: wrapperFolderId,
+              folderId: created.id,
             );
           }
         }
@@ -1044,6 +1052,17 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     String? lastFailure;
     // 本地就是空目录、压根没上传的（节点无从报错，得由客户端说清楚）
     final emptyDirs = <String>[];
+    // 节点磁盘现有目录名（小写归一）：同名目录解压会覆盖/混写旧文件，
+    // 上传前据此给 entryRoot 追加后缀让两批内容在磁盘上共存。
+    // 查询失败时退化为只防本批内重名（不阻断导入主流程）。
+    Set<String> nodeDirNames = {};
+    try {
+      nodeDirNames = (await nodeSettingsService.listNodeDirectories(nodeId: nodeId, path: targetDir))
+          .map((p) => _pathBaseName(p).toLowerCase())
+          .toSet();
+    } catch (e) {
+      _logger.error('[拖拽] 节点目录列举失败，仅防本批重名: $e');
+    }
     int index = 0;
     for (final dir in dirPaths) {
       index++;
@@ -1058,8 +1077,16 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           _logger.info('[拖拽] 远程目录为空，跳过上传: $dir');
           continue;
         }
+        // 磁盘同名 → 唯一化名（照片 → 照片 (2)），库内显示名仍是原名（同名允许共存）
+        var entryName = dirName;
+        var seq = 2;
+        while (nodeDirNames.contains(entryName.toLowerCase())) {
+          entryName = '$dirName ($seq)';
+          seq++;
+        }
+        nodeDirNames.add(entryName.toLowerCase());
         scanStatusText.value = '打包: $stage';
-        zipPath = await extract_api.zipDirectoryToTmp(srcDir: dir, entryRoot: dirName);
+        zipPath = await extract_api.zipDirectoryToTmp(srcDir: dir, entryRoot: entryName);
 
         scanStatusText.value = '上传: $stage';
         await nodeSettingsService.uploadArchiveToNode(
@@ -1071,12 +1098,14 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         scanStatusText.value = '节点导入: $stage';
         final payload = await nodeSettingsService.importNodeMediaFolder(
           nodeId: nodeId,
-          folderPath: _joinNodePath(targetDir, dirName),
+          folderPath: _joinNodePath(targetDir, entryName),
           generateThumbnails: generateThumbnails,
           preserveStructure: preserveStructure,
           baseFolderId: rawFolderId,
           // 与客户端封面请求宽度对齐，避免节点预热缓存未命中
           coverWidth: mediaPrefs.effectiveRemoteCoverWidth,
+          // 磁盘名唯一化过也要按原目录名显示（同名允许共存）
+          displayName: entryName == dirName ? null : dirName,
         );
         // item_count：单集合模式是文件数，按目录结构模式是集合数；0 都表示没有有效媒体
         final importedCount = payload == null ? null : _parseIntLike(payload['item_count']);

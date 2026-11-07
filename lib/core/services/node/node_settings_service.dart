@@ -929,6 +929,7 @@ class NodeSettingsService extends GetxService {
     bool preserveStructure = false,
     String? baseFolderId,
     int? coverWidth,
+    String? displayName,
   }) async {
     final node = getNodeById(nodeId);
     if (node == null) {
@@ -947,6 +948,10 @@ class NodeSettingsService extends GetxService {
         // 否则节点内存缓存 key（含 width）不同，导入预热等于白跑。
         // 0 = 原图档（客户端请求不带宽度），节点据此跳过预生成。
         'cover_width': ?coverWidth,
+        // 库内显示名：上传时磁盘目录可能被唯一化（照片 → 照片 (2)），
+        // 传原目录名让节点侧的文件夹/集合标题保持原样（同名允许共存）。
+        // 旧节点不认识该字段会忽略，行为退回磁盘目录名。
+        'display_name': ?displayName,
       },
     );
 

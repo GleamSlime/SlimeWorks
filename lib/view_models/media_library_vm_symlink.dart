@@ -242,7 +242,9 @@ extension MediaLinkImportExt on MediaLibraryViewModel {
     }
     final baseId =
         (targetFolderId != null && !isRemoteFolder(targetFolderId)) ? targetFolderId : null;
-    final wrapperId = await _findOrCreateLocalFolder(dirName, baseId);
+    // 每次导入独立成树：新建同名包裹夹（同名允许共存）。若复用旧夹，
+    // 下方 _syncMediaLinkFromDisk 会用新源路径覆盖旧夹的软链登记，旧树就丢了
+    final wrapperId = await _createLocalFolder(dirName, baseId);
     final result = await _syncMediaLinkFromDisk(
       root: canonical,
       wrapperId: wrapperId,
@@ -272,7 +274,8 @@ extension MediaLinkImportExt on MediaLibraryViewModel {
     if (dirName.isEmpty) return const [];
     final baseId =
         (targetFolderId != null && !isRemoteFolder(targetFolderId)) ? targetFolderId : null;
-    final wrapperId = await _findOrCreateLocalFolder(dirName, baseId);
+    // 与点击软链导入一致：每次新建同名包裹夹，同名共存不合并、不覆盖旧登记
+    final wrapperId = await _createLocalFolder(dirName, baseId);
     final result = await _syncMediaLinkFromDisk(root: canonical, wrapperId: wrapperId);
     return result.$1;
   }

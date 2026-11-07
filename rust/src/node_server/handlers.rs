@@ -299,12 +299,23 @@ pub async fn dispatch_action(
                 .as_str()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty());
+            // 库内显示名：客户端上传时为防磁盘覆盖可能把落盘目录唯一化
+            // （照片 → 照片 (2)），库内仍按原目录名显示（同名允许共存）；
+            // 旧客户端不传则维持原行为（以磁盘目录名为准）。
+            let display_name = params["display_name"]
+                .as_str()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
             // 按原始目录导入：扫描子目录集合，并按目录层级创建文件夹归档
             if preserve_structure {
                 let collections = media_api::scan_media_folders(folder_path.clone())
                     .map_err(|e| format!("导入媒体文件夹失败: {}", e))?;
-                let imported =
-                    import_collections_with_structure(&folder_path, collections, &base_folder_id)?;
+                let imported = import_collections_with_structure(
+                    &folder_path,
+                    collections,
+                    &base_folder_id,
+                    display_name.as_deref(),
+                )?;
                 if generate_thumbnails {
                     spawn_import_thumbnail_generation(&imported, cover_width);
                 }
@@ -319,8 +330,16 @@ pub async fn dispatch_action(
                     "updated_at": chrono::Utc::now().timestamp(),
                 }));
             }
-            let collection = media_api::import_media_folder(folder_path)
+            let mut collection = media_api::import_media_folder(folder_path)
                 .map_err(|e| format!("导入媒体文件夹失败: {}", e))?;
+            // 客户端指定显示名：磁盘目录被唯一化过，库内标题仍用原名（同名共存）
+            if let Some(name) = &display_name {
+                if &collection.title != name {
+                    media_api::rename_media_collection(collection.id.clone(), name.clone())
+                        .map_err(|e| format!("重命名媒体集合失败: {}", e))?;
+                    collection.title = name.clone();
+                }
+            }
             let mut folder_id = collection.folder_id.clone();
             if let Some(pid) = &base_folder_id {
                 media_api::move_media_collection_to_folder(collection.id.clone(), Some(pid.clone()))
@@ -1353,15 +1372,34 @@ pub async fn dispatch_action(
     }
 }
 
-/// 按原始目录结构导入：按集合目录相对导入根目录的层级创建（或复用）文件夹，
-/// 并将集合移入对应文件夹；[base_folder_id] 为层级挂载的起始父文件夹，
-/// 集合目录不在根目录之下时直接挂到起始文件夹下；返回归档后的集合列表。
+/// 按原始目录结构导入：以导入根目录名在 [base_folder_id] 下**新建**同名包裹
+/// 文件夹（同名允许共存，不与既有文件夹合并），再按相对层级建树并移入集合；
+/// 集合目录不在根目录之下时直接挂到包裹文件夹下；返回归档后的集合列表。
 fn import_collections_with_structure(
     root: &str,
     collections: Vec<media_collection::MediaCollection>,
     base_folder_id: &Option<String>,
+    display_name: Option<&str>,
 ) -> Result<Vec<media_collection::MediaCollection>, String> {
     let root_norm = root.trim_end_matches(['/', '\\']);
+    // 每次导入独立成树：根层新建同名夹（与客户端本地导入语义一致），
+    // 树内层级只复用本次新建的节点，绝不落进用户既有的同名旧夹。
+    // 显示名优先用客户端传入的原目录名（磁盘目录可能被唯一化过）。
+    let root_name = display_name
+        .map(str::to_string)
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| {
+            root_norm
+                .rsplit(['/', '\\'])
+                .find(|s| !s.is_empty())
+                .unwrap_or("")
+                .to_string()
+        });
+    let effective_base: Option<String> = if root_name.is_empty() {
+        base_folder_id.clone()
+    } else {
+        Some(create_folder(&root_name, base_folder_id)?)
+    };
     let mut folder_cache: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
     let mut imported = Vec::new();
@@ -1372,7 +1410,7 @@ fn import_collections_with_structure(
             .trim_end_matches(['/', '\\'])
             .strip_prefix(root_norm)
             .map(|r| r.trim_start_matches(['/', '\\']).to_string());
-        let mut parent_id: Option<String> = base_folder_id.clone();
+        let mut parent_id: Option<String> = effective_base.clone();
         if let Some(rel) = rel {
             let mut acc = String::new();
             for segment in rel.split(['/', '\\']).filter(|s| !s.is_empty()) {
@@ -1400,7 +1438,20 @@ fn import_collections_with_structure(
     Ok(imported)
 }
 
+/// 在指定父文件夹下无条件新建文件夹（同名允许共存）；返回文件夹 ID。
+fn create_folder(name: &str, parent_id: &Option<String>) -> Result<String, String> {
+    let folder = match parent_id {
+        Some(pid) => media_api::create_child_media_folder(name.to_string(), pid.clone())
+            .map_err(|e| format!("创建文件夹失败: {}", e))?,
+        None => media_api::create_media_folder(name.to_string())
+            .map_err(|e| format!("创建文件夹失败: {}", e))?,
+    };
+    Ok(folder.id)
+}
+
 /// 在指定父文件夹下查找同名子文件夹，不存在时创建；返回文件夹 ID。
+/// 仅供「同一棵导入树内部」的层级复用（父节点是本次新建的夹）；
+/// 跨次导入的根层一律走 [create_folder]，避免把新内容混进旧夹。
 fn find_or_create_folder(name: &str, parent_id: &Option<String>) -> Result<String, String> {
     let existing = match parent_id {
         Some(pid) => media_api::get_child_media_folders(pid.clone())
@@ -1415,13 +1466,7 @@ fn find_or_create_folder(name: &str, parent_id: &Option<String>) -> Result<Strin
     if let Some(folder) = existing {
         return Ok(folder.id);
     }
-    let folder = match parent_id {
-        Some(pid) => media_api::create_child_media_folder(name.to_string(), pid.clone())
-            .map_err(|e| format!("创建文件夹失败: {}", e))?,
-        None => media_api::create_media_folder(name.to_string())
-            .map_err(|e| format!("创建文件夹失败: {}", e))?,
-    };
-    Ok(folder.id)
+    create_folder(name, parent_id)
 }
 
 /// 由文件夹下已有集合的磁盘位置反推「上传落点」。
