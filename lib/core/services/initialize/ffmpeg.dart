@@ -14,7 +14,8 @@ class RustFFmpeg {
   static Future<String?>? _probeFuture;
 
   /// 返回可用 ffmpeg 可执行路径，优先探测系统 PATH（用户用 brew/包管理器安装的），
-  /// 系统 PATH 未命中则检查内置模块，仍未命中则触发下载；
+  /// PATH 未命中再按绝对路径探测 macOS 常见安装目录（GUI 启动的进程 PATH 不含包管理器目录），
+  /// 仍未命中则检查内置模块，不存在则触发下载；
   /// 全部失败时返回 null。结果在本次运行期间只解析一次（无论成功或失败均缓存）。
   static Future<String?> resolvePath() async {
     if (_pathFuture != null) {
@@ -36,6 +37,35 @@ class RustFFmpeg {
     final result = await _probeFuture!;
     _logger.info('[FFmpeg] resolveProbe: 解析完成 → ${result ?? "未找到 ffprobe"}');
     return result;
+  }
+
+  /// macOS 常见 ffmpeg 安装目录（按优先级排序）：
+  /// Apple Silicon Homebrew 原生 arm64 版优先，其次 Intel Homebrew / MacPorts，
+  /// 最后 /usr/local/bin 里的软链（往往是管理员手动建立的指向）。
+  /// GUI 方式（Dock/Finder）启动的应用不经过 path_helper，进程 PATH 通常是
+  /// launchd 的最小集（/usr/bin:/bin:/usr/sbin:/sbin），不含包管理器目录，
+  /// 所以必须用绝对路径显式探测，否则会错误地回落到内置的 Intel 静态包（Rosetta 转译）。
+  static const List<String> _macosKnownDirs = [
+    '/opt/homebrew/bin', // Apple Silicon Homebrew（原生 arm64）
+    '/usr/local/bin', // Intel Homebrew / 手动软链
+    '/opt/local/bin', // MacPorts
+  ];
+
+  /// macOS 下按绝对路径探测常见安装位；找到且能跑 `-version` 才返回。
+  static String? _findInMacosKnownDirs(String exeName) {
+    for (final dir in _macosKnownDirs) {
+      final file = File('$dir/$exeName');
+      if (!file.existsSync()) continue;
+      try {
+        // 轻量校验可执行且没坏（软链目标被 brew 清理过等情况），~40ms 开销，仅启动时一次
+        final r = Process.runSync(file.path, ['-version']);
+        if (r.exitCode == 0) return file.path;
+        _logger.info('[FFmpeg] $dir/$exeName 存在但执行失败 exitCode=${r.exitCode}，继续探测');
+      } catch (e) {
+        _logger.info('[FFmpeg] $dir/$exeName 执行异常: $e，继续探测');
+      }
+    }
+    return null;
   }
 
   /// Windows 下直接扫 PATH 找可执行文件，避免探测时弹出控制台窗口
@@ -76,6 +106,15 @@ class RustFFmpeg {
       } catch (e) {
         _logger.info('[FFmpeg] 系统 PATH 未发现 ffmpeg: $e');
       }
+
+      // ①.5 PATH 未命中（GUI 启动的进程 PATH 不含包管理器目录），
+      // 按绝对路径探测 macOS 常见安装位，优先命中原生 arm64 版
+      final known = _findInMacosKnownDirs('ffmpeg');
+      if (known != null) {
+        _logger.info('[FFmpeg] 使用 macOS 常见安装目录中的 ffmpeg: $known');
+        return known;
+      }
+      _logger.info('[FFmpeg] macOS 常见安装目录未发现 ffmpeg');
     }
 
     // ② 系统 PATH 未命中，检查内置模块
@@ -130,6 +169,15 @@ class RustFFmpeg {
       } catch (e) {
         _logger.info('[FFmpeg] 系统 PATH 未发现 ffprobe: $e');
       }
+
+      // ①.5 PATH 未命中，按绝对路径探测 macOS 常见安装位（与 ffmpeg 保持一致，
+      // 避免 ffmpeg 用原生版、ffprobe 回落到内置 Intel 版的混搭）
+      final known = _findInMacosKnownDirs('ffprobe');
+      if (known != null) {
+        _logger.info('[FFmpeg] 使用 macOS 常见安装目录中的 ffprobe: $known');
+        return known;
+      }
+      _logger.info('[FFmpeg] macOS 常见安装目录未发现 ffprobe');
     }
 
     // ② 系统 PATH 未命中，检查内置模块
