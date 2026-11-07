@@ -507,7 +507,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
         bottomButtonBarMargin: barMargin,
         buttonBarHeight: buttonBarH,
         buttonBarButtonColor: s.onMedia.withValues(alpha: 0.85),
-        bufferingIndicatorBuilder: (_) => const _GlassPulseLoader(),
+        bufferingIndicatorBuilder: (_) => _VideoLoadingSpeed(player: player),
       ),
       fullscreen: const media_controls.MaterialDesktopVideoControlsThemeData(),
       child: media_controls.MaterialVideoControlsTheme(
@@ -528,7 +528,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
           buttonBarHeight: buttonBarH,
           buttonBarButtonColor: s.onMedia.withValues(alpha: 0.85),
           backdropColor: s.mediaStage.withValues(alpha: 0.45),
-          bufferingIndicatorBuilder: (_) => const _GlassPulseLoader(),
+          bufferingIndicatorBuilder: (_) => _VideoLoadingSpeed(player: player),
         ),
         fullscreen: const media_controls.MaterialVideoControlsThemeData(),
         child: Video(controller: controller, fit: _videoFit),
@@ -1184,6 +1184,118 @@ class _VideoWaveformBar extends StatelessWidget {
           height: scaleW(28),
         ),
       ),
+    );
+  }
+}
+
+// ── 缓冲速度指示（播放画面中央）─────────────────────────────────────────
+
+/// 加载/缓冲时在脉冲圈下方显示半透明下载速度小字（XX MB/s）。
+///
+/// 速度来自 libmpv 的 `demuxer-cache-state.raw-bytes-per-sec`（实时解复用速率，
+/// 与 mpv 自带 stats 同一口径）。本地秒开场景延迟一拍再出字，避免闪跳；
+/// Web/移动 WebPlayer 没有 NativePlayer，或属性读取失败时，静默退回纯脉冲圈。
+class _VideoLoadingSpeed extends StatefulWidget {
+  const _VideoLoadingSpeed({required this.player});
+
+  final Player player;
+
+  @override
+  State<_VideoLoadingSpeed> createState() => _VideoLoadingSpeedState();
+}
+
+class _VideoLoadingSpeedState extends State<_VideoLoadingSpeed> {
+  late StreamSubscription<bool> _bufferingSub;
+  Timer? _pollTimer;
+  /// 当前是否处于缓冲中（控制小字显隐节奏）
+  bool _buffering = true;
+  /// 当前速度文本；null 表示还没采到样本，先只显示脉冲圈
+  String? _speedText;
+  /// 组件销毁标志：await 回来的结果要过这道闸才允许 setState
+  bool _alive = true;
+
+  static const _firstDelay = Duration(milliseconds: 400);
+  static const _pollPeriod = Duration(milliseconds: 500);
+
+  @override
+  void initState() {
+    super.initState();
+    _schedulePolling();
+    _bufferingSub = widget.player.stream.buffering.listen((value) {
+      if (!mounted) return;
+      setState(() {
+        _buffering = value;
+        // 缓冲结束就把旧速度抹掉，下次重新进入缓冲时不闪出过期数字
+        if (!value) _speedText = null;
+      });
+      _schedulePolling();
+    });
+  }
+
+  /// 按当前缓冲状态起停轮询（幂等：非缓冲或平台不支持时不启动）
+  void _schedulePolling() {
+    _pollTimer?.cancel();
+    if (!_buffering) return;
+    final native = widget.player.platform;
+    if (native is! NativePlayer) return;
+    // 首拍延迟出速度，避免本地文件一闪而过的缓冲把画面点缀成抽奖
+    _pollTimer = Timer(_firstDelay, () {
+      unawaited(_sampleSpeed(native));
+      if (!mounted) return;
+      _pollTimer?.cancel();
+      _pollTimer = Timer.periodic(_pollPeriod, (_) => unawaited(_sampleSpeed(native)));
+    });
+  }
+
+  Future<void> _sampleSpeed(NativePlayer native) async {
+    try {
+      final raw = await native.getProperty('demuxer-cache-state');
+      if (!mounted || !_alive || !_buffering || raw.isEmpty) return;
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final bps = (json['raw-bytes-per-sec'] as num?)?.toDouble();
+      if (bps == null) return;
+      final text = _formatSpeed(bps);
+      if (text != _speedText) setState(() => _speedText = text);
+    } catch (e) {
+      // 属性暂不可用/换源竞态：静默跳过这一拍，保持纯脉冲圈
+      debugPrint('[MVP] 读取 demuxer-cache-state 失败：$e');
+    }
+  }
+
+  /// 与 dashboard 网络卡片同一格式化口径：≥1024 KB/s 走 MB/s，保留两位
+  static String _formatSpeed(double bytesPerSec) {
+    final kbps = bytesPerSec / 1024.0;
+    if (kbps >= 1024) return '${(kbps / 1024).toStringAsFixed(2)} MB/s';
+    return '${kbps.toStringAsFixed(0)} KB/s';
+  }
+
+  @override
+  void dispose() {
+    _alive = false;
+    _pollTimer?.cancel();
+    _bufferingSub.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _GlassPulseLoader(),
+        if (_buffering && _speedText != null) ...[
+          SizedBox(height: AppTheme.metrics.kSpace8),
+          Text(
+            _speedText!,
+            style: TextStyle(
+              fontSize: AppTheme.metrics.fontSize13,
+              // 半透明小字：压在媒体深色底上，读得到但不抢画面
+              color: s.onMedia.withValues(alpha: 0.75),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
