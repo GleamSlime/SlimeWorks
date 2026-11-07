@@ -99,6 +99,16 @@ void main() {
       expect(reloaded.videoScrubPreload.value, isFalse);
     });
 
+    test('videoWaveformSeek 往返（视频振幅进度条开关）', () async {
+      final svc = MediaPrefsService();
+      await svc.init();
+      await svc.setVideoWaveformSeek(true);
+
+      final reloaded = MediaPrefsService();
+      await reloaded.init();
+      expect(reloaded.videoWaveformSeek.value, isTrue);
+    });
+
     test('privacyBlurSigma 往返', () async {
       final svc = MediaPrefsService();
       await svc.init();
@@ -130,6 +140,7 @@ void main() {
       expect(svc.cacheLimitBytes.value, 1 * 1024 * 1024 * 1024);
       expect(svc.privacyMode.value, isFalse);
       expect(svc.videoScrubPreload.value, isTrue);
+      expect(svc.videoWaveformSeek.value, isFalse); // 默认普通进度条
       expect(svc.privacyBlurSigma.value, 15.0);
       expect(svc.fileCheckDepth.value, FileCheckDepth.coverOnly);
     });
@@ -299,7 +310,7 @@ void main() {
     test('getCacheDirs 返回新结构与旧兼容路径', () async {
       final svc = MediaPrefsService();
       final dirs = await svc.getCacheDirs();
-      expect(dirs.length, 4);
+      expect(dirs.length, 5);
       final paths = dirs.map((d) => d.path).toList();
       expect(
         paths.any((p) => p.endsWith('library${Platform.pathSeparator}media${Platform.pathSeparator}thumbnails')),
@@ -307,6 +318,11 @@ void main() {
       );
       expect(
         paths.any((p) => p.endsWith('library${Platform.pathSeparator}media${Platform.pathSeparator}covers')),
+        isTrue,
+      );
+      expect(
+        // 视频振幅进度条的波形缓存（VideoWaveformService 写这里）
+        paths.any((p) => p.endsWith('library${Platform.pathSeparator}media${Platform.pathSeparator}waveforms')),
         isTrue,
       );
       expect(paths.any((p) => p.endsWith('thumbnails')), isTrue); // 旧路径
