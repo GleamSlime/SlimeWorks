@@ -3,6 +3,7 @@ import 'package:get_it/get_it.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/provider/screen_provider_impl.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
+import 'package:slime_works/core/services/video_waveform_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
@@ -52,6 +53,9 @@ void getItInit() {
 
   // 媒体偏好设置服务
   getIt.registerLazySingleton<MediaPrefsService>(() => MediaPrefsService());
+
+  // 视频预览振幅进度条的波形提取服务（仅桌面端本地文件生效）
+  getIt.registerLazySingleton<VideoWaveformService>(() => VideoWaveformService());
 
   // Manga 漫画平台服务
   getIt.registerLazySingleton<MangaService>(() => MangaService());

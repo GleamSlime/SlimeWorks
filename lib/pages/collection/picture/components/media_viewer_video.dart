@@ -94,12 +94,86 @@ class _VideoPreviewState extends State<_VideoPreview> {
   // 音量面板是否展开
   bool _showVolumePanel = false;
 
+  // ── 振幅进度条（波形）──────────────────────────────────────────────────
+  // 把普通横条进度条换成按音频振幅显示的波形条：高声段顶天、安静段矮，
+  // 点哪跳哪。开关持久化在 MediaPrefsService，跨会话沿用。
+
+  /// 当前是否处于振幅模式（初始值取持久化偏好）
+  bool _waveMode = false;
+
+  /// 波形数据（0~1 峰值数组）；null = 尚未取得（提取中或失败）
+  List<double>? _waveform;
+
+  /// 波形提取是否已失败（失败后退回普通进度条，不再挂转圈骗人）
+  bool _waveFailed = false;
+
+  /// 提取任务序号：切源/切页后旧任务的结果直接丢弃，防止串页
+  int _waveJob = 0;
+
+  /// 播放位置/总时长（毫秒）。走 ValueNotifier 让波形条自己重绘，
+  /// position 事件很密，不值得为它 setState 整个预览页。
+  final ValueNotifier<int> _posMs = ValueNotifier<int>(0);
+  final ValueNotifier<int> _durMs = ValueNotifier<int>(0);
+  StreamSubscription? _posSub;
+  StreamSubscription? _durSub;
+
+  /// 本机型可用的振幅进度条开关：仅桌面端 + 本地文件（远程 URL / 移动端没有解码兜底）。
+  /// supports() 要摸磁盘（existsSync），按 source 记忆化，避免每帧 build 重复 stat。
+  String? _waveAvailSrc;
+  bool _waveAvailVal = false;
+  bool get _waveAvailable {
+    if (!widget.isActive) return false;
+    final src = widget.source;
+    if (_waveAvailSrc != src) {
+      _waveAvailSrc = src;
+      _waveAvailVal = getIt<VideoWaveformService>().supports(src);
+    }
+    return _waveAvailVal;
+  }
+
+  /// 重新挂位置/时长订阅（每个 Player 实例一次）
+  void _bindPositionStreams(Player player) {
+    _posSub?.cancel();
+    _durSub?.cancel();
+    _posMs.value = 0;
+    _durMs.value = 0;
+    _posSub = player.stream.position.listen((d) => _posMs.value = d.inMilliseconds);
+    _durSub = player.stream.duration.listen((d) => _durMs.value = d.inMilliseconds);
+  }
+
+  /// 启动当前源的波形提取（开关关 / 平台不支持 / 已失败过则跳过）。
+  void _startWaveExtraction() {
+    final gen = ++_waveJob;
+    _waveform = null;
+    _waveFailed = false;
+    final src = widget.source;
+    if (!_waveMode || src == null || !getIt<VideoWaveformService>().supports(src)) return;
+    getIt<VideoWaveformService>().waveformFor(src).then((data) {
+      if (!mounted || gen != _waveJob) return;
+      if (data == null) {
+        setState(() => _waveFailed = true);
+      } else {
+        setState(() => _waveform = data);
+      }
+    });
+  }
+
+  /// 切换振幅/普通进度条，并写入偏好（下次打开预览沿用）。
+  void _toggleWaveMode() {
+    final next = !_waveMode;
+    setState(() => _waveMode = next);
+    getIt<MediaPrefsService>().setVideoWaveformSeek(next);
+    if (next && _waveform == null && !_waveFailed) _startWaveExtraction();
+  }
+
   /// 原生 Media Session / Now Playing 通道（iOS + Android）
   static const _mediaChannel = MethodChannel('slime_works/media_session');
 
   @override
   void initState() {
     super.initState();
+    // 振幅进度条开关：跨会话沿用持久化偏好
+    _waveMode = getIt<MediaPrefsService>().videoWaveformSeek.value;
     if (widget.isActive) _initPlayer();
   }
 
@@ -130,6 +204,9 @@ class _VideoPreviewState extends State<_VideoPreview> {
     });
     final uri = source.startsWith('http') ? source : Uri.file(source).toString();
     _player!.open(Media(uri));
+    // 振幅进度条：位置/时长订阅 + 提取当前源波形
+    _bindPositionStreams(_player!);
+    _startWaveExtraction();
     _readySub = _player!.stream.videoParams.listen((params) {
       if ((params.dw ?? 0) > 0 && !_playerReady) {
         _readySub?.cancel();
@@ -171,6 +248,16 @@ class _VideoPreviewState extends State<_VideoPreview> {
       _volumeSub?.cancel();
       _volumeSub = null;
       _flushVolume();
+      // 波形状态随 Player 一起放下（再变活跃时会重新提取/读缓存）
+      _waveJob++;
+      _waveform = null;
+      _waveFailed = false;
+      _posSub?.cancel();
+      _posSub = null;
+      _durSub?.cancel();
+      _durSub = null;
+      _posMs.value = 0;
+      _durMs.value = 0;
       _miniController = null;
       _player?.dispose();
       _player = null;
@@ -204,6 +291,11 @@ class _VideoPreviewState extends State<_VideoPreview> {
     _readySub?.cancel();
     _audioReadySub?.cancel();
     _volumeSub?.cancel();
+    _posSub?.cancel();
+    _durSub?.cancel();
+    _posMs.dispose();
+    _durMs.dispose();
+    _waveJob++;
     _flushVolume();
     _player?.dispose();
     super.dispose();
@@ -340,11 +432,17 @@ class _VideoPreviewState extends State<_VideoPreview> {
     final viewPad = MediaQuery.viewPaddingOf(context);
     final bottomInset = isMobile ? viewPad.bottom : 0.0;
 
-    // 底部控制栏：进度指示器 + 弹簧 + [速度, 适应, 音量, 窗口, 全屏]
+    // 底部控制栏：进度指示器 + 弹簧 + [振幅条, 速度, 适应, 音量, 窗口, 全屏]
     // 控制栏已离开屏幕最底端，会有额外 margin
+    // 振幅覆盖层：开关开 + 本机可提取 + 未失败。数据未到期间先挂转圈，
+    // 让"切换"立刻可见；提取失败则整体退回普通条（不再空转骗人）。
+    final waveCover = _waveMode && _waveAvailable && !_waveFailed;
     final bottomBar = [
       const media_controls.MaterialPositionIndicator(),
       const Spacer(),
+      // 振幅进度条开关：仅桌面端本地文件可见（远程/移动端无解码兜底，藏起来免得点了没反应）
+      if (_waveAvailable)
+        _VideoWaveButton(active: _waveMode, onToggle: _toggleWaveMode),
       _VideoSpeedButton(player: player),
       _VideoFitButton(
         currentFit: _videoFit,
@@ -371,6 +469,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
       normal: media_controls.MaterialVideoControlsThemeData(
         topButtonBar: const [],
         topButtonBarMargin: EdgeInsets.zero,
+        // 振幅模式下关掉原生横条，由我们叠在正上方的波形条接管点击/拖动
+        displaySeekBar: !waveCover,
         seekBarMargin: EdgeInsets.only(
           bottom: bottomInset + AppTheme.metrics.kSpace12 + buttonBarH,
           left: AppTheme.metrics.kSpace12,
@@ -560,6 +660,34 @@ class _VideoPreviewState extends State<_VideoPreview> {
           ),
         ] else ...[
           IgnorePointer(ignoring: _swiping, child: videoWidget),
+          // ── 振幅进度条覆盖层 ──────────────────────────────────────────
+          // 常驻叠在原生横条腾出的位置（同一 margin），不随控制栏隐藏：
+          // 高声段顶天、安静段矮，一眼看出片源哪里响，点/拖即跳。
+          // 波形条内部走 ValueNotifier 局部重建，高频 position 不惊动整页。
+          if (waveCover)
+            Positioned(
+              left: AppTheme.metrics.kSpace12,
+              right: AppTheme.metrics.kSpace12,
+              bottom: bottomInset + AppTheme.metrics.kSpace12 + buttonBarH,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppTheme.metrics.kSpace8,
+                  vertical: AppTheme.metrics.kSpace4,
+                ),
+                // 半透暗底让波形在亮画面/亮主题下也站得住（同 backdropColor 的路子）
+                decoration: BoxDecoration(
+                  color: s.mediaStage.withValues(alpha: 0.35),
+                  borderRadius: AppTheme.metrics.radius12,
+                ),
+                child: _VideoWaveformBar(
+                  waveform: _waveform,
+                  loading: _waveform == null,
+                  posMs: _posMs,
+                  durMs: _durMs,
+                  onSeek: (ms) => player.seek(Duration(milliseconds: ms)),
+                ),
+              ),
+            ),
           // 音量面板（点击音量按钮展开）
           if (_showVolumePanel)
             Positioned(
@@ -953,3 +1081,96 @@ class _VolumePanel extends StatelessWidget {
   }
 }
 
+
+// ── 振幅进度条覆盖层（视频预览）──────────────────────────────────────────
+
+/// 视频预览的「振幅进度条」：复用音乐播放器的 [WaveformSeekBar]，
+/// 用 ValueNotifier 只重建这一小条，不被高频 position 事件拖着整页重绘。
+/// 波形还没提取好时挂转圈——切换后立刻有反馈，不用干等数据。
+class _VideoWaveformBar extends StatelessWidget {
+  const _VideoWaveformBar({
+    required this.waveform,
+    required this.loading,
+    required this.posMs,
+    required this.durMs,
+    required this.onSeek,
+  });
+
+  /// 波形峰值（0~1）；null = 尚在提取
+  final List<double>? waveform;
+
+  /// 提取中：显示转圈占位
+  final bool loading;
+
+  /// 播放位置/总时长（毫秒）订阅源
+  final ValueListenable<int> posMs;
+  final ValueListenable<int> durMs;
+
+  /// 点击/拖动跳转（毫秒）
+  final ValueChanged<int> onSeek;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final wave = waveform;
+    if (wave == null || loading) {
+      // 提取中：转圈占位（配色跟波形自己一致，压在深底上才看得见）
+      return SizedBox(
+        height: scaleW(28),
+        child: Center(
+          child: SizedBox(
+            width: AppTheme.metrics.iconSize20,
+            height: AppTheme.metrics.iconSize20,
+            child: CircularProgressIndicator(
+              strokeWidth: AppTheme.metrics.strokeRegular,
+              color: s.info.color,
+            ),
+          ),
+        ),
+      );
+    }
+    // 位置/时长走 ValueNotifier：高频 position 只重建这条波形，不惊动整页
+    return ValueListenableBuilder<int>(
+      valueListenable: posMs,
+      builder: (context, pos, _) => ValueListenableBuilder<int>(
+        valueListenable: durMs,
+        builder: (context, dur, __) => WaveformSeekBar(
+          waveform: wave,
+          positionMs: pos,
+          durationMs: dur,
+          onSeek: onSeek,
+          activeColor: s.info.color,
+          inactiveColor: s.onMedia.withValues(alpha: 0.30),
+          // 视频画面上的波形自带描边感，条间距收紧一点显得密而清晰
+          barGap: 1.0,
+          height: scaleW(28),
+        ),
+      ),
+    );
+  }
+}
+
+// ── 振幅进度条切换按钮（底部控制栏）─────────────────────────────────────
+
+class _VideoWaveButton extends StatelessWidget {
+  const _VideoWaveButton({required this.active, required this.onToggle});
+
+  /// 当前是否处于振幅模式（按钮高亮反馈）
+  final bool active;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    return IconButton(
+      tooltip: active ? '切回普通进度条' : '振幅进度条',
+      icon: Icon(
+        Icons.graphic_eq_rounded,
+        // 开启时用 info 紫点亮，一眼看出当前处于哪种进度条
+        color: active ? s.info.color : s.onMedia.withValues(alpha: 0.85),
+        size: AppTheme.metrics.iconSize22,
+      ),
+      onPressed: onToggle,
+    );
+  }
+}

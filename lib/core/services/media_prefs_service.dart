@@ -108,10 +108,16 @@ class MediaPrefsService {
   static const _keyFakeCover = 'media_fake_cover';
   static const _keyFakeCoverPath = 'media_fake_cover_path';
   static const _keyVideoVolume = 'media_video_volume';
+  static const _keyVideoWaveformSeek = 'media_video_waveform_seek';
 
   /// 预览页视频/音频的播放音量（0~100，默认 100）。
   /// 每换一个 Player 实例都要重新套用，否则调过的音量在切页后就丢了。
   final videoVolume = 100.0.obs;
+
+  /// 视频预览「振幅进度条」开关（默认关闭）。
+  /// 开启后进度条从普通横条换成按音频振幅显示的波形条，高声段一眼可见、点击即跳；
+  /// 跨会话沿用，每个预览页初始化时读取。仅桌面端本地文件有波形可显示。
+  final videoWaveformSeek = false.obs;
 
   /// 伪封面的出厂默认图：只是开发机上的一张壁纸，换台机器读不到时封面退成实色底，
   /// 在媒体设置里换成任意本地图片即可。
@@ -189,6 +195,7 @@ class MediaPrefsService {
     fakeCover.value = prefs.getBool(_keyFakeCover) ?? false;
     fakeCoverPath.value = prefs.getString(_keyFakeCoverPath) ?? defaultFakeCoverPath;
     videoVolume.value = (prefs.getDouble(_keyVideoVolume) ?? 100.0).clamp(0.0, 100.0);
+    videoWaveformSeek.value = prefs.getBool(_keyVideoWaveformSeek) ?? false;
     final depthStr = prefs.getString(_keyFileCheckDepth) ?? 'coverOnly';
     fileCheckDepth.value = FileCheckDepth.values.firstWhere(
       (e) => e.name == depthStr,
@@ -282,8 +289,15 @@ class MediaPrefsService {
     await prefs.setDouble(_keyVideoVolume, videoVolume.value);
   }
 
-  /// 返回所有媒体缓存目录（视频帧缩略图 + 封面图缩略图）。
-  /// 路径结构：`AppSupport/SlimeWorks/library/media/{thumbnails,covers}`
+  /// 设置视频预览「振幅进度条」开关，写入后下次打开预览直接沿用。
+  Future<void> setVideoWaveformSeek(bool v) async {
+    videoWaveformSeek.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyVideoWaveformSeek, v);
+  }
+
+  /// 返回所有媒体缓存目录（视频帧缩略图 + 封面图缩略图 + 视频预览波形）。
+  /// 路径结构：`AppSupport/SlimeWorks/library/media/{thumbnails,covers,waveforms}`
   Future<List<Directory>> getCacheDirs() async {
     final appDir = await getApplicationSupportDirectory();
     // 兼容旧路径（直接在 appDir 下）和新路径（library/media 子目录）
@@ -291,6 +305,8 @@ class MediaPrefsService {
     return [
       Directory('${base}library${Platform.pathSeparator}media${Platform.pathSeparator}thumbnails'),
       Directory('${base}library${Platform.pathSeparator}media${Platform.pathSeparator}covers'),
+      // 视频预览振幅进度条的波形缓存（峰值 JSON，几 KB 一条）
+      Directory('${base}library${Platform.pathSeparator}media${Platform.pathSeparator}waveforms'),
       // 旧路径保留用于计算（不再写入，但可能存在旧缓存文件）
       Directory('${base}thumbnails'),
       Directory('${base}cover_thumb_cache'),
