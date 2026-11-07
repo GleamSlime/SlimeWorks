@@ -59,6 +59,7 @@ jobs:
           channel: stable
 
       - name: Flutter 依赖 + 代码生成
+        shell: bash
         run: |
           # enforce-lockfile：严格按 lock 的版本与 hash 取包，不符直接失败
           flutter pub get --enforce-lockfile
@@ -189,6 +190,7 @@ jobs:
           channel: stable
 
       - name: Flutter 依赖 + 代码生成
+        shell: bash
         run: |
           # enforce-lockfile：严格按 lock 的版本与 hash 取包，不符直接失败
           flutter pub get --enforce-lockfile
@@ -355,6 +357,7 @@ jobs:
           channel: stable
 
       - name: Flutter 依赖 + 代码生成
+        shell: bash
         run: |
           # enforce-lockfile：严格按 lock 的版本与 hash 取包，不符直接失败
           flutter pub get --enforce-lockfile
@@ -504,6 +507,7 @@ jobs:
           channel: stable
 
       - name: Flutter 依赖 + 代码生成
+        shell: bash
         run: |
           # enforce-lockfile：严格按 lock 的版本与 hash 取包，不符直接失败
           flutter pub get --enforce-lockfile
@@ -940,6 +944,7 @@ jobs:
           java-version: 17
 
       - name: Flutter 依赖 + 代码生成
+        shell: bash
         run: |
           # enforce-lockfile：严格按 lock 的版本与 hash 取包，不符直接失败
           flutter pub get --enforce-lockfile
