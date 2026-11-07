@@ -70,10 +70,10 @@ Future<void> main() async {
     });
   }
 
-  // 初始化桌面端自动更新
+  // 初始化应用更新检查
   // 先加载自动更新开关偏好；开关开启时由 loadPrefs 内部启动闲置定时器
-  // 启动时静默检查一次新版本（不阻塞主流程，不强制安装）
-  if (Platform.isMacOS || Platform.isWindows) {
+  // 启动时静默检查一次新版本（发现更新弹窗提示；macOS 自动模式为全自动安装）
+  if (AppUpdateService.supportsUpdateCheck) {
     await getIt<AppUpdateService>().loadPrefs();
     unawaited(getIt<AppUpdateService>().checkForUpdates());
   }

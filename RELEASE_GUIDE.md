@@ -1,6 +1,6 @@
 # SlimeWorks 发版指南
 
-> 技术栈：fastforge（打包） + auto_updater（自动更新） + GitHub Releases（托管）
+> 技术栈：fastforge（打包） + GitHub Releases（托管与更新信息源） + 应用内自动更新（macOS 全自动 / 其余平台弹窗跳转） + 蒲公英（iOS/Android 分发）
 
 ---
 
@@ -123,48 +123,22 @@ SUPublicEDKey: yAXFDhgJ/LYFRcYsW/UT/gLJ4hm4IE2wT6aiJW71kNg=
 <string>你的公钥</string>
 ```
 
-### 4.3 main.dart 集成
+### 4.3 应用内更新机制（现行）
 
-```dart
-import 'package:auto_updater/auto_updater.dart';
+自 2026-11 起，更新检查**不再走 auto_updater（Sparkle/WinSparkle）**，改由
+`AppUpdateService` 直接调用 GitHub REST API（`releases/latest`）：
 
-// 在 main() 中，桌面端初始化阶段添加：
-if (Platform.isMacOS || Platform.isWindows) {
-  await autoUpdater.setFeedURL('https://你的域名/appcast.xml');
-  await autoUpdater.checkForUpdates();
-  await autoUpdater.setScheduledCheckInterval(3600); // 每小时检查一次
-}
-```
-
-### 4.4 appcast.xml 更新源
-
-托管在 GitHub Releases 或自有服务器，格式如下：
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/rss-sparkle-1.0">
-  <channel>
-    <title>史莱姆工坊</title>
-    <language>zh-CN</language>
-    <item>
-      <title>1.0.1</title>
-      <description>
-        <![CDATA[修复了若干问题，优化性能]]>
-      </description>
-      <pubDate>Thu, 29 May 2026 00:00:00 +0800</pubDate>
-      <enclosure
-        url="https://github.com/GleamSlime/slime_works/releases/download/v1.0.1/史莱姆工坊-1.0.1-macos.dmg"
-        sparkle:version="26"
-        sparkle:shortVersionString="1.0.1"
-        sparkle:edSignature="EdDSA签名值"
-        length="52428800"
-        type="application/octet-stream" />
-    </item>
-  </channel>
-</rss>
-```
-
----
+- 更新内容 = Release 正文（CI 用 `scripts/ci_release_body.sh` 生成的提交清单）；
+- 弹窗按钮按平台分流：
+  - **macOS**：全自动——后台下载 DMG（sha256 以 API 资产 `digest` 字段校验）→
+    挂载 → 独立 bash 脚本等主进程退出后 `ditto` 替换 `/Applications` → `open` 重启，
+    全程无人工点击（开关开启 + 闲置 5 分钟触发，或弹窗点「立即更新」）；
+  - **Windows / Android**：跳转 GitHub Release 页面；
+  - **iOS**：跳转蒲公英页面 `https://www.pgyer.com/SlimeWork`；
+- 版本比较基准是 CI 数字构建号（`github.run_number`）：客户端读
+  `CiBuildInfo.buildCode`，远端从 DMG 资产名 `+<N>-macos.dmg` 解出；
+- appcast.xml 仍由 CI 维护：Sparkle/WinSparkle 的自动检查已停用（Info.plist
+  未配 `SUFeedURL`、代码不再调 `setFeedURL`），保留它仅为兼容旧版本客户端。
 
 ## 五、发版流程
 
@@ -299,10 +273,18 @@ https://gleamslime.github.io/slime_works/appcast.xml
 
 ### 8.6 更新签名现状
 
+- **新版客户端**（≥ 2026-11）：完整性靠 GitHub API 的 `digest`（sha256），
+  不依赖 Sparkle 签名链；EdDSA 签名与 appcast 仅服务旧版升级链路
 - macOS：`Info.plist` 配置了 `SUPublicEDKey`，`build-macos` 用 `sign_update`
   + Secret `SPARKLE_PRIVATE_KEY` 生成 `sparkle:edSignature`，再写入 appcast
-- Windows：`Runner.rc` 未嵌入 DSAPub，WinSparkle 跳过验签，`appcast.xml` 不写 `dsaSignature`
-- 旧版本内置的就是这把公钥，因此升级链路可连续，无需手动重装
+- macOS 应用本体：CI 用**固定自签证书**签名（Secret `MAC_SIGN_IDENTITY_*`，
+  生成方式见 `scripts/make_mac_signing_cert.sh`）。这是"TCC 权限每次更新后
+  被重置"问题的根治手段——ad-hoc 签名每次构建 CDHash 都变，系统视其为新 App，
+  磁盘访问等授权全部清零；证书身份恒定后授权跨版本保留。
+  注意：用户**第一次**从 ad-hoc 旧版迁移到证书签名版时仍会重置一次权限，
+  之后每次更新保持不掉落
+- Windows：`Runner.rc` 未嵌入 DSAPub，WinSparkle 验签恒失败（旧版"更新失败"
+  的根因）；新版 Windows 客户端已不走 WinSparkle，此问题不再影响用户
 
 ### 8.7 本地发版（备选）
 

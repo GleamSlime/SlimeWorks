@@ -25,8 +25,8 @@ class AboutPage extends StatelessWidget {
 
   AppUpdateService get _service => getIt<AppUpdateService>();
 
-  // 仅 macOS/Windows 支持原生自动更新
-  bool get _supportsAutoUpdate => Platform.isMacOS || Platform.isWindows;
+  // 全平台支持检查更新并弹窗；macOS 额外支持全自动安装重启
+  bool get _supportsAutoUpdate => AppUpdateService.supportsUpdateCheck;
 
   @override
   Widget build(BuildContext context) {
@@ -178,15 +178,13 @@ class AboutPage extends StatelessWidget {
           child: Text('应用更新', style: AppTextStyles.sectionTitle(context)),
         ),
         if (!_supportsAutoUpdate)
-          // iOS 走蒲公英分发：没有应用内更新通道，给一个直达下载页的按钮
+          // 极少数未覆盖平台（如 Linux）：没有检查通道，给一个直达 GitHub 的说明
           _AboutCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  Platform.isIOS
-                      ? 'iOS 测试版通过蒲公英分发，点击下方按钮前往下载最新版本'
-                      : '当前平台不支持应用内自动更新，请前往 GitHub Releases 手动下载新版本',
+                  '当前平台不支持应用内更新检查，请前往 GitHub Releases 手动下载新版本',
                   style: AppTextStyles.role(
                     context,
                     fontSize: m.fontSize13,
@@ -194,28 +192,26 @@ class AboutPage extends StatelessWidget {
                     height: 1.5,
                   ),
                 ),
-                if (Platform.isIOS) ...[
-                  SizedBox(height: m.kSpace12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      onPressed: () async {
-                        const url = 'https://www.pgyer.com/SlimeWork';
-                        final ok = await launchUrl(
-                          Uri.parse(url),
-                          mode: LaunchMode.externalApplication,
-                        );
-                        if (!ok) {
-                          EasyLoading.showError('无法打开链接');
-                        }
-                      },
-                      icon: DrawIcon(StrokeIcons.download, size: m.iconSize16),
-                      // 文字按钮的字样式由主题的按钮档给出，这里不再手写 TextStyle
-                      // （裸构造会丢 fontFamily，中文就静默回退了）。
-                      label: const Text('打开分发页面'),
-                    ),
+                SizedBox(height: m.kSpace12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: () async {
+                      const url = 'https://github.com/GleamSlime/SlimeWorks/releases';
+                      final ok = await launchUrl(
+                        Uri.parse(url),
+                        mode: LaunchMode.externalApplication,
+                      );
+                      if (!ok) {
+                        EasyLoading.showError('无法打开链接');
+                      }
+                    },
+                    icon: DrawIcon(StrokeIcons.download, size: m.iconSize16),
+                    // 文字按钮的字样式由主题的按钮档给出，这里不再手写 TextStyle
+                    // （裸构造会丢 fontFamily，中文就静默回退了）。
+                    label: const Text('打开分发页面'),
                   ),
-                ],
+                ),
               ],
             ),
           )
@@ -224,8 +220,11 @@ class AboutPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildAutoUpdateSwitch(context),
-                Divider(height: 1, color: s.hairline),
+                // 移动端（iOS/Android）没有闲置自动检查的意义，只保留手动检查入口
+                if (Platform.isMacOS || Platform.isWindows) ...[
+                  _buildAutoUpdateSwitch(context),
+                  Divider(height: 1, color: s.hairline),
+                ],
                 _buildCheckUpdateButton(context),
               ],
             ),
@@ -253,7 +252,9 @@ class AboutPage extends StatelessWidget {
                   Text('自动更新', style: AppTextStyles.rowTitle(context)),
                   SizedBox(height: m.kSpace2),
                   Text(
-                    '闲置 5 分钟后自动检查 GitHub 新版本，发现更新自动下载安装',
+                    Platform.isMacOS
+                        ? '闲置 5 分钟后自动检查 GitHub 新版本，发现更新自动下载安装并重启'
+                        : '闲置 5 分钟后自动检查 GitHub 新版本，发现更新弹窗提示下载',
                     style: AppTextStyles.caption(context),
                   ),
                 ],

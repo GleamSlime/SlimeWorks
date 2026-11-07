@@ -1,25 +1,36 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
-import 'package:auto_updater/auto_updater.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:slime_works/core/build_info.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
+import 'package:slime_works/core/services/macos_update_installer.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+/// 应用更新服务：以 GitHub Actions 发布的 Release 为唯一信息源。
+///
+/// - 更新内容（版本、提交清单、资产与 sha256 摘要）全部来自 GitHub REST API；
+/// - macOS：全自动更新——后台下载 DMG → 校验 → 挂载替换 → 自动重启；
+/// - Windows / Android：弹窗后跳转 GitHub Release 页面手动下载；
+/// - iOS：弹窗后跳转蒲公英下载页；
+/// - 不再调用 auto_updater（Sparkle/WinSparkle）：WinSparkle 0.8.1 因缺少 DSA
+///   签名恒报"更新失败"，Sparkle 交互流程也无法做到无人值守全自动。
 class AppUpdateService {
-  static const String _feedUrl =
-      'https://gleamslime.github.io/SlimeWorks/appcast.xml';
-  static const String _feedHost = 'gleamslime.github.io';
+  static const String _repo = 'GleamSlime/SlimeWorks';
+  static const String _apiBase = 'https://api.github.com';
+  static const String _iosDownloadUrl = 'https://www.pgyer.com/SlimeWork';
 
   // 自动更新偏好键
   static const String _prefKeyAutoUpdate = 'auto_update_enabled';
@@ -27,14 +38,13 @@ class AppUpdateService {
   static const Duration _idleThreshold = Duration(minutes: 5);
   // 闲置轮询周期：每分钟检查一次闲置状态
   static const Duration _idlePollInterval = Duration(minutes: 1);
-  // Sparkle 内置定时检查间隔（秒）
-  static const int _sparkleCheckIntervalSec = 3600;
 
   final Loggers _logger = Loggers(name: '应用更新');
-  final Dio _probeDio = Dio(
+  final Dio _dio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 20),
+      headers: {'User-Agent': 'SlimeWorks-Updater'},
     ),
   );
 
@@ -44,22 +54,27 @@ class AppUpdateService {
   final RxBool autoUpdateEnabled = false.obs;
   // 最近一次检查是否发现新版本（供 UI 判断提示语）
   bool lastCheckHadUpdate = false;
+  // macOS 下载进度（0~1；null 表示未在下载）
+  final RxnDouble downloadProgress = RxnDouble();
+  // macOS 安装阶段文案（弹窗内实时展示）
+  final RxString installPhase = ''.obs;
 
-  bool _feedUrlSet = false;
   DateTime _lastActiveTime = DateTime.now();
   Timer? _idleCheckTimer;
+
+  /// 当前平台是否参与应用内更新检查（全平台弹窗；macOS 额外支持全自动安装）
+  static bool get supportsUpdateCheck =>
+      Platform.isMacOS || Platform.isWindows || Platform.isAndroid || Platform.isIOS;
 
   /// 从 SharedPreferences 加载偏好，启动时调用
   Future<void> loadPrefs() async {
     // Debug 模式下禁用更新检查（避免开发期间弹出更新提示）
     if (kDebugMode) return;
-    if (!Platform.isMacOS && !Platform.isWindows) return;
+    if (!supportsUpdateCheck) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       autoUpdateEnabled.value = prefs.getBool(_prefKeyAutoUpdate) ?? false;
-      _logger.info(
-        '[应用更新] 加载偏好: autoUpdate=${autoUpdateEnabled.value}',
-      );
+      _logger.info('[应用更新] 加载偏好: autoUpdate=${autoUpdateEnabled.value}');
       if (autoUpdateEnabled.value) {
         startAutoCheck();
       }
@@ -85,15 +100,12 @@ class AppUpdateService {
     }
   }
 
-  /// 启动自动检查：闲置定时器 + Sparkle 内置定时检查
+  /// 启动自动检查：闲置达到阈值后触发一次检查
   void startAutoCheck() {
-    if (!Platform.isMacOS && !Platform.isWindows) return;
+    if (!supportsUpdateCheck) return;
     _idleCheckTimer?.cancel();
     _lastActiveTime = DateTime.now();
     _idleCheckTimer = Timer.periodic(_idlePollInterval, (_) => _maybeIdleCheck());
-    // 设置 Sparkle 内置定时检查（每小时一次）
-    _ensureFeedUrlSet();
-    autoUpdater.setScheduledCheckInterval(_sparkleCheckIntervalSec);
     _logger.info(
       '[应用更新] 已启动自动检查（闲置阈值 ${_idleThreshold.inMinutes} 分钟）',
     );
@@ -103,8 +115,6 @@ class AppUpdateService {
   void stopAutoCheck() {
     _idleCheckTimer?.cancel();
     _idleCheckTimer = null;
-    // 关闭 Sparkle 内置定时检查
-    autoUpdater.setScheduledCheckInterval(0);
     _logger.info('[应用更新] 已停止自动检查');
   }
 
@@ -129,105 +139,55 @@ class AppUpdateService {
     _logger.info(
       '[应用更新] 检测到闲置 ${idleDuration.inMinutes} 分钟，开始自动检查',
     );
-    await _performAutoCheck();
+    await _performCheck(showDialog: true, autoInstall: true);
   }
 
-  Future<void> _ensureFeedUrlSet() async {
-    if (_feedUrlSet) return;
-    final reachable = await _probeFeedUrl();
-    if (!reachable) {
-      _logger.info('[应用更新] 更新服务器不可达，跳过 feedURL 设置');
-      return;
-    }
-    await autoUpdater.setFeedURL(_feedUrl);
-    _feedUrlSet = true;
-  }
-
-  /// 自动检查：发现新版本后直接走原生下载安装流程，不弹自定义 dialog
-  Future<void> _performAutoCheck() async {
-    if (isChecking.value) return;
-    isChecking.value = true;
-    try {
-      final reachable = await _probeFeedUrl();
-      if (!reachable) {
-        _logger.info('[应用更新] 自动检查：服务器不可达');
-        return;
-      }
-      final info = await _fetchAppcast();
-      if (info == null) {
-        _logger.info('[应用更新] 自动检查：appcast.xml 解析失败');
-        return;
-      }
-
-      final currentBuild = AppInfoService.buildCode;
-      final remoteBuild = int.tryParse(info.buildNumber) ?? 0;
-      if (remoteBuild <= currentBuild) {
-        _logger.info('[应用更新] 自动检查：已是最新版本');
-        return;
-      }
-
-      updateInfo.value = info;
-      _logger.info(
-        '[应用更新] 自动检查：发现新版本 v${info.version}+${info.buildNumber}，触发原生下载安装',
-      );
-      // 直接触发原生 Sparkle/WinSparkle 流程，自动下载并提示安装
-      await _ensureFeedUrlSet();
-      autoUpdater.checkForUpdates();
-    } catch (e) {
-      _logger.error('[应用更新] 自动检查失败: $e');
-    } finally {
-      isChecking.value = false;
-    }
-  }
-
-  /// 用户主动触发检查更新（关于页"检查更新"按钮）
-  Future<void> checkForUpdates({bool silent = true}) async {
+  /// 检查更新入口。[autoInstall] 为 true 时（启动静默检查）macOS 直接全自动安装；
+  /// 用户主动点按钮时保持弹窗确认，不静默重启。
+  Future<void> checkForUpdates({bool silent = true, bool autoInstall = false}) async {
     // Debug 模式下不弹更新提示
     if (kDebugMode) {
       _logger.info('[应用更新] Debug 模式，跳过更新检查');
       return;
     }
+    await _performCheck(showDialog: true, autoInstall: autoInstall);
+  }
+
+  /// 拉取 Release、比较版本、按需弹窗；macOS 在自动模式下直接静默安装重启。
+  Future<void> _performCheck({
+    required bool showDialog,
+    required bool autoInstall,
+  }) async {
     if (isChecking.value) return;
     isChecking.value = true;
     lastCheckHadUpdate = false;
-
     try {
-      final reachable = await _probeFeedUrl();
-      if (!reachable) {
-        _logger.info('[应用更新] 更新服务器不可达，跳过检查');
-        return;
-      }
-
-      // 域名可达才设置 feedURL（避免 Sparkle 在后台自动弹出错误）
-      if (!_feedUrlSet) {
-        await autoUpdater.setFeedURL(_feedUrl);
-        _feedUrlSet = true;
-      }
-
-      final info = await _fetchAppcast();
+      final info = await _fetchLatestRelease();
       if (info == null) {
-        // appcast.xml 解析失败时静默跳过，不回退原生检查（避免 Sparkle 弹出错误弹窗）
-        _logger.info('[应用更新] 无法解析 appcast.xml，跳过检查');
+        _logger.info('[应用更新] 检查：无法获取 Release 信息（网络不可达或解析失败）');
         return;
       }
 
-      final currentBuild = AppInfoService.buildCode;
-      final remoteBuild = int.tryParse(info.buildNumber) ?? 0;
-
-      if (remoteBuild <= currentBuild) {
-        _logger.info('[应用更新] 已是最新版本');
+      if (!_isNewer(info)) {
+        _logger.info('[应用更新] 检查：已是最新版本（远端 build=${info.remoteBuildCode ?? info.buildNumber}）');
         return;
       }
 
       updateInfo.value = info;
       lastCheckHadUpdate = true;
 
-      // 有更新时弹出自定义弹窗，用户点击"立即更新"后走原生下载流程
+      // macOS 自动模式：不打扰用户，下载校验后自动替换并重启
+      if (autoInstall && Platform.isMacOS) {
+        _logger.info('[应用更新] 自动模式：开始静默下载安装 v${info.version}');
+        await _startMacInstall(info);
+        return;
+      }
+
+      if (!showDialog) return;
       final context = navigatorKey.currentContext;
       if (context != null && context.mounted) {
         _showUpdateDialog(context, info);
       }
-      // 无 context 时不回退原生检查，避免 Sparkle 弹出错误弹窗
     } catch (e) {
       _logger.error('[应用更新] 检查更新失败: $e');
     } finally {
@@ -235,166 +195,287 @@ class AppUpdateService {
     }
   }
 
-  Future<bool> _probeFeedUrl() async {
+  // ───────────────────────── GitHub Release 获取与解析 ─────────────────────────
+
+  /// 通过 GitHub REST API 获取最新 Release，组装各平台所需信息。
+  Future<AppUpdateInfo?> _fetchLatestRelease() async {
     try {
-      final result = await InternetAddress.lookup(_feedHost);
-      return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
-    } catch (_) {
-      try {
-        await _probeDio.head<dynamic>('https://$_feedHost');
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
-  }
-
-  Future<AppUpdateInfo?> _fetchAppcast() async {
-    try {
-      final response = await _probeDio.get<String>(_feedUrl);
-      if (response.statusCode != 200 || response.data == null) return null;
-
-      final xml = response.data!;
-      return _parseAppcast(xml);
-    } catch (e) {
-      _logger.error('[应用更新] 获取 appcast.xml 失败: $e');
-      return null;
-    }
-  }
-
-  AppUpdateInfo? _parseAppcast(String xml) {
-    try {
-      final titleMatch = RegExp(r'<title>\s*(.*?)\s*</title>').firstMatch(xml);
-      final descMatch =
-          RegExp(r'<!\[CDATA\[(.*?)\]\]>').firstMatch(xml) ??
-          RegExp(r'<description>\s*(.*?)\s*</description>').firstMatch(xml);
-      // appcast 里既能写成 item 子元素，也能写成 enclosure 属性，两种都认
-      String? pick(String tag) {
-        final asElement =
-            RegExp('<$tag>\\s*([^<]+?)\\s*</$tag>').firstMatch(xml);
-        if (asElement != null) return asElement.group(1);
-        return RegExp('$tag="([^"]+)"').firstMatch(xml)?.group(1);
-      }
-
-      final version = pick('sparkle:shortVersionString');
-      final build = pick('sparkle:version');
-      final urlMatch = RegExp(r'url="([^"]+)"').firstMatch(xml);
-
-      if (version == null || build == null) return null;
-
-      return AppUpdateInfo(
-        version: version,
-        buildNumber: build,
-        title: titleMatch?.group(1) ?? '',
-        description: descMatch?.group(1)?.trim() ?? '',
-        downloadUrl: urlMatch?.group(1) ?? '',
+      final resp = await _dio.get<dynamic>(
+        '$_apiBase/repos/$_repo/releases/latest',
+        options: Options(responseType: ResponseType.plain),
       );
+      if (resp.statusCode != 200 || resp.data == null) return null;
+      return parseRelease(jsonDecode(resp.data as String) as Map<String, dynamic>);
     } catch (e) {
-      _logger.error('[应用更新] 解析 appcast.xml 失败: $e');
+      _logger.error('[应用更新] 获取 Release 失败: $e');
       return null;
     }
   }
 
-  void _showUpdateDialog(BuildContext context, AppUpdateInfo info) {
-    final m = AppTheme.metrics;
-    final s = AppSemantic.of(context);
+  /// 解析 Release JSON：tag 形如 `v1.0.0+20261107.ae4a4a2`；
+  /// macOS 取 `*-macos.dmg` 资产（带 sha256 digest），其余平台只需页面链接。
+  /// 公开为 static 供单元测试直接校验解析规则。
+  static AppUpdateInfo? parseRelease(Map<String, dynamic> json) {
+    final tag = json['tag_name'] as String? ?? '';
+    if (tag.isEmpty) return null;
+    final versionMatch = RegExp(r'^v(\d[\w.\-]*)\+(.+)$').firstMatch(tag);
+    final version = versionMatch?.group(1) ?? tag;
+    final ciBuildNumber = versionMatch?.group(2) ?? '';
 
-    showDialog(
+    // 提交清单正文（Release body 由 CI 用同一份"本次推送提交记录"写入）
+    final body = (json['body'] as String? ?? '').trim();
+
+    String? dmgUrl;
+    String? dmgSha256;
+    int? assetBuildCode;
+    for (final asset in (json['assets'] as List? ?? const [])) {
+      final name = (asset['name'] as String? ?? '');
+      // 资产名形如 slime_works-1.0.0+155-macos.dmg：+ 后的纯数字即 CI run_number
+      final codeMatch = RegExp(r'\+(\d+)[^/]*-macos\.dmg$').firstMatch(name);
+      if (name.toLowerCase().endsWith('.dmg') &&
+          (dmgUrl == null || codeMatch != null)) {
+        dmgUrl = asset['browser_download_url'] as String?;
+        final digest = asset['digest'] as String?;
+        dmgSha256 = digest != null && digest.startsWith('sha256:')
+            ? digest.substring(7)
+            : null;
+        if (codeMatch != null) {
+          assetBuildCode = int.tryParse(codeMatch.group(1)!);
+        }
+      }
+    }
+
+    final releaseUrl = json['html_url'] as String? ??
+        'https://github.com/$_repo/releases/latest';
+
+    return AppUpdateInfo(
+      version: version,
+      buildNumber: ciBuildNumber,
+      title: json['name'] as String? ?? 'SlimeWorks v$version',
+      description: body,
+      downloadUrl: dmgUrl ?? releaseUrl,
+      releaseUrl: releaseUrl,
+      remoteBuildCode: assetBuildCode,
+      sha256: dmgSha256,
+    );
+  }
+
+  /// 版本比较：优先用 CI 数字构建号（GitHub run_number，注入在 CiBuildInfo/资产名里），
+  /// 拿不到时退回 tag 的 YYYYMMDD 前缀比较，再退回版本号比较。
+  bool _isNewer(AppUpdateInfo info) {
+    final currentBuild = AppInfoService.buildCode;
+    if (info.remoteBuildCode != null) {
+      return info.remoteBuildCode! > currentBuild;
+    }
+    // tag 构建号形如 20261107.ae4a4a2：同日构建哈希不可序，但足以挡住跨日误判
+    final remoteDate = int.tryParse(
+        RegExp(r'^(\d{8})').stringMatch(info.buildNumber) ?? '');
+    final localDate = int.tryParse(
+        RegExp(r'^(\d{8})').stringMatch(CiBuildInfo.buildNumber) ?? '');
+    if (remoteDate != null && localDate != null) {
+      return remoteDate > localDate;
+    }
+    return _versionGreaterThan(info.version, AppInfoService.version);
+  }
+
+  /// 语义化版本号比较（点分数字，缺位补 0）
+  bool _versionGreaterThan(String a, String b) {
+    final pa = a.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final pb = b.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final n = pa.length > pb.length ? pa.length : pb.length;
+    for (var i = 0; i < n; i++) {
+      final va = i < pa.length ? pa[i] : 0;
+      final vb = i < pb.length ? pb[i] : 0;
+      if (va != vb) return va > vb;
+    }
+    return false;
+  }
+
+  // ───────────────────────── 平台化"立即更新"动作 ─────────────────────────
+
+  /// 弹窗主按钮：macOS 走全自动安装；Windows/Android 跳 GitHub Release 页；
+  /// iOS 跳蒲公英下载页。
+  Future<void> performUpdateAction(BuildContext context, AppUpdateInfo info) async {
+    if (Platform.isMacOS) {
+      // 不关弹窗：macOS 全自动安装的下载进度与阶段文案就地展示，
+      // 安装完成时应用会自动退出重启，无需用户再操作。
+      await _startMacInstall(info);
+      return;
+    }
+    // 其余平台是"跳转下载页"，先关弹窗再离开应用
+    Navigator.of(context).pop();
+    final url = Platform.isIOS ? _iosDownloadUrl : info.releaseUrl;
+    try {
+      final ok = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!ok) {
+        _logger.error('[应用更新] 无法打开下载页面: $url');
+        final ctx = navigatorKey.currentContext;
+        if (ctx != null && ctx.mounted) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(content: Text('无法打开下载页面，请稍后重试')),
+          );
+        }
+      }
+    } catch (e) {
+      _logger.error('[应用更新] 打开下载页面异常: $e');
+    }
+  }
+
+  // ───────────────────────── macOS 全自动安装 ─────────────────────────
+
+  /// 下载 DMG → sha256 校验 → 落盘替换 → 自动重启，全程无人值守。
+  Future<void> _startMacInstall(AppUpdateInfo info) async {
+    final installer = MacosUpdateInstaller(logger: _logger);
+    try {
+      installPhase.value = '正在下载更新…';
+      final dmgPath = await installer.download(
+        url: info.downloadUrl,
+        expectedSha256: info.sha256,
+        onProgress: (received, total) {
+          downloadProgress.value = total > 0 ? received / total : null;
+        },
+      );
+      installPhase.value = '正在安装并重启…';
+      await installer.installAndRelaunch(dmgPath);
+      // 替换脚本已接管：等主进程退出即可，正常情况下不会走到这里
+      _logger.info('[应用更新] macOS：安装脚本已接管，应用即将自动重启');
+    } catch (e) {
+      installPhase.value = '';
+      downloadProgress.value = null;
+      _logger.error('[应用更新] macOS 自动安装失败: $e');
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('自动更新失败：$e，可前往 GitHub Releases 手动下载')),
+        );
+      }
+    }
+  }
+
+  // ───────────────────────── 更新弹窗 ─────────────────────────
+
+  /// 使用 showDialog 弹出更新说明（内容即 GitHub Release 提交清单）。
+  void _showUpdateDialog(BuildContext context, AppUpdateInfo info) {
+    showDialog<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: m.radius12),
-        title: Row(
-          children: [
-            DrawIcon(StrokeIcons.systemUpdate,
-              size: m.iconSize24,
-              color: s.accent,
-            ),
-            SizedBox(width: m.kSpace8),
-            Text(
-              '发现新版本',
-              style: AppTextStyles.role(
-                ctx,
-                fontSize: m.fontSize18,
-                color: s.textPrimary,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'v${info.version} (Build ${info.buildNumber})',
-              style: AppTextStyles.role(
-                ctx,
-                fontSize: m.fontSize15,
-                color: s.accent,
-                weight: FontWeight.bold,
-              ),
-            ),
-            if (info.description.isNotEmpty) ...[
-              SizedBox(height: m.kSpace8),
-              Container(
-                constraints: BoxConstraints(maxHeight: scaleW(200)),
-                child: SingleChildScrollView(
+      builder: (ctx) {
+        final s = AppSemantic.of(ctx);
+        final m = AppTheme.metrics;
+        // 主按钮文案按平台区分：macOS 是"自动下载安装并重启"
+        final actionLabel = Platform.isMacOS
+            ? '立即更新（自动安装）'
+            : Platform.isIOS
+                ? '前往蒲公英下载'
+                : '前往下载页面';
+        return Obx(() {
+          final downloading = downloadProgress.value != null;
+          return AlertDialog(
+            backgroundColor: s.surfaceRaised,
+            shape: RoundedRectangleBorder(borderRadius: m.radius16),
+            title: Row(
+              children: [
+                DrawIcon(StrokeIcons.newReleases, size: m.iconSize20, color: s.accent),
+                SizedBox(width: m.kSpace8),
+                Expanded(
                   child: Text(
-                    info.description,
-                    style: AppTextStyles.role(
-                      ctx,
-                      fontSize: m.fontSize13,
-                      color: s.textPrimary,
-                    ),
+                    '发现新版本 v${info.version}',
+                    style: AppTextStyles.rowTitle(ctx),
                   ),
                 ),
-              ),
-            ],
-            SizedBox(height: m.kSpace4),
-            Text(
-              '当前版本: v${AppInfoService.version} (Build ${AppInfoService.buildNumber})',
-              style: AppTextStyles.role(
-                ctx,
-                fontSize: m.fontSize12,
-                color: s.textSecondary,
+              ],
+            ),
+            content: SizedBox(
+              width: scaleW(420),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 更新内容：GitHub Actions 发布时写入的提交清单
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: scaleW(240)),
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        info.description.isEmpty
+                            ? '构建号：${info.buildNumber}'
+                            : info.description,
+                        style: AppTextStyles.role(
+                          ctx,
+                          fontSize: m.fontSize12,
+                          color: s.textSecondary,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // macOS 全自动安装的实时进度区
+                  if (Platform.isMacOS && (downloading || installPhase.value.isNotEmpty)) ...[
+                    SizedBox(height: m.kSpace12),
+                    Text(
+                      installPhase.value,
+                      style: AppTextStyles.role(
+                        ctx,
+                        fontSize: m.fontSize12,
+                        color: s.accentText,
+                      ),
+                    ),
+                    if (downloading) ...[
+                      SizedBox(height: m.kSpace6),
+                      LinearProgressIndicator(
+                        value: downloadProgress.value,
+                        minHeight: scaleW(4),
+                      ),
+                    ],
+                  ],
+                ],
               ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            // 按钮文字样式由主题的字阶+字族统一发出，这里再写裸 TextStyle
-            // 会把 fontFamily 整条顶掉，中文会变兜底字
-            child: const Text('稍后提醒'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              // 用户主动触发更新时才调用原生检查，并启用定时检查
-              autoUpdater.checkForUpdates();
-              autoUpdater.setScheduledCheckInterval(3600);
-            },
-            child: const Text('立即更新'),
-          ),
-        ],
-      ),
+            actions: [
+              if (!Platform.isMacOS || !downloading)
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  // 按钮文字样式由主题的字阶+字族统一发出，这里再写裸 TextStyle
+                  // 会把 fontFamily 整条顶掉，中文会变兜底字
+                  child: const Text('稍后提醒'),
+                ),
+              FilledButton(
+                // 下载/安装进行中禁止重复触发
+                onPressed: downloading ? null : () => performUpdateAction(ctx, info),
+                child: Text(actionLabel),
+              ),
+            ],
+          );
+        });
+      },
     );
   }
 }
+
 
 class AppUpdateInfo {
   final String version;
   final String buildNumber;
   final String title;
   final String description;
+  /// macOS 为 DMG 下载地址；其余平台回退为 Release 页面
   final String downloadUrl;
+  /// GitHub Release 页面（Windows/Android"立即更新"跳转目标）
+  final String releaseUrl;
+  /// CI 数字构建号（从 DMG 资产名的 +N 解出），拿不到为 null
+  final int? remoteBuildCode;
+  /// DMG 的 sha256（GitHub API digest），拿不到为 null
+  final String? sha256;
 
-  AppUpdateInfo({
+  const AppUpdateInfo({
     required this.version,
     required this.buildNumber,
     required this.title,
     required this.description,
     required this.downloadUrl,
+    required this.releaseUrl,
+    this.remoteBuildCode,
+    this.sha256,
   });
 }
