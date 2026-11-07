@@ -252,7 +252,7 @@ class AboutPage extends StatelessWidget {
                   Text('自动更新', style: AppTextStyles.rowTitle(context)),
                   SizedBox(height: m.kSpace2),
                   Text(
-                    Platform.isMacOS
+                    AppUpdateService.supportsAutoInstall
                         ? '闲置 5 分钟后自动检查 GitHub 新版本，发现更新自动下载安装并重启'
                         : '闲置 5 分钟后自动检查 GitHub 新版本，发现更新弹窗提示下载',
                     style: AppTextStyles.caption(context),

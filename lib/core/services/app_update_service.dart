@@ -11,6 +11,7 @@ import 'package:slime_works/core/build_info.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/app_info_service.dart';
 import 'package:slime_works/core/services/macos_update_installer.dart';
+import 'windows_update_installer.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/logger.dart';
@@ -62,9 +63,14 @@ class AppUpdateService {
   DateTime _lastActiveTime = DateTime.now();
   Timer? _idleCheckTimer;
 
-  /// 当前平台是否参与应用内更新检查（全平台弹窗；macOS 额外支持全自动安装）
+  /// 当前平台是否参与应用内更新检查（全平台弹窗；macOS/Windows 额外支持全自动安装）
   static bool get supportsUpdateCheck =>
       Platform.isMacOS || Platform.isWindows || Platform.isAndroid || Platform.isIOS;
+
+  /// 当前平台能否在应用内完成"下载→校验→替换/安装→重启"的全自动更新。
+  /// macOS 走 DMG ditto 替换，Windows 走 Inno 静默安装；
+  /// Android 的 APK 必须由系统安装器接管（无法静默覆盖自身），iOS 受沙盒限制只能跳蒲公英。
+  static bool get supportsAutoInstall => Platform.isMacOS || Platform.isWindows;
 
   /// 从 SharedPreferences 加载偏好，启动时调用
   Future<void> loadPrefs() async {
@@ -142,7 +148,7 @@ class AppUpdateService {
     await _performCheck(showDialog: true, autoInstall: true);
   }
 
-  /// 检查更新入口。[autoInstall] 为 true 时（启动静默检查）macOS 直接全自动安装；
+  /// 检查更新入口。[autoInstall] 为 true 时（闲置自动检查）macOS/Windows 直接全自动安装；
   /// 用户主动点按钮时保持弹窗确认，不静默重启。
   Future<void> checkForUpdates({bool silent = true, bool autoInstall = false}) async {
     // Debug 模式下不弹更新提示
@@ -176,10 +182,10 @@ class AppUpdateService {
       updateInfo.value = info;
       lastCheckHadUpdate = true;
 
-      // macOS 自动模式：不打扰用户，下载校验后自动替换并重启
-      if (autoInstall && Platform.isMacOS) {
+      // 自动模式（macOS/Windows）：不打扰用户，下载校验后自动安装并重启
+      if (autoInstall && supportsAutoInstall) {
         _logger.info('[应用更新] 自动模式：开始静默下载安装 v${info.version}');
-        await _startMacInstall(info);
+        await _startAutoInstall(info);
         return;
       }
 
@@ -228,20 +234,28 @@ class AppUpdateService {
     String? dmgUrl;
     String? dmgSha256;
     int? assetBuildCode;
+    String? exeUrl;
+    String? exeSha256;
     for (final asset in (json['assets'] as List? ?? const [])) {
       final name = (asset['name'] as String? ?? '');
+      final lower = name.toLowerCase();
+      final digest = asset['digest'] as String?;
+      final sha = digest != null && digest.startsWith('sha256:')
+          ? digest.substring(7)
+          : null;
       // 资产名形如 slime_works-1.0.0+155-macos.dmg：+ 后的纯数字即 CI run_number
       final codeMatch = RegExp(r'\+(\d+)[^/]*-macos\.dmg$').firstMatch(name);
-      if (name.toLowerCase().endsWith('.dmg') &&
-          (dmgUrl == null || codeMatch != null)) {
+      if (lower.endsWith('.dmg') && (dmgUrl == null || codeMatch != null)) {
         dmgUrl = asset['browser_download_url'] as String?;
-        final digest = asset['digest'] as String?;
-        dmgSha256 = digest != null && digest.startsWith('sha256:')
-            ? digest.substring(7)
-            : null;
+        dmgSha256 = sha;
         if (codeMatch != null) {
           assetBuildCode = int.tryParse(codeMatch.group(1)!);
         }
+      }
+      // Windows 安装包名形如 _1.0.0+155_windows_x64.exe（fastforge 产物）
+      if (lower.endsWith('.exe') && lower.contains('windows')) {
+        exeUrl = asset['browser_download_url'] as String?;
+        exeSha256 = sha;
       }
     }
 
@@ -255,6 +269,8 @@ class AppUpdateService {
       description: body,
       downloadUrl: dmgUrl ?? releaseUrl,
       releaseUrl: releaseUrl,
+      windowsDownloadUrl: exeUrl,
+      windowsSha256: exeSha256,
       remoteBuildCode: assetBuildCode,
       sha256: dmgSha256,
     );
@@ -293,13 +309,13 @@ class AppUpdateService {
 
   // ───────────────────────── 平台化"立即更新"动作 ─────────────────────────
 
-  /// 弹窗主按钮：macOS 走全自动安装；Windows/Android 跳 GitHub Release 页；
+  /// 弹窗主按钮：macOS/Windows 走应用内全自动安装；Android 跳 GitHub Release 页；
   /// iOS 跳蒲公英下载页。
   Future<void> performUpdateAction(BuildContext context, AppUpdateInfo info) async {
-    if (Platform.isMacOS) {
-      // 不关弹窗：macOS 全自动安装的下载进度与阶段文案就地展示，
+    if (supportsAutoInstall) {
+      // 不关弹窗：全自动安装的下载进度与阶段文案就地展示，
       // 安装完成时应用会自动退出重启，无需用户再操作。
-      await _startMacInstall(info);
+      await _startAutoInstall(info);
       return;
     }
     // 其余平台是"跳转下载页"，先关弹窗再离开应用
@@ -324,28 +340,43 @@ class AppUpdateService {
     }
   }
 
-  // ───────────────────────── macOS 全自动安装 ─────────────────────────
+  // ───────────────────────── macOS / Windows 全自动安装 ─────────────────────────
 
-  /// 下载 DMG → sha256 校验 → 落盘替换 → 自动重启，全程无人值守。
-  Future<void> _startMacInstall(AppUpdateInfo info) async {
-    final installer = MacosUpdateInstaller(logger: _logger);
+  /// 下载安装包 → sha256 校验 → 替换/静默安装 → 自动重启，全程无人值守。
+  Future<void> _startAutoInstall(AppUpdateInfo info) async {
+    // Windows 必须拿到安装包直链才能自动装；缺失（资产改名/未上传）时
+    // 退回下载页面，避免拿着 Release 页面 URL 去下载 HTML。
+    if (Platform.isWindows && (info.windowsDownloadUrl ?? '') == '') {
+      installPhase.value = '未找到 Windows 安装包，跳转下载页面…';
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        Navigator.of(context).pop();
+        await launchUrl(Uri.parse(info.releaseUrl),
+            mode: LaunchMode.externalApplication);
+      }
+      return;
+    }
+    final url = Platform.isWindows
+        ? info.windowsDownloadUrl!
+        : info.downloadUrl;
+    final sha = Platform.isWindows ? info.windowsSha256 : info.sha256;
     try {
       installPhase.value = '正在下载更新…';
-      final dmgPath = await installer.download(
-        url: info.downloadUrl,
-        expectedSha256: info.sha256,
+      final pkgPath = await _downloadPackage(
+        url: url,
+        expectedSha256: sha,
         onProgress: (received, total) {
           downloadProgress.value = total > 0 ? received / total : null;
         },
       );
       installPhase.value = '正在安装并重启…';
-      await installer.installAndRelaunch(dmgPath);
-      // 替换脚本已接管：等主进程退出即可，正常情况下不会走到这里
-      _logger.info('[应用更新] macOS：安装脚本已接管，应用即将自动重启');
+      await _installAndRelaunch(pkgPath);
+      // 接力脚本已接管：等主进程退出即可，正常情况下不会走到这里
+      _logger.info('[应用更新] 安装脚本已接管，应用即将自动重启');
     } catch (e) {
       installPhase.value = '';
       downloadProgress.value = null;
-      _logger.error('[应用更新] macOS 自动安装失败: $e');
+      _logger.error('[应用更新] 自动安装失败: $e');
       final context = navigatorKey.currentContext;
       if (context != null && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -353,6 +384,38 @@ class AppUpdateService {
         );
       }
     }
+  }
+
+  /// 按平台委派下载（macOS 装 DMG / Windows 装 Inno exe）
+  Future<String> _downloadPackage({
+    required String url,
+    String? expectedSha256,
+    required void Function(int received, int total) onProgress,
+  }) {
+    if (Platform.isWindows) {
+      return WindowsUpdateInstaller(logger: _logger).download(
+        url: url,
+        expectedSha256: expectedSha256,
+        onProgress: onProgress,
+      );
+    }
+    return MacosUpdateInstaller(logger: _logger).download(
+      url: url,
+      expectedSha256: expectedSha256,
+      onProgress: onProgress,
+    );
+  }
+
+  /// 按平台委派"接管安装并重启"的脱离会话脚本
+  Future<void> _installAndRelaunch(String pkgPath) {
+    if (Platform.isWindows) {
+      return WindowsUpdateInstaller(logger: _logger).installAndRelaunch(
+        pkgPath,
+        currentExe: Platform.resolvedExecutable,
+        mainPid: pid,
+      );
+    }
+    return MacosUpdateInstaller(logger: _logger).installAndRelaunch(pkgPath);
   }
 
   // ───────────────────────── 更新弹窗 ─────────────────────────
@@ -365,7 +428,7 @@ class AppUpdateService {
         final s = AppSemantic.of(ctx);
         final m = AppTheme.metrics;
         // 主按钮文案按平台区分：macOS 是"自动下载安装并重启"
-        final actionLabel = Platform.isMacOS
+        final actionLabel = supportsAutoInstall
             ? '立即更新（自动安装）'
             : Platform.isIOS
                 ? '前往蒲公英下载'
@@ -411,7 +474,7 @@ class AppUpdateService {
                     ),
                   ),
                   // macOS 全自动安装的实时进度区
-                  if (Platform.isMacOS && (downloading || installPhase.value.isNotEmpty)) ...[
+                  if (supportsAutoInstall && (downloading || installPhase.value.isNotEmpty)) ...[
                     SizedBox(height: m.kSpace12),
                     Text(
                       installPhase.value,
@@ -433,7 +496,7 @@ class AppUpdateService {
               ),
             ),
             actions: [
-              if (!Platform.isMacOS || !downloading)
+              if (!supportsAutoInstall || !downloading)
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
                   // 按钮文字样式由主题的字阶+字族统一发出，这里再写裸 TextStyle
@@ -463,6 +526,11 @@ class AppUpdateInfo {
   final String downloadUrl;
   /// GitHub Release 页面（Windows/Android"立即更新"跳转目标）
   final String releaseUrl;
+  /// Windows Inno 安装包直链（*_windows_x64.exe），拿不到为 null；
+  /// 仅 Windows 自动安装使用（其余平台仍走 downloadUrl/页面跳转）
+  final String? windowsDownloadUrl;
+  /// Windows 安装包的 sha256（GitHub API digest），拿不到为 null
+  final String? windowsSha256;
   /// CI 数字构建号（从 DMG 资产名的 +N 解出），拿不到为 null
   final int? remoteBuildCode;
   /// DMG 的 sha256（GitHub API digest），拿不到为 null
@@ -475,6 +543,8 @@ class AppUpdateInfo {
     required this.description,
     required this.downloadUrl,
     required this.releaseUrl,
+    this.windowsDownloadUrl,
+    this.windowsSha256,
     this.remoteBuildCode,
     this.sha256,
   });
