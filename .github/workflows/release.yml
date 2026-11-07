@@ -190,10 +190,20 @@ jobs:
 
       - name: Flutter 依赖 + 代码生成
         run: |
-          flutter pub get
-          flutter pub run build_runner build --delete-conflicting-outputs
           # 描边图标是构建期产物，*.g.dart 不入库，缺了它编译直接断
-          dart run tool/stroke_icons/generate.dart
+          # 75 表示临时失败或构建脚本刚变化需重跑：最多重试一次，其它错误直接失败
+          for attempt in 1 2; do
+            if flutter pub get \
+              && flutter pub run build_runner build --delete-conflicting-outputs \
+              && dart run tool/stroke_icons/generate.dart; then
+              break
+            else
+              status=$?
+              if [ "$status" -ne 75 ] || [ "$attempt" -eq 2 ]; then
+                exit "$status"
+              fi
+            fi
+          done
           flutter precache --macos
 
       - name: 写入 CI 构建信息
@@ -345,10 +355,20 @@ jobs:
 
       - name: Flutter 依赖 + 代码生成
         run: |
-          flutter pub get
-          flutter pub run build_runner build --delete-conflicting-outputs
           # 描边图标是构建期产物，*.g.dart 不入库，缺了它编译直接断
-          dart run tool/stroke_icons/generate.dart
+          # 75 表示临时失败或构建脚本刚变化需重跑：最多重试一次，其它错误直接失败
+          for attempt in 1 2; do
+            if flutter pub get \
+              && flutter pub run build_runner build --delete-conflicting-outputs \
+              && dart run tool/stroke_icons/generate.dart; then
+              break
+            else
+              status=$?
+              if [ "$status" -ne 75 ] || [ "$attempt" -eq 2 ]; then
+                exit "$status"
+              fi
+            fi
+          done
 
       - name: 写入 CI 构建信息
         shell: bash
@@ -483,10 +503,20 @@ jobs:
 
       - name: Flutter 依赖 + 代码生成
         run: |
-          flutter pub get
-          flutter pub run build_runner build --delete-conflicting-outputs
           # 描边图标是构建期产物，*.g.dart 不入库，缺了它编译直接断
-          dart run tool/stroke_icons/generate.dart
+          # 75 表示临时失败或构建脚本刚变化需重跑：最多重试一次，其它错误直接失败
+          for attempt in 1 2; do
+            if flutter pub get \
+              && flutter pub run build_runner build --delete-conflicting-outputs \
+              && dart run tool/stroke_icons/generate.dart; then
+              break
+            else
+              status=$?
+              if [ "$status" -ne 75 ] || [ "$attempt" -eq 2 ]; then
+                exit "$status"
+              fi
+            fi
+          done
 
       - name: 写入 CI 构建信息
         shell: bash
