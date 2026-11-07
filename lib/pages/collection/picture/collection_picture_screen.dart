@@ -540,6 +540,7 @@ class _CollectionPictureScreenState
                     detail.files.map((f) => f.path).toList(),
                     generateThumbnails: options.$1,
                     preserveStructure: options.$2,
+                    softLink: options.$3,
                   );
                 },
                 child: Stack(

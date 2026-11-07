@@ -240,6 +240,8 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
     // 同名集合分组是虚拟文件夹：不支持重命名/删除/迁移，也不接受拖放。
     final isDupGroup = vm.isDupGroup(folder.id);
     final isRemoteFolder = data.isRemote;
+    // 「原路径软链」根文件夹：显示软链徽章并提供右键增量重扫
+    final isLinkRoot = !isRemoteFolder && !isDupGroup && vm.isMediaLinkFolder(folder.id);
     final folderCard = MediaFolderCard(
       folder: folder,
       coverSource: data.coverSource,
@@ -250,6 +252,8 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
           ? '同名分组'
           : isRemoteFolder
           ? '远程文件夹'
+          : isLinkRoot
+          ? '软链'
           : '文件夹',
       isSelected: isSelected,
       isRemote: isRemoteFolder,
@@ -279,6 +283,7 @@ class _MediaBrowseGridViewState extends State<MediaBrowseGridView> {
       onDeleteNodeFiles: isRemoteFolder
           ? () => widget.onDeleteNodeLocalFilesForFolder(folder.id, folder.name)
           : null,
+      onRescan: isLinkRoot ? () => vm.rescanMediaLinkFolder(folder.id) : null,
     );
     if (isRemoteFolder || isDupGroup) return folderCard;
     return DragTarget<String>(

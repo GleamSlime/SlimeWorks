@@ -29,6 +29,7 @@ class MediaFolderCard extends StatefulWidget {
     this.onTransfer,
     this.onPullToLocal,
     this.onDeleteNodeFiles,
+    this.onRescan,
     this.isLost = false,
     this.coverLoading = false,
   });
@@ -57,6 +58,9 @@ class MediaFolderCard extends StatefulWidget {
   final VoidCallback? onTransfer;
   final VoidCallback? onPullToLocal;
   final VoidCallback? onDeleteNodeFiles;
+
+  /// 「原路径软链」文件夹专用：右键增量重扫源目录；非软链为 null 不显示。
+  final VoidCallback? onRescan;
   final bool isLost;
 
   /// 文件夹封面来自某个集合，该集合封面正在生成时显示加载态。
@@ -113,6 +117,12 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
             label: '转移集合到...',
             icon: StrokeIcons.driveFolderUpload,
           ),
+        if (widget.onRescan != null)
+          GlassMenuItem<String>(
+            value: 'rescan',
+            label: '重新扫描（软链源目录）',
+            icon: StrokeIcons.link,
+          ),
         if (widget.isRemote && widget.onPullToLocal != null)
           GlassMenuItem<String>(
             value: 'pull_to_local',
@@ -145,6 +155,8 @@ class _MediaFolderCardState extends State<MediaFolderCard> {
       widget.onRename();
     } else if (action == 'transfer') {
       widget.onTransfer?.call();
+    } else if (action == 'rescan') {
+      widget.onRescan?.call();
     } else if (action == 'pull_to_local') {
       widget.onPullToLocal?.call();
     } else if (action == 'delete_node_files') {

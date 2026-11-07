@@ -41,13 +41,14 @@ mixin PictureScreenDialogs
       if (scanMode) {
         await viewModel.scanFolder(localTargetFolderId: localFolderId);
       } else {
-        // 导入前弹出增强选项（全量缩略图 / 按原始目录导入）
+        // 导入前弹出增强选项（全量缩略图 / 按原始目录导入 / 原路径软链）
         final options = await _showImportOptionsDialog();
         if (options == null) return;
         await viewModel.importFolder(
           localTargetFolderId: localFolderId,
           generateThumbnails: options.$1,
           preserveStructure: options.$2,
+          softLink: options.$3,
         );
       }
       return;
@@ -60,11 +61,14 @@ mixin PictureScreenDialogs
     await _showNodeFolderDialog(scanMode: scanMode);
   }
 
-  /// 本地导入前的增强选项弹窗，返回 (全量生成缩略图, 按原始目录导入)；取消返回 null。
-  Future<(bool, bool)?> _showImportOptionsDialog() async {
+  /// 本地导入前的增强选项弹窗，返回 (全量生成缩略图, 按原始目录导入, 原路径软链)；取消返回 null。
+  /// 「原路径软链」与「按原始目录导入」互斥：软链是其超集（额外镜像空目录并登记源路径），
+  /// 勾选软链后「按原始目录」自动取消并置灰。
+  Future<(bool, bool, bool)?> _showImportOptionsDialog() async {
     bool generateThumbnails = false;
     bool preserveStructure = false;
-    return showDialog<(bool, bool)>(
+    bool softLink = false;
+    return showDialog<(bool, bool, bool)>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -89,8 +93,27 @@ mixin PictureScreenDialogs
                     controlAffinity: ListTileControlAffinity.leading,
                     title: const Text('按原始目录导入'),
                     subtitle: const Text('按导入目录创建文件夹层级，集合仍按资源父目录创建'),
-                    value: preserveStructure,
-                    onChanged: (v) => setState(() => preserveStructure = v ?? false),
+                    // 软链模式下该选项被覆盖：显示为未勾选并禁用
+                    value: softLink ? false : preserveStructure,
+                    onChanged: softLink
+                        ? null
+                        : (v) => setState(() => preserveStructure = v ?? false),
+                  ),
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('原路径软链'),
+                    subtitle: const Text('保存源路径并镜像全部子目录（含空目录），支持重新扫描增量同步'),
+                    value: softLink,
+                    onChanged: (v) {
+                      final next = v ?? false;
+                      setState(() {
+                        softLink = next;
+                        // 互斥：勾选软链后取消「按原始目录」勾选
+                        if (next) preserveStructure = false;
+                      });
+                    },
                   ),
                 ],
               );
@@ -99,7 +122,8 @@ mixin PictureScreenDialogs
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop((generateThumbnails, preserveStructure)),
+              onPressed: () =>
+                  Navigator.of(context).pop((generateThumbnails, preserveStructure, softLink)),
               child: const Text('选择文件夹'),
             ),
           ],

@@ -36,6 +36,7 @@ part 'media_library_vm_refresh.dart';
 part 'media_library_vm_navigation.dart';
 part 'media_library_vm_favorites.dart';
 part 'media_library_vm_actions.dart';
+part 'media_library_vm_symlink.dart';
 
 enum MediaItemSortOrder {
   nameAsc,
@@ -419,6 +420,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 媒体库偏好实例（onInitAsync 中初始化，供排序持久化扩展使用）。
   SharedPreferences? _prefs;
 
+  /// 「原路径软链」登记表：根文件夹 ID → {path: 源目录, name: 导入时目录名}。
+  /// 内存态由 media_library_vm_symlink.dart 扩展读写，并持久化到 SharedPreferences。
+  final Map<String, Map<String, String>> _mediaLinkRoots = {};
+
   /// 拖拽顺序 prefs 键前缀（实例访问器，供 part 扩展使用；扩展内不能直接引用静态成员）。
   String get _colOrderPrefPrefix => _kColOrderPrefPrefix;
 
@@ -636,8 +641,12 @@ class MediaLibraryViewModel extends BaseViewModel {
     } catch (e) {
       _logger.error('[媒体库] 恢复排序方式失败: $e');
     }
+    // 恢复「原路径软链」登记表：重启后右键/顶栏「重新扫描」据此识别软链文件夹
+    await loadMediaLinkRoots();
     _logger.info('[媒体库] onInitAsync: 开始 refreshAll');
     await refreshAll();
+    // 登记根文件夹可能在别处被删（如直接清库），刷新完文件夹后清掉失效登记
+    await pruneMissingMediaLinkRoots();
     _logger.info(
       '[媒体库] onInitAsync: refreshAll 完成，collections=${collections.length}，folders=${folders.length}',
     );

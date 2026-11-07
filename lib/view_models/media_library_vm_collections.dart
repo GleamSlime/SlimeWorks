@@ -164,6 +164,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         media_api.deleteMediaFolder(folderId: folderId);
         await loadFolders();
         await loadCollections();
+        // 被删的可能是软链根：同步清掉登记表里的失效条目
+        await pruneMissingMediaLinkRoots();
       }
       if (currentFolderId.value == folderId) {
         currentFolderId.value = parentId;
@@ -188,6 +190,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       media_api.deleteMediaFolder(folderId: folderId);
       await loadFolders();
       await loadCollections();
+      // 被删的可能是软链根：同步清掉登记表里的失效条目
+      await pruneMissingMediaLinkRoots();
       if (currentFolderId.value == folderId) {
         currentFolderId.value = parentId;
       }
@@ -301,6 +305,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   /// 避免在异步方法内部读取响应式状态时因时序问题导致丢失文件夹上下文。
   /// [generateThumbnails]：导入后为全部文件生成缩略图（自动加入生成队列）。
   /// [preserveStructure]：按原始目录结构导入（按目录创建文件夹，集合仍按资源父级创建）。
+  /// [softLink]：原路径软链导入——镜像全部目录层级（含空目录）并登记源路径，
+  /// 支持后续「重新扫描」增量同步；与 [preserveStructure] 互斥（软链是其超集）。
   Future<void> importFolder({
     String? folderPath,
     String? nodeId,
@@ -308,6 +314,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     String? localTargetFolderId,
     bool generateThumbnails = false,
     bool preserveStructure = false,
+    bool softLink = false,
   }) async {
     try {
       isScanning.value = true;
@@ -357,6 +364,16 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         return;
       }
       scanStatusText.value = '导入中...';
+      if (softLink) {
+        // 原路径软链导入：镜像全部目录层级（含空目录）并登记源路径，
+        // 后续右键/顶栏「重新扫描」即可对该目录做磁盘 ↔ 库增量同步。
+        await _importFolderSoftLinkSync(
+          selectedPath: selectedPath,
+          targetFolderId: targetFolderId,
+          generateThumbnails: generateThumbnails,
+        );
+        return;
+      }
       final List<media_api.MediaCollection> imported;
       if (preserveStructure) {
         // 按原始目录导入：扫描子目录创建集合，再按目录层级创建文件夹归档
@@ -783,10 +800,12 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   /// - 当前处于远程节点文件夹 → 转 [importPathsToNodeFolder]（先上传再让节点导入）
   /// [generateThumbnails]：全部扫描入库后批量入队缩略图任务（与点击导入一致）
   /// [preserveStructure]：按原始目录层级归档（与点击导入一致）；false 时为同名包裹文件夹
+  /// [softLink]：原路径软链导入（与点击导入一致）；目录逐个镜像并登记源路径
   Future<void> importDroppedPaths(
     List<String> paths, {
     bool generateThumbnails = false,
     bool preserveStructure = false,
+    bool softLink = false,
   }) async {
     if (paths.isEmpty) return;
     if (isScanning.value) return;
@@ -848,6 +867,18 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       final dirName = dir.split(Platform.pathSeparator).last;
       scanStatusText.value = '扫描: $dirName';
       try {
+        if (softLink) {
+          // 原路径软链：每个拖入目录镜像完整层级（含空目录）并登记源路径；
+          // 缩略图入队统一交给下方批量流程，这里不单独触发
+          final linked = await _importDroppedPathSoftLink(
+            dir: dir,
+            targetFolderId: targetFolderId,
+          );
+          allValidCollections.addAll(linked);
+          success += linked.length;
+          foldersChanged = true;
+          continue;
+        }
         final collections = await media_api.scanMediaFolders(folderPath: dir);
         final validCollections = collections.where((c) => c.itemCount > BigInt.zero).toList();
         final emptyCollections = collections.where((c) => c.itemCount == BigInt.zero).toList();
@@ -1313,6 +1344,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       savedScrollOffset.value = 0.0;
       await loadCollections();
       await loadFolders();
+      // 清库后所有软链根已不存在，同步清空登记表
+      await pruneMissingMediaLinkRoots();
       showSnack(
         '成功',
         '已清空本地媒体库（$clearedTables 张表${clearedFiles > 0 ? " + $clearedFiles 个缓存文件" : ""}）',

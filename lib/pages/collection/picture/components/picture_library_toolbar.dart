@@ -64,6 +64,8 @@ class PictureLibraryToolbar extends StatelessWidget {
       final isScanning = viewModel.isScanning.value;
       final statusText = viewModel.scanStatusText.value;
       final inDetail = viewModel.isInDetail;
+      // 当前浏览/详情上下文所处的软链根文件夹 ID（不在软链内为 null）
+      final linkRootId = viewModel.mediaLinkRootForContext;
       final thumbProgress = viewModel.thumbProgress.value;
       final remoteThumbProgress = viewModel.remoteThumbProgress.value;
       // columnCount 非 null 表示移动端，需要在 toolbar 中显示列数 + 排序
@@ -124,6 +126,16 @@ class PictureLibraryToolbar extends StatelessWidget {
                   viewModel: viewModel,
                   hintText: inDetail ? '搜索资源文件名' : '搜索文件夹/集合/资源',
                 ),
+                // 「原路径软链」文件夹：顶栏增量重扫当前所在的软链根（磁盘 ↔ 库同步 + 封面重生成）
+                if (!isScanning && linkRootId != null)
+                  Tooltip(
+                    message: '重新扫描软链源目录（增量同步新增/删除的文件与文件夹）',
+                    child: DesktopHeadToolsButton(
+                      icon: DrawIcon(StrokeIcons.link),
+                      size: AppTheme.metrics.kSpace40,
+                      onTap: () => viewModel.rescanMediaLinkFolder(linkRootId),
+                    ),
+                  ),
                 // 浏览模式：图书馆操作按钮
                 if (!isScanning && !inDetail)
                   Row(
