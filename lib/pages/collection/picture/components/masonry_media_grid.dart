@@ -14,6 +14,7 @@ import 'package:slime_works/pages/collection/picture/components/media_cutout_car
 import 'package:slime_works/pages/collection/picture/components/media_item_tile.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
+import 'package:get/get.dart';
 
 /// 瀑布流（Masonry）媒体网格。
 /// 将 [items] 均匀分配到 [columnCount] 列，每个 tile 高度由图片自然宽高比决定；
@@ -29,7 +30,6 @@ class MasonryMediaGrid extends StatefulWidget {
     required this.onOpenViewer,
     required this.onConfirmDelete,
     this.onConfirmDeleteNodeLocalFile,
-    this.lastViewedItemId,
     this.scrollController,
   });
 
@@ -42,8 +42,6 @@ class MasonryMediaGrid extends StatefulWidget {
   final Future<void> Function(media_api.MediaItem) onConfirmDelete;
 
   final Future<void> Function(media_api.MediaItem)? onConfirmDeleteNodeLocalFile;
-
-  final String? lastViewedItemId;
 
   final ScrollController? scrollController;
 
@@ -83,43 +81,57 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
 
   StreamSubscription<bool>? _overlaySub;
 
+  /// 「刚看过的条目」监听：由本网格自己订阅，而不是靠外层 Obx 把它当 prop 传进来。
+  ///
+  /// 原先外层详情的 Obx 在收集窗口里读 lastViewedItemId.value，点卡片进预览时
+  /// 那次写入会把整个 Obx（= 整棵网格 + 所有卡片的 provider 重解析）重建一遍，
+  /// 预览进出各一次。改成 ever 订阅后，写入只让本组件重画高亮那几张卡。
+  Worker? _lastViewedWorker;
+
   @override
   void initState() {
     super.initState();
-    _highlightId = widget.lastViewedItemId;
     _scheduleReveal();
     _overlaySub = widget.viewModel.showMediaOverlay.listen((_) {
       if (mounted) setState(() {});
     });
-    if (_highlightId != null) {
-      // 等待首批 tiles 渲染后滚动到高亮项，并在 2.5s 后消退高亮
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToHighlighted();
-        _highlightTimer = Timer(_kHighlightDwell, () {
-          if (mounted) setState(() => _highlightId = null);
-          widget.viewModel.lastViewedItemId.value = null;
-        });
+    _lastViewedWorker = ever<String?>(
+      widget.viewModel.lastViewedItemId,
+      _onLastViewedChanged,
+    );
+    // 首帧高亮：延迟到 post-frame 再读值。
+    // 不能在 initState 里直接读 lastViewedItemId.value——本方法是在外层 Obx 的
+    // build 窗口内执行的，那次读取会把外层 Obx（整棵网格）重新登记成该 Rx 的
+    // 订阅者，绕一圈又回到「写 ID 就重建全网格」。post-frame 时代理已释放，
+    // 读值不建立任何订阅。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _onLastViewedChanged(widget.viewModel.lastViewedItemId.value);
+    });
+  }
+
+  /// 外部写入新的高亮 ID（点卡片进预览、或预览里翻页后返回）。
+  void _onLastViewedChanged(String? id) {
+    if (!mounted) return;
+    // 自己消退时写的 null 不再触发；与当前高亮相同也无需重复调度
+    if (id == null || id == _highlightId) return;
+    _highlightTimer?.cancel();
+    setState(() => _highlightId = id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToHighlighted();
+      _highlightTimer = Timer(_kHighlightDwell, () {
+        if (mounted) setState(() => _highlightId = null);
+        widget.viewModel.lastViewedItemId.value = null;
       });
-    }
+    });
   }
 
   @override
   void didUpdateWidget(MasonryMediaGrid oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 外部传入新的高亮 ID（如从Viewer返回后重建 widget）
-    if (widget.lastViewedItemId != null &&
-        widget.lastViewedItemId != oldWidget.lastViewedItemId &&
-        widget.lastViewedItemId != _highlightId) {
-      _highlightTimer?.cancel();
-      setState(() => _highlightId = widget.lastViewedItemId);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToHighlighted();
-        _highlightTimer = Timer(_kHighlightDwell, () {
-          if (mounted) setState(() => _highlightId = null);
-          widget.viewModel.lastViewedItemId.value = null;
-        });
-      });
-    }
+    // 高亮 ID 不再从这里传入：改由 initState 里的 ever 监听直接感知，
+    // 见 _lastViewedWorker 的说明。
     if (oldWidget.collectionId != widget.collectionId ||
         oldWidget.columnCount != widget.columnCount) {
       // 切换了集合或列数变化：先立即显示前几行（避免空白闪烁），再继续逐行展开动画
@@ -189,6 +201,7 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   @override
   void dispose() {
     _overlaySub?.cancel();
+    _lastViewedWorker?.dispose();
     _revealTimer?.cancel();
     _highlightTimer?.cancel();
     _internalScrollController?.dispose();

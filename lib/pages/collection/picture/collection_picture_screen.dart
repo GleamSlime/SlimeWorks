@@ -50,9 +50,15 @@ class _CollectionPictureScreenState
   /// 文件/文件夹正被拖入窗口（桌面端）。
   bool _isDraggingFiles = false;
 
-  /// true when MediaViewerPage is pushed on top; used to redirect the back
-  /// button in the action bar to close the viewer instead of exiting the collection.
-  bool _viewerActive = false;
+  /// MediaViewerPage 是否压在集合列表之上：操作栏的返回按钮据此决定是
+  /// 「关闭预览」还是「退出集合」（避免预览里再出现第二个返回键）。
+  ///
+  /// 这里刻意用普通字段而不是 setState：这个值只在按钮的 onTap 里被读一次，
+  /// 是「点击时才需要知道」的信息。原先 push/pop 都会 setState，整棵
+  /// buildContent（含媒体网格）被重建两遍，正是「预览返回列表时 cover 重新加载」
+  /// 的第二个来源（第一个是图片缓存被挤掉）。改成赋值后由闭包按需读取，
+  /// 预览进出不再触发任何重绘。
+  final _viewerActiveFlag = _BoolFlag();
 
   /// 导航方向：true = 向前（进入子页），false = 向后（返回上级）。
   bool _navForward = true;
@@ -318,7 +324,7 @@ class _CollectionPictureScreenState
       leading: _escLayer(
         PictureActionBar(
           viewModel: viewModel,
-          isViewerActive: _viewerActive,
+          isViewerActive: () => _viewerActiveFlag.value,
           detailColumnCount: _detailColumnCount,
           onColumnDecrement: () => setState(() => _detailColumnCount--),
           onColumnIncrement: () => setState(() => _detailColumnCount++),
@@ -635,7 +641,8 @@ class _CollectionPictureScreenState
           ? _confirmDeleteNodeLocalItemFile
           : null,
       onViewerStateChanged: (active) {
-        if (mounted) setState(() => _viewerActive = active);
+        // 只记录状态，不 setState：见 _viewerActiveFlag 的说明。
+        if (mounted) _viewerActiveFlag.value = active;
       },
     );
   }
@@ -673,4 +680,13 @@ class _AnimatedSwitcherWrapper extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 一个不通知任何人的 bool 容器。
+///
+/// 存在的意义：预览层的激活状态只有「操作栏返回按钮被按下」那一刻才被读，
+/// 用 ValueNotifier/Rx 反而会给不需要的地方挂上监听，用 setState 会把整棵
+/// 内容树重建。这里就是要「写进去、读到就行」，所以用最朴素的字段容器。
+class _BoolFlag {
+  bool value = false;
 }

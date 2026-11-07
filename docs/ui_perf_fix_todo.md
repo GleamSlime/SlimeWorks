@@ -33,6 +33,8 @@
 | F5 | 工具页三张卡与全站材质不同口径 | 仍在用 `Card` + `RoundedRectangleBorder` 手写描边 | `lib/pages/tools/components/extract_card.dart`、`ncm_decrypt_card.dart`、`sentry_log_card.dart` 统一走 `AppCard.glassDecoration` | 目视一致：同圆角、同描边、同投影 |
 | F6 | 侧栏选中项与背景层次混同 | 选中态用了过淡的 `surface.withAlpha(100)` | `lib/components/window/collapsible_sidebar.dart:1333-1356`（改 `surfaceRaised`/`surface` + 自定义柔影） | 明暗两套主题下选中项都能一眼拎出来 |
 | F7 | `dashboard_screen.dart` 有未使用的 import | 早先引入 `RoleManager` 做权限过滤，后来卡片列表改成静态、权限判断移除，import 忘删 | `lib/pages/dashboard_screen.dart:12`（删 `role_manager.dart` 一行） | `dart analyze lib/pages/dashboard_screen.dart` → `No issues found!` |
+| F8 | 首页看板图表/数字冻结不更新 | `system_metrics_service` 把每秒采集放进 `Isolate.run`——FRB 的 `#[frb(sync)]` 绑定依赖每个 isolate 各自的 `RustLib.__state`，新 isolate 从没跑过 `RustLib.init()`，每个周期都抛 `Bad state` 被 catch 静默吞掉，`notifyListeners` 永不触发 | `lib/core/services/system_metrics_service.dart:_refresh`（改回主 isolate 直接同步调用；sysinfo 重扫只在首次构造发生，单次毫秒级），失败日志改为节流（首条 + 每 30 条一次） | 打开首页 60 秒，折线持续右移；日志里「系统指标」仅在真失败时出现 |
+| F9 | 预览完返回列表 cover 重新加载且很慢（两个机制） | ①缓存条目层面：预览按原图满分辨率解码（4K≈30MB），单条目要么超预算干脆不进缓存、要么把网格 480px 封面条目挤出；且 `_preloadNeighborMedia` 用的 provider（`FileImage(原图)`）与卡片（`ResizeImage(FileImage(缩略图),480)`）不同 key，预热对列表毫无贡献。②重建层面：`_viewerActive`/`lastViewedItemId` 在 Obx 窗口内被读，退出预览时整棵网格树随 setState/响应式重建 | ①新增 `lib/pages/collection/picture/components/cover_decode_cache.dart`：预览显示与预热统一「解码封顶」（`resizeIfNeeded(maxSide,null,…)`，与卡片同构 key），并一次预热「列表封面条目+预览条目」两条；`main.dart` 预算 48→80MB。②`_viewerActive` 改为点击时才读的 `ValueGetter`（不 setState）；`lastViewedItemId` 改 `ever` worker + post-frame 读初值（避免在父 Obx 收集窗口里注册依赖） | `flutter analyze` 0 新增问题；返回列表目视封面秒开、无重加载闪烁 |
 
 ### 1.2 Rust 侧
 
@@ -198,7 +200,7 @@ flutter test test/dashboard_render_test.dart test/ledger_render_test.dart \
 | 看似问题 | 实测结论 |
 |----------|----------|
 | `AtmosphereBackdrop` 叠 5 层全屏渐变 = GPU 负担 | 已加 `RepaintBoundary`；且 `layered: false`（窄窗/移动端）只画 1 层。静止态不触发重绘 |
-| `system_metrics_service` 每秒 `notifyListeners` | 已用 `Isolate.run` 把 FFI 挪出主线程；Dashboard 侧用 `ListenableBuilder` 只重建指标区，不重建整树 |
+| `system_metrics_service` 每秒 `notifyListeners` | ~~已用 `Isolate.run` 把 FFI 挪出主线程~~ **该说法作废**：`Isolate.run` 正是看板停更的根因（新 isolate 没做 FRB 初始化，每个周期抛 `Bad state` 被吞），已改回主 isolate 直接同步调用并给失败日志节流，见 §1.1 F8。Dashboard 侧仍用 `ListenableBuilder` 只重建指标区 |
 | `live_frost` 200ms 定时器 | 每次 tick 先比对窗口矩形，没变就直接 return，静止时零抓帧 |
 | `_SparklinePainter.shouldRepaint` | 有实现且比较了 `data` 与两端色；不是每帧重绘 |
 | `serve_media_file_with_range` 的 u64 下溢 | 已有 `clamp_range` 保证 `start <= capped_end`，且 `resolve_range` 有测试 |

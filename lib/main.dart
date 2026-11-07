@@ -93,9 +93,15 @@ Future<void> main() async {
   // 避免漫画服务器不可达时把整个应用卡在启动画面上
   unawaited(getIt<MangaService>().init());
 
-  // 限制 Flutter imageCache 最大字节数（默认 ~100MB 可能被大量远程图片撑满），
-  // 设为 48MB：缩略图浏览够用，同时把常驻后台的解码图上限压下来。
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 48 * 1024 * 1024;
+  // 限制 Flutter imageCache 最大字节数（默认 ~100MB 可能被大量远程图片撑满）。
+  // 48MB 是「压常驻后台内存」那次调整定下的，但它带来一个副作用：预览大图当时
+  // 仍按**原始分辨率**解码，一张 4K 图就是 30MB+，LRU 为塞下它会把别的东西
+  // 全驱逐掉——从预览返回列表时网格封面缓存已经空了，只能重新解码（表现为
+  // 「cover 重新加载且很慢」）。现在预览侧已改为「解码封顶」（见
+  // cover_decode_cache），单条目普遍变小，预算回到 80MB 换回返回列表的命中率：
+  // 网格 480px 封面约 0.8MB/张，80MB 可驻留上百张 + 若干封顶后的预览图。
+  // 后台内存的下降靠的是预览封顶本身，不是靠这条预算线硬压。
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 80 * 1024 * 1024;
 
   // 网络图片的连接并发：dart:io 默认对同一 host 最多 6 条连接，远端列表一屏
   // 几十张封面会在客户端就排成一条长队，表现为「上行永远跑不满」。

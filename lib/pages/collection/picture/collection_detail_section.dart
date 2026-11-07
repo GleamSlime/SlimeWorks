@@ -135,7 +135,8 @@ class CollectionDetailSection extends StatelessWidget {
             isRemote: isRemote,
             viewModel: viewModel,
             columnCount: columnCount,
-            lastViewedItemId: viewModel.lastViewedItemId.value,
+            // 高亮 ID 不再经由 prop 传入：MasonryMediaGrid 自己 ever 订阅
+            // viewModel.lastViewedItemId，避免外层 Obx 因那次读取而重建整棵网格。
             onOpenViewer: (index) {
               if (collectionId.isEmpty) return;
               if (index >= 0 && index < sortedItems.length) {

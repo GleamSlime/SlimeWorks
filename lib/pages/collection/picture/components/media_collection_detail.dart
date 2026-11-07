@@ -154,7 +154,11 @@ class MediaCollectionDetailView extends StatelessWidget {
               isRemote: isRemote,
               viewModel: viewModel,
               columnCount: columnCount,
-              lastViewedItemId: viewModel.lastViewedItemId.value,
+              // 注意：这里**不要**再读 lastViewedItemId.value 传给网格。
+              // 本方法在 Obx 的依赖收集窗口内，那次读取会把整个 Obx（= 整棵网格
+              // 与全部卡片）登记成该 Rx 的订阅者，于是点卡片进预览时的写入会
+              // 重建整棵网格——「返回列表 cover 重新加载」的第二个来源。
+              // 高亮改由 MasonryMediaGrid 自己 ever 订阅，见该文件的 _lastViewedWorker。
               onOpenViewer: (index) {
                 if (collectionId.isEmpty) return;
                 if (index >= 0 && index < sortedItems.length) {

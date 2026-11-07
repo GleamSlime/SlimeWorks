@@ -12,6 +12,7 @@ part of 'media_viewer_page.dart';
 class _ImageViewer extends StatefulWidget {
   const _ImageViewer({
     required this.source,
+    required this.decodeMaxSide,
     required this.onSwipeDelta,
     required this.onSwipeEnd,
     this.onSave,
@@ -22,6 +23,12 @@ class _ImageViewer extends StatefulWidget {
   });
 
   final String source;
+
+  /// 解码上限（物理像素边长），由父级用 MediaQuery 统一计算。
+  ///
+  /// 必须是外部传入而不是本页 LayoutBuilder 的约束：本 state 页与预热路径
+  /// 要用同一个数，ResizeImageKey 才相等。
+  final int decodeMaxSide;
 
   /// 父级翻页 delta（dy 正 = 手指向下 = 上一项）
   final void Function(double dy) onSwipeDelta;
@@ -259,8 +266,12 @@ class _ImageViewerState extends State<_ImageViewer> {
                 _layoutH = h;
                 final Widget imgWidget;
                 if (src.startsWith('http')) {
-                  imgWidget = Image.network(
-                    src,
+                  // 用统一的封顶 provider 而不是 Image.network(src)：
+                  // key 与 _preloadNeighborMedia 预热的那条一致，滑到本页直接命中。
+                  // ResizeImage 复用内层 provider 的 completer，下载进度事件仍会透传，
+                  // 所以 loadingBuilder 的字节进度不受影响。
+                  imgWidget = Image(
+                    image: CoverDecodeCache.viewerProvider(src, widget.decodeMaxSide),
                     fit: BoxFit.contain,
                     width: w,
                     height: h,
@@ -311,8 +322,9 @@ class _ImageViewerState extends State<_ImageViewer> {
                     ),
                   );
                 } else {
-                  imgWidget = Image.file(
-                    File(src),
+                  // 同上：封顶解码，避免一张原图 30MB+ 把列表封面条目挤出缓存
+                  imgWidget = Image(
+                    image: CoverDecodeCache.viewerProvider(src, widget.decodeMaxSide),
                     fit: BoxFit.contain,
                     width: w,
                     height: h,

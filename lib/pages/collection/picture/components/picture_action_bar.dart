@@ -30,8 +30,13 @@ class PictureActionBar extends StatelessWidget {
 
   final MediaLibraryViewModel viewModel;
 
-  /// true 表示 MediaViewerPage 压在页面栈顶，返回按钮改为关闭查看器。
-  final bool isViewerActive;
+  /// 返回 true 表示 MediaViewerPage 压在页面栈顶，返回按钮改为关闭查看器。
+  ///
+  /// 用读取函数而不是 bool：本字段只在返回按钮的 onTap 里用到，属于「点击时才需要
+  /// 知道」的信息。做成 bool 就得在预览 push/pop 时 setState 重建整条操作栏乃至上层
+  /// 网格（正是「返回列表 cover 重新加载」的一个来源）；改成回调后预览进出零重绘。
+  /// 见 collection_picture_screen 里的 `_viewerActiveFlag`。
+  final ValueGetter<bool> isViewerActive;
 
   /// 详情页网格列数（由 screen 持有，本栏只展示与回调增减）。
   final int detailColumnCount;
@@ -81,7 +86,8 @@ class PictureActionBar extends StatelessWidget {
                       icon: DrawIcon(StrokeIcons.arrowBack),
                       size: AppTheme.metrics.kSpace40,
                       onTap: () {
-                        if (isViewerActive) {
+                        // 点击时才读预览状态：不触发本栏任何重建
+                        if (isViewerActive()) {
                           Navigator.of(context).maybePop();
                         } else if (inDetail) {
                           onExitCollection();

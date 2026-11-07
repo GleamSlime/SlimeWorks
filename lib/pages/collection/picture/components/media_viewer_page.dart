@@ -17,6 +17,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 
+import 'package:slime_works/pages/collection/picture/components/cover_decode_cache.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
 
@@ -210,6 +211,11 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
   /// 由当前项的「首帧就绪」回调触发：当前图还没出来就去抢下一张的解码与带宽，
   /// 首屏只会更慢。视频不预建播放器（libmpv 实例很重），只把封面图先塞进图片缓存，
   /// 真正切过去时画面已有底图。
+  ///
+  /// 预热用的 provider 必须与**真正显示时逐字同 key**，否则解了半天列表用不上：
+  /// 原先这里直接用 `FileImage(原图)`，与网格卡片的 `ResizeImage(FileImage(缩略图), 480)`
+  /// 是两个条目，还额外把原图按满分辨率解码撑爆 ImageCache。现在统一走
+  /// [CoverDecodeCache]，一次预热两条：列表封面条目 + 预览封顶解码条目。
   void _preloadNeighborMedia() {
     if (!mounted) return;
     final nextIndex = _currentIndex + 1;
@@ -225,22 +231,30 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     // 本地视频/音频的「封面」就是原始文件本身，当图片预解码必然失败；
     // 真正的封帧要在切页后由播放器出画面，这里直接跳过。
     if (isVideoLike && !(coverSource?.startsWith('http') ?? false)) return;
-    // 视频/音频只预热封面；图片预热的是预览原图（详情页看的是全图，不是缩略图）
-    final target = isVideoLike
-        ? coverSource
+    // 视频/音频项没有「预览图片条目」可预热：本地封面路径就是视频文件本身，
+    // 当图片解码必然失败；远程封面 URL 与卡片用的是同一个 provider（http 不
+    // 再套 Resize），预热封面条目即可。图片项则两条都热。
+    final fullSource = isVideoLike
+        ? null
         : widget.viewModel.buildMediaSource(item, collectionId: widget.collectionId);
-    if (target == null || target.isEmpty) return;
-    final ImageProvider provider = target.startsWith('http')
-        ? NetworkImage(target)
-        : FileImage(File(target));
-    // 失败交给正式加载时再报：预加载只是加速，不该产生错误日志。
-    // 放到下一帧：本方法常由 Image 的 frameBuilder 在 build 期间回调，
-    // 直接在 build 里解码会挤占同一帧的布局开销。
-    final context = this.context;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      precacheImage(provider, context, onError: (_, _) {}).catchError((_) {});
-    });
+    CoverDecodeCache.warmupItem(
+      context: context,
+      fullSrc: fullSource,
+      coverSrc: coverSource,
+      coverCacheWidth: CoverDecodeCache.gridCacheWidth(
+        widget.viewModel.mediaPrefs.localPreviewWidth.value,
+      ),
+      viewerMaxSide: _viewerDecodeSide(),
+    );
+  }
+
+  /// 预览页统一的解码上限（物理像素边长）。
+  ///
+  /// 用 MediaQuery 而不是各页自己的 LayoutBuilder 约束：当前页与预热的邻居页
+  /// 必须算出同一个数，ResizeImageKey 才相等，预热才换得来命中。
+  int _viewerDecodeSide() {
+    final mq = MediaQuery.of(context);
+    return CoverDecodeCache.viewerDecodeSide(mq.size, mq.devicePixelRatio);
   }
 
   // ── 即时跳转（键盘 / 滚轮，不需要跟手） ──────────────────────────────────
@@ -423,6 +437,8 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     }
     return _ImageViewer(
       source: source,
+      // 解码封顶：与 _preloadNeighborMedia 用同一个数，预热才换得来命中
+      decodeMaxSide: _viewerDecodeSide(),
       pageIndex: index,
       wheelZoomNotifier: _wheelZoomNotifier,
       onSwipeDelta: _handleSwipeDelta,
