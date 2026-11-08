@@ -19,9 +19,12 @@ lazy_static! {
     static ref WORKER: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
     static ref SECRETS: RwLock<HashMap<i64, String>> = RwLock::new(HashMap::new());
     static ref STATUS: RwLock<SchedulerStatus> = RwLock::new(SchedulerStatus::default());
+    /// 当前代 worker 的停止信号。必须每代独立：
+    /// 若用全局 AtomicBool，stop() 后紧接 start() 会把它复位 false，
+    /// 旧 worker 正阻塞在同步收信（可达分钟级）时回来一看 flag 已复位就永不退出，
+    /// 造成双线程重复收信、反复开关持续泄漏线程。
+    static ref STOP_SIGNAL: Mutex<Option<std::sync::Arc<AtomicBool>>> = Mutex::new(None);
 }
-
-static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 /// 检查节拍：规则真正的"每日 HH:MM / 间隔 N 分钟"判断在 rule_due 里做，
 /// 这里只决定轮询粒度，太密会白耗唤醒，太疏会错过到点。
@@ -71,19 +74,27 @@ pub fn start() -> Result<(), String> {
             }
         }
     }
-    STOP_REQUESTED.store(false, Ordering::SeqCst);
-    let handle = std::thread::spawn(|| loop {
-        if STOP_REQUESTED.load(Ordering::SeqCst) {
+    // 新一代 worker 拿全新的停止信号，旧代信号已被 stop() 翻转且不再复位
+    let stop_signal = std::sync::Arc::new(AtomicBool::new(false));
+    *STOP_SIGNAL.lock().map_err(|e| e.to_string())? = Some(stop_signal.clone());
+    let handle = std::thread::spawn(move || loop {
+        if stop_signal.load(Ordering::SeqCst) {
             sw_info!("[ledger] 自动记账线程已退出");
             break;
         }
         run_due_rules();
         // 分片睡眠，停止请求最坏 1 秒内生效
         for _ in 0..TICK_SECS {
-            if STOP_REQUESTED.load(Ordering::SeqCst) {
+            if stop_signal.load(Ordering::SeqCst) {
                 break;
             }
             std::thread::sleep(Duration::from_secs(1));
+        }
+        // 一轮跑完后再查一次：run_due_rules 里的同步收信可能耗时很久，
+        // 期间收到停止请求就不必再睡满一个节拍
+        if stop_signal.load(Ordering::SeqCst) {
+            sw_info!("[ledger] 自动记账线程已退出");
+            break;
         }
     });
     *WORKER.lock().map_err(|e| e.to_string())? = Some(handle);
@@ -96,7 +107,13 @@ pub fn start() -> Result<(), String> {
 }
 
 pub fn stop() -> Result<(), String> {
-    STOP_REQUESTED.store(true, Ordering::SeqCst);
+    // 只翻转「当前代」的信号并摘掉引用；旧 worker 手里握的是自己的 Arc，
+    // 即使它阻塞在收信里，回来后看到的仍是 true，必然退出
+    if let Ok(mut sig) = STOP_SIGNAL.lock() {
+        if let Some(s) = sig.take() {
+            s.store(true, Ordering::SeqCst);
+        }
+    }
     let handle = WORKER.lock().map_err(|e| e.to_string())?.take();
     if let Some(h) = handle {
         // 线程最长 1 秒后自行退出；这里不 join，避免卡住 FFI 调用线程

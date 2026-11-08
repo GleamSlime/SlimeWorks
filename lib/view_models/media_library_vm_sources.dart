@@ -674,7 +674,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
     // 通过 Rust FFI 调用 extract_video_scrub_frames
     try {
       final frameCount = mediaPrefs.currentLevel.frameCount;
-      final result = media_api.extractVideoScrubFrames(
+      final result = await media_api.extractVideoScrubFrames(
         videoPath: videoPath,
         frameCount: frameCount,
       );

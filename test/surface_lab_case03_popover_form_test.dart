@@ -22,7 +22,7 @@ void main() {
   const btnH = 36.0;
   // 灰框 4（卡描边那 1 在卡片自己里面）
   const cardAt = 4.0;
-  const _bw = 1.0;
+  const bw = 1.0;
   // 标题的两个落点：按钮里 (13,8) → 面板里 (16,17)
   const labelFrom = Offset(13, 8);
   const labelTo = Offset(16, 17);
@@ -187,7 +187,7 @@ void main() {
       expect(footer(t).size, const Size(354, 48));
       expect(rel(t, footer(t)).dy, closeTo(footTop, 0.2));
       // 6 是卡内容盒里的空档；再往外还有 1 描边 + 4 灰框，离面板底缘是 11
-      expect(form(t).bottom - _bw - footer(t).bottom, closeTo(6, 0.2));
+      expect(form(t).bottom - bw - footer(t).bottom, closeTo(6, 0.2));
       expect(box(t).bottom - footer(t).bottom, closeTo(11, 0.2));
       // 落进面板之后它换了 class：`text-muted-foreground`，一落地就翻，不补间
       expect(ink(t, Case03PopoverForm.labelKey), const Color(0xFF737373));

@@ -4,12 +4,10 @@ rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=SystemConfiguration"]
 [target.x86_64-apple-darwin]
 rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=SystemConfiguration"]
 
-# Windows 环境下 whisper-rs-sys 编译所需的配置
+# Windows 环境下 whisper-rs-sys 编译所需的 LIBCLANG_PATH / CMAKE_GENERATOR=Ninja
+# 由 cargokit 的 builder.dart 在 Windows 桌面构建时注入（rust_builder/cargokit）。
+# 注意不能写进全局 [env]——那会污染 macOS/Linux 构建
+# （macOS 没有 Ninja 和 C:\Program Files\LLVM，直接构建失败）。
+# cargo 的 target.<triple>.env 需要 nightly -Ztarget-applies-to-host，稳定版不支持。
 [target.x86_64-pc-windows-msvc]
 rustflags = []
-
-[env]
-# whisper-rs-sys 编译需要 LLVM/Clang（bindgen 依赖）
-LIBCLANG_PATH = "C:\\Program Files\\LLVM\\bin"
-# 使用 Ninja 作为 CMake 生成器（比 VS 生成器更可靠）
-CMAKE_GENERATOR = "Ninja"

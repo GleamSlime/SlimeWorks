@@ -202,7 +202,7 @@ class PlaylistSidebar extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).whenComplete(nameController.dispose);
   }
 
   void _showCreateFolderDialog(BuildContext context) {
@@ -227,7 +227,7 @@ class PlaylistSidebar extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).whenComplete(nameController.dispose);
   }
 }
 
@@ -371,7 +371,7 @@ class _FolderTile extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).whenComplete(nameController.dispose);
   }
 }
 
@@ -471,7 +471,7 @@ class _PlaylistTile extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).whenComplete(nameController.dispose);
   }
 }
 

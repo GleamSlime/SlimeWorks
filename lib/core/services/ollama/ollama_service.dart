@@ -212,45 +212,41 @@ class OllamaService {
         final buffer = StringBuffer();
 
         const Loggers(name: 'Ollama').info('开始流式生成, url=${server.url}/api/chat');
-        var finished = false;
 
-        await for (final chunk in stream.stream) {
-          final text = utf8.decode(chunk);
-          const Loggers(name: 'Ollama').info('收到原始流 chunk: ${text.replaceAll('\n', '\\n')}');
+        // socket chunk 边界是任意的：直接 utf8.decode(chunk) 会把多字节汉字劈开抛
+        // FormatException，按 chunk 内换行切分又会把一行 JSON 劈成两半（两半都解析
+        // 失败被静默吞掉，译文悄悄缺段）。交给 utf8.decoder + LineSplitter 做跨块拼接。
+        final lines = utf8.decoder
+            .bind(stream.stream)
+            .transform(const LineSplitter());
 
-          final lines = text.split('\n').where((line) => line.trim().isNotEmpty);
-
-          for (final rawLine in lines) {
-            var line = rawLine.trim();
-            // 支持可能的 SSE 风格 'data: {...}' 前缀
-            if (line.startsWith('data:')) {
-              line = line.substring(5).trim();
-            }
-            if (line == '[DONE]') {
-              finished = true;
-              break;
-            }
-
-            try {
-              final json = jsonDecode(line);
-              final ollamaResponse = OllamaResponse.fromJson(json);
-              if (ollamaResponse.content.isNotEmpty) {
-                buffer.write(ollamaResponse.content);
-                onChunk(ollamaResponse.content);
-              } else {
-                const Loggers(name: 'Ollama').info('流响应 content 为空, done=${ollamaResponse.done}');
-              }
-
-              if (ollamaResponse.done) {
-                finished = true;
-                break;
-              }
-            } catch (e, st) {
-              const Loggers(name: 'Ollama').info('解析流式响应失败', error: e, stackTrace: st);
-            }
+        await for (final rawLine in lines) {
+          var line = rawLine.trim();
+          if (line.isEmpty) continue;
+          // 支持可能的 SSE 风格 'data: {...}' 前缀
+          if (line.startsWith('data:')) {
+            line = line.substring(5).trim();
+          }
+          if (line == '[DONE]') {
+            break;
           }
 
-          if (finished) break;
+          try {
+            final json = jsonDecode(line);
+            final ollamaResponse = OllamaResponse.fromJson(json);
+            if (ollamaResponse.content.isNotEmpty) {
+              buffer.write(ollamaResponse.content);
+              onChunk(ollamaResponse.content);
+            } else {
+              const Loggers(name: 'Ollama').info('流响应 content 为空, done=${ollamaResponse.done}');
+            }
+
+            if (ollamaResponse.done) {
+              break;
+            }
+          } catch (e, st) {
+            const Loggers(name: 'Ollama').info('解析流式响应失败', error: e, stackTrace: st);
+          }
         }
 
         const Loggers(name: 'Ollama').info('流式生成结束, total length=${buffer.length}');

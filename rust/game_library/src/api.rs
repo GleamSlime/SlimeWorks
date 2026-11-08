@@ -307,23 +307,27 @@ pub async fn game_library_get_game_by_id(game_id: String) -> Result<Option<Game>
 
 pub async fn game_library_delete_game(game_id: String) -> Result<()> {
     with_conn(|conn| {
-        conn.execute(
+        // 四条 DELETE 必须在一个事务里：逐条自动提交时中途失败会留下半删状态
+        //（比如 sessions 已删、games 还在），游戏时长统计就永久丢了且无法恢复
+        let tx = conn.unchecked_transaction().context("开启删除事务失败")?;
+        tx.execute(
             "DELETE FROM game_progress WHERE game_id = ?1",
             params![game_id.clone()],
         )
         .context("删除游戏进度失败")?;
-        conn.execute(
+        tx.execute(
             "DELETE FROM game_categories WHERE game_id = ?1",
             params![game_id.clone()],
         )
         .context("删除游戏分类关联失败")?;
-        conn.execute(
+        tx.execute(
             "DELETE FROM play_sessions WHERE game_id = ?1",
             params![game_id.clone()],
         )
         .context("删除游玩记录失败")?;
-        conn.execute("DELETE FROM games WHERE id = ?1", params![game_id])
+        tx.execute("DELETE FROM games WHERE id = ?1", params![game_id])
             .context("删除游戏失败")?;
+        tx.commit().context("提交删除事务失败")?;
         Ok(())
     })
 }
@@ -418,13 +422,16 @@ pub async fn game_library_delete_category(category_id: String) -> Result<()> {
     }
 
     with_conn(|conn| {
-        conn.execute(
+        // 关联表与分类表要一起成功/一起回滚，避免留下孤立的 game_categories 行
+        let tx = conn.unchecked_transaction().context("开启删除事务失败")?;
+        tx.execute(
             "DELETE FROM game_categories WHERE category_id = ?1",
             params![category_id.clone()],
         )
         .context("删除分类关联失败")?;
-        conn.execute("DELETE FROM categories WHERE id = ?1", params![category_id])
+        tx.execute("DELETE FROM categories WHERE id = ?1", params![category_id])
             .context("删除分类失败")?;
+        tx.commit().context("提交删除事务失败")?;
         Ok(())
     })
 }

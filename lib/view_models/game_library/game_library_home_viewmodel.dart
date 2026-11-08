@@ -14,12 +14,24 @@ class GameLibraryHomeViewModel extends BaseViewModel {
 
   final Rxn<GameLibraryHomeData> homeData = Rxn<GameLibraryHomeData>();
 
+  /// 游玩会话保存事件订阅（onClose 时必须销毁，否则页面销毁后仍持续刷新）
+  Worker? _sessionWorker;
+
   @override
   Future<void> onInitAsync() async {
     await super.onInitAsync();
     await _service.init();
     await refresh();
-    ever(_processTracker.sessionSavedCount, (_) => refresh());
+    _sessionWorker ??= ever(_processTracker.sessionSavedCount, (_) {
+      if (!isClosed) refresh();
+    });
+  }
+
+  @override
+  void onClose() {
+    _sessionWorker?.dispose();
+    _sessionWorker = null;
+    super.onClose();
   }
 
   @override

@@ -82,6 +82,11 @@ class MangaDownloadService {
     // 已完成则跳过
     if (entry.episodes[eps.order]?.isCompleted == true) return;
 
+    // 正在下载时重复请求（用户手点 + 推送节点同章并发）必须直接返回：
+    // 重建 info 会让运行中的 impl 继续更新旧对象，而 map 里换成新的 waiting 对象，
+    // _waitEpsDone 盯着新对象等到超时判失败（推送流程卡 30 分钟）
+    if (_activeKeys.contains('${comic.id}:${eps.order}')) return;
+
     entry.episodes[eps.order] = MangaDownloadEpsInfo(
       epsOrder: eps.order,
       epsTitle: eps.title,

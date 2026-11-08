@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'dart:developer' as developer;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:slime_works/components/window/desktop_head.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
@@ -877,7 +878,8 @@ class _CollectionLibraryScreenState
         key: _gridKey,
         controller: _scrollController,
         padding: EdgeInsets.all(AppTheme.metrics.kSpace12),
-        cacheExtent: 500,
+        // cacheExtent 已迁移 scrollCacheExtent（Flutter 3.41 起废弃旧参数）
+        scrollCacheExtent: const ScrollCacheExtent.pixels(500),
         physics: const BouncingScrollPhysics(),
         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: scaleW(200),

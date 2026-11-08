@@ -208,13 +208,26 @@ fn reject_busy(stream: &mut TcpStream) {
 fn kill_process_on_port(#[cfg_attr(not(any(unix, windows)), allow(unused_variables))] port: u16) {
     #[cfg(unix)]
     {
-        let _ = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(format!(
-                "lsof -ti :{} 2>/dev/null | xargs kill -9 2>/dev/null || true",
-                port
-            ))
-            .output();
+        // 只匹配「本地 LISTEN 该端口」的进程：
+        // - `lsof -ti :port` 会把远端端口相同的出站连接也列进来——本机作为客户端
+        //   连着远程节点（默认同端口）时会把自己 kill -9 自杀。
+        // - 再显式排除自身 PID，双保险。
+        let self_pid = std::process::id();
+        if let Ok(out) = std::process::Command::new("lsof")
+            .args(["-tiTCP", &format!(":{}", port), "-sTCP:LISTEN"])
+            .output()
+        {
+            for line in String::from_utf8_lossy(&out.stdout).lines() {
+                if let Ok(pid) = line.trim().parse::<u32>() {
+                    if pid == 0 || pid == self_pid {
+                        continue;
+                    }
+                    let _ = std::process::Command::new("kill")
+                        .args(["-9", &pid.to_string()])
+                        .output();
+                }
+            }
+        }
         std::thread::sleep(std::time::Duration::from_millis(400));
     }
 

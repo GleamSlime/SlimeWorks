@@ -35,6 +35,9 @@ class GameLibraryViewModel extends BaseViewModel {
   /// 是否处于多选模式
   bool get isSelecting => selectedIds.isNotEmpty;
 
+  /// 游玩会话保存事件订阅（onClose 时必须销毁，否则页面销毁后仍持续刷新）
+  Worker? _sessionWorker;
+
   @override
   Future<void> onInitAsync() async {
     await super.onInitAsync();
@@ -43,7 +46,16 @@ class GameLibraryViewModel extends BaseViewModel {
     selectedSort.value = settings.defaultSort;
     await refresh();
     // 监听游玩会话保存事件，自动刷新列表（游戏进程退出后触发）
-    ever(_processTracker.sessionSavedCount, (_) => refresh());
+    _sessionWorker ??= ever(_processTracker.sessionSavedCount, (_) {
+      if (!isClosed) refresh();
+    });
+  }
+
+  @override
+  void onClose() {
+    _sessionWorker?.dispose();
+    _sessionWorker = null;
+    super.onClose();
   }
 
   @override

@@ -139,11 +139,21 @@ class PowerStatsService extends GetxService {
       await _initCompleter!.future;
       return;
     }
-    _initCompleter = Completer<void>();
-    await _loadPrefs();
-    await _initRustModule();
-    _isInitialized = true;
-    _initCompleter!.complete();
+    final completer = Completer<void>();
+    _initCompleter = completer;
+    try {
+      await _loadPrefs();
+      await _initRustModule();
+      _isInitialized = true;
+      completer.complete();
+    } catch (e) {
+      // 初始化失败必须回传错误并清空 completer，
+      // 否则后续每个 ensureInitialized 都会 await 一个永不 complete 的 future 挂死
+      _isInitialized = false;
+      _initCompleter = null;
+      if (!completer.isCompleted) completer.completeError(e);
+      rethrow;
+    }
   }
 
   Future<void> _loadPrefs() async {

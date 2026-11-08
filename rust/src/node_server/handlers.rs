@@ -657,8 +657,12 @@ pub async fn dispatch_action(
                     .map_err(|e| format!("Base64 解码失败: {}", e))?;
 
             let temp_path = write_temp_image(&bytes, ext)?;
-            novel_api::update_novel_cover(novel_id, temp_path)
-                .map_err(|e| format!("更新小说封面失败: {}", e))?;
+            let copy_path = temp_path.clone();
+            let result = novel_api::update_novel_cover(novel_id, temp_path)
+                .map_err(|e| format!("更新小说封面失败: {}", e));
+            // 临时文件用完即删：不清理会随每次封面上传无限堆积在系统临时目录
+            let _ = fs::remove_file(&copy_path);
+            result?;
             Ok(json!({"ok": true}))
         }
 
@@ -1642,9 +1646,29 @@ pub fn extract_image_ext(path: &str) -> &'static str {
 
 /// 写入临时图片文件
 fn write_temp_image(bytes: &[u8], ext: &str) -> Result<String, String> {
+    // 扩展名白名单：ext 来自请求参数，直接拼进文件名可被塞进路径片段
+    let safe_ext = match ext.trim().trim_start_matches('.').to_lowercase().as_str() {
+        "jpg" | "jpeg" => "jpg",
+        "png" => "png",
+        "webp" => "webp",
+        "gif" => "gif",
+        "bmp" => "bmp",
+        _ => "png",
+    };
     let temp_dir = std::env::temp_dir().join("slime_node_cover");
     fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
-    let file_path = temp_dir.join(format!("cover.{}", ext));
+    // 文件名必须唯一：固定 cover.ext 会让并发封面上传互相覆盖，
+    // 结果是小说 A 配上小说 B 的封面
+    let unique = format!(
+        "cover_{}_{}.{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0),
+        safe_ext
+    );
+    let file_path = temp_dir.join(unique);
     fs::write(&file_path, bytes).map_err(|e| format!("写入临时文件失败: {}", e))?;
     Ok(file_path.to_string_lossy().to_string())
 }

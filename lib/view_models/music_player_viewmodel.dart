@@ -11,7 +11,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/components/window/collapsible_sidebar.dart';
-import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
@@ -22,8 +21,6 @@ import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
-
-part 'music_player_vm_remote.dart';
 
 /// 播放模式
 enum PlayerPlayMode {
@@ -37,64 +34,8 @@ enum PlayerPlayMode {
   const PlayerPlayMode(this.label, this.icon);
 }
 
-/// ASMR 树节点（目录或音轨）
-class _AsmrTreeNode {
-  final String type;
-  final String title;
-  final String? downloadUrl;
-  final String? streamUrl;
-  final int? sizeBytes;
-  final double? durationSec;
-  final bool selected;
-  final List<_AsmrTreeNode>? children;
-
-  const _AsmrTreeNode({
-    required this.type,
-    required this.title,
-    this.downloadUrl,
-    this.streamUrl,
-    this.sizeBytes,
-    this.durationSec,
-    required this.selected,
-    this.children,
-  });
-
-  /// 是否为音轨文件
-  bool get isAudio => type == 'audio';
-
-  /// 音轨播放地址（优先流地址，其次下载地址）
-  String? get url => streamUrl ?? downloadUrl;
-
-  /// 音轨时长（毫秒）
-  int? get durationMs => durationSec != null ? (durationSec! * 1000).round() : null;
-}
-
-/// ASMR 作品信息（标题 + 封面 + 完整树结构）
-class _AsmrWorkInfo {
-  final String title;
-  final String? coverUrl;
-  final List<_AsmrTreeNode> tree;
-
-  const _AsmrWorkInfo({required this.title, this.coverUrl, required this.tree});
-
-  /// 展开树中所有音轨
-  List<_AsmrTreeNode> get tracks {
-    final result = <_AsmrTreeNode>[];
-    void walk(List<_AsmrTreeNode> nodes) {
-      for (final n in nodes) {
-        if (n.isAudio && n.url != null) result.add(n);
-        if (n.children != null) walk(n.children!);
-      }
-    }
-
-    walk(tree);
-    return result;
-  }
-}
-
 /// 音乐播放器 ViewModel
 class MusicPlayerViewModel extends BaseViewModel {
-  final NodeSettingsService _nodeService = getIt<NodeSettingsService>();
   final Loggers _logger = Loggers(name: '播放器');
 
   // ── 播放列表 ─────────────────────────────────────────────────────────────
@@ -209,9 +150,6 @@ class MusicPlayerViewModel extends BaseViewModel {
   // ── 搜索 ─────────────────────────────────────────────────────────────────
   final searchQuery = ''.obs;
 
-  /// 是否正在从远程节点加载
-  final isRemoteLoading = false.obs;
-
   /// 是否正在导入音乐
   final isImporting = false.obs;
 
@@ -220,6 +158,10 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   /// 导入总进度（0.0~1.0），下载本地文件时实时更新；-1 表示不确定进度
   final importingProgress = (-1.0).obs;
+
+  /// 导入任务代际号：每次发起导入自增，后台封面/延迟清理任务只允许
+  /// 清理自己那一代的状态，避免旧任务的 finally 抹掉新导入的进度条
+  int _importGeneration = 0;
 
   // ── 沉浸式播放 ───────────────────────────────────────────────────────────
   /// 是否进入沉浸式播放全屏
@@ -345,7 +287,12 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   /// 保存当前播放进度到 SharedPreferences
   void _savePlaybackPosition() {
-    if (currentIndex.value < 0 || currentItems.isEmpty) return;
+    // 越界守卫：切列表/删歌后 currentIndex 可能超出新列表范围，
+    // 定时器每 5 秒触发一次，不查上界会周期性抛 RangeError
+    if (currentIndex.value < 0 ||
+        currentIndex.value >= currentItems.length) {
+      return;
+    }
     final item = currentItems[currentIndex.value];
     final positionMs = currentPositionMs.value;
     final durationMs = this.durationMs.value;
@@ -568,7 +515,20 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   Future<void> _loadPlaylistItems(String playlistId) async {
     try {
-      currentItems.value = music_api.getPlaylistItems(playlistId: playlistId);
+      // 记住正在播的曲目 id，换新列表后按 id 重新定位索引：
+      // 直接沿用旧 index 会越界（短列表）或指向错曲
+      final String? playingId =
+          (currentIndex.value >= 0 && currentIndex.value < currentItems.length)
+              ? currentItems[currentIndex.value].id
+              : null;
+      final items = music_api.getPlaylistItems(playlistId: playlistId);
+      currentItems.value = items;
+      if (playingId != null) {
+        final newIndex = items.indexWhere((i) => i.id == playingId);
+        currentIndex.value = newIndex; // 不在新列表则 -1（无选中）
+      } else {
+        currentIndex.value = -1;
+      }
       // 后台修复缺失的元数据（时长等）
       _repairMetadataInBackground(playlistId);
     } catch (e) {
@@ -586,7 +546,10 @@ class MusicPlayerViewModel extends BaseViewModel {
         final count = await music_api.repairMissingMetadata(playlistId: playlistId);
         if (count > BigInt.zero) {
           _logger.info('[播放器] 修复了 ${count.toInt()} 条元数据');
-          currentItems.value = music_api.getPlaylistItems(playlistId: playlistId);
+          // 修复期间用户可能已切到别的列表，写回前校验，避免旧列表覆盖新列表
+          if (currentPlaylistId.value == playlistId) {
+            currentItems.value = music_api.getPlaylistItems(playlistId: playlistId);
+          }
         }
       } catch (e) {
         _logger.info('[播放器] 修复元数据失败: $e');
@@ -639,6 +602,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   Future<void> importMusicFolder(String folderPath) async {
     final pid = currentPlaylistId.value;
     if (pid == null) return;
+    final gen = ++_importGeneration;
     isImporting.value = true;
     importingStatus.value = '正在扫描音乐文件...';
     try {
@@ -648,16 +612,17 @@ class MusicPlayerViewModel extends BaseViewModel {
       await _loadPlaylists();
       importingStatus.value = '正在提取封面...';
       // 后台提取封面
-      _extractCoversInBackground(pid);
+      _extractCoversInBackground(pid, gen);
       // 后台预计算波形
       _precomputeWaveformsInBackground(pid);
     } catch (e) {
       _logger.info('[播放器] 导入音乐文件夹失败: $e');
       importingStatus.value = '导入失败: $e';
     } finally {
-      // 封面提取是后台的，不阻塞 finally
+      // 封面提取是后台的，不阻塞 finally；只清理自己这一代的导入状态
       Future.delayed(AppMotion.dwell, () {
-        if (importingStatus.value.contains('提取封面')) {
+        if (gen == _importGeneration &&
+            importingStatus.value.contains('提取封面')) {
           isImporting.value = false;
           importingStatus.value = '';
         }
@@ -668,39 +633,49 @@ class MusicPlayerViewModel extends BaseViewModel {
   Future<void> importMusicPaths(List<String> paths) async {
     final pid = currentPlaylistId.value;
     if (pid == null) return;
+    final gen = ++_importGeneration;
     isImporting.value = true;
     importingStatus.value = '正在导入音乐...';
     try {
       await music_api.importMusicPaths(playlistId: pid, paths: paths);
       await _loadPlaylistItems(pid);
       await _loadPlaylists();
-      _extractCoversInBackground(pid);
+      _extractCoversInBackground(pid, gen);
       _precomputeWaveformsInBackground(pid);
     } catch (e) {
       _logger.info('[播放器] 导入音乐失败: $e');
       importingStatus.value = '导入失败: $e';
     } finally {
       Future.delayed(AppMotion.dwell, () {
-        isImporting.value = false;
-        importingStatus.value = '';
+        if (gen == _importGeneration) {
+          isImporting.value = false;
+          importingStatus.value = '';
+        }
       });
     }
   }
 
-  /// 后台提取封面
-  void _extractCoversInBackground(String playlistId) {
+  /// 后台提取封面（[gen] 为发起时的导入代际号，防止旧任务清理新任务状态）
+  void _extractCoversInBackground(String playlistId, int gen) {
     Future(() async {
       try {
         final count = await music_api.batchExtractCovers(playlistId: playlistId);
         if (count > BigInt.zero) {
-          importingStatus.value = '已提取 ${count.toInt()} 个封面';
-          await _loadPlaylistItems(playlistId);
+          if (gen == _importGeneration) {
+            importingStatus.value = '已提取 ${count.toInt()} 个封面';
+          }
+          // 只在用户仍停留在该列表时刷新，避免旧列表数据覆盖新列表
+          if (currentPlaylistId.value == playlistId) {
+            await _loadPlaylistItems(playlistId);
+          }
         }
       } catch (e) {
         _logger.info('[播放器] 后台提取封面失败: $e');
       } finally {
-        isImporting.value = false;
-        importingStatus.value = '';
+        if (gen == _importGeneration) {
+          isImporting.value = false;
+          importingStatus.value = '';
+        }
       }
     });
   }
@@ -796,7 +771,8 @@ class MusicPlayerViewModel extends BaseViewModel {
           final newFolder = music_api.createFolder(name: dirName, parentId: currentFolderId.value);
           final pl = music_api.createPlaylistInFolder(name: dirName, folderId: newFolder.id);
           await music_api.importMusicFolder(playlistId: pl.id, folderPath: folder);
-          _extractCoversInBackground(pl.id);
+          // 拖拽自动建列表的导入不占用前台导入状态条，代际号取当前值即可
+          _extractCoversInBackground(pl.id, _importGeneration);
           _precomputeWaveformsInBackground(pl.id);
         }
       } catch (e) {
@@ -1199,7 +1175,15 @@ class MusicPlayerViewModel extends BaseViewModel {
           response.statusCode != HttpStatus.partialContent) {
         throw Exception('HTTP ${response.statusCode}');
       }
-      final raf = file.openWrite(mode: FileMode.writeOnlyAppend);
+      // 发过 Range 但服务器回 200：说明它不支持断点续传、返回的是完整文件，
+      // 此时必须截断重写；继续 append 会得到「半截+完整」的损坏文件，
+      // 且长度超过 expectedSize 反而通过完整性校验、永久跳过重下。
+      final isResume =
+          exist > 0 && response.statusCode == HttpStatus.partialContent;
+      if (!isResume) exist = 0;
+      final raf = file.openWrite(
+        mode: isResume ? FileMode.writeOnlyAppend : FileMode.write,
+      );
       var received = exist;
       await for (final chunk in response) {
         raf.add(chunk);
@@ -1258,8 +1242,24 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   Future<void> deleteMusicItem(String itemId) async {
     try {
+      // 记录正在播的曲目 id，删除后按 id 重新定位索引：
+      // 删除当前曲之前的条目会使 index 错位（显示/持久化错曲），
+      // 删除最后一首会使 index 越界（5 秒定时器 RangeError）
+      final String? playingId =
+          (currentIndex.value >= 0 && currentIndex.value < currentItems.length)
+              ? currentItems[currentIndex.value].id
+              : null;
       music_api.deleteMusicItem(itemId: itemId);
       currentItems.removeWhere((i) => i.id == itemId);
+      if (playingId != null) {
+        currentIndex.value = currentItems.indexWhere((i) => i.id == playingId);
+      }
+      if (itemId == playingId) {
+        // 删的就是正在播的：停止播放并清理当前曲信息
+        await _player.pause();
+        isPlaying.value = false;
+        currentIndex.value = -1;
+      }
     } catch (e) {
       _logger.info('[播放器] 删除音乐失败: $e');
     }
@@ -1557,20 +1557,28 @@ class MusicPlayerViewModel extends BaseViewModel {
     _loadWaveform(item.filePath);
   }
 
+  /// 波形加载代际号：快速切歌时多个 extractWaveform 并发，
+  /// 旧曲目的 Future 后完成会覆盖新曲波形，用代际号丢弃过期结果
+  int _waveformGeneration = 0;
+
   /// 加载波形数据
   void _loadWaveform(String audioFilePath) {
+    final gen = ++_waveformGeneration;
     currentWaveform.clear();
     if (!showWaveformMode.value) return;
     isWaveformLoading.value = true;
     Future(() async {
       try {
         final data = await music_api.extractWaveform(audioFilePath: audioFilePath, samples: 1000);
+        if (gen != _waveformGeneration) return; // 已切歌，丢弃过期波形
         currentWaveform.value = data.toList();
         _logger.info('[播放器] 加载波形: ${data.length} 个采样点');
       } catch (e) {
         _logger.info('[播放器] 加载波形失败: $e');
       } finally {
-        isWaveformLoading.value = false;
+        if (gen == _waveformGeneration) {
+          isWaveformLoading.value = false;
+        }
       }
     });
   }
@@ -1628,7 +1636,12 @@ class MusicPlayerViewModel extends BaseViewModel {
     }
 
     isTranslatingLyrics.value = true;
-    translatedLyrics.value = List.filled(currentLyrics.length, null);
+    // 记住发起翻译时的歌词列表引用：translateBatch 可达分钟级，
+    // 期间切歌会由 _loadLyrics 清空/替换 translatedLyrics，
+    // 返回后必须校验列表未变，否则越界或把旧译文安到新曲头上
+    final sourceLyrics = currentLyrics;
+    final targetList = List<String?>.filled(sourceLyrics.length, null);
+    translatedLyrics.value = targetList;
 
     try {
       final ollamaService = getIt.get<OllamaService>();
@@ -1652,7 +1665,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       final languagePair = TranslationLanguagePair(from: '日文', to: '中文', displayName: '日文 → 中文');
 
       // 批量翻译歌词标题
-      final titles = currentLyrics.map((t) => t.title).toList();
+      final titles = sourceLyrics.map((t) => t.title).toList();
       final translated = await ollamaService.translateBatch(
         model: model,
         paragraphs: titles,
@@ -1662,9 +1675,15 @@ class MusicPlayerViewModel extends BaseViewModel {
         },
       );
 
-      // 更新翻译结果
-      for (int i = 0; i < translated.length && i < currentLyrics.length; i++) {
-        translatedLyrics[i] = translated[i];
+      // await 期间切歌则歌词列表已被替换，丢弃本次翻译结果
+      if (!identical(currentLyrics, sourceLyrics) ||
+          !identical(translatedLyrics, targetList)) {
+        _logger.info('[播放器] 翻译期间已切歌，丢弃过期译文');
+        return;
+      }
+      // 更新翻译结果（写入发起时捕获的列表，长度天然对齐）
+      for (int i = 0; i < translated.length && i < targetList.length; i++) {
+        targetList[i] = translated[i];
       }
       translatedLyrics.refresh();
       _logger.info('[播放器] 歌词翻译完成');

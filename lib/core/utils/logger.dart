@@ -17,7 +17,18 @@ String deviceCode = '';
 
 class Loggers {
   static final List<String> _logs = [];
+  /// 内存日志环形上限：桌面端常驻数天 + 流式日志会无限累积（纯内存泄漏）。
+  /// 文件日志已由 Rust slime_logger 按天滚动，这份副本只用于界面查看。
+  static const int _maxLogEntries = 5000;
   static List<String> get allLogs => List.unmodifiable(_logs);
+
+  /// 追加一条内存日志，超出上限时丢弃最旧的（避免无限增长）
+  static void _appendLog(String entry) {
+    _logs.add(entry);
+    if (_logs.length > _maxLogEntries) {
+      _logs.removeRange(0, _logs.length - _maxLogEntries);
+    }
+  }
   static String? _deviceId;
   static final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
   static String? get _lokiUrl => dotenv.env['LOKI_URL'];
@@ -178,7 +189,7 @@ class Loggers {
     // 先记录基础日志，避免在设备ID未初始化时出错
     final basicLogEntry = "$timeStr [$name] $message";
     debugPrint(basicLogEntry);
-    _logs.add(basicLogEntry);
+    _appendLog(basicLogEntry);
 
     // 异步处理上报逻辑（不阻塞日志记录）
     if (reportToLoki) {
@@ -269,7 +280,7 @@ class Loggers {
     // 先记录基础错误日志
     final basicLogEntry = "[$name] $timeStr $fullMessage";
     debugPrint(basicLogEntry);
-    _logs.add(basicLogEntry);
+    _appendLog(basicLogEntry);
 
     // 异步处理上报逻辑
     if (reportToLoki) {

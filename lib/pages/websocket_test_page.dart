@@ -59,6 +59,8 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
   }
 
   void _addLog(String message) {
+    // 接收循环 await 返回时页面可能已销毁，先复查 mounted 防止 setState-after-dispose
+    if (!mounted) return;
     setState(() {
       _logs.insert(0, '[${DateTime.now().toString().substring(11, 19)}] $message');
     });
@@ -186,21 +188,27 @@ class _WebSocketTestPageState extends State<WebSocketTestPage> {
               final jsonStr = data.substring('CLIENTS_LIST:'.length).trim();
               if (jsonStr.isEmpty) {
                 _addLog('[客户端列表为空]');
-                return;
-              }
-              try {
-                final List<dynamic> jsonList = json.decode(jsonStr);
-                final clients = jsonList
-                    .map((item) => ClientInfo.fromJson(item as Map<String, dynamic>))
-                    .toList();
                 if (mounted) {
                   setState(() {
-                    _clients = clients;
+                    _clients = [];
                   });
-                  _addLog('[客户端列表更新] ${clients.length} 个客户端');
                 }
-              } catch (e) {
-                _addLog('[解析客户端列表失败] $e');
+                // 注意不能 return：否则跳过下方重调度，监听循环永久停摆
+              } else {
+                try {
+                  final List<dynamic> jsonList = json.decode(jsonStr);
+                  final clients = jsonList
+                      .map((item) => ClientInfo.fromJson(item as Map<String, dynamic>))
+                      .toList();
+                  if (mounted) {
+                    setState(() {
+                      _clients = clients;
+                    });
+                    _addLog('[客户端列表更新] ${clients.length} 个客户端');
+                  }
+                } catch (e) {
+                  _addLog('[解析客户端列表失败] $e');
+                }
               }
             }
           }

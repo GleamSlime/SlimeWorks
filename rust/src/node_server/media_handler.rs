@@ -339,7 +339,10 @@ fn serve_range_request(
     use std::io::{Read, Seek, SeekFrom};
 
     // 解析 Range: bytes=start-end
-    if let Some((start, capped_end)) = resolve_range(range, total_length, is_av_content_type(content_type))
+    // 切片上限对所有类型生效（不只音视频）：vec![0u8; range_length] 是按请求
+    // 长度直接分配的，非 AV 不限长会让一个 Range 请求把 10GB 文件整块拉进内存。
+    // 客户端收到短于请求的 206 后按 Content-Range 继续拉下一段即可。
+    if let Some((start, capped_end)) = resolve_range(range, total_length, true)
     {
         let range_length = (capped_end - start + 1) as usize;
 
@@ -383,11 +386,6 @@ fn serve_range_request(
     } else {
         Ok(error_plain(StatusCode::BAD_REQUEST, "invalid range header"))
     }
-}
-
-/// 判断 Content-Type 是否为视频/音频（需要切片限制）
-fn is_av_content_type(ct: &str) -> bool {
-    ct.starts_with("video/") || ct.starts_with("audio/")
 }
 
 /// 创建纯文本错误响应
@@ -588,20 +586,29 @@ pub fn serve_media_file_with_range(
     // 对视频/音频限制单次最大传输量，防止将整个大文件载入内存
     let is_av = is_video_file(file_path) || is_audio_file(file_path);
     let (start, capped_end) = match range {
-        Some(range_str) => resolve_range(range_str, total_length, is_av)
+        // 切片上限对所有类型生效：buffer 按请求长度直接分配，
+        // 非 AV 不限长时一个 Range 请求即可让节点按 10GB 级分配内存（远程 OOM）。
+        Some(range_str) => resolve_range(range_str, total_length, true)
             .ok_or_else(|| "invalid range header".to_string())?,
         // 无 Range 时的分档：
         // - 音视频：主动只回首个切片，促使播放器改用 Range 请求，避免整片进内存；
         // - 其它文件（字幕、文档、小图）：**整份给完**。历史上这里不分档，
         //   一律截到 2 MB，结果超过 2 MB 的非音视频文件被静默截断——
         //   客户端拿到的是一份残缺文件却仍然 206，属于静默数据损坏。
+        //   但整读必须先卡 MAX_DIRECT_READ_BYTES（与 hyper 分支同阈值），
+        //   超限回 413 让客户端改用 Range 分片拉取，而不是按文件全长分配。
         None if is_av => clamp_range(
             0,
             (VIDEO_CHUNK_SIZE - 1).min(total_length.saturating_sub(1)),
             total_length,
             false,
         ),
-        None => (0, total_length.saturating_sub(1)),
+        None => {
+            if total_length > MAX_DIRECT_READ_BYTES {
+                return Err(payload_too_large_message(total_length));
+            }
+            (0, total_length.saturating_sub(1))
+        }
     };
     let range_length = (capped_end - start + 1) as usize;
 
@@ -859,6 +866,38 @@ mod tests {
 
         // 非法 Range 头：明确报错而不是静默回全文件
         assert!(serve_media_file_with_range(path, Some("garbage")).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// 非音视频大文件：无 Range 时必须回 413（payload too large）而不是按文件全长
+    /// 一次性分配内存；带 Range 时也要按切片上限截断，否则一个请求就能把节点打爆。
+    #[test]
+    fn non_av_large_file_is_capped_not_read_whole() {
+        let dir = test_dir("cap");
+        let iso = dir.join("big.iso");
+        // 稀疏文件：只改长度，不真写 60 MiB
+        let f = fs::File::create(&iso).unwrap();
+        f.set_len(MAX_DIRECT_READ_BYTES + 1).unwrap();
+        drop(f);
+        let path = iso.to_str().unwrap();
+
+        let err = serve_media_file_with_range(path, None).expect_err("超限必须拒绝整读");
+        assert!(is_payload_too_large_error(&err), "got: {err}");
+
+        // 带 Range：返回的是被切片上限截断的一小段，而不是整文件
+        let (status, headers, body) =
+            serve_media_file_with_range(path, Some("bytes=0-")).unwrap();
+        assert_eq!(status, "206 Partial Content");
+        assert_eq!(body.len() as u64, VIDEO_CHUNK_SIZE);
+        let content_range = headers
+            .iter()
+            .find(|(n, _)| n == "Content-Range")
+            .map(|(_, v)| v.clone())
+            .unwrap();
+        assert!(
+            content_range.ends_with(&format!("/{}", MAX_DIRECT_READ_BYTES + 1)),
+            "got: {content_range}"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -81,6 +81,12 @@ fn extract_7z(archive_path: &str, output_dir: &str, password: Option<&str>) -> R
     Ok(())
 }
 
+/// 解压后累计写出体积上限。
+///
+/// 上传与解压两处都只看压缩体大小（8 GiB），而 zip bomb 一笔 1 MB 的包能解出 TB 级：
+/// 没有这个上限，一个压缩包就能写满节点磁盘。
+const MAX_EXTRACTED_BYTES: u64 = 64 * 1024 * 1024 * 1024; // 64 GiB
+
 fn extract_zip(archive_path: &str, output_dir: &str, _password: Option<&str>) -> Result<()> {
     let output = Path::new(output_dir);
     fs::create_dir_all(output)?;
@@ -90,6 +96,7 @@ fn extract_zip(archive_path: &str, output_dir: &str, _password: Option<&str>) ->
     let mut archive = zip::ZipArchive::new(BufReader::new(file))
         .with_context(|| format!("无法读取 zip 文件: {}", archive_path))?;
 
+    let mut written_total: u64 = 0;
     for i in 0..archive.len() {
         if is_cancelled() {
             anyhow::bail!("用户取消");
@@ -110,8 +117,60 @@ fn extract_zip(archive_path: &str, output_dir: &str, _password: Option<&str>) ->
             }
             let mut outfile = File::create(&outpath)
                 .with_context(|| format!("无法创建文件: {}", outpath.display()))?;
-            std::io::copy(&mut entry, &mut outfile)?;
+            // 防 zip bomb：累计写出量超限立即中止（已解出的部分由调用方清理）
+            copy_with_limit(&mut entry, &mut outfile, &mut written_total)?;
         }
+    }
+    Ok(())
+}
+
+
+/// 边读边写并累计体积，超过 [MAX_EXTRACTED_BYTES] 立即中止。
+/// 单文件解压（gz/bz2/xz）与 zip 条目共用这一个卡口。
+fn copy_with_limit<R: std::io::Read, W: std::io::Write>(
+    reader: &mut R,
+    writer: &mut W,
+    total: &mut u64,
+) -> Result<u64> {
+    use std::io::{Read, Write};
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut copied = 0u64;
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        writer.write_all(&buf[..n])?;
+        copied += n as u64;
+        *total = total.saturating_add(n as u64);
+        if *total > MAX_EXTRACTED_BYTES {
+            anyhow::bail!(
+                "解压后体积超过上限 {} GiB，疑似压缩炸弹，已中止",
+                MAX_EXTRACTED_BYTES / 1024 / 1024 / 1024
+            );
+        }
+    }
+    Ok(copied)
+}
+
+/// tar 系列统一走这里：`Archive::unpack` 无法卡体积，
+/// 改为逐条目读取并累计写出量，超限中止（软链/设备文件照常由 unpack_in 处理）。
+fn unpack_tar_limited<R: std::io::Read>(archive: &mut tar::Archive<R>, output: &Path) -> Result<()> {
+    let mut total: u64 = 0;
+    for entry in archive.entries()? {
+        if is_cancelled() {
+            anyhow::bail!("用户取消");
+        }
+        let mut entry = entry?;
+        // header 声明的大小即可判定炸弹：真实写出量不会超过它
+        total = total.saturating_add(entry.size());
+        if total > MAX_EXTRACTED_BYTES {
+            anyhow::bail!(
+                "解压后体积超过上限 {} GiB，疑似压缩炸弹，已中止",
+                MAX_EXTRACTED_BYTES / 1024 / 1024 / 1024
+            );
+        }
+        entry.unpack_in(output)?;
     }
     Ok(())
 }
@@ -123,8 +182,7 @@ fn extract_tar(archive_path: &str, output_dir: &str) -> Result<()> {
     let file =
         File::open(archive_path).with_context(|| format!("无法打开 tar 文件: {}", archive_path))?;
     let mut archive = tar::Archive::new(file);
-    archive
-        .unpack(output)
+    unpack_tar_limited(&mut archive, output)
         .with_context(|| format!("tar 解压失败: {}", archive_path))?;
     Ok(())
 }
@@ -137,8 +195,7 @@ fn extract_tar_gz(archive_path: &str, output_dir: &str) -> Result<()> {
         .with_context(|| format!("无法打开 tar.gz 文件: {}", archive_path))?;
     let gz = flate2::read::GzDecoder::new(file);
     let mut archive = tar::Archive::new(gz);
-    archive
-        .unpack(output)
+    unpack_tar_limited(&mut archive, output)
         .with_context(|| format!("tar.gz 解压失败: {}", archive_path))?;
     Ok(())
 }
@@ -151,8 +208,7 @@ fn extract_tar_bz2(archive_path: &str, output_dir: &str) -> Result<()> {
         .with_context(|| format!("无法打开 tar.bz2 文件: {}", archive_path))?;
     let bz2 = bzip2::read::BzDecoder::new(file);
     let mut archive = tar::Archive::new(bz2);
-    archive
-        .unpack(output)
+    unpack_tar_limited(&mut archive, output)
         .with_context(|| format!("tar.bz2 解压失败: {}", archive_path))?;
     Ok(())
 }
@@ -165,8 +221,7 @@ fn extract_tar_xz(archive_path: &str, output_dir: &str) -> Result<()> {
         .with_context(|| format!("无法打开 tar.xz 文件: {}", archive_path))?;
     let xz = liblzma::read::XzDecoder::new(file);
     let mut archive = tar::Archive::new(xz);
-    archive
-        .unpack(output)
+    unpack_tar_limited(&mut archive, output)
         .with_context(|| format!("tar.xz 解压失败: {}", archive_path))?;
     Ok(())
 }
@@ -188,7 +243,8 @@ fn extract_gz(archive_path: &str, output_dir: &str) -> Result<()> {
     let outpath = output.join(&stem);
     let mut outfile =
         File::create(&outpath).with_context(|| format!("无法创建文件: {}", outpath.display()))?;
-    std::io::copy(&mut gz, &mut outfile)?;
+    let mut total = 0u64;
+    copy_with_limit(&mut gz, &mut outfile, &mut total)?;
     Ok(())
 }
 
@@ -209,7 +265,8 @@ fn extract_bz2(archive_path: &str, output_dir: &str) -> Result<()> {
     let outpath = output.join(&stem);
     let mut outfile =
         File::create(&outpath).with_context(|| format!("无法创建文件: {}", outpath.display()))?;
-    std::io::copy(&mut bz2, &mut outfile)?;
+    let mut total = 0u64;
+    copy_with_limit(&mut bz2, &mut outfile, &mut total)?;
     Ok(())
 }
 
@@ -230,7 +287,8 @@ fn extract_xz(archive_path: &str, output_dir: &str) -> Result<()> {
     let outpath = output.join(&stem);
     let mut outfile =
         File::create(&outpath).with_context(|| format!("无法创建文件: {}", outpath.display()))?;
-    std::io::copy(&mut xz, &mut outfile)?;
+    let mut total = 0u64;
+    copy_with_limit(&mut xz, &mut outfile, &mut total)?;
     Ok(())
 }
 
@@ -254,14 +312,34 @@ fn scan_archives_recursive(
     extensions: &[&str],
     results: &mut Vec<ArchiveInfo>,
 ) -> Result<()> {
-    if !current.exists() {
+    scan_archives_inner(base, current, extensions, results, 0)
+}
+
+/// 与 zip_tree 同口径的防御：限深 + 跳过软链。
+/// path.is_dir() 会跟随软链，用户目录里一个指向祖先的软链就会无限递归栈溢出。
+fn scan_archives_inner(
+    base: &Path,
+    current: &Path,
+    extensions: &[&str],
+    results: &mut Vec<ArchiveInfo>,
+    depth: usize,
+) -> Result<()> {
+    const MAX_DEPTH: usize = 32;
+    if depth >= MAX_DEPTH || !current.exists() {
         return Ok(());
     }
     for entry in std::fs::read_dir(current)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_dir() {
-            scan_archives_recursive(base, &path, extensions, results)?;
+        // file_type() 不跟随软链；拿不到类型的条目（并发删除/权限变化）直接跳过
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
+            scan_archives_inner(base, &path, extensions, results, depth + 1)?;
             continue;
         }
         let file_name = path
@@ -279,10 +357,12 @@ fn scan_archives_recursive(
             }
         });
         if is_archive {
-            let metadata = std::fs::metadata(&path).unwrap_or_else(|_| {
-                std::fs::symlink_metadata(&path)
-                    .unwrap_or_else(|_| panic!("无法获取文件元数据: {}", path.display()))
-            });
+            // 扫描期间文件被并发删除/权限变化时跳过该条目，不能 panic 炸掉整个扫描
+            let Ok(metadata) = std::fs::metadata(&path)
+                .or_else(|_| std::fs::symlink_metadata(&path))
+            else {
+                continue;
+            };
             results.push(ArchiveInfo {
                 path: path.to_string_lossy().to_string(),
                 file_name,
@@ -610,7 +690,8 @@ fn zip_tree<'a, W: std::io::Write + std::io::Seek>(
             continue;
         }
         let item_prefix = format!("{prefix}/{name}");
-        if path.is_dir() {
+        // 用 file_type 判定（不跟随软链）；上面已排除软链，这里语义等价但更明确
+        if entry.file_type()?.is_dir() {
             writer.add_directory(&item_prefix, options)?;
             sub_dirs.push((path, item_prefix));
         } else if let Ok(mut content) = fs::File::open(&path) {
@@ -631,20 +712,30 @@ pub fn get_dir_size(path: &str) -> Result<u64> {
         return Ok(0);
     }
     let mut total: u64 = 0;
-    fn walk(dir: &Path, total: &mut u64) -> Result<()> {
+    // 与 zip_tree/扫描同口径：限深 + 跳软链，防目录环栈溢出
+    fn walk(dir: &Path, total: &mut u64, depth: usize) -> Result<()> {
+        const MAX_DEPTH: usize = 32;
+        if depth >= MAX_DEPTH {
+            return Ok(());
+        }
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if file_type.is_symlink() {
+                continue;
+            }
             let path = entry.path();
-            if path.is_dir() {
-                walk(&path, total)?;
-            } else {
-                let meta = entry.metadata()?;
+            if file_type.is_dir() {
+                walk(&path, total, depth + 1)?;
+            } else if let Ok(meta) = entry.metadata() {
                 *total += meta.len();
             }
         }
         Ok(())
     }
-    walk(p, &mut total)?;
+    walk(p, &mut total, 0)?;
     Ok(total)
 }
 
@@ -1007,6 +1098,42 @@ mod scan_size_tests {
         touch(&base.join("sub/deep/z.dat"), b"0123456789"); // 10 字节
 
         assert_eq!(get_dir_size(base.to_str().unwrap()).unwrap(), 22);
+    }
+
+    /// 软链目录环：scan_archives / get_dir_size 曾用 path.is_dir() 无限递归 → 栈溢出。
+    /// 这里造一个指回父目录的软链，两个函数都必须正常返回且不重复计入。
+    #[cfg(unix)]
+    #[test]
+    fn recursive_scans_skip_symlink_loops() {
+        let base = tmp_base("sw_symlink_loop");
+        touch(&base.join("sub/a.zip"), b"zipdata");
+        // sub/loop -> base：跟随软链就是无限环
+        std::os::unix::fs::symlink(&base, base.join("sub/loop")).unwrap();
+
+        let found = scan_archives(base.to_str().unwrap()).unwrap();
+        assert_eq!(found.len(), 1, "软链环不得让扫描重复计数: {found:?}");
+        // get_dir_size 同样只算真实文件
+        assert_eq!(get_dir_size(base.to_str().unwrap()).unwrap(), 7);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// copy_with_limit 的累计上限：超过 MAX_EXTRACTED_BYTES 必须报错而不是把磁盘写满。
+    /// 用已过阈值的计数器模拟「前面已经写了很多」，验证这一笔就被拦下。
+    #[test]
+    fn copy_with_limit_stops_on_zip_bomb() {
+        let mut src: &[u8] = b"0123456789";
+        let mut out: Vec<u8> = Vec::new();
+        // 计数已经贴着上限：任何一笔写入都应立刻中止
+        let mut total = MAX_EXTRACTED_BYTES;
+        let err = copy_with_limit(&mut src, &mut out, &mut total).unwrap_err();
+        assert!(err.to_string().contains("压缩炸弹"), "err={err}");
+        // 未超限时正常写完并累计
+        let mut src2: &[u8] = b"0123456789";
+        let mut out2: Vec<u8> = Vec::new();
+        let mut total2 = 0u64;
+        copy_with_limit(&mut src2, &mut out2, &mut total2).unwrap();
+        assert_eq!(out2.len(), 10);
+        assert_eq!(total2, 10);
     }
 
     #[test]

@@ -1699,9 +1699,21 @@ class NodeSettingsService extends GetxService {
     return url.endsWith('/node/call') ? url.substring(0, url.length - '/node/call'.length) : url;
   }
 
+  /// 把「应答成功的那一路地址」回写到节点配置。
+  ///
+  /// 只允许修正 **同一个 host** 上的端口/格式差异（例如用户只填了 `192.168.1.5`，
+  /// 实际节点在 `192.168.1.5:17888`）。候选地址里 LAN 优先，如果连 host 不同也回写，
+  /// 在家时 LAN 先应答就会把用户配置的外网地址永久覆盖成内网地址，
+  /// 之后出门两路都是内网地址、节点彻底失联，只能手工重填。
   Future<void> _persistResolvedNodeBaseUrl(NodeEndpoint node, String resolvedBaseUrl) async {
     final normalizedResolved = _normalizeBaseUrl(resolvedBaseUrl);
-    if (normalizedResolved.isEmpty || normalizedResolved == _normalizeBaseUrl(node.apiBaseUrl)) {
+    final normalizedConfigured = _normalizeBaseUrl(node.apiBaseUrl);
+    if (normalizedResolved.isEmpty ||
+        normalizedResolved == normalizedConfigured) {
+      return;
+    }
+    // host 不同一律不回写：这只说明「这一路当前可达」，不代表配置写错了
+    if (_hostOf(normalizedResolved) != _hostOf(normalizedConfigured)) {
       return;
     }
 
@@ -1715,6 +1727,9 @@ class NodeSettingsService extends GetxService {
     await _save();
     _logger.info('节点地址已自动修正: ${node.name} -> $normalizedResolved');
   }
+
+  /// 取 baseUrl 的 host（不含端口/scheme），解析失败返回空串。
+  String _hostOf(String baseUrl) => Uri.tryParse(baseUrl)?.host ?? '';
 
   Map<String, dynamic> _sanitizeJsonMap(Map<String, dynamic> source) {
     final output = <String, dynamic>{};

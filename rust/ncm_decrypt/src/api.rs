@@ -1,4 +1,5 @@
 use slime_logger::sw_error;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::decrypt;
@@ -6,6 +7,9 @@ use crate::types::*;
 
 static PROGRESS_STATE: OnceLock<Arc<Mutex<Option<NcmDecryptProgress>>>> = OnceLock::new();
 static RESULT_STATE: OnceLock<Arc<Mutex<Option<NcmDecryptResult>>>> = OnceLock::new();
+/// 取消标志：此前取消只是把进度状态改成 Cancelled，run_decrypt 里没有任何检查，
+/// 下一次进度回调立刻覆盖回 Decrypting，解密照常跑完（还会按配置删源文件）。
+static CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
 
 fn get_progress_state() -> &'static Arc<Mutex<Option<NcmDecryptProgress>>> {
     PROGRESS_STATE.get_or_init(|| Arc::new(Mutex::new(None)))
@@ -44,6 +48,8 @@ pub fn ncm_get_result_json() -> String {
 /// 启动解密任务（后台线程）
 pub fn ncm_decrypt_start(config_json: String) {
     let config_json_clone = config_json.clone();
+    // 新任务开始前清掉上一次的取消标志，否则一次取消会让后续任务立刻退出
+    CANCEL_FLAG.store(false, Ordering::SeqCst);
     std::thread::spawn(move || {
         ncm_decrypt_run(config_json_clone);
     });
@@ -51,6 +57,8 @@ pub fn ncm_decrypt_start(config_json: String) {
 
 /// 取消解密任务
 pub fn ncm_decrypt_cancel() {
+    // 置真正的取消标志：run_decrypt 每个文件前检查它，能在文件边界停下
+    CANCEL_FLAG.store(true, Ordering::SeqCst);
     let mut state = get_progress_state().lock().unwrap();
     if let Some(ref mut progress) = *state {
         progress.status = NcmDecryptStatus::Cancelled;
@@ -89,17 +97,26 @@ fn ncm_decrypt_run(config_json: String) {
 
     let progress_state = get_progress_state().clone();
 
-    let result = decrypt::run_decrypt(&config, &|p| {
-        *progress_state.lock().unwrap() = Some(p);
-    });
+    let result = decrypt::run_decrypt(
+        &config,
+        &|p| {
+            *progress_state.lock().unwrap() = Some(p);
+        },
+        &|| CANCEL_FLAG.load(Ordering::SeqCst),
+    );
 
+    // 取消标志优先：run_decrypt 因取消提前返回时，最终态必须是 Cancelled，
+    // 否则界面会显示「解密失败」并让人误以为解密出错
+    let cancelled = CANCEL_FLAG.load(Ordering::SeqCst);
     let final_progress = NcmDecryptProgress {
         total_files: result.total_files,
         current_file_index: result.total_files,
         current_file_name: String::new(),
-        total_progress: 100.0,
+        total_progress: if cancelled { 0.0 } else { 100.0 },
         elapsed_seconds: result.elapsed_seconds,
-        status: if result.success {
+        status: if cancelled {
+            NcmDecryptStatus::Cancelled
+        } else if result.success {
             NcmDecryptStatus::Completed
         } else {
             NcmDecryptStatus::Failed

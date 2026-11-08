@@ -428,6 +428,19 @@ class LanTransferService {
       return;
     }
 
+    // 启动是异步长操作（Rust init + 建目录 + 授权码 + 端口重试最长数秒）。
+    // 启动途中用户关开关时 _isRunning 还是 false，直接 return 会「静默丢弃停止」：
+    // 启动随后完成置 true 并开设备刷新定时器，用户以为已关、实际 mDNS/TCP 一直在跑。
+    // 因此先等启动收敛，再按结果决定是否需要真正停一次。
+    if (_pendingStart != null) {
+      _logger.info('LAN Transfer stop requested while starting, waiting for start to settle');
+      try {
+        await _pendingStart;
+      } catch (_) {
+        // 启动本身失败就没什么可停的
+      }
+    }
+
     if (!_isRunning) {
       return;
     }

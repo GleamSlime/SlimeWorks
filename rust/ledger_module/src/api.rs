@@ -371,6 +371,10 @@ fn check_with_limit(rule_id: i64, password: &str, limit: u64, history: bool) -> 
     let mut new_emails = 0i64;
     let mut new_tx = 0i64;
     let mut skipped = 0i64;
+    // 真正写库失败（非"已存在"去重跳过）的笔数。必须与 skipped 区分开：
+    // 混在一起会 finish_log(ok=true) 并推进 last_run_at，每日规则当天不再重试，
+    // 而 record_email 已记下 UID，下次收取直接跳过 → 账单永久丢失且日志看不出异常。
+    let mut write_failed = 0i64;
     // 命中规则却解析不了的封数：单独记，改版要有数可看
     let mut parse_failed = 0i64;
     let known = storage::known_email_uids(rule_id).unwrap_or_default();
@@ -449,7 +453,7 @@ fn check_with_limit(rule_id: i64, password: &str, limit: u64, history: bool) -> 
                 }
                 Err(e) => {
                     sw_warn!("[ledger] 流水写入失败: {}", e);
-                    skipped += 1;
+                    write_failed += 1;
                 }
             }
         }
@@ -493,21 +497,37 @@ fn check_with_limit(rule_id: i64, password: &str, limit: u64, history: bool) -> 
     } else {
         String::new()
     };
+    let failed_note = if write_failed > 0 {
+        format!("，{} 笔写库失败（下一轮会重试）", write_failed)
+    } else {
+        String::new()
+    };
     let detail = if history {
         // 扫描条数要写出来：「扫了 200 封一封没命中」和「只扫到 10 封」在日志里
         // 长得一样，用户就会以为回补没生效。
         format!(
-            "历史回补：扫描 {} 封，新增 {} 封账单 / {} 笔流水，跳过 {} 笔（{} 秒）{}",
-            scanned, new_emails, new_tx, skipped, elapsed, archive_note
+            "历史回补：扫描 {} 封，新增 {} 封账单 / {} 笔流水，跳过 {} 笔{}（{} 秒）{}",
+            scanned,
+            new_emails,
+            new_tx,
+            skipped,
+            failed_note,
+            elapsed,
+            archive_note
         )
     } else {
         format!(
-            "收取 {} 封新邮件，新增 {} 笔流水，跳过 {} 笔（{} 秒）{}",
-            new_emails, new_tx, skipped, elapsed, archive_note
+            "收取 {} 封新邮件，新增 {} 笔流水，跳过 {} 笔{}（{} 秒）{}",
+            new_emails, new_tx, skipped, failed_note, elapsed, archive_note
         )
     };
-    finish_log(log_id, true, new_emails, new_tx, skipped, &detail);
-    let _ = storage::touch_rule_run(rule_id, &detail);
+    // 有写库失败时不能报成功：每日模式下 finish_log(ok=false) + 不推进 last_run_at，
+    // 让下一轮自动收信重试，而不是把账单静默丢掉
+    let ok = write_failed == 0;
+    finish_log(log_id, ok, new_emails, new_tx, skipped, &detail);
+    if ok {
+        let _ = storage::touch_rule_run(rule_id, &detail);
+    }
     sw_info!("[ledger] 规则《{}》检查完成：{}", rule.name, detail);
     Ok(detail)
 }
@@ -832,6 +852,45 @@ mod tests {
 
         storage::close_db();
         assert!(archive_parse_failure(3, "8125", "未初始化", "<b/>").is_none(), "账本没开就别写盘");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 建库要能被并发首次调用安全执行：节点上多个 ledger_* 请求会同时到达，
+    /// 以前是 check-then-init，会撞 categories.name UNIQUE 并让 DB_CONN 被顶掉。
+    #[test]
+    fn init_db_is_safe_under_concurrent_first_calls() {
+        let dir = std::env::temp_dir().join(format!("sw_ledger_conc_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let db = dir.join("ledger.db");
+        let path = db.to_str().unwrap().to_string();
+
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let p = path.clone();
+                std::thread::spawn(move || storage::init_db(&p))
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap().expect("并发首次建库不得失败");
+        }
+
+        // 内置数据只应播种一份（INSERT OR IGNORE + 双检锁）
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        let cash: i64 = conn
+            .query_row("SELECT COUNT(*) FROM accounts WHERE name = '现金'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cash, 1, "默认账户只能有一份");
+        let dup_categories: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM (SELECT name FROM categories GROUP BY name HAVING COUNT(*) > 1)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(dup_categories, 0, "内置类别不得重复播种");
+        drop(conn);
+
+        storage::close_db();
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

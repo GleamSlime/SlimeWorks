@@ -166,7 +166,7 @@ class MangaService {
       // 登录前强制同步一次网络配置，避免 init 未触发时 Rust 侧仍是默认直连。
       await _syncNetworkConfigToRust();
       await rust.mangaLogin(email: email, password: password);
-      return _finalizeLoginSuccess();
+      return await _finalizeLoginSuccess();
     } catch (e) {
       _logger.error('Manga 登录失败: $e');
       rethrow;

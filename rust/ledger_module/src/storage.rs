@@ -13,6 +13,9 @@ lazy_static! {
     static ref DB_CONN: Mutex<Option<Connection>> = Mutex::new(None);
     /// 账本文件路径：解析失败留档这类旁路写盘要知道"账本在哪，就写在旁边"
     static ref DB_PATH: Mutex<String> = Mutex::new(String::new());
+    /// 建库互斥：init_db 是 check-then-init，节点上多个连接会并发首次调用，
+    /// 没有这把锁会两个连接同时建库/播种，撞 UNIQUE 并让 DB_CONN 被后写者覆盖
+    static ref INIT_LOCK: Mutex<()> = Mutex::new(());
 }
 
 /// 列表查询用的联查形态：账户名/类别名一次带出
@@ -32,8 +35,24 @@ fn today_str() -> String {
 }
 
 /// 建表 + 内置数据播种
+///
+/// 全程持 INIT_LOCK 串行化：并发首次调用（节点上多个 ledger_* 请求同时到达）
+/// 会重复建表播种，后面的连接还会把 DB_CONN 里的连接对象顶掉。
 pub fn init_db(db_path: &str) -> Result<()> {
+    let _init_guard = INIT_LOCK.lock().unwrap();
     let path = PathBuf::from(db_path);
+    // 双检：等锁期间别人可能已经建好了。必须连路径一起比——
+    // 只判连接是否存在的话，指向另一个文件的 init 会误判成功，
+    // 调用方以为库已经可用，实际连的是别人的库。
+    if DB_CONN.lock().map(|g| g.is_some()).unwrap_or(false) {
+        let same = DB_PATH
+            .lock()
+            .map(|p| PathBuf::from(p.as_str()) == path)
+            .unwrap_or(false);
+        if same {
+            return Ok(());
+        }
+    }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).context("创建账本数据库目录失败")?;
     }
@@ -171,35 +190,29 @@ pub fn init_db(db_path: &str) -> Result<()> {
     Ok(())
 }
 
-/// 首次建库播种内置类别与一个默认账户；已有数据时不动用户改过的内容
+/// 首次建库播种内置类别与一个默认账户；已有数据时不动用户改过的内容。
+///
+/// 全部用 `INSERT OR IGNORE`：`ensure_ledger_ready` 是跨连接的 check-then-init，
+/// 两个请求可能同时看到 category_count == 0 并进入首开分支，
+/// 裸 INSERT 会撞 categories.name 的 UNIQUE 让其中一个请求 500。
 fn seed_builtins(conn: &Connection) -> Result<()> {
-    let category_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM categories", [], |r| r.get(0))
-        .unwrap_or(0);
-    if category_count == 0 {
-        for (idx, (name, icon, direction)) in BUILTIN_CATEGORIES.iter().enumerate() {
-            conn.execute(
-                "INSERT INTO categories (name, icon, direction, sort_order, is_builtin) VALUES (?1, ?2, ?3, ?4, 1)",
-                params![name, icon, direction, idx as i64],
-            )?;
-        }
-    } else {
-        // 升级路径：新版本加了内置类别时补插，按名字幂等
-        for (idx, (name, icon, direction)) in BUILTIN_CATEGORIES.iter().enumerate() {
-            conn.execute(
-                "INSERT OR IGNORE INTO categories (name, icon, direction, sort_order, is_builtin) VALUES (?1, ?2, ?3, ?4, 1)",
-                params![name, icon, direction, idx as i64],
-            )?;
-        }
+    for (idx, (name, icon, direction)) in BUILTIN_CATEGORIES.iter().enumerate() {
+        conn.execute(
+            "INSERT OR IGNORE INTO categories (name, icon, direction, sort_order, is_builtin) VALUES (?1, ?2, ?3, ?4, 1)",
+            params![name, icon, direction, idx as i64],
+        )?;
     }
 
     let account_count: i64 = conn
         .query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get(0))
         .unwrap_or(0);
     if account_count == 0 {
+        // 并发首开时两个连接都会判 0，靠 name UNIQUE 之外的幂等写法兜底：
+        // 这里用 NOT EXISTS 子查询保证只有一次真正插入
         conn.execute(
             "INSERT INTO accounts (name, type, last4, currency, credit_limit, balance, sort_order, enabled, created_at) \
-             VALUES ('现金', 'cash', '', 'CNY', 0, 0, 10, 1, ?1)",
+             SELECT '现金', 'cash', '', 'CNY', 0, 0, 10, 1, ?1 \
+             WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE name = '现金')",
             params![now_str()],
         )?;
     }

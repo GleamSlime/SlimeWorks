@@ -314,8 +314,12 @@ class AsrSettingsService extends GetxService {
   Future<String?> deployLocal() async {
     if (!supportsLocalEngine) return '当前平台不支持本地语音识别引擎';
     if (isDeploying.value) {
-      // 重复点击时等待同一次部署结果，而不是再起一个下载
-      return await _deployFuture ?? '部署已在进行中';
+      // 重复点击时等待同一次部署结果，而不是再起一个下载。
+      // 注意 `await f ?? x` 会被解析成 `(await f) ?? x`：部署成功约定返回 null，
+      // 这样写会把「等到的成功」兜成错误串，界面显示部署失败。
+      final pending = _deployFuture;
+      if (pending != null) return await pending;
+      return '部署已在进行中';
     }
 
     final future = _runDeploy();

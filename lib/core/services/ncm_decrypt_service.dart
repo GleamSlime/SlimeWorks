@@ -162,7 +162,9 @@ class NcmDecryptService extends GetxService {
 
       progress.value = newProgress;
 
-      if (status == NcmDecryptStatus.completed || status == NcmDecryptStatus.failed) {
+      if (status == NcmDecryptStatus.completed ||
+          status == NcmDecryptStatus.failed ||
+          status == NcmDecryptStatus.cancelled) {
         _stopPolling();
         _finalizeResult(newProgress);
       }

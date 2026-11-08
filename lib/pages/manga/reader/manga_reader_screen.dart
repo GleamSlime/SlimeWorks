@@ -9,6 +9,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
@@ -1168,7 +1169,7 @@ class _MangaReaderScreenState
   }
 
   /// 阅读器主视图
-  /// [Fix] cacheExtent 加大到 2000，防止上滑时因 item 被回收/重建触发布局抖动
+  /// [Fix] scrollCacheExtent 加大到 2000，防止上滑时因 item 被回收/重建触发布局抖动
   /// [Fix] 使用 ClampingScrollPhysics，去掉 Bouncing 弹性边界减少位置重算
   Widget _buildReaderView(BuildContext context) {
     return Obx(() {
@@ -1177,7 +1178,7 @@ class _MangaReaderScreenState
           : (viewModel.nextEps != null ? 1 : 0);
       return ListView.builder(
         controller: _scrollController,
-        cacheExtent: 2000,
+        scrollCacheExtent: const ScrollCacheExtent.pixels(2000),
         physics: const ClampingScrollPhysics(),
         itemCount: viewModel.pages.length + extraCount,
         itemBuilder: (ctx, i) {

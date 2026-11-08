@@ -212,13 +212,23 @@ class TranscriptionTaskQueue {
       return;
     }
 
+    var removed = 0;
     _queue.removeWhere((t) {
       if (t.id == taskId) {
         t.state.value = TranscriptionTaskState.cancelled;
+        removed++;
         return true;
       }
       return false;
     });
+    // 出队的任务不会再进 _processNext 的 completedCount++，
+    // 不把总数减掉的话进度会永远停在「已完成/原总数」（如 2/3）
+    if (removed > 0) {
+      totalCount.value = (totalCount.value - removed).clamp(
+        completedCount.value,
+        1 << 30,
+      );
+    }
   }
 
   void _cancelRunning(TranscriptionTask task) {
@@ -232,15 +242,27 @@ class TranscriptionTaskQueue {
         }
       }
     }
+    // whisper 侧没有取消 API：任务只能跑完，因此立刻停掉进度轮询，
+    // 避免取消后进度条还在涨；状态由 _processNext 完成时复查，不会回写成 completed
+    _stopProgressPolling(task, done: false);
+    task.indeterminate.value = false;
     task.state.value = TranscriptionTaskState.cancelled;
   }
 
   /// 取消所有等待中的任务
   void cancelAll() {
+    var removed = 0;
     for (final task in _queue) {
       task.state.value = TranscriptionTaskState.cancelled;
+      removed++;
     }
     _queue.clear();
+    if (removed > 0) {
+      totalCount.value = (totalCount.value - removed).clamp(
+        completedCount.value,
+        1 << 30,
+      );
+    }
   }
 
   /// 清除已完成的任务记录
@@ -291,11 +313,12 @@ class TranscriptionTaskQueue {
     }
   }
 
-  void _stopProgressPolling(TranscriptionTask task) {
+  void _stopProgressPolling(TranscriptionTask task, {bool done = true}) {
     _progressTimer?.cancel();
     _progressTimer = null;
     task.indeterminate.value = false;
-    task.progress.value = 1.0;
+    // 取消路径不能把进度写成 100%，否则界面看着像已完成
+    if (done) task.progress.value = 1.0;
   }
 
   Future<void> _processNext() async {
@@ -333,7 +356,11 @@ class TranscriptionTaskQueue {
         task.result = result;
         _logger.info('[识别队列] 识别完成: ${task.displayName}, 片段数=${result.segments.length}');
       }
-      task.state.value = TranscriptionTaskState.completed;
+      // 用户取消时不能把状态改回 completed： whisper 任务没有取消 API，
+      // 取消后底层识别仍会跑完并返回结果，这里必须尊重已取消的终态
+      if (task.state.value != TranscriptionTaskState.cancelled) {
+        task.state.value = TranscriptionTaskState.completed;
+      }
       _stopProgressPolling(task);
     } catch (e) {
       // 用户已取消时不要把状态改成失败，避免任务卡片闪一下红

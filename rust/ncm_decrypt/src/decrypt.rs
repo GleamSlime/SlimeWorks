@@ -339,9 +339,13 @@ fn parse_metadata(json_str: &str) -> (String, Option<String>, Option<String>, Op
 }
 
 /// 执行批量解密
+///
+/// [is_cancelled] 在每个文件开始前被调用：返回 true 时立刻停止并返回已取消结果。
+/// 取消只在文件边界生效——单个文件解密是不可中断的整体操作。
 pub fn run_decrypt(
     config: &NcmDecryptConfig,
     progress_callback: &dyn Fn(NcmDecryptProgress),
+    is_cancelled: &dyn Fn() -> bool,
 ) -> NcmDecryptResult {
     let start_time = std::time::Instant::now();
 
@@ -378,6 +382,28 @@ pub fn run_decrypt(
     let mut failed_files = Vec::new();
 
     for (i, ncm_file) in ncm_files.iter().enumerate() {
+        // 用户取消：在文件边界停下，已解出的文件保留，剩余文件不再处理
+        // （尤其不能继续跑 delete_after_decrypt 删除源文件）
+        if is_cancelled() {
+            sw_info!("[ncm_decrypt] 已取消，停止于第 {}/{} 个文件", i, total);
+            progress_callback(NcmDecryptProgress {
+                total_files: total,
+                current_file_index: i as u32,
+                current_file_name: String::new(),
+                total_progress: (i as f64 / total as f64) * 100.0,
+                elapsed_seconds: start_time.elapsed().as_secs_f64(),
+                status: NcmDecryptStatus::Cancelled,
+            });
+            return NcmDecryptResult {
+                success: false,
+                total_files: total,
+                success_count,
+                failed_count: total - success_count,
+                elapsed_seconds: start_time.elapsed().as_secs_f64(),
+                failed_files,
+                error_message: Some("用户已取消".to_string()),
+            };
+        }
         let progress = (i as f64 / total as f64) * 100.0;
         progress_callback(NcmDecryptProgress {
             total_files: total,
@@ -647,7 +673,7 @@ mod synthetic_tests {
             source_dir: dir.to_str().unwrap().to_string(),
             delete_after_decrypt: false,
         };
-        let result = run_decrypt(&config, &|_| {});
+        let result = run_decrypt(&config, &|_| {}, &|| false);
         assert!(result.success, "error: {:?}", result.error_message);
         assert_eq!((result.total_files, result.success_count, result.failed_count), (1, 1, 0));
         let mp3 = dir.join("song.mp3");
@@ -660,7 +686,7 @@ mod synthetic_tests {
             source_dir: dir.to_str().unwrap().to_string(),
             delete_after_decrypt: true,
         };
-        let result2 = run_decrypt(&config_delete, &|_| {});
+        let result2 = run_decrypt(&config_delete, &|_| {}, &|| false);
         assert!(result2.success);
         assert!(!path.exists(), "delete_after_decrypt 应删除源文件");
 

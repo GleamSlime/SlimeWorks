@@ -31,6 +31,15 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
     _initService();
   }
 
+  @override
+  void dispose() {
+    // State 内创建的 Rx 必须手动关闭，否则 Obx 订阅随页面反复进出累积泄漏
+    _isLoading.close();
+    _isReady.close();
+    _models.close();
+    super.dispose();
+  }
+
   Future<void> _initService() async {
     try {
       final service = getIt.get<OllamaSettingsService>();
@@ -391,7 +400,11 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
           ),
         ],
       ),
-    );
+    ).whenComplete(() {
+      // 对话框关闭后释放输入控制器，避免反复打开造成泄漏
+      urlController.dispose();
+      apiKeyController.dispose();
+    });
   }
 
   void _showEditServerDialog(OllamaServer server) {
@@ -446,7 +459,11 @@ class _OllamaSettingsTabState extends State<OllamaSettingsTab> {
           ),
         ],
       ),
-    );
+    ).whenComplete(() {
+      // 对话框关闭后释放输入控制器，避免反复打开造成泄漏
+      urlController.dispose();
+      apiKeyController.dispose();
+    });
   }
 
   Future<void> _deleteServer(String url) async {

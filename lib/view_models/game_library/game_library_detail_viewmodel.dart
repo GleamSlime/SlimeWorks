@@ -38,6 +38,18 @@ class GameLibraryDetailViewModel extends BaseViewModel {
   // ── 启动设置 ─────────────────────────────────────────────
   final RxBool useOpenOnMacos = false.obs;
 
+  /// 游玩会话保存事件订阅。只在首次 load 注册一次：
+  /// load 会被 updateGame/saveProgress 等多处反复调用，若每次都 ever()
+  /// 会导致 worker 指数增殖，且页面销毁后仍挂在 GetIt 单例上泄漏。
+  Worker? _sessionWorker;
+
+  @override
+  void onClose() {
+    _sessionWorker?.dispose();
+    _sessionWorker = null;
+    super.onClose();
+  }
+
   Future<void> load(String gameId) async {
     await _service.init();
     game.value = await _service.getGameById(gameId);
@@ -47,11 +59,12 @@ class GameLibraryDetailViewModel extends BaseViewModel {
     selectedCategoryIds
       ..clear()
       ..addAll(await _service.getCategoryIdsByGameId(gameId));
-    // 监听游玩会话保存（游戏退出后）自动刷新
-    ever(processTracker.sessionSavedCount, (_) {
+    // 监听游玩会话保存（游戏退出后）自动刷新（仅注册一次，见 _sessionWorker 注释）
+    _sessionWorker ??= ever(processTracker.sessionSavedCount, (_) {
+      if (isClosed) return;
       final String? id = game.value?.id;
       if (id != null) {
-        load(id);
+        _refreshSessionData(id);
       }
     });
     // 加载全局设置（useOpenOnMacos）
@@ -63,6 +76,18 @@ class GameLibraryDetailViewModel extends BaseViewModel {
     await detectSaveFolder();
     // 后台加载萌娘百科内容（不阻塞主界面）
     _fetchMoegirlInBackground();
+  }
+
+  /// 会话保存后的轻量刷新：只更新会话/进度/时长相关数据，
+  /// 不重新走 load 全流程（避免重复拉分类/百科，也杜绝 worker 回调再注册 worker）。
+  Future<void> _refreshSessionData(String gameId) async {
+    try {
+      game.value = await _service.getGameById(gameId);
+      sessions.assignAll(await _service.getPlaySessionsByGameId(gameId));
+      progress.value = await _service.getProgressByGameId(gameId);
+    } catch (e) {
+      _logger.error('会话保存后刷新失败: $e');
+    }
   }
 
   /// 简单启发式检测游戏存档目录：检查游戏目录下常见的存档文件夹名

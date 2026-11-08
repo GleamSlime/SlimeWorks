@@ -658,8 +658,10 @@ async fn bind_listener_with_recovery(port: u16) -> Result<TcpListener> {
 fn force_kill_port_process(port: u16) -> bool {
     use std::process::Command;
 
+    // 只匹配「本地 LISTEN 该端口」的进程：-ti tcp:port 会把远端端口相同的
+    // 出站连接也列进来，可能把自己（作为客户端连着别人）kill -9 自杀。
     let output = match Command::new("lsof")
-        .args(["-ti", &format!("tcp:{}", port)])
+        .args(["-tiTCP", &format!(":{}", port), "-sTCP:LISTEN"])
         .output()
     {
         Ok(output) => output,
@@ -669,9 +671,14 @@ fn force_kill_port_process(port: u16) -> bool {
         }
     };
 
+    let self_pid = std::process::id().to_string();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut killed_any = false;
     for pid in stdout.lines().map(str::trim).filter(|pid| !pid.is_empty()) {
+        // 显式排除自身 PID 与系统保留的 PID 0，双保险
+        if pid == self_pid || pid == "0" {
+            continue;
+        }
         match Command::new("kill").args(["-9", pid]).status() {
             Ok(status) if status.success() => {
                 killed_any = true;
@@ -947,28 +954,40 @@ async fn handle_connection(
         MessageType::TransferRequest => {
             let request: TransferRequest = serde_json::from_str(&msg.payload)?;
             let tid = request.transfer_id.clone();
+            // 安全：sender_device_id 是发送方自报的字符串，而 device_id 经 mDNS 广播 /
+            // Heartbeat（无授权即回复）公开可得。若「信任设备」直接跳过授权码，
+            // 任意局域网设备伪造一个受信任 ID 就能绕过验证并自动 Accepted 落盘。
+            // 因此信任只是「免人工确认」的必要条件，还必须证明知道授权码；
+            // 证明不了的信任设备降级为待人工确认，而不是直接拒绝（避免打断正常传输）。
+            let expected = access_code.read().await.clone();
+            let code_ok = match expected {
+                Some(ref expected_code) => {
+                    request.access_code.as_deref().unwrap_or("") == expected_code.as_str()
+                }
+                // 本机未设授权码：等于完全开放，此时信任判定才有意义
+                None => true,
+            };
             let is_trusted = trusted_devices
                 .read()
                 .await
                 .contains_key(&request.sender_device_id);
-
-            // 非信任设备必须携带正确的本机授权码；无权则直接拒绝，不进入待确认
-            if !is_trusted {
-                let expected = access_code.read().await.clone();
-                if let Some(expected_code) = expected {
-                    let provided = request.access_code.as_deref().unwrap_or("");
-                    if provided != expected_code {
-                        sw_warn!(
-                            "拒绝未授权连接: 来自 {}, 授权码不匹配",
-                            request.sender_device_name
-                        );
-                        return Err(anyhow!("授权码验证失败"));
-                    }
-                }
+            if !code_ok && !is_trusted {
+                sw_warn!(
+                    "拒绝未授权连接: 来自 {}, 授权码不匹配",
+                    request.sender_device_name
+                );
+                return Err(anyhow!("授权码验证失败"));
             }
+            if is_trusted && !code_ok {
+                sw_warn!(
+                    "信任设备 {} 未携带正确授权码，降级为人工确认",
+                    request.sender_device_name
+                );
+            }
+            let auto_accept = is_trusted && code_ok;
 
             // 初始化接收方传输记录
-            let initial_status = if is_trusted {
+            let initial_status = if auto_accept {
                 TransferStatus::Accepted
             } else {
                 TransferStatus::Pending
@@ -997,7 +1016,7 @@ async fn handle_connection(
                 .insert(tid.clone(), transfer_item.clone());
 
             // 判断是否接受
-            let accepted = if is_trusted {
+            let accepted = if auto_accept {
                 sw_info!(
                     "信任设备自动接受: {} from {}",
                     tid,
