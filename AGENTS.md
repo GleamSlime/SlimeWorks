@@ -186,6 +186,27 @@ fastforge package --platform windows --target exe    # Windows
     **必须**在装了 Xcode 的机器或 CI 上验证后再合入。
 - Windows 打包只能在 Windows 上做；Linux/Android/iOS 同理。
 
+### macOS 签名身份（决定更新后要不要重授权限）
+
+**必须**给仓库配置 `MAC_SIGN_IDENTITY_P12` / `MAC_SIGN_IDENTITY_PASSWORD` /
+`MAC_SIGN_IDENTITY_NAME` 三项 Secrets，否则 CI 回退 ad-hoc 签名：
+
+- ad-hoc 签名的 CDHash 每次构建都不同 → macOS 的 TCC（完全磁盘访问、外置卷等）
+  把每次更新后的 App 当成**另一个程序**，权限全部清零，用户每次自动更新后都要
+  重新手动授权。这是已经被用户反馈过的真实问题。
+- 自签证书的身份跨版本不变，用户**授权一次之后**后续更新不再掉权限。
+
+生成与配置步骤（一次性）：
+
+```bash
+bash scripts/make_mac_signing_cert.sh      # 产出 mac_signing_cert/ 下的 p12
+# 把 p12 的 base64 单行、导出时设的口令、证书通用名分别填进
+# Settings → Secrets and variables → Actions 的上述三项
+```
+
+注意：证书一旦投入使用就**不要重新生成**——换证书等于换身份，用户机器上的
+TCC 授权会全部重来。CI 里该步骤未配置 Secrets 时以 `::error` 报出，便于发现。
+
 ---
 
 ## 构建命令

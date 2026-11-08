@@ -60,6 +60,15 @@ class AppUpdateService {
   // macOS 安装阶段文案（弹窗内实时展示）
   final RxString installPhase = ''.obs;
 
+  /// 自动安装是否正在进行（下载+安装全程）。
+  ///
+  /// 为什么必须是 Rx 且**点击瞬间就置位**：原实现只看 [downloadProgress]
+  /// 是否为 null 来判断"正在下载"，但该值要等收到第一个字节才有——从点击到
+  /// 连接建立（DNS/TLS/首包）这段时间里按钮仍然是可点的，连点两下就会并发
+  /// 跑两份下载，两边的 onProgress 交替写 [downloadProgress]，界面上的进度
+  /// 就在两个值之间来回跳。这里在进入下载前同步置位，彻底堵住这个窗口。
+  final RxBool autoInstallBusy = false.obs;
+
   DateTime _lastActiveTime = DateTime.now();
   Timer? _idleCheckTimer;
 
@@ -344,6 +353,12 @@ class AppUpdateService {
 
   /// 下载安装包 → sha256 校验 → 替换/静默安装 → 自动重启，全程无人值守。
   Future<void> _startAutoInstall(AppUpdateInfo info) async {
+    // 重入闸：连点按钮/自动检查与手动点击撞在一起时，只允许一份下载在跑。
+    // 不拦的话两份下载会同时写 downloadProgress，进度表在两个值之间跳。
+    if (autoInstallBusy.value) {
+      _logger.info('[应用更新] 已在自动安装中，忽略重复触发');
+      return;
+    }
     // Windows 必须拿到安装包直链才能自动装；缺失（资产改名/未上传）时
     // 退回下载页面，避免拿着 Release 页面 URL 去下载 HTML。
     if (Platform.isWindows && (info.windowsDownloadUrl ?? '') == '') {
@@ -356,6 +371,7 @@ class AppUpdateService {
       }
       return;
     }
+    autoInstallBusy.value = true;
     final url = Platform.isWindows
         ? info.windowsDownloadUrl!
         : info.downloadUrl;
@@ -383,6 +399,9 @@ class AppUpdateService {
           SnackBar(content: Text('自动更新失败：$e，可前往 GitHub Releases 手动下载')),
         );
       }
+    } finally {
+      // 失败要放开重试；成功路径进程会被接力脚本替换，放开也无害
+      autoInstallBusy.value = false;
     }
   }
 
@@ -434,6 +453,8 @@ class AppUpdateService {
                 ? '前往蒲公英下载'
                 : '前往下载页面';
         return Obx(() {
+          // busy 覆盖"点击后到首包之间"的空窗期，downloading 只管进度条显隐
+          final busy = autoInstallBusy.value;
           final downloading = downloadProgress.value != null;
           return AlertDialog(
             backgroundColor: s.surfaceRaised,
@@ -496,7 +517,7 @@ class AppUpdateService {
               ),
             ),
             actions: [
-              if (!supportsAutoInstall || !downloading)
+              if (!supportsAutoInstall || !busy)
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
                   // 按钮文字样式由主题的字阶+字族统一发出，这里再写裸 TextStyle
@@ -504,8 +525,8 @@ class AppUpdateService {
                   child: const Text('稍后提醒'),
                 ),
               FilledButton(
-                // 下载/安装进行中禁止重复触发
-                onPressed: downloading ? null : () => performUpdateAction(ctx, info),
+                // 下载/安装进行中禁止重复触发（busy 从点击瞬间即为 true）
+                onPressed: busy ? null : () => performUpdateAction(ctx, info),
                 child: Text(actionLabel),
               ),
             ],

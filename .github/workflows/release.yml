@@ -288,7 +288,14 @@ jobs:
             exit 1
           fi
           if [ -z "$MAC_SIGN_IDENTITY_P12" ] || [ -z "$MAC_SIGN_IDENTITY_NAME" ]; then
-            echo "::warning::未配置 MAC_SIGN_IDENTITY_* secrets，回退 ad-hoc 签名（每次更新后权限需要重新授予）"
+            # 用 error 而不是 warning：ad-hoc 签名会让用户每次更新后被 macOS
+            # 重新索要「完全磁盘访问」等 TCC 权限（授权按签名身份记录，ad-hoc
+            # 每次构建 CDHash 都变 = 每次都被当成另一个 App）。
+            # 这是一条会长期困扰用户的真实缺陷，不该淹没在 warning 里。
+            echo "::error::未配置 MAC_SIGN_IDENTITY_* secrets —— 产物将是 ad-hoc 签名，"
+            echo "::error::用户每次自动更新后都要重新授予磁盘权限。"
+            echo "::error::先跑 scripts/make_mac_signing_cert.sh 生成自签证书，把"
+            echo "::error::P12/PASSWORD/NAME 三项填进仓库 Secrets，再重跑本 job。"
             codesign --force --deep --sign - "$DMG_PATH"
             exit 0
           fi
