@@ -7,27 +7,27 @@
     <item>
       <title>1.0.0</title>
       <description>
-        <![CDATA[Auto build v1.0.0+20261108.85e5600]]>
+        <![CDATA[Auto build v1.0.0+20261108.a2858f3]]>
       </description>
-      <pubDate>Sun, 08 Nov 2026 11:48:55 +0000</pubDate>
-      <sparkle:version>171</sparkle:version>
+      <pubDate>Sun, 08 Nov 2026 13:07:08 +0000</pubDate>
+      <sparkle:version>172</sparkle:version>
       <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
       <enclosure
-        url="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0+20261108.85e5600/slime_works-1.0.0+171-macos.dmg"
+        url="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0+20261108.a2858f3/slime_works-1.0.0+172-macos.dmg"
         sparkle:os="macos"
-        sparkle:edSignature="fIZB1psN84OCwmza6CHgFW/y53IGQKu+60ku/q07YUq7zcerRClmmiB51Ki/9zUSrC+DdnkrNaFku4eDjSEuDA=="
-        length="68452392"
+        sparkle:edSignature="DS1ORKWjbWxyTggLt1+r2be+lmXOarOTqQCjz6FH+FfXTwJd/bRwbCRUR3Uwt2uKn3SLznpzQbG+OdJ+4HZxDw=="
+        length="68452211"
         type="application/octet-stream" />
     </item>
     <item>
       <title>1.0.0</title>
-      <pubDate>Sun, 08 Nov 2026 11:48:55 +0000</pubDate>
+      <pubDate>Sun, 08 Nov 2026 13:07:08 +0000</pubDate>
       <enclosure
-        url="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0+20261108.85e5600/史莱姆工坊_1.0.0+171_windows_x64.exe"
+        url="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0+20261108.a2858f3/史莱姆工坊_1.0.0+172_windows_x64.exe"
         sparkle:os="windows"
-        sparkle:version="1.0.0.171"
+        sparkle:version="1.0.0.172"
         sparkle:shortVersionString="1.0.0"
-        length="36439893"
+        length="36438718"
         type="application/octet-stream" />
     </item>
   </channel>
