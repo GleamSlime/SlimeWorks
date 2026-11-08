@@ -43,7 +43,29 @@ class CollectionPictureScreen extends BasePage<MediaLibraryViewModel> {
 class _CollectionPictureScreenState
     extends BasePageState<MediaLibraryViewModel, CollectionPictureScreen>
     with PictureScreenDialogs {
-  int _detailColumnCount = 3;
+  /// 详情页网格列数：持久化在 MediaPrefsService，切页/重启都沿用。
+  int get _detailColumnCount => viewModel.mediaPrefs.detailColumnCount.value;
+
+  void _setDetailColumnCount(int value) {
+    viewModel.mediaPrefs.setDetailColumnCount(value).ignore();
+  }
+
+  /// 上一次「重扫封面」触发时间：用于吞掉长按之后补发的那次 onTap。
+  DateTime? _lastCoverRescanAt;
+
+  /// 重扫封面入口：单击 = 只补缺失，长按 = 覆盖重生成。
+  ///
+  /// 长按结束时 Flutter 仍会补一次 onTap，若不拦就会出现「长按了却走普通模式」，
+  /// 表现为覆盖模式形同无效。这里用一个很短的窗口把紧随其后的 onTap 丢弃。
+  void _handleRescanCovers({bool force = false}) {
+    final now = DateTime.now();
+    final last = _lastCoverRescanAt;
+    if (!force && last != null && now.difference(last) < const Duration(milliseconds: 600)) {
+      return;
+    }
+    _lastCoverRescanAt = now;
+    viewModel.rescanFolderCovers(force: force).ignore();
+  }
   // 同样每次导航时重建，避免 AnimatedSwitcher 过渡期间两个 GridView 同时 attach 同一个 controller
   late ScrollController _scrollController;
 
@@ -287,16 +309,16 @@ class _CollectionPictureScreenState
       onScanFolder: () => _handleFolderAction(scanMode: true),
       onImportFolder: () => _handleFolderAction(scanMode: false),
       onRescanCollection: () => viewModel.rescanCollection(),
-      onRescanCovers: () => viewModel.rescanFolderCovers(),
+      onRescanCovers: ({bool force = false}) => _handleRescanCovers(force: force),
       onRefresh: () async => viewModel.refreshAll(),
       onClearLibrary: () => _confirmClearLibrary(),
       onCreateSmartFolder: () => _showCreateSmartFolderDialog(),
       columnCount: isMobile ? _detailColumnCount : null,
       onColumnDecrement: isMobile && viewModel.isInDetail && _detailColumnCount > 1
-          ? () => setState(() => _detailColumnCount--)
+          ? () => _setDetailColumnCount(_detailColumnCount - 1)
           : null,
       onColumnIncrement: isMobile && viewModel.isInDetail && _detailColumnCount < 10
-          ? () => setState(() => _detailColumnCount++)
+          ? () => _setDetailColumnCount(_detailColumnCount + 1)
           : null,
       onUpload:
           (isMobile &&
@@ -345,8 +367,8 @@ class _CollectionPictureScreenState
           // 返回键只调这一个入口，判断全在 _handleBack 里（含预览层优先）
           onBack: _handleBack,
           detailColumnCount: _detailColumnCount,
-          onColumnDecrement: () => setState(() => _detailColumnCount--),
-          onColumnIncrement: () => setState(() => _detailColumnCount++),
+          onColumnDecrement: () => _setDetailColumnCount(_detailColumnCount - 1),
+          onColumnIncrement: () => _setDetailColumnCount(_detailColumnCount + 1),
           onExitToRoot: _exitToRoot,
           onEnterFolder: _enterFolder,
         ),

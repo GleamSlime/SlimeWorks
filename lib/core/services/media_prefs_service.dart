@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -109,6 +111,8 @@ class MediaPrefsService {
   static const _keyFakeCoverPath = 'media_fake_cover_path';
   static const _keyVideoVolume = 'media_video_volume';
   static const _keyVideoWaveformSeek = 'media_video_waveform_seek';
+  static const _keyDetailColumnCount = 'media_detail_column_count';
+  static const _keyVideoResumePosition = 'media_video_resume_positions';
 
   /// 预览页视频/音频的播放音量（0~100，默认 100）。
   /// 每换一个 Player 实例都要重新套用，否则调过的音量在切页后就丢了。
@@ -118,6 +122,16 @@ class MediaPrefsService {
   /// 开启后进度条从普通横条换成按音频振幅显示的波形条，高声段一眼可见、点击即跳；
   /// 跨会话沿用，每个预览页初始化时读取。仅桌面端本地文件有波形可显示。
   final videoWaveformSeek = false.obs;
+
+  /// 集合详情页网格列数（默认 3，范围 1~10）。
+  /// 原先只存在页面 State 里，切页即丢；持久化后跨会话沿用。
+  final detailColumnCount = 3.obs;
+
+  /// 视频断点续播位置：filePath/URL → 毫秒。
+  ///
+  /// 远程节点视频也用同一份（key 就是它的 http 直链），
+  /// 本地与远程续播体验一致。片头/片尾附近的进度不恢复，由调用方判断。
+  final videoResumePositions = <String, int>{}.obs;
 
   /// 伪封面的出厂默认图：只是开发机上的一张壁纸，换台机器读不到时封面退成实色底，
   /// 在媒体设置里换成任意本地图片即可。
@@ -196,6 +210,25 @@ class MediaPrefsService {
     fakeCoverPath.value = prefs.getString(_keyFakeCoverPath) ?? defaultFakeCoverPath;
     videoVolume.value = (prefs.getDouble(_keyVideoVolume) ?? 100.0).clamp(0.0, 100.0);
     videoWaveformSeek.value = prefs.getBool(_keyVideoWaveformSeek) ?? false;
+    detailColumnCount.value = (prefs.getInt(_keyDetailColumnCount) ?? 3).clamp(1, 10);
+    // 续播表以 JSON 字符串存：路径当 key 可能含任意字符，单独建索引键太脏
+    final resumeRaw = prefs.getString(_keyVideoResumePosition);
+    if (resumeRaw != null && resumeRaw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(resumeRaw);
+        if (decoded is Map) {
+          final restored = <String, int>{};
+          decoded.forEach((key, value) {
+            if (key is String && value is num && value > 0) {
+              restored[key] = value.toInt();
+            }
+          });
+          videoResumePositions.assignAll(restored);
+        }
+      } catch (e) {
+        debugPrint('[MediaPrefs] 续播位置解析失败: $e');
+      }
+    }
     final depthStr = prefs.getString(_keyFileCheckDepth) ?? 'coverOnly';
     fileCheckDepth.value = FileCheckDepth.values.firstWhere(
       (e) => e.name == depthStr,
@@ -294,6 +327,36 @@ class MediaPrefsService {
     videoWaveformSeek.value = v;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyVideoWaveformSeek, v);
+  }
+
+  /// 保存集合详情页网格列数（1~10，跨会话沿用）。
+  Future<void> setDetailColumnCount(int v) async {
+    detailColumnCount.value = v.clamp(1, 10);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyDetailColumnCount, detailColumnCount.value);
+  }
+
+  /// 记录/覆盖某个视频的续播位置（毫秒）。
+  ///
+  /// 片头 5 秒内不记录（等于没看），这样用户从头看完再打开仍是开头。
+  Future<void> setVideoResumePosition(String source, int positionMs) async {
+    if (source.isEmpty) return;
+    const headGuard = 5000;
+    if (positionMs <= headGuard) {
+      // 回到片头就把记录清掉，别留一个"续播到第 1 秒"的假记忆
+      if (videoResumePositions.remove(source) == null) return;
+    } else {
+      videoResumePositions[source] = positionMs;
+    }
+    await _persistResumePositions();
+  }
+
+  /// 视频的续播位置（毫秒）；没有记录返回 null。
+  int? videoResumePosition(String source) => videoResumePositions[source];
+
+  Future<void> _persistResumePositions() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyVideoResumePosition, jsonEncode(videoResumePositions));
   }
 
   /// 返回所有媒体缓存目录（视频帧缩略图 + 封面图缩略图 + 视频预览波形）。

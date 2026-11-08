@@ -40,7 +40,8 @@ class PictureLibraryToolbar extends StatelessWidget {
   final VoidCallback onScanFolder;
   final VoidCallback onImportFolder;
   final VoidCallback onRescanCollection;
-  final VoidCallback onRescanCovers;
+  /// [force] = true 表示覆盖模式（长按触发）：已有的封面也重新生成。
+  final void Function({bool force}) onRescanCovers;
   final VoidCallback onRefresh;
   final VoidCallback onClearLibrary;
   final VoidCallback onCreateSmartFolder;
@@ -151,11 +152,16 @@ class PictureLibraryToolbar extends StatelessWidget {
                         ),
                       ),
                       Tooltip(
-                        message: '重新扫描封面',
-                        child: DesktopHeadToolsButton(
-                          icon: DrawIcon(StrokeIcons.autorenew),
-                          size: AppTheme.metrics.kSpace40,
-                          onTap: onRescanCovers,
+                        message: '重新扫描封面（长按 = 覆盖重生成）',
+                        child: GestureDetector(
+                          // 长按 = 覆盖模式；两者重复触发由 screen 侧按时间戳去抖，
+                          // 这里不需要自己维护状态（本组件是 Stateless）
+                          onLongPress: () => onRescanCovers(force: true),
+                          child: DesktopHeadToolsButton(
+                            icon: DrawIcon(StrokeIcons.autorenew),
+                            size: AppTheme.metrics.kSpace40,
+                            onTap: () => onRescanCovers(force: false),
+                          ),
                         ),
                       ),
                       Tooltip(

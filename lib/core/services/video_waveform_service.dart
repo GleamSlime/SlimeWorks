@@ -41,17 +41,25 @@ class VideoWaveformService {
   /// 正在计算中的请求去重：邻页预热与当前页同时打开同一文件时只跑一份。
   final Map<String, Future<List<double>?>> _inFlight = {};
 
-  /// 该播放源是否值得提取波形：仅桌面端、本地存在的非 http 文件。
+  /// 是否支持为该来源提取振幅。
+  ///
+  /// - 本地文件：桌面端且文件存在 → 可用（有 FFI 快速路径）
+  /// - 远程节点视频（http/https）：桌面端即可，交给 ffmpeg 直接读 URL 流式取峰
+  ///   （FFI 路径只吃本地路径，远程一律走 ffmpeg）
   bool supports(String? source) {
     if (source == null || source.isEmpty) return false;
-    if (source.startsWith('http://') || source.startsWith('https://')) return false;
     if (!(Platform.isWindows || Platform.isMacOS)) return false;
+    if (isRemoteSource(source)) return true;
     try {
       return File(source).existsSync();
     } catch (_) {
       return false;
     }
   }
+
+  /// 远程来源判定：节点媒体走 http(s) 直链。
+  static bool isRemoteSource(String source) =>
+      source.startsWith('http://') || source.startsWith('https://');
 
   /// 提取指定文件的波形（0~1 归一化振幅数组，长度 = bins）。失败返回 null。
   Future<List<double>?> waveformFor(String filePath, {int bins = defaultBins}) async {
@@ -81,20 +89,23 @@ class VideoWaveformService {
     final cached = await _readDiskCache(key, bins);
     if (cached != null && cached.isNotEmpty) return cached;
 
-    // ② Rust FFI（symphonia）：音频文件与多数 MP4 能直接命中，速度最快
+    // ② Rust FFI（symphonia）：音频文件与多数 MP4 能直接命中，速度最快。
+    //    只吃本地路径——远程 URL 交给 ffmpeg 直接流式读。
     List<double>? data;
-    try {
-      final raw = await music_api
-          .extractWaveform(audioFilePath: filePath, samples: bins)
-          .timeout(_ffiTimeout);
-      if (raw.length == bins && raw.any((v) => v > 0)) {
-        data = _normalize(raw);
+    if (!isRemoteSource(filePath)) {
+      try {
+        final raw = await music_api
+            .extractWaveform(audioFilePath: filePath, samples: bins)
+            .timeout(_ffiTimeout);
+        if (raw.length == bins && raw.any((v) => v > 0)) {
+          data = _normalize(raw);
+        }
+      } catch (e) {
+        _logger.info('[VideoWaveform] FFI 提取失败，转 ffmpeg 兜底: $e');
       }
-    } catch (e) {
-      _logger.info('[VideoWaveform] FFI 提取失败，转 ffmpeg 兜底: $e');
     }
 
-    // ③ ffmpeg 子进程兜底（覆盖 symphonia 解不了的容器/编码）
+    // ③ ffmpeg 子进程兜底（覆盖 symphonia 解不了的容器/编码，以及远程 http 流）
     data ??= await _extractWithFfmpeg(filePath, bins);
 
     if (data == null) return null;
@@ -103,7 +114,14 @@ class VideoWaveformService {
   }
 
   /// 缓存文件名：sha256(路径|大小|修改时间|bins)，文件一变 key 即变，天然过期。
+  ///
+  /// 远程 URL 拿不到 stat，且同一 URL 就是同一份内容（节点按需生成，路径含集合
+  /// 与文件名），因此只用 URL 本身做 key；重新上传同名文件会命中旧波形，
+  /// 属于可接受的退化——总比每次都重跑 ffmpeg 好。
   Future<String?> _cacheKey(String filePath, int bins) async {
+    if (isRemoteSource(filePath)) {
+      return sha256.convert(utf8.encode('$filePath|remote|$bins')).toString();
+    }
     try {
       final stat = await File(filePath).stat();
       final src = '$filePath|${stat.size}|${stat.modified.millisecondsSinceEpoch}|$bins';
@@ -193,6 +211,8 @@ class VideoWaveformService {
         exe,
         [
           '-v', 'quiet',
+          // 远程 http 流：限制协议白名单与超时，避免 ffmpeg 卡在握手上不返回
+          if (isRemoteSource(filePath)) ...['-rw_timeout', '15000000'],
           '-i', filePath,
           '-vn', // 丢视频轨，只留音频
           '-f', 's16le',

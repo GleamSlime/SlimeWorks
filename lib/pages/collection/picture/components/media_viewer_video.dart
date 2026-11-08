@@ -81,6 +81,68 @@ class _VideoPreviewState extends State<_VideoPreview> {
     }
   }
 
+  // ── 断点续播（本地与远程节点视频共用）──────────────────────────────
+
+  /// 打开视频后恢复到上次播放位置。
+  ///
+  /// 必须等到拿到时长之后才能 seek：`open()` 立刻 seek 会被 libmpv 丢弃，
+  /// 表现为"记忆了但每次还是从头播"。这里挂在时长流上，成功 seek 一次即退订。
+  void _restoreResumePosition() {
+    final src = widget.source;
+    if (src == null || src.isEmpty) return;
+    final savedMs = _volumePrefs.videoResumePosition(src);
+    if (savedMs == null || savedMs <= 0) return;
+    final player = _player;
+    if (player == null) return;
+    _resumeSub?.cancel();
+    _resumeSub = player.stream.duration.listen((duration) {
+      if (duration <= Duration.zero) return;
+      final total = duration.inMilliseconds;
+      // 片尾 10 秒内不恢复（等于看完了，下次应从片头开始）
+      if (savedMs >= total - 10000) {
+        _resumeSub?.cancel();
+        _resumeSub = null;
+        return;
+      }
+      _resumeSub?.cancel();
+      _resumeSub = null;
+      player.seek(Duration(milliseconds: savedMs));
+      debugPrint('[MVP] 续播恢复到 ${savedMs}ms / 总时长 ${total}ms');
+    });
+  }
+
+  /// 周期性记录播放进度（每秒一拍，落盘另有节流）。
+  void _startResumeTracking() {
+    _resumeTimer?.cancel();
+    _resumeTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final player = _player;
+      if (player == null) return;
+      final pos = player.state.position.inMilliseconds;
+      final dur = player.state.duration.inMilliseconds;
+      if (pos <= 0 || dur <= 0) return;
+      // 播到片尾就当看完了，清掉记录，下次从头开始
+      final src = widget.source;
+      if (src == null || src.isEmpty) return;
+      final value = pos >= dur - 10000 ? 0 : pos;
+      _volumePrefs.setVideoResumePosition(src, value);
+    });
+  }
+
+  /// 立即把当前进度落盘（切页/销毁时用，免得丢掉最后这几秒）。
+  void _flushResumePosition() {
+    final player = _player;
+    if (player == null) return;
+    final pos = player.state.position.inMilliseconds;
+    final dur = player.state.duration.inMilliseconds;
+    final src = widget.source;
+    if (pos <= 0 || dur <= 0 || src == null || src.isEmpty) return;
+    _volumePrefs.setVideoResumePosition(
+      src,
+      pos >= dur - 10000 ? 0 : pos,
+    );
+  }
+
   // 应用内迷你悬浮窗（画中画）：复用同一 Player 的第二个视频输出
   VideoController? _miniController;
   bool _miniMode = false;
@@ -93,6 +155,12 @@ class _VideoPreviewState extends State<_VideoPreview> {
 
   // 音量面板是否展开
   bool _showVolumePanel = false;
+
+  /// 续播：等待时长就绪后 seek 一次即退订
+  StreamSubscription<Duration>? _resumeSub;
+
+  /// 续播：周期性记录进度的定时器
+  Timer? _resumeTimer;
 
   /// 桌面端全屏（窗口最大化 + 沉浸模式）是否处于本预览页开启的状态。
   ///
@@ -214,6 +282,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
     // 振幅进度条：位置/时长订阅 + 提取当前源波形
     _bindPositionStreams(_player!);
     _startWaveExtraction();
+    _restoreResumePosition();
+    _startResumeTracking();
     _readySub = _player!.stream.videoParams.listen((params) {
       if ((params.dw ?? 0) > 0 && !_playerReady) {
         _readySub?.cancel();
@@ -308,6 +378,10 @@ class _VideoPreviewState extends State<_VideoPreview> {
     _volumeSub?.cancel();
     _posSub?.cancel();
     _durSub?.cancel();
+    _resumeSub?.cancel();
+    _resumeTimer?.cancel();
+    // 销毁前把最后进度落盘（切视频/返回列表都会走这里）
+    _flushResumePosition();
     _posMs.dispose();
     _durMs.dispose();
     _waveJob++;
@@ -739,6 +813,15 @@ class _VideoPreviewState extends State<_VideoPreview> {
           ),
         ] else ...[
           IgnorePointer(ignoring: _swiping, child: videoWidget),
+          // ── 右上角常驻下载速率角标 ────────────────────────────────────
+          // 远程节点视频的加载速度要能一直看到（不只在缓冲圈出现时），
+          // 因此独立于控制栏常驻；进入沉浸式全屏时随之外隐藏，避免挡画面。
+          if (PlatformUtil.isDesktop && !_ownFullscreen)
+            Positioned(
+              right: AppTheme.metrics.kSpace12,
+              top: viewPad.top + AppTheme.metrics.kSpace12,
+              child: IgnorePointer(child: _VideoLoadingSpeed(player: player, asBadge: true)),
+            ),
           // ── 振幅进度条覆盖层 ──────────────────────────────────────────
           // 常驻叠在原生横条腾出的位置（同一 margin），不随控制栏隐藏：
           // 高声段顶天、安静段矮，一眼看出片源哪里响，点/拖即跳。
@@ -777,38 +860,40 @@ class _VideoPreviewState extends State<_VideoPreview> {
                 onClose: () => setState(() => _showVolumePanel = false),
               ),
             ),
-          if (isMobile)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              // 排除底部控制栏区域，避免拖动进度条时误触发上下翻页
-              bottom: bottomInset + 12 + buttonBarH + 24,
-              child: _VideoSwipeListener(
-                onDragStart: () {
-                  setState(() => _swiping = true);
-                  widget.onDragStart();
-                },
-                onDragUpdate: widget.onDragUpdate,
-                onDragEnd: (velocity, screenExtent) {
-                  widget.onDragEnd(velocity, screenExtent);
-                  setState(() => _swiping = false);
-                },
-                onDragCancel: () => setState(() => _swiping = false),
-                screenExtent: () {
-                  final box = context.findRenderObject() as RenderBox;
-                  return box.size.height;
-                },
-                onSeekStart: _beginSeek,
-                onSeekUpdate: _updateSeek,
-                onSeekEnd: _commitSeek,
-                onSeekCancel: _cancelSeek,
-                screenWidth: () {
-                  final box = context.findRenderObject() as RenderBox;
-                  return box.size.width;
-                },
-              ),
+          // 手势层：移动端同时支持「上下翻页 + 左右快进」；
+          // 桌面端只开放水平快进（翻页在桌面端由箭头键承担，且拖拽要与框选共存）
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            // 排除底部控制栏区域，避免拖动进度条时误触发快进
+            bottom: bottomInset + 12 + buttonBarH + 24,
+            child: _VideoSwipeListener(
+              horizontalOnly: !isMobile,
+              onDragStart: () {
+                setState(() => _swiping = true);
+                widget.onDragStart();
+              },
+              onDragUpdate: widget.onDragUpdate,
+              onDragEnd: (velocity, screenExtent) {
+                widget.onDragEnd(velocity, screenExtent);
+                setState(() => _swiping = false);
+              },
+              onDragCancel: () => setState(() => _swiping = false),
+              screenExtent: () {
+                final box = context.findRenderObject() as RenderBox;
+                return box.size.height;
+              },
+              onSeekStart: _beginSeek,
+              onSeekUpdate: _updateSeek,
+              onSeekEnd: _commitSeek,
+              onSeekCancel: _cancelSeek,
+              screenWidth: () {
+                final box = context.findRenderObject() as RenderBox;
+                return box.size.width;
+              },
             ),
+          ),
           // 水平拖动快进/快退反馈层
           if (_seeking)
             Positioned.fill(
@@ -840,6 +925,7 @@ class _VideoSwipeListener extends StatefulWidget {
     required this.onSeekEnd,
     required this.onSeekCancel,
     required this.screenWidth,
+    this.horizontalOnly = false,
   });
 
   // 垂直滑动 = 翻页
@@ -854,6 +940,9 @@ class _VideoSwipeListener extends StatefulWidget {
   final VoidCallback onSeekEnd;
   final VoidCallback onSeekCancel;
   final double Function() screenWidth;
+
+  /// 只识别水平拖动（桌面端）：垂直方向不抢手势，翻页交给键盘方向键。
+  final bool horizontalOnly;
 
   @override
   State<_VideoSwipeListener> createState() => _VideoSwipeListenerState();
@@ -917,8 +1006,14 @@ class _VideoSwipeListenerState extends State<_VideoSwipeListener> {
       _accH += dx;
       _accV += dy;
       if (_accH.abs() > _kThreshold || _accV.abs() > _kThreshold) {
-        // 首次超过阈值的方向定为拖动轴
-        _axis = _accH.abs() >= _accV.abs();
+        // 首次超过阈值的方向定为拖动轴。
+        // horizontalOnly 时垂直偏移直接放弃整个手势（桌面端不抢纵向拖动）。
+        final horizontal = _accH.abs() >= _accV.abs();
+        if (widget.horizontalOnly && !horizontal) {
+          _reset();
+          return;
+        }
+        _axis = horizontal;
         if (_horizontal) {
           widget.onSeekStart();
           widget.onSeekUpdate(_accH);
@@ -1237,9 +1332,13 @@ class _VideoWaveformBar extends StatelessWidget {
 /// 与 mpv 自带 stats 同一口径）。本地秒开场景延迟一拍再出字，避免闪跳；
 /// Web/移动 WebPlayer 没有 NativePlayer，或属性读取失败时，静默退回纯脉冲圈。
 class _VideoLoadingSpeed extends StatefulWidget {
-  const _VideoLoadingSpeed({required this.player});
+  const _VideoLoadingSpeed({required this.player, this.asBadge = false});
 
   final Player player;
+
+  /// false = 挂在缓冲脉冲圈下方（只在缓冲时出现）；
+  /// true = 常驻右上角角标（一直显示当前下载速率，供远程节点视频观察）。
+  final bool asBadge;
 
   @override
   State<_VideoLoadingSpeed> createState() => _VideoLoadingSpeedState();
@@ -1248,9 +1347,9 @@ class _VideoLoadingSpeed extends StatefulWidget {
 class _VideoLoadingSpeedState extends State<_VideoLoadingSpeed> {
   late StreamSubscription<bool> _bufferingSub;
   Timer? _pollTimer;
-  /// 当前是否处于缓冲中（控制小字显隐节奏）
+  /// 当前是否处于缓冲中（inline 模式下决定小字显隐）
   bool _buffering = true;
-  /// 当前速度文本；null 表示还没采到样本，先只显示脉冲圈
+  /// 当前速度文本；null 表示还没采到样本
   String? _speedText;
   /// 组件销毁标志：await 回来的结果要过这道闸才允许 setState
   bool _alive = true;
@@ -1267,16 +1366,16 @@ class _VideoLoadingSpeedState extends State<_VideoLoadingSpeed> {
       setState(() {
         _buffering = value;
         // 缓冲结束就把旧速度抹掉，下次重新进入缓冲时不闪出过期数字
-        if (!value) _speedText = null;
+        if (!value && !widget.asBadge) _speedText = null;
       });
       _schedulePolling();
     });
   }
 
-  /// 按当前缓冲状态起停轮询（幂等：非缓冲或平台不支持时不启动）
+  /// 角标常驻轮询；inline 模式只在缓冲时轮询。
   void _schedulePolling() {
     _pollTimer?.cancel();
-    if (!_buffering) return;
+    if (!widget.asBadge && !_buffering) return;
     final native = widget.player.platform;
     if (native is! NativePlayer) return;
     // 首拍延迟出速度，避免本地文件一闪而过的缓冲把画面点缀成抽奖
@@ -1291,14 +1390,14 @@ class _VideoLoadingSpeedState extends State<_VideoLoadingSpeed> {
   Future<void> _sampleSpeed(NativePlayer native) async {
     try {
       final raw = await native.getProperty('demuxer-cache-state');
-      if (!mounted || !_alive || !_buffering || raw.isEmpty) return;
+      if (!mounted || !_alive || raw.isEmpty) return;
       final json = jsonDecode(raw) as Map<String, dynamic>;
       final bps = (json['raw-bytes-per-sec'] as num?)?.toDouble();
       if (bps == null) return;
       final text = _formatSpeed(bps);
       if (text != _speedText) setState(() => _speedText = text);
     } catch (e) {
-      // 属性暂不可用/换源竞态：静默跳过这一拍，保持纯脉冲圈
+      // 属性暂不可用/换源竞态：静默跳过这一拍
       debugPrint('[MVP] 读取 demuxer-cache-state 失败：$e');
     }
   }
@@ -1321,6 +1420,29 @@ class _VideoLoadingSpeedState extends State<_VideoLoadingSpeed> {
   @override
   Widget build(BuildContext context) {
     final s = AppSemantic.of(context);
+    if (widget.asBadge) {
+      final text = _speedText;
+      if (text == null) return const SizedBox.shrink();
+      // 右上角常驻角标：半透明深底 + 半透明文字，压在画面上读得到但不抢戏
+      return Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppTheme.metrics.kSpace8,
+          vertical: AppTheme.metrics.kSpace4,
+        ),
+        decoration: BoxDecoration(
+          color: s.mediaStage.withValues(alpha: 0.45),
+          borderRadius: AppTheme.metrics.radius8,
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: AppTheme.metrics.fontSize12,
+            color: s.onMedia.withValues(alpha: 0.85),
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

@@ -109,6 +109,53 @@ void main() {
       expect(reloaded.videoWaveformSeek.value, isTrue);
     });
 
+    test('detailColumnCount 往返（资源列表列数持久化）', () async {
+      final svc = MediaPrefsService();
+      await svc.init();
+      await svc.setDetailColumnCount(6);
+
+      final reloaded = MediaPrefsService();
+      await reloaded.init();
+      expect(reloaded.detailColumnCount.value, 6);
+    });
+
+    test('detailColumnCount 越界钳制到 1~10', () async {
+      final svc = MediaPrefsService();
+      await svc.init();
+      await svc.setDetailColumnCount(99);
+      expect(svc.detailColumnCount.value, 10);
+      await svc.setDetailColumnCount(0);
+      expect(svc.detailColumnCount.value, 1);
+    });
+
+    test('videoResumePosition 往返（本地与远程共用一张表）', () async {
+      final svc = MediaPrefsService();
+      await svc.init();
+      // 远程节点视频用的是 http 直链，同样要能记住
+      await svc.setVideoResumePosition('/movies/a.mp4', 125000);
+      await svc.setVideoResumePosition('http://node:8080/node/media?path=x', 64000);
+
+      final reloaded = MediaPrefsService();
+      await reloaded.init();
+      expect(reloaded.videoResumePosition('/movies/a.mp4'), 125000);
+      expect(reloaded.videoResumePosition('http://node:8080/node/media?path=x'), 64000);
+    });
+
+    test('videoResumePosition 回到片头时清掉记录', () async {
+      final svc = MediaPrefsService();
+      await svc.init();
+      await svc.setVideoResumePosition('/movies/b.mp4', 90000);
+      expect(svc.videoResumePosition('/movies/b.mp4'), 90000);
+
+      // 片头 5 秒内视为"没看"，记录应被清除而不是留一个 3 秒的假记忆
+      await svc.setVideoResumePosition('/movies/b.mp4', 3000);
+      expect(svc.videoResumePosition('/movies/b.mp4'), isNull);
+
+      final reloaded = MediaPrefsService();
+      await reloaded.init();
+      expect(reloaded.videoResumePosition('/movies/b.mp4'), isNull);
+    });
+
     test('privacyBlurSigma 往返', () async {
       final svc = MediaPrefsService();
       await svc.init();

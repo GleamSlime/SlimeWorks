@@ -124,6 +124,53 @@ extension MediaLibraryActionsExt on MediaLibraryViewModel {
     return null;
   }
 
+  /// 在文件夹整棵子树里找**第一个真正有封面可用**的集合（供文件夹卡片取图）。
+  ///
+  /// 与 [_findFirstCollectionForFolder] 的区别：后者只按顺序取第一个集合，
+  /// 如果它封面还在生成或已失效（视频没抽到帧、图片被外部删掉），文件夹卡就
+  /// 整片空着——哪怕同一棵树下别的子文件夹里有现成封面。
+  /// 这里保持同样的遍历顺序，但跳过当前没有可用封面的集合。
+  media_api.MediaCollection? _findFirstCoveredCollectionForFolder(
+    String folderId, {
+    Set<String>? visited,
+  }) {
+    final seen = visited ?? <String>{};
+    if (!seen.add(folderId)) return null;
+    final directCollections = mergedCollections
+        .where((collection) => collection.folderId == folderId)
+        .toList(growable: false);
+    for (final collection in _applySortOrder(List.of(directCollections), folderId)) {
+      if (_collectionHasUsableCover(collection)) return collection;
+    }
+    for (final child in mergedFolders.where((f) => f.parentId == folderId)) {
+      final found = _findFirstCoveredCollectionForFolder(child.id, visited: seen);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  /// 该集合当前是否有可直接显示的封面（远程 URL / 已缓存缩略图 / 图片源文件）。
+  ///
+  /// 纯判定、不触发任何生成：文件夹封面只是"顺带展示"，不该因此点起一堆任务。
+  bool _collectionHasUsableCover(media_api.MediaCollection collection) {
+    final coverPath = collection.coverPath;
+    if (coverPath == null || coverPath.isEmpty) return false;
+    if (isRemoteCollection(collection.id)) return true;
+    if (_collectionVideoThumbnails.containsKey(collection.id)) return true;
+    if (_collectionCoverFailed.contains(collection.id)) return false;
+    final lower = coverPath.toLowerCase();
+    const imageExts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.heic', '.avif'];
+    if (imageExts.any(lower.endsWith)) {
+      try {
+        return File(coverPath).existsSync();
+      } catch (_) {
+        return false;
+      }
+    }
+    // 视频/音频封面依赖异步提取：当前没缓存就先跳过，让文件夹卡继续往下一层找
+    return false;
+  }
+
   String _buildRemoteCollectionId(String nodeId, String rawId) {
     return '${MediaLibraryViewModel._remoteCollectionPrefix}$nodeId:$rawId';
   }

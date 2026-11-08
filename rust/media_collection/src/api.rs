@@ -3113,7 +3113,7 @@ fn collect_collection_config_dirs(root: &Path) -> Vec<std::path::PathBuf> {
 }
 
 /// 清理集合的物理目录残留：先删掉目录树内的 `.SlimeWorks` 缓存目录，再在集合目录
-/// 已空时删除该目录本身。
+/// 已空时删除该目录本身；集合目录被删掉后继续向上收拢空目录。
 fn cleanup_collection_physical_dirs(collection_id: &str) {
     let Ok(collections) = get_collections().lock() else {
         return;
@@ -3125,9 +3125,88 @@ fn cleanup_collection_physical_dirs(collection_id: &str) {
     else {
         return;
     };
+    // 记下其他集合的路径：向上收拢时凡是被它们覆盖的目录一律保留，
+    // 这是「绝不动别人的目录」唯一可靠的判据
+    let sibling_paths: Vec<std::path::PathBuf> = collections
+        .iter()
+        .filter(|collection| collection.id != collection_id)
+        .map(|collection| std::path::PathBuf::from(&collection.folder_path))
+        .collect();
     drop(collections);
 
-    cleanup_empty_collection_dir(Path::new(&folder_path));
+    let root = std::path::PathBuf::from(&folder_path);
+    cleanup_empty_collection_dir(&root);
+    // 集合目录自己被删掉后，它的父级可能也空了——用户看到的「文件夹还在」
+    // 正是这一层：集合常挂在子目录里（照片/旅行/），删空的是「旅行」，
+    // 而界面上那个「照片」文件夹没人收。
+    if !root.exists() {
+        prune_empty_ancestors(&root, &sibling_paths);
+    }
+}
+
+/// 自底向上删除集合目录的**空**祖先，遇到第一个非空目录或仍被其他集合占用的目录即停。
+///
+/// 三重保险，宁可留着也不误删：
+/// 1. 只删确实为空的目录（`remove_dir` 本身对非空目录也会失败）
+/// 2. 该目录仍被其他集合的 `folder_path` 覆盖（等于或在其下）→ 保留
+/// 3. 该目录里还有任何 `.SlimeWorks` 之外的残留（如隐藏文件）→ 由第 1 条自然挡住
+///
+/// 另外永远不碰这些有特殊意义的目录：磁盘根、当前工作目录、家目录，
+/// 以及它们的直接子级（macOS 的 ~/Desktop 之类）。
+fn prune_empty_ancestors(removed: &Path, sibling_paths: &[std::path::PathBuf]) {
+    let protected: Vec<std::path::PathBuf> = {
+        let mut list = Vec::new();
+        if let Ok(cwd) = std::env::current_dir() {
+            list.push(cwd);
+        }
+        if let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) {
+            list.push(home);
+        }
+        #[cfg(target_os = "windows")]
+        if let Some(profile) = std::env::var_os("USERPROFILE").map(std::path::PathBuf::from) {
+            list.push(profile);
+        }
+        list
+    };
+    let Some(mut current) = removed.parent().map(Path::to_path_buf) else {
+        return;
+    };
+    // 防御异常深的目录链，同时保证不会一路删到卷根
+    for _ in 0..64 {
+        // 盘根（/ 或 C:\）永远不动
+        if current.parent().is_none() {
+            return;
+        }
+        // 受保护目录本身及其一级子目录（~/Desktop、~/Downloads…）一律不动
+        if protected
+            .iter()
+            .any(|p| p == &current || current.parent() == Some(p.as_path()))
+        {
+            return;
+        }
+        // 还有别的集合住在这个目录（或它的子目录）里 → 停
+        if sibling_paths
+            .iter()
+            .any(|sibling| sibling == &current || sibling.starts_with(&current))
+        {
+            return;
+        }
+        if !current.is_dir() {
+            return;
+        }
+        // 目录非空时 remove_dir 会失败，正是我们要的保守行为
+        if std::fs::remove_dir(&current).is_err() {
+            return;
+        }
+        sw_info!(
+            "[delete_collection_local_files] 空父目录一并删除: {}",
+            current.display()
+        );
+        let Some(parent) = current.parent().map(Path::to_path_buf) else {
+            return;
+        };
+        current = parent;
+    }
 }
 
 /// 删除 `root` 目录树内所有 `.SlimeWorks` 缓存目录，并在 `root` 因此变空时删掉它。
@@ -3949,6 +4028,63 @@ mod tests {
         assert!(root.join("说明.txt").exists());
         assert!(root.exists(), "仍有残留内容时不得删除集合目录");
         let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    // ── prune_empty_ancestors：删空集合后向上收拢空父目录 ──────────────────
+
+    #[test]
+    fn prune_ancestors_removes_empty_parent_chain() {
+        // 模拟「照片/旅行/」这种集合挂在子目录里的格局
+        let base = std::env::temp_dir().join(format!("slime_sw_prune_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let nested = base.join("照片/旅行");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        // 集合目录已被删掉（cleanup 的前一步），从它出发向上收拢
+        let removed = nested.clone();
+        std::fs::remove_dir(&nested).unwrap();
+        prune_empty_ancestors(&removed, &[]);
+
+        // 空链会一路收到临时根：这正是「用户只剩下空目录」时应有的结果
+        assert!(!base.join("照片").exists(), "空父目录链应一路收掉");
+        assert!(!base.exists(), "自身也已空且无其他集合占用时同样收掉");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn prune_ancestors_stops_at_dir_holding_other_collection() {
+        let base = std::env::temp_dir().join(format!("slime_sw_prune_keep_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let nested = base.join("照片/旅行");
+        let other = base.join("照片/婚礼");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+
+        let removed = nested.clone();
+        std::fs::remove_dir(&nested).unwrap();
+        // 另一个集合仍住在 照片/婚礼 下
+        prune_empty_ancestors(&removed, std::slice::from_ref(&other));
+
+        assert!(!base.join("照片/旅行").exists());
+        assert!(base.join("照片").exists(), "还有别的集合在，父目录必须保留");
+        assert!(other.exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn prune_ancestors_keeps_dir_with_leftover_file() {
+        let base = std::env::temp_dir().join(format!("slime_sw_prune_file_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let nested = base.join("照片/旅行");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(base.join("照片/说明.txt"), b"x").unwrap();
+
+        let removed = nested.clone();
+        std::fs::remove_dir(&nested).unwrap();
+        prune_empty_ancestors(&removed, &[]);
+
+        assert!(base.join("照片/说明.txt").exists(), "有残留文件时不得删目录");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

@@ -123,14 +123,14 @@ class _SeekIndicator extends StatelessWidget {
     final deltaMs = t.inMilliseconds - player.state.position.inMilliseconds;
     final deltaSec = deltaMs ~/ 1000;
     final sign = deltaSec > 0 ? '+' : (deltaSec < 0 ? '-' : '');
-    return Container(
+    // 无背景色版本：直接压在画面上，靠文字阴影保证深浅画面下都读得清
+    final shadow = <Shadow>[
+      Shadow(color: s.mediaStage.withValues(alpha: 0.75), blurRadius: scaleW(6)),
+    ];
+    return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppTheme.metrics.kSpace16,
         vertical: AppTheme.metrics.kSpace8,
-      ),
-      decoration: BoxDecoration(
-        color: s.mediaStage.withValues(alpha: 0.6),
-        borderRadius: AppTheme.metrics.radius10,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -140,15 +140,19 @@ class _SeekIndicator extends StatelessWidget {
             // 深色小窗遮罩上的强调色走语义 info 紫
             style: AppTextStyles.role(
               context,
-              color: AppSemantic.of(context).info.color,
+              color: s.info.color,
               weight: FontWeight.bold,
               fontSize: AppTheme.metrics.fontSize17,
-            ),
+            ).copyWith(shadows: shadow),
           ),
           SizedBox(height: AppTheme.metrics.kSpace4),
           Text(
             _fmt(t),
-            style: AppTextStyles.role(context, color: s.onMediaSecondary, fontSize: AppTheme.metrics.fontSize13),
+            style: AppTextStyles.role(
+              context,
+              color: s.onMedia,
+              fontSize: AppTheme.metrics.fontSize13,
+            ).copyWith(shadows: shadow),
           ),
         ],
       ),

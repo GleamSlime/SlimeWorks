@@ -710,15 +710,19 @@ class _MediaCardCoverState extends State<MediaCardCover> {
     final privacyOn = prefs?.privacyMode.value ?? false;
     // 「还没有封面」与「封面丢了/解码失败」是两回事：
     // 前者显示占位图标（或在生成中显示加载态），后者才显示 lostIcon。
+    //
+    // 底色统一用 s.surface（= 卡片本体色），不再用 surfaceSunken：
+    // 文件夹卡、集合卡、智能文件夹卡都长在 MediaCutoutCard 上，差别只有
+    // "有没有封面"；占位区偏深一档会让没封面的那类看着像另一种卡片。
     final placeholder = _CoverPlaceholder(
       icon: widget.placeholderIcon,
-      background: s.surfaceSunken,
+      background: s.surface,
     );
     final broken = _CoverPlaceholder(
       icon: widget.lostIcon ?? widget.placeholderIcon,
-      background: s.surfaceSunken,
+      background: s.surface,
     );
-    final loading = _CoverLoading(background: s.surfaceSunken);
+    final loading = _CoverLoading(background: s.surface);
     if (widget.isLost) return broken;
     if (src == null || src.isEmpty) {
       return widget.loading ? loading : placeholder;

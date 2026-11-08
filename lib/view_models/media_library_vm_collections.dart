@@ -591,9 +591,12 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   /// 重新扫描当前文件夹（含所有层级）的封面：逐个集合检查集合封面与资源缩略图，
   /// 缺失的重新加入生成队列；远程集合下发到对应节点后台补生成。
   ///
+  /// [force] = true 是「覆盖模式」（长按按钮触发）：不管之前有没有封面，
+  /// 都清掉内存/磁盘结论后重新生成一遍。默认 false 只补缺失的。
+  ///
   /// 范围口径与浏览层一致：根目录=整个本地库 + 全部启用节点；普通文件夹=整棵子树；
   /// 智能文件夹=命中集合；同名分组=组内集合；远程文件夹=节点按子树扫描。
-  Future<void> rescanFolderCovers() async {
+  Future<void> rescanFolderCovers({bool force = false}) async {
     if (isScanning.value) return;
     // 用户主动点击即表示要生成：暂停状态下先恢复，否则新任务会被入队入口直接拦掉
     if (thumbGenerationPaused.value) resumeThumbGeneration();
@@ -655,6 +658,18 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         for (final collection in localTargets) {
           _collectionCoverFailed.remove(collection.id);
           _audioCoverEmptyCollections.remove(collection.id);
+          if (force) {
+            // 覆盖模式：连「已有结果」也一起清掉。
+            // 不清的话，下面的磁盘就绪预检会把它们全部判成"已就绪"直接跳过，
+            // 长按就变成了空操作。
+            _collectionVideoThumbnails.remove(collection.id);
+          }
+        }
+        if (force) {
+          // 同时清掉条目缩略图的结论，让每个文件都真正重新生成
+          _itemThumbnails.clear();
+          _itemThumbFailed.clear();
+          _audioCoverCache.clear();
         }
         // 清负缓存后「生成中」加载态需要立刻反映到卡片上
         _notifyCoverChanged();
@@ -664,7 +679,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
               '检查封面 ${i + 1}/${localTargets.length}: ${collection.title}';
           try {
             // 不挂当前文件夹取消组：扫描是显式操作，离开文件夹也不应中断
-            enqueueLocalCollectionCover(collection, trackFolder: false);
+            enqueueLocalCollectionCover(collection, trackFolder: false, force: force);
             final items = await media_api.getMediaCollectionItems(
               collectionId: collection.id,
             );

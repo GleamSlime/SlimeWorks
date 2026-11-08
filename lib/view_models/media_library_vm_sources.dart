@@ -213,6 +213,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
   void enqueueLocalCollectionCover(
     media_api.MediaCollection collection, {
     bool trackFolder = true,
+    bool force = false,
   }) {
     if (thumbGenerationPaused.value) return;
     if (isRemoteCollection(collection.id)) return;
@@ -223,12 +224,14 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
         collection.id,
         coverPath,
         trackFolder: trackFolder,
+        force: force,
       );
     } else if (MediaLibraryViewModel._isAudioPath(coverPath)) {
       _generateCollectionAudioCoverAsync(
         collection.id,
         coverPath,
         trackFolder: trackFolder,
+        force: force,
       );
     }
   }
@@ -297,11 +300,17 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
     String collectionId,
     String videoPath, {
     bool trackFolder = true,
+    bool force = false,
   }) {
     if (_collectionVideoThumbnails.containsKey(collectionId) ||
         _collectionCoverFailed.contains(collectionId) ||
         _coverQueue.contains(collectionId) ||
         _inFlightCoverKeys.contains(collectionId)) {
+      return;
+    }
+    // 覆盖模式：磁盘预检一律跳过，直接重新生成
+    if (force) {
+      _enqueueCollectionVideoCover(collectionId, videoPath, trackFolder: trackFolder);
       return;
     }
     // 先占位再异步查磁盘：查询期间同一集合不会被重复入队
@@ -390,12 +399,17 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
     String collectionId,
     String audioPath, {
     bool trackFolder = true,
+    bool force = false,
   }) {
     if (_collectionVideoThumbnails.containsKey(collectionId) ||
         _audioCoverEmptyCollections.contains(collectionId) ||
         _collectionCoverFailed.contains(collectionId) ||
         _coverQueue.contains(collectionId) ||
         _inFlightCoverKeys.contains(collectionId)) {
+      return;
+    }
+    if (force) {
+      _enqueueCollectionAudioCover(collectionId, audioPath, trackFolder: trackFolder);
       return;
     }
     // 与视频封面同构：先查磁盘，命中就不排任务（音频封面宽度固定 300）
@@ -571,7 +585,13 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
   String? buildFolderCoverSource(media_api.MediaFolder folder) {
     // 注册响应式依赖：集合排序变更时同步更新文件夹封面
     collectionOrderVersion.value;
-    final collection = _firstCoverCollectionForFolder(folder);
+    // 优先取「真有封面」的集合：否则首个集合还在生成/已失效时，
+    // 文件夹卡会整片空着，哪怕子文件夹里就有现成封面。
+    var collection = _findFirstCoveredCollectionForFolder(folder.id);
+    if (collection == null && !isDupGroup(folder.id)) {
+      // 整棵子树都没有现成封面：退回首个集合，让它异步生成后再显示
+      collection = _firstCoverCollectionForFolder(folder);
+    }
     if (collection == null) {
       return null;
     }
