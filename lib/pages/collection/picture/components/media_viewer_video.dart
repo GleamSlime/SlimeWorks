@@ -94,6 +94,13 @@ class _VideoPreviewState extends State<_VideoPreview> {
   // 音量面板是否展开
   bool _showVolumePanel = false;
 
+  /// 桌面端全屏（窗口最大化 + 沉浸模式）是否处于本预览页开启的状态。
+  ///
+  /// 记这一位是为了「谁开谁关」：用户可能是从别处（音乐播放器沉浸模式、系统
+  /// 最大化）进到这个状态的，退出预览时不该无条件还原别人的窗口。
+  /// 真正的窗口态一律现查 `windowManager.isMaximized()`，本字段只做归属标记。
+  bool _ownFullscreen = false;
+
   // ── 振幅进度条（波形）──────────────────────────────────────────────────
   // 把普通横条进度条换成按音频振幅显示的波形条：高声段顶天、安静段矮，
   // 点哪跳哪。开关持久化在 MediaPrefsService，跨会话沿用。
@@ -288,6 +295,14 @@ class _VideoPreviewState extends State<_VideoPreview> {
 
   @override
   void dispose() {
+    // 退出预览时若全屏是本页开的，必须还回去：否则回到列表会看到侧栏和顶栏消失。
+    // 只还原自己开的那一份，别动用户从别处（音乐播放器沉浸模式等）带来的状态。
+    if (_ownFullscreen) {
+      _ownFullscreen = false;
+      final immersive = getIt<DesktopScreenProvider>().desktopImmersiveMode;
+      if (immersive.value) immersive.value = false;
+      unawaited(windowManager.unmaximize());
+    }
     _readySub?.cancel();
     _audioReadySub?.cancel();
     _volumeSub?.cancel();
@@ -342,7 +357,30 @@ class _VideoPreviewState extends State<_VideoPreview> {
     }
   }
 
-  // ── 水平拖动快进/快退 ────────────────────────────────────────────────
+  // ── 桌面端全屏（窗口语义）────────────────────────────────────────────
+
+  /// 桌面端全屏开关：窗口最大化 + 沉浸模式（隐藏侧栏与顶栏）。
+  ///
+  /// 不用 media_kit 的 `toggleFullscreen`：那是压一条全屏 route，与窗口真实状态
+  /// 完全脱钩 —— 用户把窗口拖小之后 route 仍在栈上，`isFullscreen` 依旧为 true，
+  /// 再点一次就被当成「退出全屏」直接 pop，行为与直觉相反。
+  /// 改成窗口语义后，"全屏"就是窗口真的最大化，用户手动缩窗也自然退出全屏。
+  Future<void> _toggleDesktopFullscreen() async {
+    if (!PlatformUtil.isDesktop) return;
+    final immersive = getIt<DesktopScreenProvider>().desktopImmersiveMode;
+    // 窗口态现查：用户可能用系统按钮/快捷键改过，缓存值不可信
+    final maximized = await windowManager.isMaximized();
+    if (_ownFullscreen || (immersive.value && maximized)) {
+      _ownFullscreen = false;
+      immersive.value = false;
+      if (maximized) await windowManager.unmaximize();
+    } else {
+      _ownFullscreen = true;
+      immersive.value = true;
+      if (!maximized) await windowManager.maximize();
+    }
+    if (mounted) setState(() {});
+  }
 
   void _beginSeek() {
     final p = _player;
@@ -488,7 +526,10 @@ class _VideoPreviewState extends State<_VideoPreview> {
       const media_controls.MaterialDesktopPositionIndicator(),
       const Spacer(),
       ...customButtons,
-      const media_controls.MaterialDesktopFullscreenButton(),
+      // 桌面端全屏 = 窗口最大化 + 沉浸模式，不能用 media_kit 的
+      // MaterialDesktopFullscreenButton（它只会压一条全屏 route，与窗口状态
+      // 互不知情：窗口被缩小后它仍认为"在全屏"，点一下就退出全屏）。
+      _VideoFullscreenButton(onToggle: _toggleDesktopFullscreen),
     ];
     final videoWidget = media_controls.MaterialDesktopVideoControlsTheme(
       normal: media_controls.MaterialDesktopVideoControlsThemeData(
@@ -1321,6 +1362,68 @@ class _VideoWaveButton extends StatelessWidget {
         size: AppTheme.metrics.iconSize22,
       ),
       onPressed: onToggle,
+    );
+  }
+}
+
+// ── 桌面端全屏按钮（窗口语义，非 route）────────────────────────────────
+
+/// 桌面端底栏的全屏开关。
+///
+/// 图标按窗口真实最大化状态切换，而不是按"有没有全屏 route"——
+/// 用户拖窗口缩小后窗口态立刻变回非全屏，图标也跟着变回去，不再自说自话。
+class _VideoFullscreenButton extends StatefulWidget {
+  const _VideoFullscreenButton({required this.onToggle});
+
+  final Future<void> Function() onToggle;
+
+  @override
+  State<_VideoFullscreenButton> createState() => _VideoFullscreenButtonState();
+}
+
+class _VideoFullscreenButtonState extends State<_VideoFullscreenButton> with WindowListener {
+  /// 窗口是否已最大化（现查，不做跨组件共享的静态缓存）
+  bool _maximized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    windowManager.addListener(this);
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final value = await windowManager.isMaximized();
+    if (mounted && value != _maximized) setState(() => _maximized = value);
+  }
+
+  // 用户用系统按钮/快捷键改窗口态时，图标跟着变
+  @override
+  void onWindowMaximize() => _refresh();
+
+  @override
+  void onWindowUnmaximize() => _refresh();
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    return IconButton(
+      tooltip: _maximized ? '退出全屏' : '全屏',
+      icon: Icon(
+        _maximized ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+        color: s.onMedia.withValues(alpha: 0.85),
+        size: AppTheme.metrics.iconSize22,
+      ),
+      onPressed: () async {
+        await widget.onToggle();
+        await _refresh();
+      },
     );
   }
 }

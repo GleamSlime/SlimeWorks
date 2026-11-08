@@ -18,33 +18,25 @@ class PictureActionBar extends StatelessWidget {
   const PictureActionBar({
     super.key,
     required this.viewModel,
-    required this.isViewerActive,
+    required this.onBack,
     required this.detailColumnCount,
     required this.onColumnDecrement,
     required this.onColumnIncrement,
-    required this.onExitCollection,
-    required this.onExitFolder,
     required this.onExitToRoot,
     required this.onEnterFolder,
   });
 
   final MediaLibraryViewModel viewModel;
 
-  /// 返回 true 表示 MediaViewerPage 压在页面栈顶，返回按钮改为关闭查看器。
-  ///
-  /// 用读取函数而不是 bool：本字段只在返回按钮的 onTap 里用到，属于「点击时才需要
-  /// 知道」的信息。做成 bool 就得在预览 push/pop 时 setState 重建整条操作栏乃至上层
-  /// 网格（正是「返回列表 cover 重新加载」的一个来源）；改成回调后预览进出零重绘。
-  /// 见 collection_picture_screen 里的 `_viewerActiveFlag`。
-  final ValueGetter<bool> isViewerActive;
+  /// 返回按钮回调。逐级返回的全部判断（预览层 → 集合 → 文件夹）由调用方
+  /// 统一实现，本栏不再自行判断层级——避免多处各写一份后互相不一致。
+  final VoidCallback onBack;
 
   /// 详情页网格列数（由 screen 持有，本栏只展示与回调增减）。
   final int detailColumnCount;
   final VoidCallback onColumnDecrement;
   final VoidCallback onColumnIncrement;
 
-  final VoidCallback onExitCollection;
-  final VoidCallback onExitFolder;
   final VoidCallback onExitToRoot;
   final void Function(String id) onEnterFolder;
 
@@ -73,10 +65,7 @@ class PictureActionBar extends StatelessWidget {
             child: Row(
               mainAxisSize: hasBoundedWidth ? MainAxisSize.max : MainAxisSize.min,
               children: [
-                // 返回按钮（左侧）
-                // When MediaViewerPage is on top (_viewerActive), this button closes
-                // the viewer instead of exiting the collection — avoids a second back
-                // button being visible inside MediaViewerPage at the same time.
+                // 返回按钮（左侧）：只调统一入口，层级判断在 page 侧
                 AnimatedOpacity(
                   opacity: showBack ? 1.0 : 0.0,
                   duration: AppMotion.fast,
@@ -85,16 +74,7 @@ class PictureActionBar extends StatelessWidget {
                     child: DesktopHeadToolsButton(
                       icon: DrawIcon(StrokeIcons.arrowBack),
                       size: AppTheme.metrics.kSpace40,
-                      onTap: () {
-                        // 点击时才读预览状态：不触发本栏任何重建
-                        if (isViewerActive()) {
-                          Navigator.of(context).maybePop();
-                        } else if (inDetail) {
-                          onExitCollection();
-                        } else {
-                          onExitFolder();
-                        }
-                      },
+                      onTap: onBack,
                     ),
                   ),
                 ),

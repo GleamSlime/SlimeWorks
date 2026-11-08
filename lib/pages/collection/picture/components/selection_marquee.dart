@@ -16,6 +16,7 @@ class SelectionMarquee extends StatefulWidget {
     required this.viewModel,
     required this.scrollController,
     required this.child,
+    this.enabled = true,
   });
 
   /// 被框选覆盖的网格本体（同一实例复用，拖框期间不重建）
@@ -25,6 +26,10 @@ class SelectionMarquee extends StatefulWidget {
 
   /// 网格的滚动控制器：拖框坐标是视口系，命中反推要加回滚动偏移才是内容系
   final ScrollController scrollController;
+
+  /// 是否启用框选。外部文件正被拖入窗口时置 false：否则拖入过程会被本层
+  /// 当成框选手势吃掉，既框出一片选中又挡住 DropTarget 的落点反馈。
+  final bool enabled;
 
   @override
   State<SelectionMarquee> createState() => _SelectionMarqueeState();
@@ -88,6 +93,10 @@ class _SelectionMarqueeState extends State<SelectionMarquee> {
     final start = _start;
     final end = _end;
     final dragging = start != null && end != null;
+    // 停用时直接透传子件：不挂任何手势，外部文件拖入、卡片点击全部直达网格
+    if (!widget.enabled) {
+      return KeyedSubtree(key: _gridKey, child: widget.child);
+    }
     return GestureDetector(
       // 拖框期间不响应点击穿透，避免拖框误触卡片
       behavior: dragging ? HitTestBehavior.opaque : HitTestBehavior.deferToChild,

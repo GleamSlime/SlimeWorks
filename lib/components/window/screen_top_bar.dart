@@ -1,9 +1,4 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:get/get_state_manager/src/rx_flutter/rx_obx_widget.dart';
-import 'package:slime_works/core/provider/main.dart';
-import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/components/icons/draw_icon.dart';
@@ -17,21 +12,28 @@ import 'package:slime_works/core/utils/size_utils.dart';
 class ScreenTopBar extends StatelessWidget {
   const ScreenTopBar({super.key});
 
+  /// Windows 三颗自绘灯用它渲染「最大化」还是「还原」图标。
+  ///
+  /// 这里只是最后已知状态的缓存，**不作为判断依据**：用户用系统按钮、快捷键或
+  /// 双击标题栏改状态时它都可能滞后。真正的判断一律 `await windowManager.isMaximized()`。
   static bool isMaximized = true;
 
+  /// 双击顶栏空白处：最大化 ⇄ 还原。
   static Future<void> handleDoubleTap() async {
-    bool isMini = await windowManager.isMaximized();
-    if (isMini) {
+    final maximized = await windowManager.isMaximized();
+    if (maximized) {
       await windowManager.unmaximize();
     } else {
       await windowManager.maximize();
     }
-
-    ScreenTopBar.isMaximized = isMini;
+    isMaximized = !maximized;
   }
 
   @override
   Widget build(BuildContext context) {
+    // 高度对齐 DesktopTopBar（60）：本条被压在页面树**之下**（见 desktop_scaffold
+    // 的 Stack 顺序说明），只负责接住没被控件覆盖的空白区的拖拽/双击，
+    // 太矮会让顶栏下半截拖不动窗口，太高又会侵入正文可点区域。
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onDoubleTap: handleDoubleTap,
@@ -42,19 +44,13 @@ class ScreenTopBar extends StatelessWidget {
         // 不锁也不闪：LiveFrost 心跳发现矩形在变就不抓，等它停下才补一帧。
         windowManager.startDragging();
       },
-      child: Container(
-        height: scaleH(40),
+      child: SizedBox(
+        height: scaleW(60),
         // margin: EdgeInsets.only(left: PlatformUtil.isDesktop ? scaleW(250) : 0),
         // width: MediaQuery.of(context).size.width - scaleW(400),
         width: MediaQuery.of(context).size.width,
-        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace4),
-        child: Platform.isMacOS
-            ? Obx(
-                () => getIt<DesktopScreenProvider>().isMobile.value
-                    ? const MacWindowButtonsReserve()
-                    : const SizedBox.shrink(),
-              )
-            : null,
+        // 这一层现在在页面之下，任何绘制都会盖住页面；保持完全空白。
+        child: const SizedBox.expand(),
       ),
     );
   }

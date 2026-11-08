@@ -229,7 +229,29 @@ class _CollectionPictureScreenState
     super.dispose();
   }
 
-  /// ESC 逐级返回：退出多选 → 退出集合 → 退出文件夹 → 交回上层。
+  /// 唯一返回入口：预览层 → 集合 → 文件夹，逐级退一层。
+  ///
+  /// 原先「操作栏返回键 / 正文 ESC / PopScope / 移动端左滑」各自判断一遍
+  /// （操作栏还额外读 `_viewerActiveFlag`），新增状态必漏一处。
+  /// 现在四条入口全部收敛到这里，行为只有一份定义。
+  ///
+  /// 预览层优先：MediaViewerPage 压在栈顶时，返回键的语义是「关预览」，
+  /// 而不是把底下的集合一起退掉（那样用户会以为点错了）。
+  void _handleBack() {
+    if (_viewerActiveFlag.value) {
+      Navigator.of(context, rootNavigator: true).maybePop();
+      return;
+    }
+    if (viewModel.isInDetail) {
+      _exitCollection();
+      return;
+    }
+    if (viewModel.currentFolderId.value != null) {
+      _exitFolder();
+    }
+  }
+
+  /// ESC 逐级返回：退出多选 → 交给 [_handleBack]。
   ///
   /// 为什么要单独一层挂在 chrome 控件上：工具栏和面包屑走 ScreenChrome 的 AppBar 槽，
   /// 与正文里那层 Focus 是兄弟而不是后代。焦点一旦落进搜索框或工具栏按钮，ESC 就再也
@@ -243,12 +265,8 @@ class _CollectionPictureScreenState
       viewModel.exitSelection();
       return KeyEventResult.handled;
     }
-    if (viewModel.isInDetail) {
-      _exitCollection();
-      return KeyEventResult.handled;
-    }
-    if (viewModel.currentFolderId.value != null) {
-      _exitFolder();
+    if (_viewerActiveFlag.value || viewModel.isInDetail || viewModel.currentFolderId.value != null) {
+      _handleBack();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -324,12 +342,11 @@ class _CollectionPictureScreenState
       leading: _escLayer(
         PictureActionBar(
           viewModel: viewModel,
-          isViewerActive: () => _viewerActiveFlag.value,
+          // 返回键只调这一个入口，判断全在 _handleBack 里（含预览层优先）
+          onBack: _handleBack,
           detailColumnCount: _detailColumnCount,
           onColumnDecrement: () => setState(() => _detailColumnCount--),
           onColumnIncrement: () => setState(() => _detailColumnCount++),
-          onExitCollection: _exitCollection,
-          onExitFolder: _exitFolder,
           onExitToRoot: _exitToRoot,
           onEnterFolder: _enterFolder,
         ),
@@ -409,13 +426,7 @@ class _CollectionPictureScreenState
       return PopScope(
         canPop: !hasInternalBackLevel,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) {
-            if (inCollection) {
-              _exitCollection();
-            } else if (inFolder) {
-              _exitFolder();
-            }
-          }
+          if (!didPop) _handleBack();
         },
         child: ScreenChrome(
           data: _buildScreenChromeData(context),
@@ -513,13 +524,7 @@ class _CollectionPictureScreenState
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
                         onHorizontalDragEnd: (details) {
-                          if ((details.primaryVelocity ?? 0) > 200) {
-                            if (inCollection) {
-                              _exitCollection();
-                            } else if (inFolder) {
-                              _exitFolder();
-                            }
-                          }
+                          if ((details.primaryVelocity ?? 0) > 200) _handleBack();
                         },
                         child: const SizedBox.expand(),
                       ),
@@ -528,62 +533,66 @@ class _CollectionPictureScreenState
                   ],
                 );
               }
-              return DropTarget(
-                onDragEntered: (_) => setState(() => _isDraggingFiles = true),
-                onDragExited: (_) => setState(() => _isDraggingFiles = false),
-                onDragDone: (detail) async {
-                  setState(() => _isDraggingFiles = false);
-                  // 与点击"导入文件夹"完全一致：先弹窗确认选项再导入
-                  final options = await _showImportOptionsDialog();
-                  if (options == null) return;
-                  await viewModel.importDroppedPaths(
-                    detail.files.map((f) => f.path).toList(),
-                    generateThumbnails: options.$1,
-                    preserveStructure: options.$2,
-                    softLink: options.$3,
-                  );
-                },
-                child: Stack(
-                  children: [
-                    body,
-                    if (_isDraggingFiles)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: s.accent.withAlpha(40),
-                              border: Border.all(
-                                color: s.accent,
-                                width: 2,
+              // 任意点按先收回正文焦点：否则焦点留在搜索框/工具栏时 ESC 送不到正文
+              return Listener(
+                onPointerDown: (_) => _bodyFocusNode.requestFocus(),
+                child: DropTarget(
+                  onDragEntered: (_) => setState(() => _isDraggingFiles = true),
+                  onDragExited: (_) => setState(() => _isDraggingFiles = false),
+                  onDragDone: (detail) async {
+                    setState(() => _isDraggingFiles = false);
+                    // 与点击"导入文件夹"完全一致：先弹窗确认选项再导入
+                    final options = await _showImportOptionsDialog();
+                    if (options == null) return;
+                    await viewModel.importDroppedPaths(
+                      detail.files.map((f) => f.path).toList(),
+                      generateThumbnails: options.$1,
+                      preserveStructure: options.$2,
+                      softLink: options.$3,
+                    );
+                  },
+                  child: Stack(
+                    children: [
+                      body,
+                      if (_isDraggingFiles)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: s.accent.withAlpha(40),
+                                border: Border.all(
+                                  color: s.accent,
+                                  width: 2,
+                                ),
                               ),
-                            ),
-                            child: Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  DrawIcon(
-                                    StrokeIcons.folderOpen,
-                                    size: AppTheme.metrics.iconSize64,
-                                    color: s.accent,
-                                  ),
-                                  SizedBox(height: AppTheme.metrics.kSpace12),
-                                  Text(
-                                    '松开以导入媒体',
-                                    style: AppTextStyles.role(
-                                      context,
-                                      fontSize: AppTheme.metrics.fontSize14,
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    DrawIcon(
+                                      StrokeIcons.folderOpen,
+                                      size: AppTheme.metrics.iconSize64,
                                       color: s.accent,
-                                      weight: FontWeight.bold,
                                     ),
-                                  ),
-                                ],
+                                    SizedBox(height: AppTheme.metrics.kSpace12),
+                                    Text(
+                                      '松开以导入媒体',
+                                      style: AppTextStyles.role(
+                                        context,
+                                        fontSize: AppTheme.metrics.fontSize14,
+                                        color: s.accent,
+                                        weight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ?clearBtn,
-                  ],
+                      ?clearBtn,
+                    ],
+                  ),
                 ),
               );
             }),
@@ -627,6 +636,9 @@ class _CollectionPictureScreenState
     return SelectionMarquee(
       viewModel: viewModel,
       scrollController: _scrollController,
+      // 外部文件拖入期间停用框选：否则拖入动作被当作框选手势，
+      // 既会框出一片选中，也压掉了 DropTarget 的落点反馈
+      enabled: !_isDraggingFiles,
       child: grid,
     );
   }

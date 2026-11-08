@@ -205,8 +205,13 @@ class _DesktopScaffoldState extends State<DesktopScaffold> with WindowListener {
                           );
                         }),
                 ),
-                widget.child,
+                // 拖拽条必须压在 widget.child **之下**：它是一条几乎通栏的透明
+                // GestureDetector（拖窗口 / 双击最大化）。早先叠在 child 之上时，
+                // 顶栏左侧的返回键等控件全被它盖住 —— 点返回变成拖窗口、双击返回
+                // 变成最大化窗口。放到下面后，任何真正可点的控件天然优先命中，
+                // 拖拽与双击只落在没被控件覆盖的空白区。
                 const Positioned(left: 0, top: 0, child: ScreenTopBar()),
+                widget.child,
                 // 悬浮任务进度
                 const FloatingTaskProgress(),
               ],

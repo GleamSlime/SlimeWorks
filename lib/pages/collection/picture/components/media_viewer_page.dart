@@ -16,8 +16,10 @@ import 'package:media_kit_video/media_kit_video_controls/media_kit_video_control
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/services/video_waveform_service.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/pages/collection/picture/components/cover_decode_cache.dart';
 import 'package:slime_works/pages/music_player/components/waveform_seek_bar.dart';
