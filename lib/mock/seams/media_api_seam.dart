@@ -169,6 +169,18 @@ Future<String?> ensureCoverThumbnail({
   return rust.ensureCoverThumbnail(filePath: filePath, width: width);
 }
 
+/// 只查不生成：磁盘上已有该宽度缩略图缓存时返回其路径，否则 null。
+///
+/// Mock 模式没有真实磁盘缓存，一律返回 null 让上层走正常生成路径；
+/// 否则会拿真实文件路径去 mock 资源里查，结果不可预期。
+Future<String?> readyCoverThumbnailPath({
+  required String filePath,
+  required int width,
+}) async {
+  if (MockMode.enabled) return null;
+  return rust.readyCoverThumbnailPath(filePath: filePath, width: width);
+}
+
 Future<List<CollectionStats>> getAllCollectionStats() async {
   if (MockMode.enabled) {
     return _m.collections.map((c) {

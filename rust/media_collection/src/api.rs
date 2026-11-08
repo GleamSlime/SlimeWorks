@@ -484,6 +484,53 @@ pub fn ensure_collection_config_dir(root_dir: String) -> Option<String> {
     }
 }
 
+/// 只查不生成：该文件在指定宽度下的相邻缩略图缓存是否已经就绪。
+///
+/// 与 [ensure_cover_thumbnail] 的缓存判定同源（同一路径规则 + 同一有效性标准），
+/// 但**绝不解码、不落盘、不占用生成信号量**。用途是让上层在入队前先问一句，
+/// 避免"文件没变、封面已存在"时仍然排一堆空转任务。
+///
+/// 注意：音频"确实没有内嵌封面"的负缓存也算就绪（重试也拿不到），
+/// 否则每次扫描都会把这类文件重新排一遍。
+/// 就绪时返回缓存路径（可直接用于显示），未就绪返回 `None`——
+/// 由 Rust 给出路径而不是让 Dart 侧复刻命名规则，避免两边规则漂移。
+pub fn ready_cover_thumbnail_path(file_path: String, width: u32) -> Option<String> {
+    let src_path = std::path::Path::new(&file_path);
+    // 文件本身没了就没有"就绪"可言，交给生成路径去判失败
+    if !src_path.is_file() {
+        return None;
+    }
+    let lower = file_path.to_lowercase();
+    let is_audio = lower.ends_with(".mp3")
+        || lower.ends_with(".flac")
+        || lower.ends_with(".aac")
+        || lower.ends_with(".m4a")
+        || lower.ends_with(".ogg")
+        || lower.ends_with(".opus")
+        || lower.ends_with(".wav")
+        || lower.ends_with(".wma")
+        || lower.ends_with(".ape")
+        || lower.ends_with(".aiff")
+        || lower.ends_with(".alac");
+    // 音频：负缓存命中同样视为"结论已定"，但此时没有可显示的封面路径
+    if is_audio {
+        if let Ok(meta) = std::fs::metadata(src_path) {
+            let identity = file_identity(&meta);
+            if audio_cover_absent_in_memory(&file_path, &identity)
+                || audio_cover_absent_on_disk(src_path, &identity)
+            {
+                return None;
+            }
+        }
+    }
+    let cache = adjacent_cache_path(src_path, width)?;
+    if is_valid_cache_hit(&cache) {
+        Some(cache.to_string_lossy().into_owned())
+    } else {
+        None
+    }
+}
+
 /// Generate (or retrieve from disk cache) a JPEG thumbnail for `file_path`
 /// resized to `width` px (aspect-preserving). Returns the path to the cached
 /// thumbnail, or `None` if the original file is not a supported image or
@@ -4698,6 +4745,38 @@ mod tests {
         assert!(!zero.exists(), "零字节缓存残留应被删除");
         // 目录不是有效命中
         assert!(!is_valid_cache_hit(&root));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── is_cover_thumbnail_ready：只查不生成 ──────────────────────────────
+
+    #[test]
+    fn ready_cover_thumbnail_path_reports_disk_cache_without_generating() {
+        let root = fake_media_root("thumb_ready");
+        let src = root.join("photo.jpg");
+        std::fs::write(&src, b"not-a-real-jpeg").unwrap();
+        let src_str = src.to_string_lossy().to_string();
+
+        // 缓存不存在 → 未就绪，且调用本身绝不能生成任何东西
+        assert_eq!(ready_cover_thumbnail_path(src_str.clone(), 320), None);
+        let cache = adjacent_cache_path(&src, 320).unwrap();
+        assert!(!cache.exists(), "查询接口不得生成缓存文件");
+
+        // 手工放一份缓存 → 就绪
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        std::fs::write(&cache, b"x").unwrap();
+        assert_eq!(
+            ready_cover_thumbnail_path(src_str.clone(), 320),
+            Some(cache.to_string_lossy().into_owned())
+        );
+
+        // 宽度不同视为另一档缓存，各自独立
+        assert_eq!(ready_cover_thumbnail_path(src_str.clone(), 480), None);
+
+        // 源文件不存在 → 永远未就绪（交给生成路径去判失败）
+        std::fs::remove_file(&src).unwrap();
+        assert_eq!(ready_cover_thumbnail_path(src_str, 320), None);
+
         let _ = std::fs::remove_dir_all(&root);
     }
 

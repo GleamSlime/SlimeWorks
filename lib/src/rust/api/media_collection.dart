@@ -148,6 +148,20 @@ Future<String?> ensureCoverThumbnail({
   width: width,
 );
 
+/// 只查不生成：该文件在指定宽度下的缩略图缓存是否已就绪。
+///
+/// 上层在入队前用它过滤掉"文件没变、封面已在"的集合与条目，
+/// 使「重新导入」「重新扫描封面」在无变动时不再产生任务。
+/// 纯 stat 级别操作，不解码不落盘，可安全高频调用。
+/// 就绪时返回缓存路径（可直接用于显示）；音频"无内嵌封面"负缓存命中时返回 None。
+Future<String?> readyCoverThumbnailPath({
+  required String filePath,
+  required int width,
+}) => RustLib.instance.api.crateApiMediaCollectionReadyCoverThumbnailPath(
+  filePath: filePath,
+  width: width,
+);
+
 /// Return size + file-path list for every local collection in one pass.
 /// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.
 Future<List<CollectionStats>> getAllCollectionStats() =>

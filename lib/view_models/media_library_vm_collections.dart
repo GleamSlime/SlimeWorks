@@ -673,13 +673,22 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
               switch (item.kind) {
                 case media_api.MediaKind.image:
                   _itemThumbFailed.remove(item.filePath);
+                  // _enqueueItemThumbnail 内部会先查磁盘，命中则不入队
                   _enqueueItemThumbnail(item.filePath);
                 case media_api.MediaKind.video:
                   _enqueueOrPrioritizeScrub(item.filePath);
                 case media_api.MediaKind.audio:
-                  // 音频封面走独立缓存：删掉旧结果才能重新提取
-                  _audioCoverCache.remove(item.filePath);
-                  getAudioCoverSource(item.filePath).ignore();
+                  // 音频封面走独立缓存：先查磁盘，已就绪就不必重提
+                  final ready = await media_api.readyCoverThumbnailPath(
+                    filePath: item.filePath,
+                    width: 300,
+                  );
+                  if (ready == null || ready.isEmpty) {
+                    _audioCoverCache.remove(item.filePath);
+                    getAudioCoverSource(item.filePath).ignore();
+                  } else {
+                    _audioCoverCache[item.filePath] = Future.value(ready);
+                  }
               }
             }
             checked++;

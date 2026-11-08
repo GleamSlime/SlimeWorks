@@ -206,6 +206,10 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
 
   /// 为本地集合入队封面生成（导入时勾选「全文件生成缩略图」与启动预热共用）。
   /// [trackFolder] = false 时任务不进入当前文件夹取消组，离开文件夹不会中断。
+  ///
+  /// 入队前先查磁盘缓存是否已就绪：内存缓存只活在本次进程里，重新导入 /
+  /// 重新扫描时它多半是空的。不查磁盘就会把早已生成好的封面全部重排一遍，
+  /// 用户看到的是「文件没动却又冒出一批任务」。命中时直接写内存缓存，不入队。
   void enqueueLocalCollectionCover(
     media_api.MediaCollection collection, {
     bool trackFolder = true,
@@ -226,6 +230,30 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
         coverPath,
         trackFolder: trackFolder,
       );
+    }
+  }
+
+  /// 集合封面在磁盘上是否已就绪；就绪则直接写内存缓存并返回 true。
+  ///
+  /// 视频按「预览清晰度」宽度、音频按音频封面固定宽度（300）各查一次，
+  /// 与真实生成路径用的宽度保持一致，否则会永远查不到而每轮都重排。
+  Future<bool> _adoptReadyCoverCover(String collectionId, String coverPath) async {
+    final isVideo = MediaLibraryViewModel._isVideoPath(coverPath);
+    final isAudio = MediaLibraryViewModel._isAudioPath(coverPath);
+    if (!isVideo && !isAudio) return false;
+    try {
+      final width = isAudio ? 300 : mediaPrefs.localPreviewWidth.value;
+      final ready = await media_api.readyCoverThumbnailPath(
+        filePath: coverPath,
+        width: width > 0 ? width : 480,
+      );
+      if (ready == null || ready.isEmpty) return false;
+      _collectionVideoThumbnails[collectionId] = ready;
+      return true;
+    } catch (e) {
+      // 查询失败就当作未就绪，交给正常生成路径兜底
+      _logger.error('[CoverReady] 磁盘就绪查询失败: $collectionId err=$e');
+      return false;
     }
   }
 
@@ -266,6 +294,31 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
   }
 
   void _generateCollectionVideoThumbnailAsync(
+    String collectionId,
+    String videoPath, {
+    bool trackFolder = true,
+  }) {
+    if (_collectionVideoThumbnails.containsKey(collectionId) ||
+        _collectionCoverFailed.contains(collectionId) ||
+        _coverQueue.contains(collectionId) ||
+        _inFlightCoverKeys.contains(collectionId)) {
+      return;
+    }
+    // 先占位再异步查磁盘：查询期间同一集合不会被重复入队
+    _inFlightCoverKeys.add(collectionId);
+    _adoptReadyCoverCover(collectionId, videoPath).then((ready) {
+      _inFlightCoverKeys.remove(collectionId);
+      if (ready) {
+        // 磁盘命中：只通知卡片刷新，不产生任何生成任务
+        _logger.info('[VideoThumb] 磁盘已就绪，跳过入队: collectionId=$collectionId');
+        _notifyCoverChanged();
+        return;
+      }
+      _enqueueCollectionVideoCover(collectionId, videoPath, trackFolder: trackFolder);
+    });
+  }
+
+  void _enqueueCollectionVideoCover(
     String collectionId,
     String videoPath, {
     bool trackFolder = true,
@@ -345,6 +398,31 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
         _inFlightCoverKeys.contains(collectionId)) {
       return;
     }
+    // 与视频封面同构：先查磁盘，命中就不排任务（音频封面宽度固定 300）
+    _inFlightCoverKeys.add(collectionId);
+    _adoptReadyCoverCover(collectionId, audioPath).then((ready) {
+      _inFlightCoverKeys.remove(collectionId);
+      if (ready) {
+        _logger.info('[AudioCover] 磁盘已就绪，跳过入队: collectionId=$collectionId');
+        _notifyCoverChanged();
+        return;
+      }
+      _enqueueCollectionAudioCover(collectionId, audioPath, trackFolder: trackFolder);
+    });
+  }
+
+  void _enqueueCollectionAudioCover(
+    String collectionId,
+    String audioPath, {
+    bool trackFolder = true,
+  }) {
+    if (_collectionVideoThumbnails.containsKey(collectionId) ||
+        _audioCoverEmptyCollections.contains(collectionId) ||
+        _collectionCoverFailed.contains(collectionId) ||
+        _coverQueue.contains(collectionId) ||
+        _inFlightCoverKeys.contains(collectionId)) {
+      return;
+    }
     _logger.info('[AudioCover] 入队集合封面: collectionId=$collectionId');
     // 仅卡片惰性触发的任务跟随文件夹取消；导入/启动预热任务必须跑完
     if (trackFolder) _currentFolderCoverKeys.add(collectionId);
@@ -382,6 +460,10 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
 
   /// 为本地图片条目入队缩略图生成任务（宽度取「本地图片清晰度」设置，或 widthOverride）。
   /// 生成期间网格先显示原图，成功后切换到缩略图并缓存进 .SlimeWorks/tmp。
+  ///
+  /// 入队前先问 Rust「磁盘缓存是否就绪」：内存缓存只活在本次进程里，
+  /// 重启后再导入/重扫时它必然是空的——不查磁盘就会把已经生成好的封面对统统
+  /// 重排一遍，用户看到的就是"文件没动却又冒出一批任务"。
   void _enqueueItemThumbnail(String filePath, {int? widthOverride}) {
     if (thumbGenerationPaused.value) return;
     if (_itemThumbnails.containsKey(filePath) ||
@@ -390,37 +472,74 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
     }
     final key = 'item-thumb:$filePath';
     if (_coverQueue.contains(key) || _inFlightCoverKeys.contains(key)) return;
+    final w = widthOverride ?? mediaPrefs.localPreviewWidth.value;
+    final width = w > 0 ? w : 480;
+    // 入队前先查磁盘：命中就直接采用，连任务都不产生
+    // （放在闭包里查的话任务照样会被排进队列，用户看到的仍是"一批新任务"）
     _inFlightCoverKeys.add(key);
-    _coverQueue
-        .enqueue(key, () async {
-          _inFlightCoverKeys.remove(key);
-          try {
-            final w = widthOverride ?? mediaPrefs.localPreviewWidth.value;
-            final width = w > 0 ? w : 480;
-            // FRB 异步调用（Rust 端在后台线程池解码缩放，不阻塞 UI 线程）
-            final thumb = await media_api.ensureCoverThumbnail(
-              filePath: filePath,
-              width: width,
-            );
-            if (thumb == null || thumb.isEmpty) {
-              _itemThumbFailed.add(filePath);
-              // 失败也要通知：卡片此刻停在加载态，不重建就会一直转圈
-              _notifyCoverChanged();
-              return;
-            }
-            _logger.info('[ItemThumb] 缩略图已生成: $thumb');
-            _itemThumbnails[filePath] = thumb;
+    media_api
+        .readyCoverThumbnailPath(filePath: filePath, width: width)
+        .then((ready) {
+          if (ready != null && ready.isNotEmpty) {
+            _inFlightCoverKeys.remove(key);
+            _itemThumbnails[filePath] = ready;
             _notifyCoverChanged();
-          } catch (e) {
-            _logger.error('[ItemThumb] 缩略图生成失败: $filePath err=$e');
-            _itemThumbFailed.add(filePath);
-            // 同失败分支：让卡片退回原图，而不是永久停留在加载态
-            _notifyCoverChanged();
+            return;
           }
+          _coverQueue
+              .enqueue(key, () async {
+                _inFlightCoverKeys.remove(key);
+                try {
+                  // FRB 异步调用（Rust 端在后台线程池解码缩放，不阻塞 UI 线程）
+                  final thumb = await media_api.ensureCoverThumbnail(
+                    filePath: filePath,
+                    width: width,
+                  );
+                  if (thumb == null || thumb.isEmpty) {
+                    _itemThumbFailed.add(filePath);
+                    // 失败也要通知：卡片此刻停在加载态，不重建就会一直转圈
+                    _notifyCoverChanged();
+                    return;
+                  }
+                  _logger.info('[ItemThumb] 缩略图已生成: $thumb');
+                  _itemThumbnails[filePath] = thumb;
+                  _notifyCoverChanged();
+                } catch (e) {
+                  _logger.error('[ItemThumb] 缩略图生成失败: $filePath err=$e');
+                  _itemThumbFailed.add(filePath);
+                  // 同失败分支：让卡片退回原图，而不是永久停留在加载态
+                  _notifyCoverChanged();
+                }
+              })
+              .whenComplete(() {
+                // 任务被取消时闭包不会执行，此处兜底清理 key，避免永久阻断重新入队
+                _inFlightCoverKeys.remove(key);
+              });
         })
-        .whenComplete(() {
-          // 任务被取消时闭包不会执行，此处兜底清理 key，避免永久阻断重新入队
+        .catchError((Object e) {
+          // 查询本身失败：不阻断生成，按原路径直接入队（标记已清，不会递归）
+          _logger.error('[ItemThumb] 磁盘就绪查询失败: $filePath err=$e');
           _inFlightCoverKeys.remove(key);
+          _coverQueue.enqueue(key, () async {
+            _inFlightCoverKeys.remove(key);
+            try {
+              final thumb = await media_api.ensureCoverThumbnail(
+                filePath: filePath,
+                width: width,
+              );
+              if (thumb == null || thumb.isEmpty) {
+                _itemThumbFailed.add(filePath);
+                _notifyCoverChanged();
+                return;
+              }
+              _itemThumbnails[filePath] = thumb;
+              _notifyCoverChanged();
+            } catch (err) {
+              _logger.error('[ItemThumb] 缩略图生成失败: $filePath err=$err');
+              _itemThumbFailed.add(filePath);
+              _notifyCoverChanged();
+            }
+          });
         });
   }
 
@@ -661,6 +780,9 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
   Future<String?> _doGetAudioCover(String filePath) async {
     // 通过 Rust FFI 调用 ensure_cover_thumbnail（已支持音频封面提取）
     try {
+      // 磁盘已就绪就直接用，别为了一张已有的封面再去解一遍文件
+      final ready = await media_api.readyCoverThumbnailPath(filePath: filePath, width: 300);
+      if (ready != null && ready.isNotEmpty) return ready;
       return await media_api.ensureCoverThumbnail(
         filePath: filePath,
         width: 300,
