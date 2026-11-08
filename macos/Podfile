@@ -56,5 +56,35 @@ post_install do |installer|
         config.build_settings['OTHER_LDFLAGS'] << '-lc++'
       end
     end
+
+    # ── media_kit_video 2.0.1：补 mpv 的 C 头搜索路径 ──────────────────────
+    # 上游 podspec 把 Headers/**/*.h 列进 source_files，CocoaPods 也生成了
+    # 正确的 umbrella header（里面有 #import "render.h"），但**没有**把
+    # Headers/mpv 加进 HEADER_SEARCH_PATHS。于是那句 #import 找不到文件被跳过，
+    # Swift 侧看不到任何 mpv 符号，真机/CI 编译 Classes/plugin 分支时报：
+    #   TextureSW.swift:142: cannot find 'mpv_render_context_render' in scope
+    # （本机没装 Xcode，编不到这一层，所以本地看着一切正常）
+    #
+    # 注意：pod install 在跑 post_install 之前就把 xcconfig 落盘了，只改
+    # build_settings 不会反映到文件里。所以这里两头都写：改 target 设置
+    # （影响本次工程）＋ 直接给 xcconfig 追加一行（影响后续构建）。
+    if target.name == 'media_kit_video'
+      target.build_configurations.each do |config|
+        paths = config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
+        paths = [paths] if paths.is_a?(String)
+        paths << '$(PODS_TARGET_SRCROOT)/Headers'
+        paths << '$(PODS_TARGET_SRCROOT)/Headers/mpv'
+        config.build_settings['HEADER_SEARCH_PATHS'] = paths.uniq
+      end
+    end
+  end
+
+  # xcconfig 已经生成，直接补一行头搜索路径（幂等：重复 pod install 不会叠加）
+  support_dir = File.join(installer.sandbox.root, 'Target Support Files', 'media_kit_video')
+  Dir.glob(File.join(support_dir, 'media_kit_video.*.xcconfig')).each do |xcconfig|
+    content = File.read(xcconfig)
+    next if content.include?('Headers/mpv')
+    extra = "\nHEADER_SEARCH_PATHS = $(inherited) \"${PODS_TARGET_SRCROOT}/Headers\" \"${PODS_TARGET_SRCROOT}/Headers/mpv\"\n"
+    File.write(xcconfig, content + extra)
   end
 end

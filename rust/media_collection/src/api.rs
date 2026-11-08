@@ -1120,6 +1120,37 @@ fn node_thumb_get(key: &str) -> Option<Vec<u8>> {
     None
 }
 
+/// 节点缩略图「生成失败」负缓存：key → 源文件身份。
+///
+/// 为什么要它：音频没有内嵌封面、容器里没有视频轨这类情况**永远**生成不出缩略图，
+/// 但客户端每渲染一次卡片就会请求一次。没有负缓存时每轮都白跑一遍 ffmpeg
+/// （日志里能看到同一批 mp3 在 18:14 / 18:51 / 18:52 反复 generate failed）。
+///
+/// 用源文件身份（size|mtime）做值：文件被换了（重新压过、补了封面）就自动失效，
+/// 不需要用户手动清缓存。
+fn node_thumb_fail_lock() -> &'static Mutex<HashMap<String, String>> {
+    static MAP: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    MAP.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn node_thumb_fail_get(key: &str, identity: &str) -> bool {
+    let map = node_thumb_fail_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    map.get(key).map(String::as_str) == Some(identity)
+}
+
+fn node_thumb_fail_put(key: &str, identity: &str) {
+    let mut map = node_thumb_fail_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    // 简单上限：负缓存条目极小，但也不能无限长（长期运行的节点会累积）
+    if map.len() > 8192 {
+        map.clear();
+    }
+    map.insert(key.to_string(), identity.to_string());
+}
+
 fn node_thumb_put(key: &str, bytes: Vec<u8>) {
     let mut map = node_thumb_lock().lock().unwrap_or_else(|e| e.into_inner());
     let mut total = NODE_THUMB_TOTAL_BYTES.load(Ordering::Relaxed) as usize;
@@ -1203,6 +1234,15 @@ pub fn generate_thumbnail_bytes(file_path: String, width: u32) -> Option<Vec<u8>
     // 磁盘缓存：源文件身份没变就直接读文件，跳过整条解码/转码链路。
     // 这一层决定「节点重启后第一次浏览」是否还要重新生成整屏封面。
     let identity = src_meta.as_ref().map(file_identity).unwrap_or_default();
+    // 负缓存：同身份下已经判定过「生成不出来」就直接返回，别再跑一遍 ffmpeg
+    if node_thumb_fail_get(&key, &identity) {
+        sw_debug!(
+            "[node-thumb] cache-hit(fail) | src={} | w={}",
+            file_path,
+            width
+        );
+        return None;
+    }
     let disk_path = node_thumb_disk_path(&file_path, width, &identity);
     if let Some(bytes) = node_thumb_disk_get(&disk_path) {
         sw_debug!(
@@ -1257,6 +1297,10 @@ pub fn generate_thumbnail_bytes(file_path: String, width: u32) -> Option<Vec<u8>
                 file_path,
                 width
             );
+            // 失败也要记一笔负缓存：绝大多数失败是「音频没有内嵌封面」这类
+            // 不可恢复的结论，源文件不变就永远生成不出来。不缓存的话客户端
+            // 每次请求都会重跑一遍 ffmpeg（实测一屏音频每轮几十次白跑）。
+            node_thumb_fail_put(&key, &identity);
             None
         }
     }
@@ -4861,6 +4905,58 @@ mod tests {
         std::fs::write(&txt, b"x").unwrap();
         assert!(ensure_cover_thumbnail(txt.to_string_lossy().into_owned(), 320).is_none());
         assert!(!root.join("sub").exists());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 节点缩略图失败负缓存 ───────────────────────────────────────────────
+
+    #[test]
+    fn node_thumb_fail_cache_is_keyed_by_source_identity() {
+        // 用独立 key，避免与并发的真实请求串味
+        let key = format!("fail-cache-test|{}|320", std::process::id());
+        let id_v1 = "100|1000";
+        let id_v2 = "200|2000";
+
+        // 未记录 → 未命中
+        assert!(!node_thumb_fail_get(&key, id_v1));
+
+        // 记下 v1 身份 → 同身份命中
+        node_thumb_fail_put(&key, id_v1);
+        assert!(node_thumb_fail_get(&key, id_v1));
+
+        // 文件被换掉（身份变了）→ 自动失效，允许重新尝试
+        assert!(!node_thumb_fail_get(&key, id_v2));
+
+        // 记录新身份后按新身份命中
+        node_thumb_fail_put(&key, id_v2);
+        assert!(node_thumb_fail_get(&key, id_v2));
+        assert!(!node_thumb_fail_get(&key, id_v1));
+    }
+
+    #[test]
+    fn node_thumb_fail_cache_hit_skips_generation() {
+        // 端到端语义：无内嵌封面的音频第一次尝试失败后，第二次必须直接返回 None
+        // 且不再触发生成（不会因为重复请求把 ffmpeg 反复拉起来）。
+        let root = fake_media_root("node_thumb_fail_skip");
+        let src = root.join("noart.mp3");
+        // 伪造一个「音频但没有封面」的文件：ffmpeg 也解不出来
+        std::fs::write(&src, b"not-a-real-mp3").unwrap();
+        let src_str = src.to_string_lossy().into_owned();
+
+        let first = generate_thumbnail_bytes(src_str.clone(), 240);
+        assert!(first.is_none(), "无封面的音频不应产出缩略图");
+        let identity = std::fs::metadata(&src)
+            .ok()
+            .map(|m| file_identity(&m))
+            .unwrap_or_default();
+        let key = format!("{}|{}", src_str, 240);
+
+        // 第一轮失败后应当留下负缓存
+        assert!(
+            node_thumb_fail_get(&key, &identity),
+            "生成失败必须写入负缓存，否则每次请求都会重跑 ffmpeg"
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }
