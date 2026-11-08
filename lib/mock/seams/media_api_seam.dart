@@ -181,6 +181,24 @@ Future<String?> readyCoverThumbnailPath({
   return rust.readyCoverThumbnailPath(filePath: filePath, width: width);
 }
 
+/// 只查不生成：读取资源旁已缓存的振幅波形（没有/源文件已变则 null）。
+Future<List<double>?> readVideoWaveform({
+  required String filePath,
+  required int bins,
+}) async {
+  if (MockMode.enabled) return null;
+  return rust.readVideoWaveform(filePath: filePath, bins: bins);
+}
+
+/// 生成（或读缓存）振幅波形，结果写入资源旁 .SlimeWorks/waveform。
+Future<List<double>> ensureVideoWaveform({
+  required String filePath,
+  required int bins,
+}) async {
+  if (MockMode.enabled) return <double>[];
+  return rust.ensureVideoWaveform(filePath: filePath, bins: bins);
+}
+
 Future<List<CollectionStats>> getAllCollectionStats() async {
   if (MockMode.enabled) {
     return _m.collections.map((c) {

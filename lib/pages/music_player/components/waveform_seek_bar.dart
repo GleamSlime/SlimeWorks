@@ -83,8 +83,13 @@ class WaveformSeekBar extends StatelessWidget {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final totalBars = waveform.length;
-        // 根据采样点数量自适应间距：采样点多时间距缩小
-        final adaptiveGap = totalBars > 500 ? 0.5 : (totalBars > 200 ? 1.0 : barGap);
+        // 间距按「可用宽度 / 采样点数」自适应，而不是只看点数分档：
+        // 点数多而画面窄时（例如 1200 根塞进 1000px），固定 0.5px 间距会让
+        // barWidth 算成负数，clamp 后一排条溢出容器、糊成一片。
+        // 这里保证每根至少留 0.6px 画得下，间距最多占单格的 40%。
+        final slot = totalBars > 0 ? width / totalBars : width;
+        final adaptiveGap = (slot * 0.4)
+            .clamp(0.0, totalBars > 500 ? 0.5 : (totalBars > 200 ? 1.0 : barGap));
         final barWidth = (width - (totalBars - 1) * adaptiveGap) / totalBars;
 
         return MouseRegion(
@@ -103,7 +108,7 @@ class WaveformSeekBar extends StatelessWidget {
               progress: progress,
               activeColor: activeColor,
               inactiveColor: inactiveColor,
-              barWidth: barWidth.clamp(0.5, 8.0),
+              barWidth: barWidth.clamp(0.3, 8.0),
               barGap: adaptiveGap,
               barRadius: barRadius.clamp(0.0, barWidth / 2),
             ),

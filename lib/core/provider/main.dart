@@ -54,8 +54,11 @@ void getItInit() {
   // 媒体偏好设置服务
   getIt.registerLazySingleton<MediaPrefsService>(() => MediaPrefsService());
 
-  // 视频预览振幅进度条的波形提取服务（仅桌面端本地文件生效）
-  getIt.registerLazySingleton<VideoWaveformService>(() => VideoWaveformService());
+  // 视频预览振幅进度条的波形服务：本地交给本机 Rust，远程交给节点算
+  // （客户端只取 JSON，移动端因此也能用），故需注入节点服务
+  getIt.registerLazySingleton<VideoWaveformService>(
+    () => VideoWaveformService(nodeService: getIt<NodeSettingsService>()),
+  );
 
   // Manga 漫画平台服务
   getIt.registerLazySingleton<MangaService>(() => MangaService());

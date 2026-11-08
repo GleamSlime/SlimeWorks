@@ -8,6 +8,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gal/gal.dart';
+import 'package:get/get.dart' show Obx;
 import 'package:http/http.dart' as http;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -85,6 +86,10 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
   bool _uiVisible = true;
   Timer? _immersiveTimer;
 
+  /// 进入预览前桌面沉浸模式的原值；null = 本次没改过（非桌面端）。
+  /// 退出时按它还原，避免把别处（音乐播放器）开的沉浸状态一起关掉。
+  bool? _restoreDesktopImmersiveTo;
+
   // ── 图片缩放状态（缩放时禁用外层翻页手势）────────────────────────────────
   bool _imageIsZoomed = false;
   bool _currentIsVideo = false;
@@ -147,7 +152,22 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
     if (Platform.isAndroid || Platform.isIOS) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       _resetImmersiveTimer();
+    } else {
+      _enterDesktopImmersive();
     }
+  }
+
+  /// 桌面端打开预览即进入沉浸模式：侧栏与顶部 appbar 一起让位给画面。
+  ///
+  /// 预览是 rootNavigator 压栈的全屏页，但 DesktopTopBar 由外层 shell 渲染，
+  /// 不置这个标志的话顶栏会一直压在画面上方（用户反馈的"沉浸模式下 appbar
+  /// 没隐藏"）。记下原值，退出时只还原自己改过的那一份，别动音乐播放器
+  /// 等其它来源的沉浸状态。
+  void _enterDesktopImmersive() {
+    if (!PlatformUtil.isDesktop) return;
+    final immersive = getIt<DesktopScreenProvider>().desktopImmersiveMode;
+    _restoreDesktopImmersiveTo = immersive.value;
+    if (!immersive.value) immersive.value = true;
   }
 
   @override
@@ -167,6 +187,11 @@ class _MediaViewerPageState extends State<MediaViewerPage> with TickerProviderSt
   @override
   void dispose() {
     _immersiveTimer?.cancel();
+    // 还原桌面沉浸模式：预览退出后顶栏与侧栏要回来
+    final restoreTo = _restoreDesktopImmersiveTo;
+    if (restoreTo != null) {
+      getIt<DesktopScreenProvider>().desktopImmersiveMode.value = restoreTo;
+    }
     _snapCtrl.dispose();
     _wheelZoomNotifier.dispose();
     if (Platform.isAndroid || Platform.isIOS) {

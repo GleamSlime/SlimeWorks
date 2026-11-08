@@ -241,6 +241,19 @@ Future<Float64List> extractWaveform({
   samples: samples,
 );
 
+/// 供媒体库（视频振幅）复用的纯解码入口：**不带音乐播放器那套应用目录缓存**。
+///
+/// 媒体库要把波形缓存写在资源旁的 .SlimeWorks/waveform 里（随资源走、
+/// 节点算完客户端直接取），缓存策略由调用方负责，这里只负责解码出峰值。
+/// 移动端没有 symphonia 桌面链路，返回空数组让调用方走 ffmpeg 或节点侧。
+Future<Float64List> extractWaveformForMedia({
+  required String filePath,
+  required int bins,
+}) => RustLib.instance.api.crateApiMusicPlayerExtractWaveformForMedia(
+  filePath: filePath,
+  bins: bins,
+);
+
 /// 扫描文件夹路径映射（返回树形结构，不限制文件类型，不限深度）
 PathMappingNodeInfo scanPathMapping({required String dirPath}) =>
     RustLib.instance.api.crateApiMusicPlayerScanPathMapping(dirPath: dirPath);

@@ -962,6 +962,55 @@ class NodeSettingsService extends GetxService {
     return Map<String, dynamic>.from(data);
   }
 
+  /// 从节点媒体直链反查「哪个节点 + 节点上的绝对路径」。
+  ///
+  /// 用途：预览页手里只有播放 URL（Image.network / 播放器只吃 URL），
+  /// 但取振幅必须回到节点侧算，需要还原出 nodeId 与 filePath。
+  /// 匹配依据是 base url 前缀；非节点链接（本地文件、外链）返回 null。
+  ({String nodeId, String filePath})? resolveNodeFromMediaUrl(String url) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return null;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return null;
+    final path = uri.queryParameters['path'];
+    if (path == null || path.isEmpty) return null;
+    // 去掉查询串后按 base url 前缀匹配节点
+    final origin = '${uri.scheme}://${uri.authority}';
+    for (final node in remoteNodes) {
+      final base = _normalizeBaseUrl(_baseUrlFor(node));
+      if (base.startsWith(origin)) {
+        return (nodeId: node.id, filePath: path);
+      }
+    }
+    return null;
+  }
+
+  /// 取远程节点上某个媒体文件的振幅波形（0~1，长度 = bins）。
+  ///
+  /// [ensure] = false 只读节点已有缓存（没有则返回 null，不触发计算）；
+  /// true 表示让节点现算并落盘。**解码永远在节点侧做**，客户端只收几 KB
+  /// 的 JSON —— 移动端走远程节点时绝不能把整段视频拉到本地跑 ffmpeg。
+  ///
+  /// [filePath] 是节点上的绝对路径（不是客户端路径）。
+  Future<List<double>?> fetchNodeMediaWaveform({
+    required String nodeId,
+    required String filePath,
+    int bins = 1200,
+    bool ensure = false,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    final response = await _callNode(
+      node: node,
+      action: ensure ? 'ensure_media_waveform' : 'read_media_waveform',
+      params: <String, dynamic>{'file_path': filePath, 'bins': bins},
+    );
+    final data = response['data'];
+    if (data is! Map) return null;
+    final arr = data['data'];
+    if (arr is! List || arr.isEmpty) return null;
+    return arr.map((e) => (e as num).toDouble()).toList(growable: false);
+  }
+
   /// 让节点重新检查指定范围内的集合封面，缺失的由节点后台补生成。
   ///
   /// [folderId]：节点原始文件夹 ID，扫描其整棵子树（含所有层级）；

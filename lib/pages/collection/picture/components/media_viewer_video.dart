@@ -81,6 +81,36 @@ class _VideoPreviewState extends State<_VideoPreview> {
     }
   }
 
+  // ── 预加载策略：默认整段缓冲到底 ─────────────────────────────────────
+
+  /// 让 libmpv 尽量把整片缓冲下来，而不是只留一小段前滚窗口。
+  ///
+  /// media_kit 的 `PlayerConfiguration.bufferSize` 只作用于 Dart 侧的日志/事件
+  /// 环形缓冲，**管不到 libmpv 的解复用缓存**；真正的闸门是 mpv 的
+  /// `demuxer-max-bytes` / `demuxer-max-back-bytes` / `cache-secs`，默认只留
+  /// 150MiB 且到量就停 —— 表现就是"预加载只有一点"，往后拖还得等。
+  ///
+  /// 这里放开到 2GiB 并把 cache-secs 设为无限（inf），配合 `cache-pause=no`
+  /// 让它一路读到底。上限仍需保留：无上限会让超长片把内存吃穿。
+  Future<void> _applyFullPreload(Player player) async {
+    final native = player.platform;
+    if (native is! NativePlayer) return; // Web 播放器没有 mpv 属性
+    try {
+      // 前向缓冲上限（字节）：2GiB 足够覆盖绝大多数长片
+      await native.setProperty('demuxer-max-bytes', '${2 * 1024 * 1024 * 1024}');
+      // 已播过的部分也保留，往回拖不用再下载
+      await native.setProperty('demuxer-max-back-bytes', '${512 * 1024 * 1024}');
+      // 不按"缓冲了多少秒"设限，只按字节上限收口
+      await native.setProperty('cache-secs', 'inf');
+      // 缓冲未满时不要暂停播放等待，边播边继续读
+      await native.setProperty('cache-pause', 'no');
+      await native.setProperty('demuxer-readahead-secs', 'inf');
+    } catch (e) {
+      // 属性不被支持时退回默认策略，不影响播放
+      debugPrint('[MVP] 预加载属性设置失败（退回默认缓冲）: $e');
+    }
+  }
+
   // ── 断点续播（本地与远程节点视频共用）──────────────────────────────
 
   /// 打开视频后恢复到上次播放位置。
@@ -262,6 +292,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
     _readySub?.cancel();
     _player = Player(configuration: const PlayerConfiguration(bufferSize: 128 * 1024 * 1024));
     _videoController = VideoController(_player!);
+    _applyFullPreload(_player!);
     // 套用上次记住的音量：Player 每个实例都是全新状态，不在这里恢复就会回到 100%
     _player!
       ..setVolume(_volumePrefs.videoVolume.value)
@@ -1468,23 +1499,33 @@ class _VideoLoadingSpeedState extends State<_VideoLoadingSpeed> {
 class _VideoWaveButton extends StatelessWidget {
   const _VideoWaveButton({required this.active, required this.onToggle});
 
-  /// 当前是否处于振幅模式（按钮高亮反馈）
+  /// 初始振幅模式（仅用于首帧）。真实高亮状态由 prefs 的 Rx 现读，见 build。
   final bool active;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final s = AppSemantic.of(context);
-    return IconButton(
-      tooltip: active ? '切回普通进度条' : '振幅进度条',
-      icon: Icon(
-        Icons.graphic_eq_rounded,
-        // 开启时用 info 紫点亮，一眼看出当前处于哪种进度条
-        color: active ? s.info.color : s.onMedia.withValues(alpha: 0.85),
-        size: AppTheme.metrics.iconSize22,
-      ),
-      onPressed: onToggle,
-    );
+    // ★ 不能只信传进来的 active：上游 media_kit_video 两套
+    //   *VideoControlsTheme 的 updateShouldNotify 写反了
+    //   （identical(normal, old.normal) && ... —— "主题没变才通知"），
+    //   主题数据一变控制栏子树就不重建，切回普通进度条后 icon 仍亮着，
+    //   必须退出重开才正常。
+    //   这里用 Obx 直接订阅 prefs 里的 Rx，自己掌握重建时机，绕开库 bug。
+    final prefs = getIt<MediaPrefsService>();
+    return Obx(() {
+      final on = prefs.videoWaveformSeek.value;
+      return IconButton(
+        tooltip: on ? '切回普通进度条' : '振幅进度条',
+        icon: Icon(
+          Icons.graphic_eq_rounded,
+          // 开启时用 info 紫点亮，一眼看出当前处于哪种进度条
+          color: on ? s.info.color : s.onMedia.withValues(alpha: 0.85),
+          size: AppTheme.metrics.iconSize22,
+        ),
+        onPressed: onToggle,
+      );
+    });
   }
 }
 

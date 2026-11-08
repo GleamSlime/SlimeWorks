@@ -105,6 +105,26 @@ pub async fn dispatch_action(
             }))
         }
 
+        // ── 视频/音频振幅（波形）─────────────────────────────────────────
+        // 客户端只要几 KB 的 JSON：解码在本节点做，绝不让客户端（尤其移动端）
+        // 把整段视频拉过去自己跑 ffmpeg。
+        // read=只读缓存（没有就回 null，不触发计算）；ensure=没有则生成并落盘。
+        "read_media_waveform" | "ensure_media_waveform" => {
+            let file_path = params["file_path"].as_str().unwrap_or("").to_string();
+            if file_path.is_empty() {
+                return Err("missing file_path".to_string());
+            }
+            let bins = params["bins"].as_u64().unwrap_or(1200) as u32;
+            let data = if action == "read_media_waveform" {
+                crate::api::media_collection::read_video_waveform(file_path, bins)
+            } else {
+                crate::api::media_collection::ensure_video_waveform(file_path, bins)
+                    .map_err(|e| format!("生成振幅失败: {}", e))?
+                    .into()
+            };
+            Ok(json!({ "data": data, "bins": bins }))
+        }
+
         // 重新扫描封面：客户端指定范围（集合 id 列表 / 文件夹子树 / 不传=全部），
         // 后台按客户端封面宽度补生成缺失的封面，进度由 get_thumb_progress 上报。
         "rescan_media_covers" => {

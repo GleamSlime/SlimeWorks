@@ -12,6 +12,13 @@ pub enum MediaKind {
 /// 若传入 None 则回退到系统 PATH 中的 "ffmpeg"/"ffprobe"。
 #[frb(sync)]
 pub fn register_ffmpeg_paths(ffmpeg_path: Option<String>, ffprobe_path: Option<String>) {
+    // 落文件日志：Dart 侧 Loggers 只进内存环形缓冲、不写文件，
+    // 注册结果否则完全不可观测（排查「用的是 brew 原生 arm64 版还是内置 Intel 版」只能靠猜）
+    slime_logger::sw_info!(
+        "[ffmpeg-path] 注册到 Rust | ffmpeg={:?} | ffprobe={:?}",
+        ffmpeg_path,
+        ffprobe_path
+    );
     if let Some(p) = ffmpeg_path {
         media_collection::register_ffmpeg_path(p);
     }
@@ -545,4 +552,310 @@ pub fn update_smart_folder(
 #[frb(sync)]
 pub fn delete_smart_folder(id: String) -> anyhow::Result<bool> {
     media_collection::delete_smart_folder(id).map_err(|e| anyhow::anyhow!(e))
+}
+
+// ── 视频/音频振幅（波形）────────────────────────────────────────────────────
+//
+// 设计要点（对应用户诉求）：
+// 1. 缓存落在**资源旁** `<资源目录>/.SlimeWorks/waveform/<文件名>.w<bins>.json`，
+//    随资源目录一起移动/共享，而不是塞进各自机器的应用数据目录。
+// 2. 远程节点在**节点侧**算：客户端只取回几 KB 的 JSON，绝不再把整段视频
+//    拉到本地跑 ffmpeg —— 移动端走远程节点时那是致命的流量与耗时。
+// 3. 只查不生成的读取口（read_video_waveform）与生成口（ensure_video_waveform）
+//    分开，导入/重扫时用后者补齐，预览时用前者优先命中。
+
+/// 资源旁的波形缓存文件路径：`<父目录>/.SlimeWorks/waveform/<文件名>.w<bins>.json`。
+fn waveform_cache_path(file_path: &str, bins: u32) -> Option<std::path::PathBuf> {
+    let src = std::path::Path::new(file_path);
+    let parent = src.parent()?;
+    let name = src.file_name()?.to_string_lossy();
+    if name.is_empty() {
+        return None;
+    }
+    Some(
+        parent
+            .join(".SlimeWorks")
+            .join("waveform")
+            .join(format!("{}.w{}.json", name, bins)),
+    )
+}
+
+/// 缓存内容带源文件身份（size|mtime）：文件被替换后缓存自动失效。
+fn waveform_identity(meta: &std::fs::Metadata) -> String {
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("{}|{}", meta.len(), mtime)
+}
+
+/// 只查不生成：读取已缓存的波形。没有缓存 / 源文件已变 / bins 不符 → 返回 None。
+///
+/// 纯读盘，不解码、不起子进程，可安全高频调用（预览打开时先走这条）。
+pub fn read_video_waveform(file_path: String, bins: u32) -> Option<Vec<f64>> {
+    let cache = waveform_cache_path(&file_path, bins)?;
+    let raw = std::fs::read_to_string(&cache).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    // 身份校验：文件换了就不能用旧波形
+    let meta = std::fs::metadata(&file_path).ok()?;
+    if value.get("identity").and_then(|v| v.as_str()) != Some(waveform_identity(&meta).as_str()) {
+        return None;
+    }
+    if value.get("bins").and_then(|v| v.as_u64()) != Some(bins as u64) {
+        return None;
+    }
+    let arr = value.get("data")?.as_array()?;
+    let out: Vec<f64> = arr.iter().filter_map(|v| v.as_f64()).collect();
+    if out.len() == bins as usize {
+        Some(out)
+    } else {
+        None
+    }
+}
+
+/// 该文件是否已有可用的波形缓存（导入/重扫时用来决定要不要补算）。
+#[frb(sync)]
+pub fn has_video_waveform(file_path: String, bins: u32) -> bool {
+    read_video_waveform(file_path, bins).is_some()
+}
+
+/// 生成（或读缓存）视频/音频的振幅数组，归一化到 0~1，长度 = bins。
+///
+/// 优先 symphonia 流式解码（内存只留 bins 个峰值）；解不了的容器/编码回退
+/// ffmpeg 输出 8kHz 单声道 PCM，边读边折叠峰值，绝不把整段 PCM 读进内存。
+/// 结果写入资源旁 `.SlimeWorks/waveform/`，下次（含节点重启、换客户端）直接命中。
+pub fn ensure_video_waveform(file_path: String, bins: u32) -> anyhow::Result<Vec<f64>> {
+    let bins = bins.clamp(64, 4096);
+    if let Some(cached) = read_video_waveform(file_path.clone(), bins) {
+        return Ok(cached);
+    }
+    let meta = std::fs::metadata(&file_path)
+        .map_err(|e| anyhow::anyhow!("源文件不可读: {}", e))?;
+    let identity = waveform_identity(&meta);
+
+    // ① symphonia：常见 MP4/MP3/FLAC 直接命中，最快
+    let peaks = match crate::api::music_player::extract_waveform_for_media(file_path.clone(), bins) {
+        Ok(v) if v.len() == bins as usize && v.iter().any(|x| *x > 0.0) => Some(v),
+        _ => None,
+    };
+    // ② ffmpeg 兜底：symphonia 解不了的（部分 MKV/WMV/TS 等）
+    let peaks = match peaks {
+        Some(v) => v,
+        None => extract_waveform_via_ffmpeg(&file_path, bins)
+            .ok_or_else(|| anyhow::anyhow!("无法从该文件提取音频振幅"))?,
+    };
+    let normalized = normalize_waveform(peaks);
+
+    // 落盘（失败不影响本次返回：只读盘等场景下拿不到缓存也能用）
+    if let Some(cache) = waveform_cache_path(&file_path, bins) {
+        if let Some(dir) = cache.parent() {
+            if std::fs::create_dir_all(dir).is_ok() {
+                let payload = serde_json::json!({
+                    "identity": identity,
+                    "bins": bins,
+                    "data": normalized,
+                });
+                if let Ok(text) = serde_json::to_string(&payload) {
+                    let _ = std::fs::write(&cache, text);
+                }
+            }
+        }
+    }
+    Ok(normalized)
+}
+
+/// 按全局峰值归一化到 0~1，并轻微抬升中小音量段（gamma 0.85）。
+///
+/// 用户的验收点是"能显著看出哪里高声"：不归一的话整段低音量的片子会糊成
+/// 一排矮条；纯线性又让安静对白几乎看不见，故用 <1 的指数抬中段、高声段仍顶满。
+fn normalize_waveform(peaks: Vec<f64>) -> Vec<f64> {
+    let max = peaks.iter().cloned().fold(0.0f64, f64::max);
+    if max <= 1e-6 {
+        return vec![0.05; peaks.len()];
+    }
+    let scale = 1.0 / max;
+    peaks
+        .iter()
+        .map(|v| (v * scale).powf(0.85).clamp(0.0, 1.0))
+        .collect()
+}
+
+/// ffmpeg 兜底提取：8kHz 单声道 s16le 走管道，边读边折叠成 bins 个峰值。
+fn extract_waveform_via_ffmpeg(file_path: &str, bins: u32) -> Option<Vec<f64>> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+
+    let mut child = Command::new(media_collection::ffmpeg_cmd())
+        .args([
+            "-v", "quiet",
+            "-i", file_path,
+            "-vn",
+            "-f", "s16le",
+            "-ac", "1",
+            "-acodec", "pcm_s16le",
+            "-ar", "8000",
+            "-",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let mut stdout = child.stdout.take()?;
+    // 每 250 个样本（约 31ms）折一个峰值，再聚合到 bins
+    const BLOCK_SAMPLES: usize = 250;
+    let mut block = vec![0u8; BLOCK_SAMPLES * 2];
+    let mut block_peaks: Vec<f64> = Vec::new();
+    let mut used = 0usize;
+    loop {
+        match stdout.read(&mut block[used..]) {
+            Ok(0) => break,
+            Ok(n) => {
+                used += n;
+                if used == block.len() {
+                    let mut peak = 0i32;
+                    for chunk in block.chunks_exact(2) {
+                        let s = i16::from_le_bytes([chunk[0], chunk[1]]).unsigned_abs() as i32;
+                        if s > peak {
+                            peak = s;
+                        }
+                    }
+                    block_peaks.push(peak as f64 / 32768.0);
+                    used = 0;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    let _ = child.wait();
+    if block_peaks.is_empty() {
+        return None;
+    }
+    Some(resample_peaks(&block_peaks, bins as usize))
+}
+
+/// 把任意长度的峰值序列重采样到 bins 个（每段取最大值，保住高声段不被平均掉）。
+fn resample_peaks(peaks: &[f64], bins: usize) -> Vec<f64> {
+    if peaks.len() == bins {
+        return peaks.to_vec();
+    }
+    let mut out = vec![0.0f64; bins];
+    for (i, slot) in out.iter_mut().enumerate() {
+        let start = i * peaks.len() / bins;
+        let end = ((i + 1) * peaks.len() / bins).max(start + 1).min(peaks.len());
+        *slot = peaks[start..end].iter().cloned().fold(0.0f64, f64::max);
+    }
+    out
+}
+
+#[cfg(test)]
+mod waveform_tests {
+    use super::*;
+
+    /// 每个用例独立临时目录，避免并发互相踩踏
+    fn temp_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "slime_waveform_{}_{}",
+            tag,
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn cache_path_sits_beside_resource() {
+        // 缓存必须落在资源旁（随资源目录移动/共享），不是应用数据目录
+        let p = waveform_cache_path("/media/movies/a.mp4", 1200).unwrap();
+        assert_eq!(
+            p,
+            std::path::Path::new("/media/movies/.SlimeWorks/waveform/a.mp4.w1200.json")
+        );
+    }
+
+    #[test]
+    fn cache_path_separates_bins() {
+        // 不同颗粒度是两份缓存，互不覆盖
+        let a = waveform_cache_path("/m/a.mp4", 480).unwrap();
+        let b = waveform_cache_path("/m/a.mp4", 1200).unwrap();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn read_returns_none_without_cache_and_never_generates() {
+        let dir = temp_dir("read_empty");
+        let src = dir.join("a.mp4");
+        std::fs::write(&src, b"not-a-real-video").unwrap();
+        let src_str = src.to_string_lossy().to_string();
+
+        assert!(read_video_waveform(src_str.clone(), 1200).is_none());
+        // 只读接口绝不能顺手生成缓存
+        let cache = waveform_cache_path(&src_str, 1200).unwrap();
+        assert!(!cache.exists(), "read_video_waveform 不得产生任何文件");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_roundtrip_and_identity_invalidation() {
+        let dir = temp_dir("roundtrip");
+        let src = dir.join("a.mp4");
+        std::fs::write(&src, b"payload-v1").unwrap();
+        let src_str = src.to_string_lossy().to_string();
+        let bins = 8u32;
+
+        // 手工写一份合法缓存，验证读取与身份校验
+        let cache = waveform_cache_path(&src_str, bins).unwrap();
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        let identity = waveform_identity(&std::fs::metadata(&src).unwrap());
+        let data: Vec<f64> = (0..bins).map(|i| i as f64 / bins as f64).collect();
+        std::fs::write(
+            &cache,
+            serde_json::json!({"identity": identity, "bins": bins, "data": data}).to_string(),
+        )
+        .unwrap();
+
+        let got = read_video_waveform(src_str.clone(), bins).expect("应命中缓存");
+        assert_eq!(got.len(), bins as usize);
+        assert!((got[4] - data[4]).abs() < 1e-9);
+
+        // bins 不符 → 不命中
+        assert!(read_video_waveform(src_str.clone(), bins + 1).is_none());
+
+        // 源文件被替换（身份变了）→ 缓存自动失效
+        std::fs::write(&src, b"payload-v2-longer").unwrap();
+        assert!(
+            read_video_waveform(src_str, bins).is_none(),
+            "源文件变了旧波形必须失效"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn normalize_keeps_relative_loudness_and_floor() {
+        // 全局峰值归一化：最大值顶到 1，相对响度保留
+        let out = normalize_waveform(vec![0.0, 0.25, 0.5, 1.0]);
+        assert!((out[3] - 1.0).abs() < 1e-9);
+        assert!(out[2] > out[1] && out[1] > out[0]);
+        // 全零输入不能产出全零（否则波形整排看不见），给最低高度
+        let silent = normalize_waveform(vec![0.0, 0.0, 0.0]);
+        assert!(silent.iter().all(|v| *v > 0.0));
+    }
+
+    #[test]
+    fn resample_preserves_peaks_not_average() {
+        // 每段取最大值：高声段不能被平均掉（这是"看出哪里高声"的关键）
+        let peaks = vec![0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.8, 0.0];
+        let out = resample_peaks(&peaks, 2);
+        assert_eq!(out.len(), 2);
+        assert!((out[0] - 1.0).abs() < 1e-9);
+        assert!((out[1] - 0.8).abs() < 1e-9);
+        // 等长时原样返回
+        assert_eq!(resample_peaks(&peaks, peaks.len()), peaks);
+    }
 }

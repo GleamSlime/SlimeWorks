@@ -487,6 +487,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
+  Float64List? dco_decode_opt_list_prim_f_64_strict(dynamic raw);
+
+  @protected
   PathMappingNodeInfo dco_decode_path_mapping_node_info(dynamic raw);
 
   @protected
@@ -1042,6 +1045,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
+
+  @protected
+  Float64List? sse_decode_opt_list_prim_f_64_strict(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PathMappingNodeInfo sse_decode_path_mapping_node_info(
@@ -1738,6 +1746,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_prim_f_64_strict(
+    Float64List? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_path_mapping_node_info(

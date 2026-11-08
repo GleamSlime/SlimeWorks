@@ -569,6 +569,21 @@ pub fn extract_waveform(
     Ok(vec![])
 }
 
+/// 供媒体库（视频振幅）复用的纯解码入口：**不带音乐播放器那套应用目录缓存**。
+///
+/// 媒体库要把波形缓存写在资源旁的 .SlimeWorks/waveform 里（随资源走、
+/// 节点算完客户端直接取），缓存策略由调用方负责，这里只负责解码出峰值。
+/// 移动端没有 symphonia 桌面链路，返回空数组让调用方走 ffmpeg 或节点侧。
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn extract_waveform_for_media(file_path: String, bins: u32) -> anyhow::Result<Vec<f64>> {
+    _extract_waveform_streaming(&file_path, bins as usize).map_err(|e| anyhow::anyhow!(e))
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn extract_waveform_for_media(_file_path: String, _bins: u32) -> anyhow::Result<Vec<f64>> {
+    Ok(Vec::new())
+}
+
 /// 流式解码音频并直接计算波形 bin 峰值
 /// 不分配全量 PCM 缓冲区，只维护 num_bins 个峰值
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

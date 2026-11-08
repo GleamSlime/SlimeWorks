@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `from_inner`
+// These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `extract_waveform_via_ffmpeg`, `from_inner`, `normalize_waveform`, `resample_peaks`, `waveform_cache_path`, `waveform_identity`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 注册 ffmpeg/ffprobe 可执行文件的绝对路径到 media_collection 模块。
@@ -276,6 +276,36 @@ SmartFolderInfo updateSmartFolder({
 
 bool deleteSmartFolder({required String id}) =>
     RustLib.instance.api.crateApiMediaCollectionDeleteSmartFolder(id: id);
+
+/// 只查不生成：读取已缓存的波形。没有缓存 / 源文件已变 / bins 不符 → 返回 None。
+///
+/// 纯读盘，不解码、不起子进程，可安全高频调用（预览打开时先走这条）。
+Future<Float64List?> readVideoWaveform({
+  required String filePath,
+  required int bins,
+}) => RustLib.instance.api.crateApiMediaCollectionReadVideoWaveform(
+  filePath: filePath,
+  bins: bins,
+);
+
+/// 该文件是否已有可用的波形缓存（导入/重扫时用来决定要不要补算）。
+bool hasVideoWaveform({required String filePath, required int bins}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionHasVideoWaveform(filePath: filePath, bins: bins);
+
+/// 生成（或读缓存）视频/音频的振幅数组，归一化到 0~1，长度 = bins。
+///
+/// 优先 symphonia 流式解码（内存只留 bins 个峰值）；解不了的容器/编码回退
+/// ffmpeg 输出 8kHz 单声道 PCM，边读边折叠峰值，绝不把整段 PCM 读进内存。
+/// 结果写入资源旁 `.SlimeWorks/waveform/`，下次（含节点重启、换客户端）直接命中。
+Future<Float64List> ensureVideoWaveform({
+  required String filePath,
+  required int bins,
+}) => RustLib.instance.api.crateApiMediaCollectionEnsureVideoWaveform(
+  filePath: filePath,
+  bins: bins,
+);
 
 /// FFI version of [media_collection::CollectionCount].
 class CollectionCount {

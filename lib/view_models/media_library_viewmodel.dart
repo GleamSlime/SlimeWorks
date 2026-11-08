@@ -12,6 +12,7 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/services/media_prefs_service.dart';
 import 'package:slime_works/core/services/video_thumb_queue.dart';
+import 'package:slime_works/core/services/video_waveform_service.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
