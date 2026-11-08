@@ -146,9 +146,45 @@ rust/
 | 日志 | Dart: `Loggers` class，Rust: `logger::{log_error, log_info}`，关键流程中文。文件日志由 `slime_logger` 按天滚动并保留 30 天：macOS `~/Library/Logs/史莱姆工坊/logs/slime_works_<日期>.log`，Windows `%APPDATA%\SlimeWorks\logs\` |
 | 注释 | 必须中文, 不要删除已有注释 |
 | 弹窗 | `showDialog` 而非 `Get.dialog` |
-| 校验 | Flutter → `flutter analyze`，Rust → `cargo build` |
-| 提交 | 改完代码通过校验（`flutter analyze` / `cargo build` / 相关测试）确认无问题后，直接 `git commit` 并 `git push`，无需再询问 |
+| 校验 | Flutter → `flutter analyze`，Rust → `cargo build`，测试 → **全量** `flutter test` |
+| 提交 | 改完代码通过下列**三道**校验后，直接 `git commit` 并 `git push`，无需再询问 |
 | 新模块 | 静态链接参考 `ws_module/`，动态载入参考 `capture_proxy/` |
+
+### 提交前必须满足（硬性限制）
+
+任何一次 `git commit` 之前，三道校验缺一不可：
+
+1. **`flutter analyze` 干净** —— 不许有 error，warning/info 也尽量清零。
+2. **全量 `flutter test` 跑过** —— 必须是**全量**，不是只跑改动相关的测试文件。
+   基线约定：本机存在约 389 个 golden 用例因 Flutter 版本/字体差异而失败，属既有环境问题。
+   判定标准是**对比基线失败集合**（用 `git worktree add /tmp/sw_baseline <基线commit>`
+   起一份基线跑一遍，两边失败集合必须一致），**head 侧不得新增任何失败**。
+   只跑单个测试文件会漏掉跨模块回归（曾漏掉 `media_prefs_persistence_test` 的目录数量断言）。
+3. **打包能过** —— 见下节「打包校验」。
+
+### 打包校验（不可省略）
+
+CI 用 `fastforge` 打包，本地等价命令：
+
+```bash
+export PATH="$PATH:$HOME/.pub-cache/bin"
+fastforge package --platform macos --target dmg     # macOS
+fastforge package --platform windows --target exe    # Windows
+```
+
+`fastforge` 未安装时先 `dart pub global activate fastforge`。
+
+**本机限制（务必先确认，别把环境问题误判成代码问题）**：
+
+- 本机 `xcode-select -p` 指向 `/Library/Developer/CommandLineTools`，且**未安装
+  Xcode.app**，`xcodebuild` 不可用 → `flutter build macos` / `fastforge ... macos`
+  必然失败于 `XcodeProjectInterpreter.getInfo`。这是环境缺失，不是代码问题。
+  在没装完整 Xcode 的机器上，macOS 打包无法验证，应改为：
+  - Rust 侧：`cargo build`（需带 `LIBCLANG_PATH` 与 SDK 头路径，见「构建命令」）
+  - Dart 侧：`flutter analyze` + 全量 `flutter test`
+  - 若改动触及 macOS 原生层（`macos/` 下 Swift/entitlements/podfile），
+    **必须**在装了 Xcode 的机器或 CI 上验证后再合入。
+- Windows 打包只能在 Windows 上做；Linux/Android/iOS 同理。
 
 ---
 
