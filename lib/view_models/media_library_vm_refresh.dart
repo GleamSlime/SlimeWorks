@@ -323,12 +323,18 @@ extension MediaLibraryRefreshExt on MediaLibraryViewModel {
       final exists = await media_api.checkPathsExist(paths: paths);
       if (exists.length != snapshot.length) return;
       final now = DateTime.now().millisecondsSinceEpoch;
+      var hasLost = false;
       for (int i = 0; i < snapshot.length; i++) {
         final item = snapshot[i];
         final cacheKey = 'item:${item.id}:${item.filePath}';
-        _lostItems[cacheKey] = !exists[i];
+        final lost = !exists[i];
+        if (lost) hasLost = true;
+        _lostItems[cacheKey] = lost;
         _itemCheckTimestamps[cacheKey] = now;
       }
+      // 这趟是后台跑（不阻塞条目加载态）：确有丢失才通知卡片补标记，
+      // 全部存在时不打扰（首屏本来就按未丢失出图）
+      if (hasLost) _notifyCoverChanged();
     } catch (e) {
       _logger.error('[媒体库] _prewarmItemLostCache 失败: $e');
     }

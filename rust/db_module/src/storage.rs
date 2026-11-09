@@ -100,6 +100,28 @@ impl DbStorage {
         Ok(existed)
     }
 
+    /// 单事务批量取值：与 keys 对齐，缺失的键返回 None。
+    /// 替代「循环 db_get」——那样 N 个键要开 N 个读事务、抢 N 次库锁。
+    pub fn get_many(&self, table_name: &str, keys: &[String]) -> Result<Vec<Option<String>>> {
+        let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());
+        let table_def = tables
+            .get(table_name)
+            .ok_or_else(|| anyhow::anyhow!("Table '{}' not registered", table_name))?;
+
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(*table_def)?;
+
+        let mut values = Vec::with_capacity(keys.len());
+        for key in keys {
+            values.push(match table.get(key.as_str())? {
+                Some(value) => Some(value.value().to_string()),
+                None => None,
+            });
+        }
+        Ok(values)
+    }
+
     /// 列出所有键
     pub fn list_keys(&self, table_name: &str) -> Result<Vec<String>> {
         let tables = self.tables.lock().unwrap_or_else(|e| e.into_inner());

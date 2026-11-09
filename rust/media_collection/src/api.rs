@@ -1463,6 +1463,7 @@ fn media_table_names() -> Vec<String> {
         meta_table_name(),
         collection_stats_table_name(),
         collection_paths_table_name(),
+        collection_item_index_table_name(),
     ]
 }
 
@@ -2004,6 +2005,59 @@ fn item_table_name() -> String {
     "media_items".to_string()
 }
 
+/// 集合 → 条目 ID 列表的索引表（collection_id → JSON 字符串数组）。
+///
+/// 为什么需要它：`media_items` 按条目 ID 存，「取某个集合的条目」历史上只能
+/// 把整张表（38 万条 / 511MB）冷加载进内存再过滤——点开一个集合就要付 1.3s+
+/// 的整表代价，且节点空闲线程 5 分钟释放缓存后每次都要重付。
+/// 有了这张小索引，单集合读只取自己那几百条记录，一个读事务搞定。
+fn collection_item_index_table_name() -> String {
+    "media_collection_item_index".to_string()
+}
+
+/// 索引表只注册一次（理由同 [ensure_aggregate_table_registered]）。
+fn ensure_item_index_table_registered() {
+    static REGISTERED: std::sync::Once = std::sync::Once::new();
+    REGISTERED.call_once(|| {
+        let _ = db_module::db_register_table(collection_item_index_table_name());
+    });
+}
+
+/// 读单个集合的条目 ID 索引；读不到（旧库未回填）返回 None。
+fn load_collection_item_ids(collection_id: &str) -> Option<Vec<String>> {
+    ensure_item_index_table_registered();
+    let record = db_module::db_get(
+        collection_item_index_table_name(),
+        collection_id.to_string(),
+    )
+    .ok()
+    .flatten()?;
+    serde_json::from_str::<Vec<String>>(&record).ok()
+}
+
+/// 写一批集合的条目 ID 索引（单事务）。空数组也要写：它表示「确认为空集合」，
+/// 与「没记录（旧库待回填）」是两种语义。
+fn persist_collection_item_ids(entries: &[(String, Vec<String>)]) -> Result<(), String> {
+    if entries.is_empty() {
+        return Ok(());
+    }
+    ensure_item_index_table_registered();
+    let sets = entries
+        .iter()
+        .filter_map(|(collection_id, ids)| {
+            serde_json::to_string(ids)
+                .ok()
+                .map(|value| db_module::DbRecord {
+                    key: collection_id.clone(),
+                    value,
+                })
+        })
+        .collect::<Vec<_>>();
+    db_module::db_batch_write(collection_item_index_table_name(), sets, Vec::new())
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 fn folder_table_name() -> String {
     "media_folders".to_string()
 }
@@ -2259,22 +2313,43 @@ fn upsert_collection_from_folder(
     }
 
     let items_persisted = {
-        let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
-        ensure_items_loaded(&mut guard);
-        let stored_items = guard.as_mut().unwrap();
-        let removed_ids = stored_items
-            .iter()
-            .filter(|item| item.collection_id == collection_id)
-            .map(|item| item.id.clone())
-            .collect::<Vec<String>>();
+        // 旧条目 ID 从索引取（没有索引的旧库退回整表过滤一次），
+        // 导入不再为此把整张 media_items 冷加载进内存。
+        let removed_ids = match load_collection_item_ids(&collection_id) {
+            Some(ids) => ids,
+            None => {
+                let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
+                ensure_items_loaded(&mut guard);
+                guard
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .filter(|item| item.collection_id == collection_id)
+                    .map(|item| item.id.clone())
+                    .collect::<Vec<String>>()
+            }
+        };
 
         // 同一次导入的增删合并到单个 redb 事务：逐条 db_set/db_delete 会让 N 个
         // 条目触发 N 次 commit（每次一趟磁盘刷写），导入上千文件时是分钟级差距。
         let sets = items.iter().filter_map(item_to_record).collect::<Vec<_>>();
         match db_module::db_batch_write(item_table_name(), sets, removed_ids) {
             Ok(_) => {
-                stored_items.retain(|item| item.collection_id != collection_id);
-                stored_items.extend(items.iter().cloned());
+                // 内存缓存只在「已加载」时同步维护；未加载就保持 None，
+                // 不为一次导入付出整表冷加载（下次真有全量需求时再加载）
+                if let Ok(mut guard) = items_mutex().lock() {
+                    if let Some(stored_items) = guard.as_mut() {
+                        stored_items.retain(|item| item.collection_id != collection_id);
+                        stored_items.extend(items.iter().cloned());
+                    }
+                }
+                // 条目 ID 索引与条目同批落册，读路径从此走单集合快查
+                if let Err(error) = persist_collection_item_ids(&[(
+                    collection_id.clone(),
+                    items.iter().map(|item| item.id.clone()).collect(),
+                )]) {
+                    sw_warn!("[media_index] 导入后写条目索引失败: {}", error);
+                }
                 true
             }
             Err(error) => {
@@ -2506,6 +2581,29 @@ pub fn get_all_media_collections() -> Result<Vec<MediaCollection>, String> {
 }
 
 pub fn get_media_collection_items(collection_id: String) -> Result<Vec<MediaItem>, String> {
+    // 快路径：查「集合 → 条目 ID」索引，一个读事务只取本集合的记录。
+    // 不再为点开一个集合把整张 media_items（几十万条）冷加载进内存。
+    if initialize_db().is_ok() {
+        if let Some(ids) = load_collection_item_ids(&collection_id) {
+            let values = db_module::db_get_many(item_table_name(), ids)
+                .map_err(|error| error.to_string())?;
+            let mut keyed: Vec<(i32, String, MediaItem)> = values
+                .into_iter()
+                .flatten()
+                .filter_map(|value| serde_json::from_str::<MediaItem>(&value).ok())
+                // 索引理论上与条目表同步；防御外部直改库导致的串数据
+                .filter(|item| item.collection_id == collection_id)
+                .map(|item| (item.order, item.title.to_lowercase(), item))
+                .collect();
+            keyed.sort_by(|left, right| {
+                left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1))
+            });
+            return Ok(keyed.into_iter().map(|(_, _, item)| item).collect());
+        }
+    }
+
+    // 慢路径（仅旧库首次访问该集合）：整表过滤一次，顺带把索引落册，
+    // 之后这个集合永远走快路径。
     let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
     ensure_items_loaded(&mut guard);
     let items = guard.as_ref().unwrap();
@@ -2516,7 +2614,14 @@ pub fn get_media_collection_items(collection_id: String) -> Result<Vec<MediaItem
         .collect::<Vec<_>>();
     // 同上：排序键预计算，避免比较函数里反复 to_lowercase 分配
     keyed.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1)));
-    Ok(keyed.into_iter().map(|(_, _, item)| item).collect())
+    let result: Vec<MediaItem> = keyed.into_iter().map(|(_, _, item)| item).collect();
+    if let Err(error) = persist_collection_item_ids(&[(
+        collection_id.clone(),
+        result.iter().map(|item| item.id.clone()).collect(),
+    )]) {
+        sw_warn!("[media_index] 条目索引回填失败 id={}: {}", collection_id, error);
+    }
+    Ok(result)
 }
 
 /// Aggregated per-collection stats: total file size and all file paths.
@@ -2985,21 +3090,28 @@ pub struct CollectionCount {
 }
 
 pub fn get_all_collection_counts() -> Result<Vec<CollectionCount>, String> {
-    let mut guard = items_mutex().lock().map_err(|e| e.to_string())?;
-    ensure_items_loaded(&mut guard);
-    let items = guard.as_ref().unwrap();
-    let mut map: HashMap<String, (u32, u64)> = HashMap::new();
-    for item in items.iter() {
-        let entry = map.entry(item.collection_id.clone()).or_insert((0, 0));
-        entry.0 += 1;
-        entry.1 += item.file_size;
-    }
-    Ok(map
+    // 与 get_all_collection_aggregates 同口径：查聚合小表，不再整表冷加载。
+    // 条数口径：live_count（stat 过）→ 集合表 item_count（记录值）。
+    let aggregates: HashMap<String, CollectionAggregate> = get_all_collection_aggregates()?
         .into_iter()
-        .map(|(id, (count, size))| CollectionCount {
-            collection_id: id,
-            item_count: count,
-            total_size: size,
+        .map(|aggregate| (aggregate.collection_id.clone(), aggregate))
+        .collect();
+    let collections = get_collections()
+        .lock()
+        .map_err(|error| error.to_string())?;
+    Ok(collections
+        .iter()
+        .map(|collection| {
+            let aggregate = aggregates.get(&collection.id);
+            CollectionCount {
+                collection_id: collection.id.clone(),
+                item_count: aggregate
+                    .and_then(|a| a.live_count)
+                    .unwrap_or(collection.item_count as u32),
+                total_size: aggregate
+                    .map(|a| a.recorded_size)
+                    .unwrap_or(0),
+            }
         })
         .collect())
 }
@@ -3129,18 +3241,6 @@ pub fn rename_media_collection(collection_id: String, title: String) -> Result<b
 }
 
 pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
-    // 先收集待删除 item 的 file_path，用于同步清理关联的缩略图任务记录
-    let file_paths_to_clean: Vec<String> = {
-        let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
-        ensure_items_loaded(&mut guard);
-        let items = guard.as_ref().unwrap();
-        items
-            .iter()
-            .filter(|item| item.collection_id == collection_id)
-            .map(|item| item.file_path.clone())
-            .collect()
-    };
-
     {
         let mut collections = get_collections()
             .lock()
@@ -3152,24 +3252,50 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
         }
     }
 
-    {
-        let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
-        ensure_items_loaded(&mut guard);
-        let items = guard.as_mut().unwrap();
-        let removed_ids = items
-            .iter()
+    // 待删条目（id + file_path）：优先走索引快路径，不再为删一个集合
+    // 冷加载整张 media_items；旧库没索引才退回整表过滤一次。
+    let removed: Vec<(String, String)> = match load_collection_item_ids(&collection_id) {
+        Some(ids) => db_module::db_get_many(item_table_name(), ids)
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .flatten()
+            .filter_map(|value| serde_json::from_str::<MediaItem>(&value).ok())
             .filter(|item| item.collection_id == collection_id)
-            .map(|item| item.id.clone())
-            .collect::<Vec<String>>();
-        items.retain(|item| item.collection_id != collection_id);
+            .map(|item| (item.id, item.file_path))
+            .collect(),
+        None => {
+            let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
+            ensure_items_loaded(&mut guard);
+            guard
+                .as_ref()
+                .unwrap()
+                .iter()
+                .filter(|item| item.collection_id == collection_id)
+                .map(|item| (item.id.clone(), item.file_path.clone()))
+                .collect()
+        }
+    };
+
+    {
+        // 内存缓存只在已加载时同步；未加载保持 None，不触发整表冷加载
+        if let Ok(mut guard) = items_mutex().lock() {
+            if let Some(items) = guard.as_mut() {
+                items.retain(|item| item.collection_id != collection_id);
+            }
+        }
+        let removed_ids: Vec<String> = removed.iter().map(|(id, _)| id.clone()).collect();
         delete_items_from_db(&removed_ids);
     }
 
     // 同步清理关联的缩略图任务记录，避免重启后被重新入队反复重试已不存在的文件
+    let file_paths_to_clean: Vec<String> = removed.into_iter().map(|(_, path)| path).collect();
     delete_thumbnail_tasks_for_file_paths(&file_paths_to_clean);
 
     delete_collection_from_db(&collection_id);
     delete_collection_aggregate_from_db(&collection_id);
+    // 条目索引行同步删掉，避免残留指向已删条目的幽灵索引
+    ensure_item_index_table_registered();
+    let _ = db_module::db_delete(collection_item_index_table_name(), collection_id.clone());
     Ok(true)
 }
 
@@ -3517,6 +3643,7 @@ pub fn clear_all_local_media(
         thumbnail_task_table_name(), // 同步清空缩略图任务，避免幽灵任务在重启后被重新入队
         collection_stats_table_name(), // 聚合体积随条目一起归零，否则旧库残留会让补算逻辑跳过
         collection_paths_table_name(), // 路径快照同理，否则删库后旧路径会被当成有效缓存
+        collection_item_index_table_name(), // 条目索引同理，避免幽灵索引指向已删条目
     ];
     let mut cleared_tables = 0u32;
     for table_name in &tables_to_clear {
@@ -4785,6 +4912,67 @@ mod tests {
             db_row(collection_stats_table_name(), &collection.id).is_none(),
             "删除集合后不应残留体积"
         );
+        assert!(
+            db_row(collection_item_index_table_name(), &collection.id).is_none(),
+            "删除集合后不应残留条目索引"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn db_collection_items_read_via_index_without_full_scan() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("item_index");
+        write_test_image(&root.join("a.bmp"));
+        write_test_image(&root.join("b.bmp"));
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+
+        // 导入即落索引
+        assert_eq!(
+            load_collection_item_ids(&collection.id).map(|ids| ids.len()),
+            Some(2),
+            "导入时应写条目索引"
+        );
+
+        // 核心回归：整表缓存释放后读单集合条目，不再冷加载 media_items
+        release_items_from_memory();
+        let items = get_media_collection_items(collection.id.clone()).unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(
+            LAST_MEDIA_ITEMS_ACCESS_SECS.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "索引命中时读条目不应触发整表冷加载"
+        );
+
+        // 旧库兼容：索引缺失时退回整表过滤一次并回填，此后走快路径
+        db_module::db_delete(collection_item_index_table_name(), collection.id.clone()).ok();
+        release_items_from_memory();
+        let legacy_items = get_media_collection_items(collection.id.clone()).unwrap();
+        assert_eq!(legacy_items.len(), 2, "旧库无索引也应读到条目");
+        assert!(
+            load_collection_item_ids(&collection.id).is_some(),
+            "慢路径应回填索引"
+        );
+        release_items_from_memory();
+        let again = get_media_collection_items(collection.id.clone()).unwrap();
+        assert_eq!(again.len(), 2);
+        assert_eq!(
+            LAST_MEDIA_ITEMS_ACCESS_SECS.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "回填后应走索引快路径"
+        );
+
+        // 删除集合也不应冷加载整表
+        release_items_from_memory();
+        assert!(delete_media_collection(collection.id.clone()).unwrap());
+        assert_eq!(
+            LAST_MEDIA_ITEMS_ACCESS_SECS.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "索引命中时删集合不应触发整表冷加载"
+        );
+        assert_eq!(row_count_for_collection(item_table_name(), &collection.id), 0);
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -4983,8 +5171,8 @@ mod tests {
 
         let (tables, files) = clear_all_local_media(false, true).unwrap();
         assert_eq!(
-            tables, 9,
-            "应清空 9 张业务表（保留 media_meta）：集合/条目/文件夹/排序/收藏/智能夹/缩略图任务/聚合体积/路径快照"
+            tables, 10,
+            "应清空 10 张业务表（保留 media_meta）：集合/条目/文件夹/排序/收藏/智能夹/缩略图任务/聚合体积/路径快照/条目索引"
         );
         assert!(files >= 2, "stale + 封面缓存至少清掉 2 个文件, got {files}");
 

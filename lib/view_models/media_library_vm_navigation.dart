@@ -55,9 +55,13 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
               .map((item) => item.filePath)
               .toList(growable: false);
           _itemPathsEpoch++;
+          // 路径换了内容：悬停源缓存按旧路径算的，丢掉重算
+          _hoverSourcesCache.remove(collectionId);
         }
-        // 预热 item 丢失状态：一次 FFI 批量检查，避免 build 期间每张卡片同步调 FFI 阻塞 UI
-        await _prewarmItemLostCache(items);
+        // 条目丢失预热不阻塞加载态：条目一到货就该出图（isLoadingItems 复位），
+        // 存在性结论落地后由 checkItemLost 的缓存通知卡片补标记。
+        // 外置/网络卷 stat 有真实唤醒开销，await 它等于让网格陪磁盘干等。
+        unawaited(_prewarmItemLostCache(items));
       }
     } catch (error) {
       // 旧集合的失败不能清空当前集合的列表

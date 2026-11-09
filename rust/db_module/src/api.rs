@@ -156,6 +156,16 @@ pub fn db_list_keys(table_name: String) -> DbResult<Vec<String>> {
         .map_err(|e| format!("Failed to list keys: {}", e))
 }
 
+/// 单事务批量取值：返回与 keys 对齐的值列表，缺失的键为空串占位。
+/// 仅供 Rust 业务层调用（不导出 Dart）：按索引取一批记录时替代循环 db_get，
+/// N 个键只开一个读事务。
+pub fn db_get_many(table_name: String, keys: Vec<String>) -> DbResult<Vec<Option<String>>> {
+    let storage = resolve(&table_name)?;
+    storage
+        .get_many(&table_name, &keys)
+        .map_err(|e| format!("Failed to get values: {}", e))
+}
+
 /// 列出所有记录
 #[frb(sync)]
 pub fn db_list_all(table_name: String) -> DbResult<Vec<DbRecord>> {
