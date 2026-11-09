@@ -273,13 +273,9 @@ pub fn get_all_pending_thumbnail_tasks() -> anyhow::Result<Vec<ThumbnailTaskInfo
         .collect())
 }
 
-/// Aggregated per-collection stats returned in a single batch FFI call.
-#[derive(Debug, Clone)]
-pub struct CollectionStats {
-    pub collection_id: String,
-    pub total_size: u64,
-    pub file_paths: Vec<String>,
-}
+// CollectionStats / get_all_collection_stats 已删除：整表冷加载 + 全量路径
+// 跨 FFI 传输的遗留死接口，生产链路无人调用。体积读聚合小表
+// （get_cached_collection_live_stats），路径按集合懒查（get_collection_file_paths）。
 
 /// Generate (or serve from disk cache) a JPEG thumbnail for `file_path` at
 /// `width` pixels wide.  Returns the path to the cached thumbnail, or `None`
@@ -302,21 +298,7 @@ pub fn ready_cover_thumbnail_path(file_path: String, width: u32) -> Option<Strin
     media_collection::ready_cover_thumbnail_path(file_path, width)
 }
 
-/// Return size + file-path list for every local collection in one pass.
-/// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.
-// 异步：FRB 在后台线程池执行，单次批量返回所有集合的 size + file_paths
-pub fn get_all_collection_stats() -> anyhow::Result<Vec<CollectionStats>> {
-    let stats =
-        media_collection::get_all_collection_stats().map_err(|error| anyhow::anyhow!(error))?;
-    Ok(stats
-        .into_iter()
-        .map(|s| CollectionStats {
-            collection_id: s.collection_id,
-            total_size: s.total_size,
-            file_paths: s.file_paths,
-        })
-        .collect())
-}
+// get_all_collection_stats FFI 导出已删除（遗留死接口，理由见上方注释）。
 
 /// Batch-check whether each file path exists on the local filesystem.
 /// Returns a `Vec<bool>` aligned with the input — `true` means the file exists.

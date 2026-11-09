@@ -6,7 +6,6 @@ import 'package:slime_works/src/rust/api/media_collection.dart'
         CachedCollectionStats,
         CollectionCount,
         CollectionLiveStats,
-        CollectionStats,
         MediaCollection,
         MediaFolder,
         MediaItem,
@@ -19,7 +18,6 @@ export 'package:slime_works/src/rust/api/media_collection.dart'
         CachedCollectionStats,
         CollectionCount,
         CollectionLiveStats,
-        CollectionStats,
         MediaCollection,
         MediaFolder,
         MediaItem,
@@ -201,19 +199,9 @@ Future<List<double>> ensureVideoWaveform({
   return rust.ensureVideoWaveform(filePath: filePath, bins: bins);
 }
 
-Future<List<CollectionStats>> getAllCollectionStats() async {
-  if (MockMode.enabled) {
-    return _m.collections.map((c) {
-      final list = _m.itemsOf(c.id);
-      return CollectionStats(
-        collectionId: c.id,
-        totalSize: list.fold(BigInt.zero, (sum, e) => sum + e.fileSize),
-        filePaths: list.map((e) => e.filePath).toList(),
-      );
-    }).toList();
-  }
-  return rust.getAllCollectionStats();
-}
+// getAllCollectionStats 接缝已删除：遗留死接口（整表冷加载 + 全量路径跨 FFI），
+// 生产链路已改走聚合小表（getCachedCollectionLiveStats）与按需路径
+// （getCollectionFilePaths），Mock 侧无需再保留对应桩。
 
 Future<List<bool>> checkPathsExist({required List<String> paths}) async {
   if (MockMode.enabled) return List<bool>.filled(paths.length, true);

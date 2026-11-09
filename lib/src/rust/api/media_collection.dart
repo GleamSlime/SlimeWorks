@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `extract_waveform_via_ffmpeg`, `from_inner`, `normalize_waveform`, `resample_peaks`, `waveform_cache_path`, `waveform_identity`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 注册 ffmpeg/ffprobe 可执行文件的绝对路径到 media_collection 模块。
 /// 必须在应用启动时（RustLib.init 之后）调用，确保缩略图生成能找到 ffmpeg。
@@ -161,11 +161,6 @@ Future<String?> readyCoverThumbnailPath({
   filePath: filePath,
   width: width,
 );
-
-/// Return size + file-path list for every local collection in one pass.
-/// Replaces the N-calls pattern in `_computeCollectionSizesAsync`.
-Future<List<CollectionStats>> getAllCollectionStats() =>
-    RustLib.instance.api.crateApiMediaCollectionGetAllCollectionStats();
 
 /// Batch-check whether each file path exists on the local filesystem.
 /// Returns a `Vec<bool>` aligned with the input — `true` means the file exists.
@@ -402,32 +397,6 @@ class CollectionLiveStats {
           collectionId == other.collectionId &&
           liveSize == other.liveSize &&
           liveCount == other.liveCount;
-}
-
-/// Aggregated per-collection stats returned in a single batch FFI call.
-class CollectionStats {
-  final String collectionId;
-  final BigInt totalSize;
-  final List<String> filePaths;
-
-  const CollectionStats({
-    required this.collectionId,
-    required this.totalSize,
-    required this.filePaths,
-  });
-
-  @override
-  int get hashCode =>
-      collectionId.hashCode ^ totalSize.hashCode ^ filePaths.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CollectionStats &&
-          runtimeType == other.runtimeType &&
-          collectionId == other.collectionId &&
-          totalSize == other.totalSize &&
-          filePaths == other.filePaths;
 }
 
 class MediaCollection {

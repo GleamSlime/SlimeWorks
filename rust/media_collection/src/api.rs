@@ -2624,34 +2624,10 @@ pub fn get_media_collection_items(collection_id: String) -> Result<Vec<MediaItem
     Ok(result)
 }
 
-/// Aggregated per-collection stats: total file size and all file paths.
-/// Used by the Dart layer to populate size/path caches in a single FFI call
-/// instead of calling `get_media_collection_items` once per collection.
-pub struct CollectionStats {
-    pub collection_id: String,
-    pub total_size: u64,
-    pub file_paths: Vec<String>,
-}
-
-/// Return size + file-path list for every collection in one pass over MEDIA_ITEMS.
-pub fn get_all_collection_stats() -> Result<Vec<CollectionStats>, String> {
-    let mut guard = items_mutex().lock().map_err(|e| e.to_string())?;
-    ensure_items_loaded(&mut guard);
-    let items = guard.as_ref().unwrap();
-    let mut map: HashMap<String, CollectionStats> = HashMap::new();
-    for item in items.iter() {
-        let entry = map
-            .entry(item.collection_id.clone())
-            .or_insert_with(|| CollectionStats {
-                collection_id: item.collection_id.clone(),
-                total_size: 0,
-                file_paths: Vec::new(),
-            });
-        entry.total_size += item.file_size;
-        entry.file_paths.push(item.file_path.clone());
-    }
-    Ok(map.into_values().collect())
-}
+// CollectionStats / get_all_collection_stats 已删除（遗留死接口）：
+// 整表冷加载 media_items + 全量路径跨 FFI 传输，生产链路已无人调用。
+// 体积读聚合小表（get_all_collection_aggregates / get_cached_collection_live_stats），
+// 路径按集合懒查（get_collection_file_paths）。
 
 /// 集合体积/条数的落册表。
 ///
@@ -3023,21 +2999,44 @@ fn aggregate_live_stats<'a, I: IntoIterator<Item = (&'a str, Option<u64>)>>(
 }
 
 /// 汇总每个集合「磁盘上仍然存在」的资源体积与条数（失效资源不计入）。
-/// 全库逐文件 stat，因此先在锁内取快照再放开锁并发跑，避免卡住其它 FFI。
+/// 快照改从路径表逐集合取（不再 ensure_items_loaded 整表冷加载），
+/// 取完再放开集合锁并发 stat，避免卡住其它 FFI。
 pub fn get_all_collection_live_stats() -> Result<Vec<CollectionLiveStats>, String> {
-    let snapshot: Vec<(String, String)> = {
-        let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
-        ensure_items_loaded(&mut guard);
-        guard
-            .as_ref()
-            .map(|items| {
-                items
-                    .iter()
-                    .map(|item| (item.collection_id.clone(), item.file_path.clone()))
-                    .collect()
-            })
-            .unwrap_or_default()
+    // 逐集合取 (collection_id, file_path) 快照：优先路径表；缺行/空行的集合
+    // 用集合表 item_count 判别——记录为 0 的是真空集合直接跳过，否则视为
+    // 旧库未回填，退回 get_media_collection_items 的索引快路径取一次并落册。
+    let collection_meta: Vec<(String, usize)> = {
+        let collections = get_collections()
+            .lock()
+            .map_err(|error| error.to_string())?;
+        collections
+            .iter()
+            .map(|collection| (collection.id.clone(), collection.item_count))
+            .collect()
     };
+    let mut snapshot: Vec<(String, String)> = Vec::new();
+    for (collection_id, item_count) in collection_meta {
+        if let Some(paths) = load_collection_paths(&collection_id) {
+            if !paths.is_empty() {
+                snapshot.extend(paths.into_iter().map(|path| (collection_id.clone(), path)));
+                continue;
+            }
+        }
+        // 路径表无行/空行且集合表记录为 0：真空集合，没有可 stat 的资源
+        if item_count == 0 {
+            continue;
+        }
+        // 旧库未回填：走条目索引快路径（索引也缺时才由它兜底整表一次），
+        // 并把路径快照落册，下一轮重扫不再进条目表
+        let items = get_media_collection_items(collection_id.clone())?;
+        let paths: Vec<String> = items.iter().map(|item| item.file_path.clone()).collect();
+        if let Err(error) =
+            persist_collection_paths(&[(collection_id.clone(), paths.clone())])
+        {
+            sw_warn!("[media_stats] 路径快照回填失败 id={}: {}", collection_id, error);
+        }
+        snapshot.extend(paths.into_iter().map(|path| (collection_id.clone(), path)));
+    }
 
     // IO 等待为主，线程再多也没收益；上限 8 防止大机器上打爆文件描述符
     let workers = std::thread::available_parallelism()
@@ -4738,19 +4737,20 @@ mod tests {
             cache.display()
         );
 
-        // 统计组装
-        let stats = get_all_collection_stats()
-            .unwrap()
-            .into_iter()
-            .find(|s| s.collection_id == collection.id)
-            .expect("stats 应包含本集合");
-        assert_eq!(stats.file_paths.len(), 2);
-        let expected_size: u64 = stats
-            .file_paths
+        // 统计组装：改查聚合表 + 路径快照表（原 get_all_collection_stats 已删，
+        // 断言口径不变：路径条数与记录体积合计）
+        let paths = load_collection_paths(&collection.id).expect("导入应落册路径快照");
+        assert_eq!(paths.len(), 2);
+        let expected_size: u64 = paths
             .iter()
             .map(|p| std::fs::metadata(p).unwrap().len())
             .sum();
-        assert_eq!(stats.total_size, expected_size);
+        let aggregate = get_all_collection_aggregates()
+            .unwrap()
+            .into_iter()
+            .find(|a| a.collection_id == collection.id)
+            .expect("聚合应包含本集合");
+        assert_eq!(aggregate.recorded_size, expected_size);
         let counts = get_all_collection_counts()
             .unwrap()
             .into_iter()
@@ -4804,11 +4804,11 @@ mod tests {
             "删除集合后不应残留该目录的缩略图任务: {pending:?}"
         );
         assert!(
-            get_all_collection_stats()
+            get_all_collection_aggregates()
                 .unwrap()
                 .iter()
-                .all(|s| s.collection_id != collection.id),
-            "stats 不应再包含已删集合"
+                .all(|a| a.collection_id != collection.id),
+            "聚合不应再包含已删集合"
         );
 
         let _ = std::fs::remove_dir_all(&root);
@@ -4974,6 +4974,70 @@ mod tests {
         );
         assert_eq!(row_count_for_collection(item_table_name(), &collection.id), 0);
 
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn db_live_stats_snapshot_from_paths_table_without_full_scan() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("live_paths");
+        write_test_image(&root.join("a.bmp"));
+        write_test_image(&root.join("b.bmp"));
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+        let expected: u64 = ["a.bmp", "b.bmp"]
+            .iter()
+            .map(|name| std::fs::metadata(root.join(name)).unwrap().len())
+            .sum();
+
+        // 核心回归：条目缓存释放后跑全量 live stat，快照来自路径表，
+        // 不再触发 media_items 整表冷加载
+        release_items_from_memory();
+        let stats = get_all_collection_live_stats().unwrap();
+        let mine = stats
+            .iter()
+            .find(|s| s.collection_id == collection.id)
+            .expect("live 统计应包含本集合");
+        assert_eq!(mine.live_size, expected);
+        assert_eq!(mine.live_count, 2);
+        assert_eq!(
+            LAST_MEDIA_ITEMS_ACCESS_SECS.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "路径表命中时 live 快照不应加载 media_items"
+        );
+
+        // 旧库未回填：删掉路径行后退回条目索引快路径，结果不变且回填路径行
+        ensure_paths_table_registered();
+        db_module::db_delete(collection_paths_table_name(), collection.id.clone()).ok();
+        release_items_from_memory();
+        let stats = get_all_collection_live_stats().unwrap();
+        let mine = stats
+            .iter()
+            .find(|s| s.collection_id == collection.id)
+            .expect("路径行缺失也应统计到本集合");
+        assert_eq!(mine.live_size, expected);
+        assert_eq!(mine.live_count, 2);
+        assert_eq!(
+            LAST_MEDIA_ITEMS_ACCESS_SECS.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "条目索引在，退回路径也不应整表冷加载"
+        );
+        assert_eq!(
+            load_collection_paths(&collection.id).map(|p| p.len()),
+            Some(2),
+            "退回应把路径快照落册，下一轮直接查表"
+        );
+
+        // 回填后再跑一轮：完全走路径表
+        release_items_from_memory();
+        get_all_collection_live_stats().unwrap();
+        assert_eq!(
+            LAST_MEDIA_ITEMS_ACCESS_SECS.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "回填后应走路径表快路径"
+        );
+
+        assert!(delete_media_collection(collection.id).unwrap());
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -95,12 +95,15 @@ extension _NodeHttpHandlerExt on NodeSettingsService {
             .toList();
       case 'list_media_collections':
         final collections = await media_api.getAllMediaCollections();
-        // 批量获取所有集合大小，一次 FFI 调用，避免 N+1 查询
-        final statsList = await media_api.getAllCollectionStats();
+        // 批量读聚合小表（写入路径维护），一次 FFI 调用避免 N+1 查询；
+        // 不再调已删除的 getAllCollectionStats 整表冷加载接口。
+        // 口径与 Rust node_server 一致：stat 过用现存值，否则退回记录值
+        final statsList = await media_api.getCachedCollectionLiveStats();
         final statsMap = {for (final s in statsList) s.collectionId: s};
         return collections.map((c) {
           final map = _mediaCollectionToJson(c);
-          map['total_size'] = (statsMap[c.id]?.totalSize ?? BigInt.zero).toString();
+          final stats = statsMap[c.id];
+          map['total_size'] = (stats?.liveSize ?? stats?.recordedSize ?? BigInt.zero).toString();
           return map;
         }).toList();
       case 'list_media_folders':

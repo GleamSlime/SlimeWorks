@@ -263,9 +263,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CollectionLiveStats dco_decode_collection_live_stats(dynamic raw);
 
   @protected
-  CollectionStats dco_decode_collection_stats(dynamic raw);
-
-  @protected
   CueSheetInfo dco_decode_cue_sheet_info(dynamic raw);
 
   @protected
@@ -323,9 +320,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CollectionLiveStats> dco_decode_list_collection_live_stats(dynamic raw);
-
-  @protected
-  List<CollectionStats> dco_decode_list_collection_stats(dynamic raw);
 
   @protected
   List<CueTrackInfo> dco_decode_list_cue_track_info(dynamic raw);
@@ -781,9 +775,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  CollectionStats sse_decode_collection_stats(SseDeserializer deserializer);
-
-  @protected
   CueSheetInfo sse_decode_cue_sheet_info(SseDeserializer deserializer);
 
   @protected
@@ -851,11 +842,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CollectionLiveStats> sse_decode_list_collection_live_stats(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<CollectionStats> sse_decode_list_collection_stats(
     SseDeserializer deserializer,
   );
 
@@ -1416,12 +1402,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_collection_stats(
-    CollectionStats self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_cue_sheet_info(CueSheetInfo self, SseSerializer serializer);
 
   @protected
@@ -1502,12 +1482,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_collection_live_stats(
     List<CollectionLiveStats> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_collection_stats(
-    List<CollectionStats> self,
     SseSerializer serializer,
   );
 

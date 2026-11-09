@@ -772,7 +772,7 @@ dart_output: lib/src/rust
 - `CollectionStats` — 集合统计（collectionId, totalSize, filePaths）
 - `MediaKind` — 媒体类型枚举（image, video, audio）
 
-核心 API：`getAllMediaCollections` / `importMediaFolder` / `scanMediaFolders` / `ensureCoverThumbnail` / `getAllCollectionStats` / 文件夹CRUD / 集合重命名/移动/删除
+核心 API：`getAllMediaCollections` / `importMediaFolder` / `scanMediaFolders` / `ensureCoverThumbnail` / `getCachedCollectionLiveStats`（聚合小表读体积）/ `getCollectionFilePaths`（按集合懒查路径）/ 文件夹CRUD / 集合重命名/移动/删除
 
 #### novel_reader — 小说阅读器
 
@@ -1044,7 +1044,7 @@ PC 端运行的 HTTP 服务器，为移动端提供中转服务：
 - 智能文件夹（规则匹配）
 - 远程节点媒体访问
 - 图片/视频预览与查看器
-- 集合统计（`getAllCollectionStats` 批量获取大小与文件列表）
+- 集合统计（`getCachedCollectionLiveStats` 读聚合小表；路径按集合懒查 `getCollectionFilePaths`）
 - 瀑布流网格布局（`MasonryMediaGrid`）
 
 **页面组件**:
@@ -1813,7 +1813,8 @@ info!("操作完成: {}", detail);
 | `importMediaFolder(folderPath)` | `Future<MediaCollection>` | 导入媒体文件夹 |
 | `scanMediaFolders(folderPath)` | `Future<List<MediaCollection>>` | 扫描媒体文件夹 |
 | `ensureCoverThumbnail(filePath, width)` | `String?` | 生成/获取缩略图 |
-| `getAllCollectionStats()` | `List<CollectionStats>` | 批量获取集合统计 |
+| `getCachedCollectionLiveStats()` | `List<CachedCollectionStats>` | 读缓存版集合体积/条数（聚合小表，过期自动后台重扫） |
+| `getCollectionFilePaths(collectionId)` | `List<String>` | 按需取单集合路径快照 |
 
 ### novel_reader.dart
 
