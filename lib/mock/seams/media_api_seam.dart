@@ -367,7 +367,7 @@ void saveFavoriteCollectionIds({required List<String> ids}) {
   rust.saveFavoriteCollectionIds(ids: ids);
 }
 
-List<SmartFolderInfo> getAllSmartFolders() {
+Future<List<SmartFolderInfo>> getAllSmartFolders() async {
   if (MockMode.enabled) return List<SmartFolderInfo>.of(_m.smartFolders);
   return rust.getAllSmartFolders();
 }

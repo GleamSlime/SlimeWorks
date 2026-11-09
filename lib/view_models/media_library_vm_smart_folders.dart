@@ -126,7 +126,7 @@ extension SmartFoldersCrudExt on MediaLibraryViewModel {
   /// 通过 FFI 从 Rust redb 加载智能文件夹（替代直接读写 JSON 文件）
   Future<void> _loadSmartFolders() async {
     try {
-      final result = media_api.getAllSmartFolders();
+      final result = await media_api.getAllSmartFolders();
       final loaded = result
           .map(
             (sf) => SmartFolder(

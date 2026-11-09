@@ -477,6 +477,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 避免从 (n-1)/n 直接消失，给用户视觉反馈再清空。
   Timer? _thumbCompleteTimer;
 
+  /// 进度通知节流窗口（250ms 合并一次 Rx 写入，见 onInitAsync 内注释）。
+  Timer? _thumbProgressNotifyTimer;
+
   /// 远程节点进度「100% 完成」短暂显示的独立定时器。
   /// 与本地进度分开：共用同一个定时器会让两边的完成态互相清掉。
   Timer? _remoteThumbCompleteTimer;
@@ -574,8 +577,15 @@ class MediaLibraryViewModel extends BaseViewModel {
     // 旧实现直接相加两队列的累计 completed/total：已结束的旧批次会一直留在分母里，
     // cancelGroup 取消的任务也不扣减，导致状态栏时有时无、数字长期失真。
     (int, int)? lastActiveProgress;
+    // 进度通知节流：任务 enqueue/完成都会回调，批量入队几百个任务时
+    // 每个回调都写 Rx + 日志会形成风暴（实测一秒 109 条 [ThumbProgress]，
+    // 每条都触发 toolbar Obx 重建 + debugPrint + 文件日志攒批）。
+    // 合并到 250ms 一次：进度条肉眼无感知差异，重建/日志量降两个数量级。
+    // 定时器挂实例字段：onInitAsync 每次进页面都重跑，局部变量会让旧窗口
+    // 失去引用无法在 onClose 取消。
+    var progressDirty = false;
 
-    void recomputeProgress() {
+    void publishProgress() {
       // 暂停期间忽略在途任务的进度回调，保持状态栏停留在暂停状态
       if (thumbGenerationPaused.value) return;
       final coverActive = _coverQueue.pending > 0;
@@ -604,8 +614,30 @@ class MediaLibraryViewModel extends BaseViewModel {
       lastActiveProgress = (c, t);
       _thumbCompleteTimer?.cancel();
       _thumbCompleteTimer = null;
-      thumbProgress.value = (c, t);
-      _logger.info('[ThumbProgress] $c/$t');
+      // 值没变就不写 Rx（record  equality 按值比较），省掉无意义重建
+      if (thumbProgress.value != (c, t)) {
+        thumbProgress.value = (c, t);
+      }
+    }
+
+    void recomputeProgress() {
+      if (thumbGenerationPaused.value) return;
+      // 队列全部空闲的「完成态」通知不节流（要及时展示完成反馈）
+      if (_coverQueue.pending == 0 && _scrubQueue.pending == 0) {
+        _thumbProgressNotifyTimer?.cancel();
+        _thumbProgressNotifyTimer = null;
+        progressDirty = false;
+        publishProgress();
+        return;
+      }
+      progressDirty = true;
+      if (_thumbProgressNotifyTimer != null) return;
+      _thumbProgressNotifyTimer = Timer(const Duration(milliseconds: 250), () {
+        _thumbProgressNotifyTimer = null;
+        if (!progressDirty || isClosed) return;
+        progressDirty = false;
+        publishProgress();
+      });
     }
 
     _coverQueue.onProgress = (_, _) => recomputeProgress();
@@ -700,6 +732,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     _trimCacheTimer = null;
     _thumbCompleteTimer?.cancel();
     _thumbCompleteTimer = null;
+    _thumbProgressNotifyTimer?.cancel();
+    _thumbProgressNotifyTimer = null;
     _remoteThumbCompleteTimer?.cancel();
     _remoteThumbCompleteTimer = null;
     _coverNotifyTimer?.cancel();
