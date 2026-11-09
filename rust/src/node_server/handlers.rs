@@ -468,6 +468,9 @@ pub async fn dispatch_action(
 
         // ── 小说操作 ─────────────────────────────────────────────────────────
         "list_novels" => {
+            // with_cover 默认 true：旧客户端不带该参数时行为完全不变（列表内嵌封面 base64）。
+            // 新客户端传 false 时跳过逐本封面读盘 + base64 编码——N 本 × ~40KB 的列表
+            // 传输是远程书架首屏卡顿的主因；封面改由 GET /node/novel_cover 按需流式取。
             let novels =
                 novel_api::get_all_novels().map_err(|e| format!("获取小说列表失败: {}", e))?;
             let folders = novel_api::get_all_folders().unwrap_or_default();
@@ -477,36 +480,7 @@ pub async fn dispatch_action(
                 .collect();
             let chapter_counts = load_chapter_count_map();
 
-            let result: Vec<Value> = novels
-                .into_iter()
-                .map(|n| {
-                    let cover_base64 = encode_cover_base64(&n.cover_path);
-                    let cover_ext =
-                        extract_image_ext(n.cover_path.as_deref().unwrap_or("")).to_string();
-                    json!({
-                        "id": n.id,
-                        "title": n.title,
-                        "author": n.author,
-                        "file_path": n.file_path,
-                        "format": n.format.as_str(),
-                        "file_size": n.file_size.to_string(),
-                        "modified_at": n.modified_at.to_string(),
-                        "added_at": n.added_at.to_string(),
-                        "progress": n.progress,
-                        "last_read_at": n.last_read_at.map(|t| t.to_string()),
-                        "cover_path": n.cover_path,
-                        "cover_base64": cover_base64,
-                        "cover_ext": cover_ext,
-                        "folder_id": n.folder_id,
-                        "folder_name": n.folder_id.as_ref().and_then(|fid| folder_map.get(fid).cloned()),
-                        "chapter_count": chapter_counts.get(n.id.as_str()).copied(),
-                        "custom_order": n.custom_order,
-                        "is_favorite": n.is_favorite,
-                        "tags": n.tags,
-                        "notes": n.notes,
-                    })
-                })
-                .collect();
+            let result = build_novel_list_json(novels, &folder_map, &chapter_counts, &params);
             Ok(json!(result))
         }
 
@@ -1664,6 +1638,124 @@ pub fn extract_image_ext(path: &str) -> &'static str {
     }
 }
 
+/// 解析 list_novels 的 with_cover 参数。
+///
+/// 缺省（旧客户端不带参数）必须是 true——列表继续内嵌封面 base64，行为逐字节不变；
+/// 只有显式传 false（布尔或字符串 "false"，兼容不同客户端的 JSON 习惯）才跳过封面。
+pub fn novels_with_cover(params: &Value) -> bool {
+    match params.get("with_cover") {
+        None | Some(Value::Null) => true,
+        Some(Value::Bool(b)) => *b,
+        Some(Value::String(s)) => !s.eq_ignore_ascii_case("false"),
+        // 其它类型按「未显式关闭」处理，保持旧口径
+        Some(_) => true,
+    }
+}
+
+/// 组装小说列表 JSON（list_novels 专用，独立成函数便于用纯内存数据做兼容测试）。
+///
+/// with_cover=false 时 cover_base64 恒为 null 且不读盘；其余字段
+/// （含 cover_path/cover_ext，供客户端拼按需封面 URL 或判有无封面）两种模式完全一致。
+pub fn build_novel_list_json(
+    novels: Vec<novel_reader::types::NovelMetadata>,
+    folder_map: &std::collections::HashMap<String, String>,
+    chapter_counts: &std::collections::HashMap<String, i32>,
+    params: &Value,
+) -> Vec<Value> {
+    let with_cover = novels_with_cover(params);
+    novels
+        .into_iter()
+        .map(|n| {
+            let cover_base64 = if with_cover {
+                encode_cover_base64(&n.cover_path)
+            } else {
+                None
+            };
+            let cover_ext = extract_image_ext(n.cover_path.as_deref().unwrap_or("")).to_string();
+            json!({
+                "id": n.id,
+                "title": n.title,
+                "author": n.author,
+                "file_path": n.file_path,
+                "format": n.format.as_str(),
+                "file_size": n.file_size.to_string(),
+                "modified_at": n.modified_at.to_string(),
+                "added_at": n.added_at.to_string(),
+                "progress": n.progress,
+                "last_read_at": n.last_read_at.map(|t| t.to_string()),
+                "cover_path": n.cover_path,
+                "cover_base64": cover_base64,
+                "cover_ext": cover_ext,
+                "folder_id": n.folder_id,
+                "folder_name": n.folder_id.as_ref().and_then(|fid| folder_map.get(fid).cloned()),
+                "chapter_count": chapter_counts.get(n.id.as_str()).copied(),
+                "custom_order": n.custom_order,
+                "is_favorite": n.is_favorite,
+                "tags": n.tags,
+                "notes": n.notes,
+            })
+        })
+        .collect()
+}
+
+/// 封面读取失败类别（语义与 media_handler::MediaPathError 同一套路，映射各自处理）。
+#[derive(Debug, PartialEq, Eq)]
+pub enum NovelCoverError {
+    /// 缺 novel_id 参数 → 400
+    MissingId,
+    /// 库中无此书 → 404
+    NotFound,
+    /// 书存在但没有封面（字段为空/文件缺失）→ 404
+    NoCover,
+}
+
+impl NovelCoverError {
+    pub fn message(&self) -> String {
+        match self {
+            NovelCoverError::MissingId => "missing novel_id".to_string(),
+            NovelCoverError::NotFound => "novel not found".to_string(),
+            NovelCoverError::NoCover => "no cover available".to_string(),
+        }
+    }
+}
+
+/// 按需读取小说封面字节（GET /node/novel_cover 的实现体）。
+///
+/// 路径只从书库元数据反查，绝不接受客户端直接传文件路径——授权语义与 /node/media
+/// 一致（mod.rs 连接层统一校验 X-SW-Auth / ?sw_auth），但攻击面更小：
+/// 拿到授权也只能取「已入库书籍的封面」，不能借道读任意文件。
+/// width>0 时复用媒体线的缩略图链路（内存缓存 + JPEG），失败回退读原图。
+pub fn read_novel_cover_bytes(
+    novel_id: &str,
+    width: u32,
+) -> Result<(Vec<u8>, String), NovelCoverError> {
+    if novel_id.is_empty() {
+        return Err(NovelCoverError::MissingId);
+    }
+    let novels = novel_api::get_all_novels().map_err(|_| NovelCoverError::NotFound)?;
+    let novel = novels
+        .into_iter()
+        .find(|n| n.id == novel_id)
+        .ok_or(NovelCoverError::NotFound)?;
+    let cover_path = novel
+        .cover_path
+        .filter(|p| !p.is_empty())
+        .ok_or(NovelCoverError::NoCover)?;
+    // 封面文件可能已被外部删除：与「无封面」同一语义，客户端显示占位即可
+    let path = Path::new(&cover_path);
+    if !path.is_file() {
+        return Err(NovelCoverError::NoCover);
+    }
+    if width > 0 {
+        if let Some(bytes) = media_api::generate_thumbnail_bytes(cover_path.clone(), width) {
+            return Ok((bytes, "image/jpeg".to_string()));
+        }
+    }
+    let bytes = fs::read(path).map_err(|_| NovelCoverError::NoCover)?;
+    let content_type = super::media_handler::guess_media_content_type(&cover_path);
+    Ok((bytes, content_type))
+}
+
 /// 写入临时图片文件
 fn write_temp_image(bytes: &[u8], ext: &str) -> Result<String, String> {
     // 扩展名白名单：ext 来自请求参数，直接拼进文件名可被塞进路径片段
@@ -1914,5 +2006,96 @@ mod dispatch_action_tests {
         // 缺 path 参数时默认 "/"：目录存在，应返回数组（内容不做断言，跨平台不稳定）
         let result = call("list_directories", json!({})).expect("默认路径应成功");
         assert!(result.is_array());
+    }
+
+    // ── list_novels with_cover 兼容性（纯内存组装，不触 novel DB） ──────────
+
+    /// 构造一本带真实封面文件的测试书元数据
+    fn novel_with_cover(dir: &Path) -> novel_reader::types::NovelMetadata {
+        let cover = dir.join("cover.png");
+        fs::write(&cover, b"fake-png-bytes").unwrap();
+        novel_reader::types::NovelMetadata {
+            id: "n1".to_string(),
+            title: "带封面书".to_string(),
+            author: None,
+            file_path: dir.join("book.txt").to_string_lossy().into_owned(),
+            format: novel_reader::types::NovelFormat::Txt,
+            file_size: 10,
+            modified_at: chrono::Utc::now(),
+            is_favorite: false,
+            tags: vec![],
+            added_at: chrono::Utc::now(),
+            progress: 0.0,
+            current_chapter_id: None,
+            last_read_at: None,
+            cover_path: Some(cover.to_string_lossy().into_owned()),
+            folder_id: None,
+            custom_order: None,
+            notes: None,
+        }
+    }
+
+    #[test]
+    fn novels_with_cover_defaults_true_for_legacy_clients() {
+        // 旧客户端不带参数：必须保持 true（行为不变的关键约定）
+        assert!(novels_with_cover(&json!({})));
+        assert!(novels_with_cover(&Value::Null));
+        assert!(novels_with_cover(&json!({"with_cover": null})));
+        // 显式 true / false
+        assert!(novels_with_cover(&json!({"with_cover": true})));
+        assert!(!novels_with_cover(&json!({"with_cover": false})));
+        // 字符串形式（不同客户端 JSON 习惯）
+        assert!(!novels_with_cover(&json!({"with_cover": "false"})));
+        assert!(novels_with_cover(&json!({"with_cover": "true"})));
+    }
+
+    #[test]
+    fn list_novels_without_param_keeps_cover_base64() {
+        // 兼容性硬约束：不带 with_cover 时列表必须仍内嵌封面 base64（旧客户端唯一来源）
+        let dir = fresh_temp_dir("list_novels_legacy");
+        let novels = vec![novel_with_cover(&dir)];
+        let folders = std::collections::HashMap::new();
+        let counts = std::collections::HashMap::new();
+
+        let legacy = build_novel_list_json(novels.clone(), &folders, &counts, &json!({}));
+        assert_eq!(legacy.len(), 1);
+        assert!(
+            legacy[0]["cover_base64"].is_string(),
+            "旧口径必须内嵌封面 base64: {}",
+            legacy[0]
+        );
+        assert!(legacy[0]["cover_path"].is_string());
+
+        // 显式 true 与缺省逐字段一致
+        let explicit = build_novel_list_json(novels, &folders, &counts, &json!({"with_cover": true}));
+        // modified_at/added_at 用同一元数据实例生成，值应一致
+        assert_eq!(legacy[0]["cover_base64"], explicit[0]["cover_base64"]);
+        assert_eq!(legacy[0]["id"], explicit[0]["id"]);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn list_novels_with_cover_false_skips_base64_keeps_metadata() {
+        let dir = fresh_temp_dir("list_novels_nocover");
+        let novels = vec![novel_with_cover(&dir)];
+        let folders = std::collections::HashMap::new();
+        let counts = std::collections::HashMap::new();
+
+        let lite = build_novel_list_json(novels.clone(), &folders, &counts, &json!({"with_cover": false}));
+        assert_eq!(lite.len(), 1);
+        assert!(lite[0]["cover_base64"].is_null(), "false 时不得内嵌 base64");
+        // 其余元数据字段保留：客户端靠 cover_path 判有无封面
+        assert!(lite[0]["cover_path"].is_string());
+        assert_eq!(lite[0]["title"], json!("带封面书"));
+        assert_eq!(lite[0]["format"], json!("txt"));
+
+        // 除封面 base64 外，两种模式的字段集合与取值一致
+        let full = build_novel_list_json(novels, &folders, &counts, &json!({}));
+        let mut lite_map = lite[0].as_object().unwrap().clone();
+        let mut full_map = full[0].as_object().unwrap().clone();
+        lite_map.remove("cover_base64");
+        full_map.remove("cover_base64");
+        assert_eq!(lite_map, full_map);
+        fs::remove_dir_all(&dir).ok();
     }
 }

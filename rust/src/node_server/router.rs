@@ -28,6 +28,9 @@ pub async fn route_request(
         // 媒体文件服务
         (Method::GET, "/node/media") => super::media_handler::handle_media_request(req).await,
 
+        // 小说封面按需流（生产路径在 mod.rs 原生 TCP 分支，这里保持双路由一致）
+        (Method::GET, "/node/novel_cover") => handle_novel_cover_request(req).await,
+
         // 文件上传
         (Method::POST, "/node/upload") => super::handlers::handle_upload(req).await,
 
@@ -72,6 +75,45 @@ async fn handle_node_call(
     match super::handlers::dispatch_action(&node_req.action, node_req.params, &config).await {
         Ok(data) => Ok(json_response(NodeResponse::success(data))),
         Err(e) => Ok(json_response(NodeResponse::error(e))),
+    }
+}
+
+/// 处理 GET /node/novel_cover（hyper 分支；生产路径为 mod.rs 原生 TCP 分支，
+/// 两者共用 handlers::read_novel_cover_bytes，授权都在路由之前完成）。
+async fn handle_novel_cover_request(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+    let query = req.uri().query().unwrap_or("");
+    let params: std::collections::HashMap<String, String> =
+        url::form_urlencoded::parse(query.as_bytes())
+            .into_owned()
+            .collect();
+    let novel_id = params.get("novel_id").cloned().unwrap_or_default();
+    let width = params
+        .get("width")
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    let result = tokio::task::spawn_blocking(move || {
+        super::handlers::read_novel_cover_bytes(&novel_id, width)
+    })
+    .await
+    .unwrap_or(Err(super::handlers::NovelCoverError::NotFound));
+    match result {
+        Ok((bytes, content_type)) => Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", content_type)
+            .header("Content-Length", bytes.len().to_string())
+            .body(Body::from(bytes))
+            .unwrap()),
+        Err(e) => {
+            let status = match e {
+                super::handlers::NovelCoverError::MissingId => StatusCode::BAD_REQUEST,
+                _ => StatusCode::NOT_FOUND,
+            };
+            Ok(Response::builder()
+                .status(status)
+                .header("Content-Type", "text/plain; charset=utf-8")
+                .body(Body::from(e.message()))
+                .unwrap())
+        }
     }
 }
 

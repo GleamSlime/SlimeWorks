@@ -94,11 +94,87 @@ pub fn get_app_data_dir() -> PathBuf {
 // ─────────────────────────────────────────────────────────────
 
 // 内容缓存：存储已解析的书籍内容，避免重复解析
-type ContentCache = Arc<Mutex<HashMap<String, (NovelContent, DateTime<Utc>)>>>;
+type ContentCache = Arc<Mutex<ContentLruCache>>;
 static CONTENT_CACHE: OnceLock<ContentCache> = OnceLock::new();
 
+/// 内容缓存的常驻书本数上限（LRU 淘汰最久未访问的一本）。
+/// 网文 TXT 常见 5~20MB，原先 HashMap 无上限、读 50 本后数百 MB 常驻不还；
+/// 5 本足以覆盖「当前书 + 最近翻阅的几本」的访问模式。
+const CONTENT_CACHE_MAX_BOOKS: usize = 5;
+
+/// 缓存条目：解析结果 + 文件 mtime（用于判过期）+ 最近访问序号（LRU 依据）。
+struct ContentCacheEntry {
+    content: NovelContent,
+    cached_at: DateTime<Utc>,
+    last_access: u64,
+}
+
+/// 带 LRU 淘汰的内容缓存。容量很小（5 本），淘汰用一次线性找最旧即可，
+/// 不必为此引入 lru crate 或维护双向链表。
+struct ContentLruCache {
+    entries: HashMap<String, ContentCacheEntry>,
+    /// 单调递增的访问时钟：每次命中/插入 +1，值最小者即最久未访问。
+    clock: u64,
+}
+
+impl ContentLruCache {
+    fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+            clock: 0,
+        }
+    }
+
+    fn tick(&mut self) -> u64 {
+        self.clock += 1;
+        self.clock
+    }
+
+    /// 命中即刷新访问时间（LRU 语义）；未命中返回 None。
+    fn get(&mut self, key: &str) -> Option<&ContentCacheEntry> {
+        let access = self.tick();
+        let entry = self.entries.get_mut(key)?;
+        entry.last_access = access;
+        Some(entry)
+    }
+
+    fn remove(&mut self, key: &str) {
+        self.entries.remove(key);
+    }
+
+    /// 插入并做容量收敛：超上限时反复淘汰最久未访问的一本。
+    fn insert(&mut self, key: String, content: NovelContent, cached_at: DateTime<Utc>) {
+        let access = self.tick();
+        self.entries.insert(
+            key,
+            ContentCacheEntry {
+                content,
+                cached_at,
+                last_access: access,
+            },
+        );
+        while self.entries.len() > CONTENT_CACHE_MAX_BOOKS {
+            let oldest = self
+                .entries
+                .iter()
+                .min_by_key(|(_, e)| e.last_access)
+                .map(|(k, _)| k.clone());
+            match oldest {
+                Some(k) => {
+                    self.entries.remove(&k);
+                }
+                None => break,
+            }
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+}
+
 fn get_content_cache() -> &'static ContentCache {
-    CONTENT_CACHE.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+    CONTENT_CACHE.get_or_init(|| Arc::new(Mutex::new(ContentLruCache::new())))
 }
 
 /// 小说库数据库文件路径（<应用数据目录>/db.redb）
@@ -542,16 +618,16 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
 
     {
         println!("[Novel] Checking cache...");
-        let cache = get_content_cache().lock().map_err(|e| e.to_string())?;
-        if let Some((cached_content, cached_time)) = cache.get(&file_path) {
-            if cached_time >= &modified_time {
+        let mut cache = get_content_cache().lock().map_err(|e| e.to_string())?;
+        if let Some(entry) = cache.get(&file_path) {
+            if entry.cached_at >= modified_time {
                 let elapsed = start_time.elapsed();
                 println!(
                     "[Novel] Cache hit! Returned in {:?}, chapters: {}",
                     elapsed,
-                    cached_content.chapters.len(),
+                    entry.content.chapters.len(),
                 );
-                return Ok(cached_content.clone());
+                return Ok(entry.content.clone());
             } else {
                 println!("[Novel] Cache expired (file modified), will re-parse");
             }
@@ -598,7 +674,8 @@ pub fn get_novel_content(file_path: String) -> Result<NovelContent, String> {
     {
         println!("[Novel] Updating cache...");
         let mut cache = get_content_cache().lock().map_err(|e| e.to_string())?;
-        cache.insert(file_path.clone(), (content.clone(), modified_time));
+        // 插入即触发 LRU 收敛（上限 CONTENT_CACHE_MAX_BOOKS 本）
+        cache.insert(file_path.clone(), content.clone(), modified_time);
         println!(
             "[Novel] Cache updated, total cached novels: {}",
             cache.len(),
@@ -645,6 +722,42 @@ pub fn get_chapter_content(file_path: String, chapter_index: usize) -> Result<St
         "txt" => {
             // TXT: 从缓存中获取（已在parse时全部加载）
             println!("[Novel] Loading TXT chapter {} from cache", chapter_index);
+
+            // 快路径：缓存命中且未过期时，直接在锁内按章切片 clone 一章返回。
+            // 原先走 get_novel_content 会把整本书（网文常见 5~20MB）clone 一份再取
+            // 一章，切一次章付一次整书克隆 + 临时内存峰值 ×2；这里只 clone 该章。
+            {
+                let modified_time = std::fs::metadata(&path)
+                    .and_then(|m| m.modified())
+                    .map(DateTime::<Utc>::from)
+                    .map_err(|e| format!("Failed to read file metadata: {}", e))?;
+                let mut cache = get_content_cache().lock().map_err(|e| e.to_string())?;
+                if let Some(entry) = cache.get(&file_path) {
+                    if entry.cached_at >= modified_time {
+                        let result = entry
+                            .content
+                            .chapters
+                            .get(chapter_index)
+                            .and_then(|ch| ch.content.clone())
+                            .ok_or_else(|| {
+                                println!(
+                                    "[Novel] Chapter {} not found or has no content",
+                                    chapter_index
+                                );
+                                format!("Chapter {} not found or has no content", chapter_index)
+                            })?;
+                        println!(
+                            "[Novel] TXT chapter {} loaded from cache slice, length: {} chars",
+                            chapter_index,
+                            result.len(),
+                        );
+                        return Ok(result);
+                    }
+                }
+            }
+
+            // 慢路径：缓存未命中/已过期，解析整书（会填充缓存），再取该章。
+            // 此处的整书 clone 每次打开只付一次，后续切章全部走上面的切片路径。
             let content = get_novel_content(file_path)?;
 
             let result = content
@@ -1597,6 +1710,110 @@ mod tests {
         );
         let content = get_novel_content(p.to_string_lossy().into_owned()).unwrap();
         assert!(content.chapters[0].content.as_ref().unwrap().contains("新版"));
+    }
+
+    /// 内容缓存必须有 LRU 上限：连开 8 本书后只常驻最近访问的 5 本，
+    /// 最早开的 3 本被淘汰（原 HashMap 无上限，读多少本驻多少本）。
+    #[test]
+    fn content_cache_evicts_least_recently_used_beyond_limit() {
+        let _serial = lock_db_test_serial();
+        assert_db_isolated();
+        reset_library_state();
+
+        let dir = case_dir("cache_lru");
+        let mut paths = Vec::new();
+        for i in 0..(CONTENT_CACHE_MAX_BOOKS + 3) {
+            let p = write_novel_txt(&dir, &format!("LRU书{}", i), "甲。", "乙。");
+            set_mtime(&p, fixed_mtime());
+            get_novel_content(p.to_string_lossy().into_owned()).unwrap();
+            paths.push(p);
+        }
+
+        let cache = get_content_cache().lock().unwrap();
+        assert_eq!(
+            cache.len(),
+            CONTENT_CACHE_MAX_BOOKS,
+            "缓存不得超过 {} 本",
+            CONTENT_CACHE_MAX_BOOKS
+        );
+        // 最早开的 3 本应已被淘汰，最近开的 5 本仍在
+        for (i, p) in paths.iter().enumerate() {
+            let key = p.to_string_lossy().into_owned();
+            let should_stay = i >= 3;
+            assert_eq!(
+                cache.entries.contains_key(&key),
+                should_stay,
+                "第 {} 本的缓存驻留状态不符",
+                i
+            );
+        }
+    }
+
+    /// 命中会刷新 LRU 访问时间：即将被淘汰的书被再次访问后，
+    /// 淘汰的应是另一本更久未访问的书。
+    #[test]
+    fn content_cache_access_refreshes_lru_order() {
+        let _serial = lock_db_test_serial();
+        assert_db_isolated();
+        reset_library_state();
+
+        let dir = case_dir("cache_lru_touch");
+        let mut paths = Vec::new();
+        for i in 0..CONTENT_CACHE_MAX_BOOKS {
+            let p = write_novel_txt(&dir, &format!("触碰书{}", i), "甲。", "乙。");
+            set_mtime(&p, fixed_mtime());
+            get_novel_content(p.to_string_lossy().into_owned()).unwrap();
+            paths.push(p);
+        }
+        // 重新访问第 0 本（此时它是「最久未访问」候选）
+        get_novel_content(paths[0].to_string_lossy().into_owned()).unwrap();
+        // 再开一本新书 → 应淘汰第 1 本而不是第 0 本
+        let newcomer = write_novel_txt(&dir, "新来书", "甲。", "乙。");
+        set_mtime(&newcomer, fixed_mtime());
+        get_novel_content(newcomer.to_string_lossy().into_owned()).unwrap();
+
+        let cache = get_content_cache().lock().unwrap();
+        assert_eq!(cache.len(), CONTENT_CACHE_MAX_BOOKS);
+        assert!(cache
+            .entries
+            .contains_key(paths[0].to_string_lossy().as_ref()));
+        assert!(!cache
+            .entries
+            .contains_key(paths[1].to_string_lossy().as_ref()));
+        assert!(cache
+            .entries
+            .contains_key(newcomer.to_string_lossy().as_ref()));
+    }
+
+    /// TXT 缓存命中时按章切片：内容与整书解析结果一致，且命中路径不依赖整书返回。
+    /// 这里钉住语义正确性（切片结果 == 整书取章），性能收益由「锁内只 clone 一章」保证。
+    #[test]
+    fn txt_chapter_slice_matches_full_content() {
+        let _serial = lock_db_test_serial();
+        assert_db_isolated();
+        reset_library_state();
+
+        let dir = case_dir("chapter_slice");
+        let p = write_novel_txt(&dir, "切片书", "第一章独有正文甲。", "第二章独有正文乙。");
+        set_mtime(&p, fixed_mtime());
+        let path_str = p.to_string_lossy().into_owned();
+
+        // 预热缓存后走切片快路径
+        let full = get_novel_content(path_str.clone()).unwrap();
+        assert!(full.chapters.len() >= 2);
+        for (idx, ch) in full.chapters.iter().enumerate() {
+            let sliced = get_chapter_content(path_str.clone(), idx).unwrap();
+            assert_eq!(
+                Some(sliced),
+                ch.content,
+                "第 {} 章切片必须与整书解析内容一致",
+                idx
+            );
+        }
+        // 越界索引在缓存命中路径同样报未找到
+        assert!(get_chapter_content(path_str.clone(), 999)
+            .unwrap_err()
+            .contains("not found"));
     }
 
     // ── remove / clear ─────────────────────────────────────────────────────

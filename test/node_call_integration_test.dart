@@ -164,7 +164,7 @@ void main() {
       expect(service.isNodeCircuitBreaked('node-a'), isFalse);
     });
 
-    test('fetchNodeNovels 复用同一条链路并把 data 转成 List<Map>', () async {
+    test('fetchNodeNovels 复用同一条链路并把 data 转成 List<Map>，且带 with_cover=false', () async {
       final service = await createService();
       final node = mountNode(service, apiBaseUrl: server.baseUrl);
       server.responder = (req) => FakeNodeReply.successData(<dynamic>[
@@ -175,7 +175,10 @@ void main() {
       expect(novels, <Map<String, dynamic>>[
         <String, dynamic>{'id': 'n1'}
       ]);
-      expect(requestFor(server, 'list_novels'), isNotNull);
+      final recorded = requestFor(server, 'list_novels');
+      expect(recorded, isNotNull);
+      // 审计 #3：列表取数显式关闭内嵌封面（旧节点不认识该参数会忽略，行为兼容）
+      expect(recorded.params['with_cover'], false);
     });
   });
 
@@ -531,6 +534,42 @@ void main() {
       expect(uri.path, '/node/media');
       expect(uri.queryParameters['path'], '/media/a.jpg');
       expect(uri.queryParameters['sw_auth'], sha256.convert(utf8.encode('ABCD-1234')).toString());
+    });
+
+    test('buildNodeNovelCoverUrl：按需封面 URL 带 novel_id/版本号/sw_auth，未知节点返回 null', () {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final service = NodeSettingsService();
+      final node = NodeEndpoint(
+        id: 'node-a',
+        name: '测试节点',
+        apiBaseUrl: 'http://127.0.0.1:17888',
+        authCode: 'ABCD-1234',
+      );
+      service.remoteNodes.add(node);
+
+      final url = service.buildNodeNovelCoverUrl(
+        nodeId: 'node-a',
+        novelId: 'raw-id:with:colon',
+        width: 240,
+        cacheBuster: 42,
+      );
+      expect(url, isNotNull);
+      final uri = Uri.parse(url!);
+      expect(uri.path, '/node/novel_cover');
+      expect(uri.queryParameters['novel_id'], 'raw-id:with:colon');
+      expect(uri.queryParameters['width'], '240');
+      expect(uri.queryParameters['v'], '42');
+      expect(uri.queryParameters['sw_auth'], sha256.convert(utf8.encode('ABCD-1234')).toString());
+
+      // 无授权码节点：不带 sw_auth；未知节点：null（调用方显示占位）
+      service.remoteNodes.add(const NodeEndpoint(
+        id: 'node-b',
+        name: '无码节点',
+        apiBaseUrl: 'http://127.0.0.1:17889',
+      ));
+      final noAuth = Uri.parse(service.buildNodeNovelCoverUrl(nodeId: 'node-b', novelId: 'x')!);
+      expect(noAuth.queryParameters.containsKey('sw_auth'), isFalse);
+      expect(service.buildNodeNovelCoverUrl(nodeId: 'ghost', novelId: 'x'), isNull);
     });
   });
 

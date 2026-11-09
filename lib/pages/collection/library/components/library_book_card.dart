@@ -847,6 +847,26 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
         } else {
           coverWidget = _buildDefaultCover();
         }
+      } else if (coverPath != null &&
+          (coverPath.startsWith('http://') || coverPath.startsWith('https://'))) {
+        // 远程封面按需 URL（with_cover=false 后不再内嵌 base64）：
+        // 流式加载，首见闪占位可接受；失败回退默认封面
+        coverWidget = ClipRect(
+          child: AnimatedScale(
+            scale: _hovering ? 1.08 : 1.0,
+            duration: AppMotion.fast,
+            curve: AppMotion.decelerate,
+            child: Hero(
+              tag: 'book_cover_${widget.metadata.id}',
+              child: Image.network(
+                coverPath,
+                fit: BoxFit.cover,
+                cacheWidth: cacheWidth,
+                errorBuilder: (_, _, _) => _buildDefaultCover(),
+              ),
+            ),
+          ),
+        );
       } else if (widget.metadata.coverPath != null) {
         final file = File(widget.metadata.coverPath!);
         if (file.existsSync()) {

@@ -551,6 +551,57 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
             }
         }
 
+        // ── 小说封面按需流式接口 ─────────────────────────────────────────────
+        // 与 /node/media 同一授权口径：上方 is_authorized 已统一校验
+        // X-SW-Auth 头或 ?sw_auth=<sha256> 查询参数（Image.network 注不了头，走后者）。
+        // 只按 novel_id 反查库内封面路径，不接受任意文件路径。
+        ("GET", "/node/novel_cover") => {
+            let query = path.splitn(2, '?').nth(1).unwrap_or("");
+            let params: std::collections::HashMap<String, String> =
+                url::form_urlencoded::parse(query.as_bytes())
+                    .into_owned()
+                    .collect();
+            let novel_id = params.get("novel_id").cloned().unwrap_or_default();
+            let width = params
+                .get("width")
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0);
+            // 查库 + 读盘/缩略图生成都是阻塞操作，移入共享 runtime 的 blocking 池
+            let result = shared_runtime().block_on(async move {
+                tokio::task::spawn_blocking(move || {
+                    handlers::read_novel_cover_bytes(&novel_id, width)
+                })
+                .await
+                .map_err(|_| handlers::NovelCoverError::NotFound)?
+            });
+            match result {
+                Ok((bytes, content_type)) => {
+                    let header = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                        content_type,
+                        bytes.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(&bytes);
+                }
+                Err(e) => {
+                    let status_line = match e {
+                        handlers::NovelCoverError::MissingId => "400 Bad Request",
+                        _ => "404 Not Found",
+                    };
+                    let err_body = format!("novel cover error: {}", e.message());
+                    let header = format!(
+                        "HTTP/1.1 {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                        status_line,
+                        err_body.len()
+                    );
+                    let _ = stream.write_all(header.as_bytes());
+                    let _ = stream.write_all(err_body.as_bytes());
+                }
+            }
+            return;
+        }
+
         // ── Manga 中转路由 ────────────────────────────────────────────────────
         // 移动端在选择 "PC中转" 分流模式后，所有 Manga 请求都会发到这里。
         // PC 使用其自身的分流配置（channel + token）代为请求 Manga 并返回数据。
@@ -1347,6 +1398,83 @@ mod tests {
             &miss[..miss.len().min(40)]
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// GET /node/novel_cover 的授权判定与 /node/media 同一口径：
+    /// 头或 ?sw_auth 摘要任一正确即放行，缺失/错误一律拒绝。
+    /// 用纯函数钉住（不触书库 DB；200 命中路径由客户端集成验收覆盖）。
+    #[test]
+    fn novel_cover_auth_matches_media_semantics() {
+        let config = config_with_code("slime-node");
+        let digest = config.auth_code_hash.clone().unwrap();
+        // 未授权 → 拒绝
+        assert!(!is_authorized(&config, None, "GET", "/node/novel_cover?novel_id=x"));
+        assert!(!is_authorized(
+            &config,
+            None,
+            "GET",
+            "/node/novel_cover?novel_id=x&sw_auth=deadbeef"
+        ));
+        // 请求头摘要 → 放行
+        assert!(is_authorized(
+            &config,
+            Some(&digest),
+            "GET",
+            "/node/novel_cover?novel_id=x"
+        ));
+        // 查询参数摘要（Image.network 注不了请求头）→ 放行
+        assert!(is_authorized(
+            &config,
+            None,
+            "GET",
+            &format!("/node/novel_cover?novel_id=x&sw_auth={digest}")
+        ));
+    }
+
+    /// GET /node/novel_cover 走真 socket：两道关卡的顺序与状态码语义
+    /// （401 未授权 → 400 缺 novel_id → 404 书不存在）。
+    /// 不触真实用户库：缺参分支在查库之前短路，错误类型由纯函数单测钉住。
+    #[test]
+    fn novel_cover_endpoint_enforces_auth_then_param_check() {
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+
+        let config = Arc::new(config_with_code("slime-node"));
+        let digest = config.auth_code_hash.clone().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let server_cfg = Arc::clone(&config);
+        let _server = std::thread::spawn(move || {
+            for incoming in listener.incoming() {
+                match incoming {
+                    Ok(stream) => handle_connection(stream, Arc::clone(&server_cfg)),
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let send = |request: &str| -> String {
+            let mut stream = TcpStream::connect(format!("127.0.0.1:{port}")).expect("connect");
+            stream.write_all(request.as_bytes()).expect("write");
+            let mut response = String::new();
+            stream.read_to_string(&mut response).expect("read");
+            response
+        };
+
+        // 未授权 → 401（与媒体端点同一道关卡，先于任何业务判定）
+        assert!(send("GET /node/novel_cover?novel_id=x HTTP/1.1\r\nHost: x\r\n\r\n")
+            .starts_with("HTTP/1.1 401"));
+        assert!(send("GET /node/novel_cover?novel_id=x&sw_auth=deadbeef HTTP/1.1\r\nHost: x\r\n\r\n")
+            .starts_with("HTTP/1.1 401"));
+        // 授权通过但缺 novel_id → 400（该分支在查库之前短路，不触库）
+        assert!(send(&format!(
+            "GET /node/novel_cover HTTP/1.1\r\nHost: x\r\nX-SW-Auth: {digest}\r\n\r\n"
+        ))
+        .starts_with("HTTP/1.1 400"));
+        assert!(send(&format!(
+            "GET /node/novel_cover?sw_auth={digest} HTTP/1.1\r\nHost: x\r\n\r\n"
+        ))
+        .starts_with("HTTP/1.1 400"));
     }
 
     /// 通用 body 的体积上限必须卡在**分配之前**。

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -35,6 +36,33 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
     super.dispose();
   }
 
+  /// 幽灵占位的封面：支持本地文件 / data URI / 远程按需 URL；
+  /// 任何缺失/失败都回退纯色底（占位卡不需要精确的丢失语义）
+  Widget _buildGhostCover(String? path, Color fallbackColor) {
+    if (path != null && path.isNotEmpty) {
+      try {
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          return Image.network(
+            path,
+            fit: BoxFit.cover,
+            cacheWidth: 200,
+            errorBuilder: (_, _, _) => Container(color: fallbackColor),
+          );
+        }
+        if (path.startsWith('data:image/')) {
+          final commaIndex = path.indexOf(',');
+          if (commaIndex > 0 && commaIndex < path.length - 1) {
+            final bytes = base64Decode(path.substring(commaIndex + 1));
+            return Image.memory(bytes, fit: BoxFit.cover, cacheWidth: 200);
+          }
+        } else if (File(path).existsSync()) {
+          return Image.file(File(path), fit: BoxFit.cover, cacheWidth: 200);
+        }
+      } catch (_) {}
+    }
+    return Container(color: fallbackColor);
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppSemantic.of(context);
@@ -44,9 +72,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
       content = Stack(
         fit: StackFit.expand,
         children: [
-          meta.coverPath != null && File(meta.coverPath!).existsSync()
-              ? Image.file(File(meta.coverPath!), fit: BoxFit.cover)
-              : Container(color: s.border),
+          _buildGhostCover(meta.coverPath, s.border),
           Positioned(
             left: 0,
             right: 0,

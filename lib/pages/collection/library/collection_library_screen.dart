@@ -47,16 +47,13 @@ class _CollectionLibraryScreenState
   bool get _isDesktop => !Platform.isAndroid && !Platform.isIOS;
 
   bool _isBookLost(NovelMetadata meta) {
-    if (meta.coverPath == null || meta.coverPath!.isEmpty) return false;
-    // 直接使用 dart:io 的 existsSync，避免同步 FFI 调用（checkPathsExist 已改为异步）
-    return !File(meta.coverPath!).existsSync();
+    // 存在性检查已移出 build：读 VM 的后台批量检查缓存，
+    // 未检查过的先按「未丢失」展示，结果到货经 coverCheckEpoch 刷新
+    return viewModel.isNovelCoverLost(meta);
   }
 
   bool _isFolderLost(NovelFolder folder) {
-    final covers = viewModel.getFolderCovers(folder.id);
-    if (covers.isEmpty) return false;
-    // 直接使用 dart:io 的 existsSync，避免同步 FFI 调用（checkPathsExist 已改为异步）
-    return covers.every((p) => !File(p).existsSync());
+    return viewModel.isFolderCoverLost(folder.id);
   }
 
   /// 滚动控制器，用于保存和恢复滚动位置
@@ -861,6 +858,8 @@ class _CollectionLibraryScreenState
   Widget _buildGrid(bool isSelecting, bool inFolder) {
     return Obx(() {
       final s = AppSemantic.of(context);
+      // 后台封面存在性检查完成的通知：丢失角标据此刷新（只在 Obx 内读）
+      viewModel.coverCheckEpoch.value;
       // ignore: unused_local_variable
       final selectedCount = viewModel.selectedIds.length;
       final items = viewModel.displayedItems; // 使用分页后的项目
@@ -1103,10 +1102,25 @@ class _CollectionLibraryScreenState
       final double h = w / 0.65;
 
       Widget cover;
-      if (FakeCover.enabled && meta.coverPath != null) {
+      final dragCoverPath = meta.coverPath;
+      if (FakeCover.enabled && dragCoverPath != null) {
         // 伪封面：拖拽浮影是最容易被旁人看到的一处，同样不能带出真实封面
         cover = const FakeCover();
-      } else if (meta.coverPath != null && File(meta.coverPath!).existsSync()) {
+      } else if (dragCoverPath != null &&
+          (dragCoverPath.startsWith('http://') || dragCoverPath.startsWith('https://'))) {
+        // 远程封面按需 URL：浮影同样流式取，失败回退占位
+        cover = Image.network(
+          dragCoverPath,
+          fit: BoxFit.cover,
+          cacheWidth: 200,
+          errorBuilder: (_, _, _) => Container(
+            color: s.border,
+            child: Center(
+              child: DrawIcon(StrokeIcons.book, size: scaleW(28), color: s.onMediaSecondary),
+            ),
+          ),
+        );
+      } else if (dragCoverPath != null && File(dragCoverPath).existsSync()) {
         final privacyOn = getIt.isRegistered<MediaPrefsService>()
             ? getIt<MediaPrefsService>().privacyMode.value
             : false;

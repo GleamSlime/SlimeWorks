@@ -112,15 +112,25 @@ void main() {
     await getIt.reset();
     nodeService = _StubNodeSettingsService();
     getIt.registerSingleton<NodeSettingsService>(nodeService);
-    vm = NovelLibraryViewModel();
+    // 走 Get.put 让 GetxController.onInit 生效，ever worker（派生缓存失效/
+    // 后台存在性检查）才会挂上——与 BasePage 的 GetBuilder(init:) 生产路径一致
+    vm = Get.put(NovelLibraryViewModel());
   });
 
   tearDown(() async {
+    Get.delete<NovelLibraryViewModel>(force: true);
     await getIt.reset();
   });
 
   setUpAll(() {
     tmpDir = Directory.systemTemp.createTempSync('novel_library_logic_test');
+    // flutter_test 测试区禁止 spawn isolate：把后台存在性检查注入为同步实现。
+    // 被测语义（检查不在 build 期、结果经缓存 + coverCheckEpoch 通知）不变。
+    NovelLibraryViewModel.coverExistenceChecker = (paths) async {
+      return <String, bool>{
+        for (final p in paths) p: File(p).existsSync(),
+      };
+    };
   });
 
   tearDownAll(() {
@@ -280,9 +290,31 @@ void main() {
       expect(minimal.customOrder, isNull);
       expect(minimal.isFavorite, isFalse);
       expect(minimal.folderId, isNull);
-      expect(minimal.coverPath, '/node/r2.png');
+      // 审计 #3：新节点（无 base64）封面改按需 URL——不再是节点侧裸路径
+      expect(minimal.coverPath, startsWith('http://127.0.0.1:17888/node/novel_cover?'));
+      expect(minimal.coverPath, contains('novel_id=r2'));
       expect(minimal.lastReadAt, isNull);
       expect(minimal.tags, isEmpty);
+    });
+
+    test('旧节点仍回 cover_base64 时保持 data URI（离线可显示，优先级高于按需 URL）', () async {
+      await mountNodeAndRefresh(
+        novels: [
+          {
+            'id': 'legacy',
+            'cover_base64': 'AAAB',
+            'cover_ext': 'png',
+            'cover_path': '/node/legacy.png',
+          },
+        ],
+      );
+      final legacy = vm.remoteNovels.single;
+      expect(legacy.coverPath, 'data:image/png;base64,AAAB');
+    });
+
+    test('无封面字段的远程书 coverPath 为 null（显示占位，不拼 URL）', () async {
+      await mountNodeAndRefresh(novels: [payload('no-cover')]);
+      expect(vm.remoteNovels.single.coverPath, isNull);
     });
 
     test('节点拉取抛错被吞，远程列表清空', () async {
@@ -594,26 +626,57 @@ void main() {
       okCover2 = f2.path;
     });
 
-    test('getFolderCover 返回第一本封面文件真实存在的书；全缺返回 null', () {
+    test('getFolderCover 返回第一本封面文件真实存在的书；全缺返回 null', () async {
       vm.novels.assignAll([
         novel('a', folderId: 'f1', coverPath: '${tmpDir.path}/ghost.png'), // 文件不存在
         novel('b', folderId: 'f1', coverPath: okCover),
         novel('c', folderId: 'f1'), // 无封面字段
         novel('d', folderId: 'f2', coverPath: okCover2), // 别的目录不算
       ]);
+      // 审计 #5：存在性检查移到后台，等本轮检查完成后丢失判定才生效
+      await vm.debugWaitCoverCheck();
       expect(vm.getFolderCover('f1'), okCover);
       expect(vm.getFolderCover('empty-folder'), isNull);
     });
 
-    test('getFolderCovers 保持书籍顺序、跳过缺失文件并按 maxCount 截断', () {
+    test('getFolderCovers 保持书籍顺序、跳过缺失文件并按 maxCount 截断', () async {
       vm.novels.assignAll([
         novel('a', folderId: 'f1', coverPath: okCover),
         novel('b', folderId: 'f1', coverPath: '${tmpDir.path}/ghost.png'),
         novel('c', folderId: 'f1', coverPath: ''), // 空串视为无封面
         novel('d', folderId: 'f1', coverPath: okCover2),
       ]);
+      await vm.debugWaitCoverCheck();
       expect(vm.getFolderCovers('f1'), [okCover, okCover2]);
       expect(vm.getFolderCovers('f1', maxCount: 1), [okCover]);
+    });
+
+    test('后台检查未回来前先展示候选（不闪丢失），到货后缺失封面被过滤并 bump epoch', () async {
+      vm.novels.assignAll([
+        novel('a', folderId: 'f1', coverPath: '${tmpDir.path}/ghost.png'),
+      ]);
+      // 未证实丢失前：候选先展示（占位语义），不算丢失
+      expect(vm.getFolderCovers('f1'), ['${tmpDir.path}/ghost.png']);
+      expect(vm.isFolderCoverLost('f1'), isFalse);
+      final epochBefore = vm.coverCheckEpoch.value;
+      await vm.debugWaitCoverCheck();
+      // 证实不存在后：过滤掉候选、标记丢失、通知 Obx 重建
+      expect(vm.getFolderCovers('f1'), isEmpty);
+      expect(vm.isFolderCoverLost('f1'), isTrue);
+      expect(vm.coverCheckEpoch.value, greaterThan(epochBefore));
+    });
+
+    test('数据变更后派生缓存失效重算：数量与封面跟着新列表走', () async {
+      vm.novels.assignAll([
+        novel('a', folderId: 'f1', coverPath: okCover),
+        novel('b', folderId: 'f1'),
+      ]);
+      expect(vm.getFolderNovelCount('f1'), 2);
+      // 换一批数据：旧索引必须失效
+      vm.novels.assignAll([novel('c', folderId: 'f1', coverPath: okCover2)]);
+      expect(vm.getFolderNovelCount('f1'), 1);
+      await vm.debugWaitCoverCheck();
+      expect(vm.getFolderCovers('f1'), [okCover2]);
     });
   });
 

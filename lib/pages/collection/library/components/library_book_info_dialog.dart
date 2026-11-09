@@ -1,6 +1,7 @@
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -122,24 +123,60 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
 
   // ── 封面区域 ─────────────────────────────────────────────────────────────
 
+  /// 无封面/加载失败时的占位图标
+  Widget _coverPlaceholder(AppSemantic s) {
+    return Center(
+      child: DrawIcon(StrokeIcons.menuBook,
+        size: AppTheme.metrics.iconSize64,
+        color: s.accent.withValues(alpha: 0.4),
+      ),
+    );
+  }
+
   Widget _buildCover(BuildContext context) {
     final s = AppSemantic.of(context);
     final coverSource = _pendingCoverPath ?? widget.metadata.coverPath;
-    final hasFile = coverSource != null && File(coverSource).existsSync();
 
-    Widget coverWidget = hasFile
-        ? Image.file(
-            File(coverSource),
+    // 封面来源分三档：远程按需 URL / data URI（旧节点内嵌 base64）/ 本地文件。
+    // 原实现只认 File.existsSync——远程书封面恒显示占位（data URI/URL 被当路径 stat）
+    Widget coverWidget;
+    if (coverSource != null &&
+        (coverSource.startsWith('http://') || coverSource.startsWith('https://'))) {
+      coverWidget = Image.network(
+        coverSource,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, _, _) => _coverPlaceholder(s),
+      );
+    } else if (coverSource != null && coverSource.startsWith('data:image/')) {
+      final commaIndex = coverSource.indexOf(',');
+      if (commaIndex > 0 && commaIndex < coverSource.length - 1) {
+        try {
+          final bytes = base64Decode(coverSource.substring(commaIndex + 1));
+          coverWidget = Image.memory(
+            bytes,
             fit: BoxFit.cover,
             width: double.infinity,
             height: double.infinity,
-          )
-        : Center(
-            child: DrawIcon(StrokeIcons.menuBook,
-              size: AppTheme.metrics.iconSize64,
-              color: s.accent.withValues(alpha: 0.4),
-            ),
+            errorBuilder: (_, _, _) => _coverPlaceholder(s),
           );
+        } catch (_) {
+          coverWidget = _coverPlaceholder(s);
+        }
+      } else {
+        coverWidget = _coverPlaceholder(s);
+      }
+    } else if (coverSource != null && File(coverSource).existsSync()) {
+      coverWidget = Image.file(
+        File(coverSource),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+      );
+    } else {
+      coverWidget = _coverPlaceholder(s);
+    }
 
     return GestureDetector(
       onTap: _editing ? _pickCover : null,

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
@@ -51,6 +52,34 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
   late FocusNode _editFocusNode;
 
   bool get _isRemoteVirtualFolder => widget.folder.id.startsWith('remote-folder:');
+
+  /// 九宫格单格封面：支持本地文件 / data URI / 远程按需 URL 三种来源。
+  ///
+  /// 存在性过滤已在 VM 的派生缓存层完成（后台批量检查），这里不再 existsSync；
+  /// 解码/加载失败回退 null（该格显示空位底色）。每格只有几十像素宽，按显示尺寸解码。
+  Widget? _buildGridCellCover(String path) {
+    try {
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        // 远程封面按需 URL：首见闪占位可接受，失败由 errorBuilder 回退空位
+        return Image.network(
+          path,
+          fit: BoxFit.cover,
+          cacheWidth: 200,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        );
+      }
+      if (path.startsWith('data:image/')) {
+        // 旧节点内嵌 base64（with_cover 缺省路径），保持离线可显示
+        final commaIndex = path.indexOf(',');
+        if (commaIndex <= 0 || commaIndex >= path.length - 1) return null;
+        final bytes = base64Decode(path.substring(commaIndex + 1));
+        return Image.memory(bytes, fit: BoxFit.cover, cacheWidth: 200);
+      }
+      return Image.file(File(path), fit: BoxFit.cover, cacheWidth: 200);
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   void initState() {
@@ -239,6 +268,9 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                 ),
                 // Obx 包一层：隐私模式 / 伪封面开关一切换，封面格立刻重绘，不用等整页重建
                 child: Obx(() {
+                  // 存在性/派生缓存变更通知：后台批量检查完成后重建本格
+                  //（coverCheckEpoch 只在 Obx 内读，勿在 initState 里读 .value）
+                  widget.viewModel.coverCheckEpoch.value;
                   final coverPaths = widget.viewModel.getFolderCovers(widget.folder.id);
                   final prefs = getIt.isRegistered<MediaPrefsService>()
                       ? getIt<MediaPrefsService>()
@@ -257,17 +289,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                 children: List.generate(3, (col) {
                                   final idx = col;
                                   if (idx < coverPaths.length) {
-                                    final coverFile = File(coverPaths[idx]);
-                                    if (coverFile.existsSync()) {
-                                      return Expanded(
-                                        // 九宫格里每格只有几十像素宽，按显示尺寸解码
-                                        child: Image.file(
-                                          coverFile,
-                                          fit: BoxFit.cover,
-                                          cacheWidth: 200,
-                                        ),
-                                      );
-                                    }
+                                    final cell = _buildGridCellCover(coverPaths[idx]);
+                                    if (cell != null) return Expanded(child: cell);
                                   }
                                   return Expanded(
                                     child: Container(
@@ -283,16 +306,8 @@ class _LibraryFolderCardState extends State<LibraryFolderCard> {
                                 children: List.generate(3, (col) {
                                   final idx = 3 + col;
                                   if (idx < coverPaths.length) {
-                                    final coverFile = File(coverPaths[idx]);
-                                    if (coverFile.existsSync()) {
-                                      return Expanded(
-                                        child: Image.file(
-                                          coverFile,
-                                          fit: BoxFit.cover,
-                                          cacheWidth: 200,
-                                        ),
-                                      );
-                                    }
+                                    final cell = _buildGridCellCover(coverPaths[idx]);
+                                    if (cell != null) return Expanded(child: cell);
                                   }
                                   return Expanded(
                                     child: Container(

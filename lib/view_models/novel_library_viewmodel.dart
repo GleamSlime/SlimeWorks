@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -11,6 +13,7 @@ import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
+import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:slime_works/pages/collection/library/components/library_item.dart';
 import 'package:slime_works/mock/seams/novel_api_seam.dart';
@@ -20,11 +23,37 @@ part 'novel_library_viewmodel_novel.dart';
 part 'novel_library_viewmodel_actions.dart';
 const Loggers _logger = Loggers(name: '书库');
 
+/// 后台封面存在性检查的 isolate 入口（顶层函数）。
+/// ★ 闭包必须只捕获可发送的参数：捕获 VM 实例（哪怕只在 catch 里用 _logger）
+/// 会让 Isolate.run 报 object is unsendable。
+Map<String, bool> _checkCoverFilesExist(Set<String> paths) {
+  final map = <String, bool>{};
+  for (final p in paths) {
+    try {
+      map[p] = File(p).existsSync();
+    } catch (_) {
+      map[p] = false;
+    }
+  }
+  return map;
+}
+
 
 /// 书库 ViewModel
 class NovelLibraryViewModel extends BaseViewModel {
   final NodeSettingsService nodeSettingsService = getIt<NodeSettingsService>();
   Worker? _nodeMutationWorker;
+
+  /// mutation tick 整轮重拉的防抖窗口：一次导入/批量操作会连发多个 tick，
+  /// 2s 内的变更合并成一次刷新，避免 N 个事件 × N 个节点的整轮重付。
+  static const _remoteRefreshDebounce = Duration(seconds: 2);
+  Timer? _remoteRefreshDebounceTimer;
+
+  /// 远程书架刷新的代际号：并发刷新时旧一轮的结果不得覆盖新一轮。
+  int _remoteRefreshGeneration = 0;
+
+  /// 首屏后台远程刷新的在途句柄（不阻塞 onInitAsync，测试可显式等待）。
+  Future<void>? _backgroundRemoteRefresh;
 
   // 书库 数据
   final novels = <NovelMetadata>[].obs;
@@ -97,40 +126,49 @@ class NovelLibraryViewModel extends BaseViewModel {
   }
 
   /// 获取文件夹封面（返回该文件夹内第一本有封面的epub或txt书籍的封面路径）
+  ///
+  /// 纯读派生缓存：build 期间零 IO。存在性检查在后台批量完成后经
+  /// coverCheckEpoch 通知刷新；缓存未命中时按「未证实丢失」先展示（占位闪一下可接受）。
   String? getFolderCover(String folderId) {
-    final folderBooks = _getBooksInFolder(folderId);
-    // 优先查找有封面的书籍
-    for (final book in folderBooks) {
-      if (book.coverPath != null && book.coverPath!.isNotEmpty) {
-        final coverFile = File(book.coverPath!);
-        if (coverFile.existsSync()) {
-          return book.coverPath;
-        }
-      }
+    final candidates = _folderCoverCandidates(folderId);
+    for (final path in candidates) {
+      if (_isCoverConfirmedMissing(path)) continue;
+      return path;
     }
     return null;
   }
 
   /// 获取文件夹前6本书的封面列表（用于6宫格显示）
+  ///
+  /// 与 getFolderCover 同一口径：候选来自派生缓存，存在性只读后台检查结果。
   List<String> getFolderCovers(String folderId, {int maxCount = 6}) {
-    final folderBooks = _getBooksInFolder(folderId);
+    final candidates = _folderCoverCandidates(folderId);
     final covers = <String>[];
-
-    for (final book in folderBooks) {
+    for (final path in candidates) {
       if (covers.length >= maxCount) break;
-      if (book.coverPath != null && book.coverPath!.isNotEmpty) {
-        final coverFile = File(book.coverPath!);
-        if (coverFile.existsSync()) {
-          covers.add(book.coverPath!);
-        }
-      }
+      if (_isCoverConfirmedMissing(path)) continue;
+      covers.add(path);
     }
     return covers;
   }
 
-  /// 获取文件夹直属书籍数量（不包含子文件夹）
+  /// 获取文件夹直属书籍数量（不包含子文件夹）——O(1) 读派生缓存
   int getFolderNovelCount(String folderId) {
-    return _getBooksInFolder(folderId).length;
+    _ensureFolderBooksCache();
+    return _folderBooksCache[folderId]?.length ?? 0;
+  }
+
+  /// 文件夹封面候选（未做存在性过滤）：来自派生缓存的书籍列表，
+  /// 保留书籍顺序、跳过空封面字段；data URI 与 http(s) URL 不做本地存在性检查。
+  List<String> _folderCoverCandidates(String folderId) {
+    _ensureFolderBooksCache();
+    final books = _folderBooksCache[folderId] ?? const <NovelMetadata>[];
+    final result = <String>[];
+    for (final book in books) {
+      final p = book.coverPath;
+      if (p != null && p.isNotEmpty) result.add(p);
+    }
+    return result;
   }
 
   int? getNovelChapterCount(String novelId) {
@@ -161,32 +199,176 @@ class NovelLibraryViewModel extends BaseViewModel {
     return 'remote-folder:$nodeId:$folderId';
   }
 
-  (String nodeId, String folderId)? _parseRemoteFolderSyntheticId(String syntheticId) {
-    if (!isRemoteFolderId(syntheticId)) return null;
-    final parts = syntheticId.split(':');
-    // 合成格式 'remote-folder:<nodeId>:<folderId>'：节点 ID 固定在第 1 段，
-    // 目录 ID 自第 2 段起可含冒号（原先误取 parts[2] 且要求 ≥4 段，导致远程目录点开恒空）
-    if (parts.length < 3) return null;
-    final nodeId = parts[1];
-    final folderId = parts.sublist(2).join(':');
-    if (nodeId.isEmpty || folderId.isEmpty) return null;
-    return (nodeId, folderId);
+  List<NovelMetadata> _getBooksInFolder(String folderId) {
+    _ensureFolderBooksCache();
+    final cached = _folderBooksCache[folderId];
+    // ★ 必须给副本：filteredItems 会对返回值原地 _sortBooks，
+    // 直接交出缓存列表会把派生缓存的顺序也排掉（封面候选顺序随之漂移）
+    if (cached != null) return List<NovelMetadata>.of(cached);
+    // 未建索引的临时目录 ID（如刚创建尚未入库）按空处理；
+    // 索引在 novels/remoteNovels 下一次变更时整体重建
+    return <NovelMetadata>[];
   }
 
-  List<NovelMetadata> _getBooksInFolder(String folderId) {
-    final remoteParsed = _parseRemoteFolderSyntheticId(folderId);
-    if (remoteParsed != null) {
-      final books = remoteNovels.where((n) {
-        final nodeId = getRemoteNodeId(n.id);
-        return nodeId == remoteParsed.$1 && n.folderId == remoteParsed.$2;
-      }).toList();
-      _logger.log(
-        '[RemoteDebug] 进入远程目录: folder=$folderId, node=${remoteParsed.$1}, rawFolder=${remoteParsed.$2}, books=${books.length}',
-        name: '书库',
-      );
-      return books;
+  // ── 文件夹→书籍 派生缓存（审计 #5） ────────────────────────────────────────
+  // 原实现每张文件夹卡 build 期间做 O(全部书籍) 过滤 + 逐封面 existsSync，
+  // SMB/外置卷上每次重建近百次网络 stat。改为：novels/remoteNovels/映射表变更
+  // 时置脏，首次读取一次性重算全部分组；封面存在性由后台批量检查（见下）。
+
+  /// 文件夹分组索引是否已失效（数据变更后待重算）
+  bool _folderBooksCacheDirty = true;
+
+  /// folderId（含 remote-folder: 合成 ID）→ 直属书籍列表
+  Map<String, List<NovelMetadata>> _folderBooksCache = {};
+
+  /// 缓存失效通知：Obx 里读它即可在数据/存在性变化后重建。
+  /// ★ 只允许在 build/Obx 中读取；勿在 initState 里读 .value
+  ///（GetX 4.7.3 会把父 Obx 注册成依赖导致整树反复重建）。
+  final coverCheckEpoch = 0.obs;
+
+  /// 数据源变更时挂失效标记（ever worker 回调，不主动 rebuild UI）。
+  void _invalidateFolderDerivedCache() {
+    _folderBooksCacheDirty = true;
+  }
+
+  /// 一次性重建 folderId → 书籍分组索引。
+  void _ensureFolderBooksCache() {
+    if (!_folderBooksCacheDirty) return;
+    final map = <String, List<NovelMetadata>>{};
+    for (final n in novels) {
+      final fid = n.folderId;
+      if (fid == null || fid.isEmpty) continue;
+      (map[fid] ??= <NovelMetadata>[]).add(n);
     }
-    return novels.where((n) => n.folderId == folderId).toList();
+    for (final n in remoteNovels) {
+      final nodeId = remoteNovelNodeId[n.id];
+      final fid = n.folderId;
+      if (nodeId == null || fid == null || fid.isEmpty) continue;
+      // 合成格式 'remote-folder:<nodeId>:<folderId>'（与 _buildRemoteFolderSyntheticId 同口径）
+      final syntheticId = _buildRemoteFolderSyntheticId(nodeId, fid);
+      (map[syntheticId] ??= <NovelMetadata>[]).add(n);
+    }
+    _folderBooksCache = map;
+    _folderBooksCacheDirty = false;
+  }
+
+  // ── 封面存在性后台检查（审计 #5） ──────────────────────────────────────────
+  // existsSync 移出 build：数据变更时后台批量 stat 一轮，结果进缓存；
+  // build 只读缓存，未命中按「未证实丢失」处理（先展示，丢失标记最迟下一轮出现）。
+
+  /// 封面路径 → 是否存在（仅本地文件路径；data URI / URL 不参与）
+  final Map<String, bool> _coverExistsCache = {};
+
+  /// 后台批量检查的在途句柄（防重入）。
+  /// ★ 必须用 completer.future 而不是 async 函数返回值：async 调用在首个 await
+  /// 前同步执行，函数体内再置 _coverCheckInFlight 会覆盖掉外层 whenComplete 包装，
+  /// 完成回调清掉的是旧引用，句柄永远不清空 → 后续调度全被「在途」挡掉。
+  Future<void>? _coverCheckInFlight;
+
+  /// 待检查的封面路径队列（数据变更时重置为全量）
+  Set<String> _coverCheckPending = {};
+
+  /// 是否为「已证实不存在」的本地封面。未检查过的路径返回 false（先展示）。
+  bool _isCoverConfirmedMissing(String path) {
+    if (path.startsWith('data:') ||
+        path.startsWith('http://') ||
+        path.startsWith('https://')) {
+      return false;
+    }
+    return _coverExistsCache[path] == false;
+  }
+
+  /// 单本书封面是否已证实丢失（书卡丢失角标用；远程/未检查返回 false）。
+  bool isNovelCoverLost(NovelMetadata meta) {
+    if (isRemoteNovel(meta.id)) return false;
+    final p = meta.coverPath;
+    if (p == null || p.isEmpty) return false;
+    _scheduleCoverExistenceCheck();
+    return _isCoverConfirmedMissing(p);
+  }
+
+  /// 文件夹是否所有候选封面都已证实丢失（与旧 _isFolderLost 语义一致：
+  /// 无封面候选不算丢失；远程虚拟夹不检查本地盘）。
+  bool isFolderCoverLost(String folderId) {
+    if (isRemoteFolderId(folderId)) return false;
+    final candidates = _folderCoverCandidates(folderId);
+    if (candidates.isEmpty) return false;
+    _scheduleCoverExistenceCheck();
+    return candidates.every(_isCoverConfirmedMissing);
+  }
+
+  /// 数据变更后安排一轮后台存在性检查（幂等：在途则并入下一轮）。
+  void _scheduleCoverExistenceCheck() {
+    // 收集当前全部本地封面路径（含远程回退的 cover_path 也一并跳过——
+    // 远程书的封面存在性由节点负责，本地 stat 无意义）
+    final paths = <String>{};
+    for (final n in novels) {
+      final p = n.coverPath;
+      if (p == null || p.isEmpty) continue;
+      if (p.startsWith('data:') || p.startsWith('http://') || p.startsWith('https://')) {
+        continue;
+      }
+      paths.add(p);
+    }
+    _coverCheckPending = paths;
+    if (_coverCheckInFlight != null) return;
+    // 先挂句柄再启动：async 函数体在首个 await 前同步执行，
+    // 若启动后再赋值，whenComplete 清句柄时会误清新一轮的引用
+    final completer = Completer<void>();
+    _coverCheckInFlight = completer.future;
+    _runCoverExistenceCheck().whenComplete(() {
+      _coverCheckInFlight = null;
+      completer.complete();
+    });
+  }
+
+  /// 后台批量 stat 的执行体（可被测试注入替换）。
+  ///
+  /// 默认实现用 Isolate.run 把同步 IO 挪出 UI isolate；flutter_test 的测试区
+  /// 禁止 spawn isolate（会报 unsendable/_Future），测试里注入同步实现即可——
+  /// 「检查不在 build 期执行、结果经缓存+epoch 通知」的语义不变。
+  @visibleForTesting
+  static Future<Map<String, bool>> Function(Set<String> paths) coverExistenceChecker =
+      _defaultCoverExistenceChecker;
+
+  static Future<Map<String, bool>> _defaultCoverExistenceChecker(Set<String> paths) {
+    // 只传纯数据进 isolate：闭包捕获 VM 实例会报 unsendable
+    return Isolate.run(() => _checkCoverFilesExist(paths));
+  }
+
+  /// 后台批量 stat：结果回来后合并进缓存并 bump coverCheckEpoch 通知卡片重建。
+  Future<void> _runCoverExistenceCheck() async {
+    // 让出当前帧：本函数可能由 build 期间的同步读触发，
+    // 通知必须落在帧外，避免 Obx 重建期写 Rx 冲突
+    await null;
+    while (_coverCheckPending.isNotEmpty) {
+      final batch = _coverCheckPending;
+      _coverCheckPending = <String>{};
+      Map<String, bool> results;
+      try {
+        results = await coverExistenceChecker(batch);
+      } catch (e) {
+        _logger.log('[CoverCheck] 后台存在性检查失败: $e', name: '书库');
+        return;
+      }
+      var changed = false;
+      results.forEach((p, exists) {
+        if (_coverExistsCache[p] != exists) {
+          _coverExistsCache[p] = exists;
+          changed = true;
+        }
+      });
+      if (changed && !isClosed) {
+        coverCheckEpoch.value++;
+      }
+    }
+  }
+
+  /// 供测试等待后台检查完成（生产代码不需要）。
+  Future<void> debugWaitCoverCheck() async {
+    while (_coverCheckInFlight != null) {
+      await _coverCheckInFlight;
+    }
   }
 
   List<NovelFolder> _buildRemoteVirtualFolders() {
@@ -383,29 +565,81 @@ class NovelLibraryViewModel extends BaseViewModel {
     return result;
   }
 
+  /// 数据变更挂钩是否已安装（幂等）
+  bool _dataHooksInstalled = false;
+
+  /// 安装派生缓存失效 + 封面存在性检查的数据源挂钩。
+  ///
+  /// ★ 不能只放 onInitAsync：那是 BasePage 的页面级钩子，VM 被直接使用
+  ///（Get.put / 测试）时不会执行，缓存将永远不失效。onStart 在两种路径下
+  /// 都会被 GetX 生命周期调用，这里兜底安装；onInitAsync 再调一次是幂等 no-op。
+  void _installDataHooks() {
+    if (_dataHooksInstalled) return;
+    _dataHooksInstalled = true;
+    // 派生缓存失效挂数据源：novels/remoteNovels/节点映射任何变更都置脏，
+    // 下一次读取一次性重算（worker 回调不在 build 期，无 Obx 依赖收集问题）
+    ever<List<NovelMetadata>>(novels, (_) => _invalidateFolderDerivedCache());
+    ever<List<NovelMetadata>>(remoteNovels, (_) => _invalidateFolderDerivedCache());
+    ever<Map<String, String>>(remoteNovelNodeId, (_) => _invalidateFolderDerivedCache());
+    // 本地书列表变更时安排一轮后台封面存在性检查（existsSync 不进 build）
+    ever<List<NovelMetadata>>(novels, (_) => _scheduleCoverExistenceCheck());
+  }
+
+  @override
+  void onInit() {
+    super.onInit();
+    _installDataHooks();
+  }
+
   @override
   Future<void> onInitAsync() async {
     if (isInitialized) {
       return;
     }
     await super.onInitAsync();
+    _installDataHooks();
     await nodeSettingsService.init();
-    _nodeMutationWorker ??= ever<int>(nodeSettingsService.libraryMutationTick, (_) async {
-      await loadNovels();
-      await loadFolders();
+    _nodeMutationWorker ??= ever<int>(nodeSettingsService.libraryMutationTick, (_) {
+      // 本地数据轻量重拉照旧；远程整轮重拉走 2s 防抖合并
+      //（一次导入/批量操作会连发多个 tick，避免 N 事件 × N 节点整轮重付）
+      unawaited(loadNovels());
+      unawaited(loadFolders());
+      _scheduleRemoteRefreshDebounced();
     });
     await Future.wait([loadData(), loadKeywordRules(), loadChapterCounts()]);
-    await refreshRemoteNovels();
+    // 审计 #3：远程刷新移出首屏 await——先显示本地书，远程到货再刷新。
+    // 原先 N 节点串行 × 全量封面 base64 的传输直接压在进页面链路上。
+    _backgroundRemoteRefresh = refreshRemoteNovels();
+    unawaited(_backgroundRemoteRefresh);
+  }
+
+  /// mutation tick 的远程刷新防抖：窗口内多次触发只执行最后一次。
+  void _scheduleRemoteRefreshDebounced() {
+    _remoteRefreshDebounceTimer?.cancel();
+    _remoteRefreshDebounceTimer = Timer(_remoteRefreshDebounce, () {
+      if (isClosed) return;
+      unawaited(refreshRemoteNovels());
+    });
+  }
+
+  /// 供测试等待首屏后台远程刷新完成。
+  Future<void> debugWaitRemoteRefresh() async {
+    await _backgroundRemoteRefresh;
   }
 
   @override
   void onClose() {
     _nodeMutationWorker?.dispose();
     _nodeMutationWorker = null;
+    _remoteRefreshDebounceTimer?.cancel();
+    _remoteRefreshDebounceTimer = null;
     super.onClose();
   }
 
   Future<void> refreshRemoteNovels() async {
+    // 代际号防过期覆盖：mutation 防抖刷新与用户操作后的显式刷新可能交叠，
+    // 只有最新一轮的结果才允许写入 Rx
+    final generation = ++_remoteRefreshGeneration;
     final allRemote = <NovelMetadata>[];
     final nodeIdMap = <String, String>{};
     final nodeNameMap = <String, String>{};
@@ -414,7 +648,9 @@ class NovelLibraryViewModel extends BaseViewModel {
     final remoteChapterCounts = <String, int>{};
     final previousRemoteIds = remoteNovelNodeId.keys.toSet();
 
-    for (final node in nodeSettingsService.enabledRemoteNodes) {
+    // 审计 #3：节点间由串行 for-await 改并发（失败熔断由 _callNode 内部负责）
+    final nodes = nodeSettingsService.enabledRemoteNodes;
+    await Future.wait(nodes.map((node) async {
       try {
         final payloads = await nodeSettingsService.fetchNodeNovels(node);
         _logger.log('[RemoteDebug] 节点 ${node.name} 返回书籍数: ${payloads.length}', name: '书库');
@@ -423,7 +659,7 @@ class NovelLibraryViewModel extends BaseViewModel {
           if (remoteId.isEmpty) continue;
 
           final syntheticId = 'remote:${node.id}:$remoteId';
-          final model = _buildRemoteNovelModel(payload, syntheticId);
+          final model = _buildRemoteNovelModel(payload, syntheticId, node);
           allRemote.add(model);
           nodeIdMap[syntheticId] = node.id;
           nodeNameMap[syntheticId] = node.name;
@@ -436,10 +672,6 @@ class NovelLibraryViewModel extends BaseViewModel {
             final folderName =
                 payload['folder_name']?.toString() ?? payload['folder_title']?.toString() ?? '远程目录';
             remoteFolderNames[syntheticFolderId] = folderName;
-            _logger.log(
-              '[RemoteDebug] 映射远程目录: node=${node.name}, folderId=$folderId, name=$folderName, synthetic=$syntheticFolderId',
-              name: '书库',
-            );
           }
 
           final chapterCount = _parseChapterCount(payload);
@@ -450,6 +682,11 @@ class NovelLibraryViewModel extends BaseViewModel {
       } catch (e) {
         _logger.log('拉取远程节点书籍失败: ${node.name} -> $e', name: '书库');
       }
+    }));
+
+    if (generation != _remoteRefreshGeneration || isClosed) {
+      // 已有更新一轮在跑/完成，本轮结果作废
+      return;
     }
 
     remoteNovels.assignAll(allRemote);
@@ -495,7 +732,18 @@ class NovelLibraryViewModel extends BaseViewModel {
     return null;
   }
 
-  NovelMetadata _buildRemoteNovelModel(Map<String, dynamic> payload, String syntheticId) {
+  /// 由节点 payload 组装远程书模型。
+  ///
+  /// 封面来源三级：
+  /// 1. 旧节点仍回 cover_base64（不认识 with_cover=false）→ 保持 data URI（离线可显示）；
+  /// 2. 新节点（with_cover=false 只回元数据）且书有封面 → 拼 GET /node/novel_cover
+  ///    按需 URL，显示时 Image.network 流式取（首见闪占位可接受）；
+  /// 3. 无节点上下文/无封面 → 回退 payload 的 cover_path（可能为 null，显示占位）。
+  NovelMetadata _buildRemoteNovelModel(
+    Map<String, dynamic> payload,
+    String syntheticId, [
+    NodeEndpoint? node,
+  ]) {
     final formatRaw = (payload['format'] ?? 'txt').toString().toLowerCase();
     final format = formatRaw == 'epub' ? NovelFormat.epub : NovelFormat.txt;
     final fileSize = BigInt.tryParse((payload['file_size'] ?? '0').toString()) ?? BigInt.zero;
@@ -516,6 +764,27 @@ class NovelLibraryViewModel extends BaseViewModel {
     final coverDataUri = (coverBase64 != null && coverBase64.isNotEmpty)
         ? 'data:image/$coverExt;base64,$coverBase64'
         : null;
+    final rawCoverPath = payload['cover_path']?.toString();
+    String? coverPath = coverDataUri;
+    if (coverPath == null &&
+        node != null &&
+        rawCoverPath != null &&
+        rawCoverPath.isNotEmpty) {
+      final rawId = (payload['id'] ?? '').toString();
+      try {
+        // 封面被替换后节点按 id 覆盖写同名文件，URL 不变会命中客户端旧图缓存；
+        // 把书籍 modified_at 拼成版本号，换封面后 URL 随之变化
+        coverPath = nodeSettingsService.buildNodeNovelCoverUrl(
+          nodeId: node.id,
+          novelId: rawId,
+          cacheBuster: modifiedAt,
+        );
+      } catch (_) {
+        coverPath = null;
+      }
+    }
+    // 旧口径回退：无法拼 URL 时保留节点侧路径（与改动前行为一致）
+    coverPath ??= rawCoverPath;
 
     return NovelMetadata(
       id: syntheticId,
@@ -528,7 +797,7 @@ class NovelLibraryViewModel extends BaseViewModel {
       addedAt: addedAt,
       progress: (payload['progress'] is num) ? (payload['progress'] as num).toDouble() : 0,
       lastReadAt: lastReadAt,
-      coverPath: coverDataUri ?? payload['cover_path']?.toString(),
+      coverPath: coverPath,
       folderId: folderId,
       customOrder: payload['custom_order'] is int ? payload['custom_order'] as int : null,
       isFavorite: payload['is_favorite'] == true,

@@ -764,10 +764,14 @@ class NodeSettingsService extends GetxService {
   }
 
   Future<List<Map<String, dynamic>>> fetchNodeNovels(NodeEndpoint node) async {
+    // with_cover=false：列表只取元数据，跳过节点侧逐本封面读盘 + base64
+    //（500 本 ≈ 20~40MB JSON 是远程书架首屏卡顿主因）。封面改由
+    // buildNodeNovelCoverUrl 按需流式取。旧节点不认识该参数会忽略之，
+    // 仍回内嵌 base64——客户端两条来源都兼容。
     final response = await _callNode(
       node: node,
       action: 'list_novels',
-      params: const <String, dynamic>{},
+      params: const <String, dynamic>{'with_cover': false},
     );
 
     final data = response['data'];
@@ -776,6 +780,37 @@ class NodeSettingsService extends GetxService {
     }
 
     return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  /// 构造远程小说封面的按需 URL（GET /node/novel_cover）。
+  ///
+  /// 与 buildNodeMediaUrl 同一授权口径：Image.network 注不了自定义请求头，
+  /// 摘要放 `?sw_auth=<sha256>` 查询参数；节点侧按 novel_id 反查库内封面路径，
+  /// 不接受任意文件路径。节点不存在时返回 null（调用方显示占位）。
+  String? buildNodeNovelCoverUrl({
+    required String nodeId,
+    required String novelId,
+    int? width,
+    int? cacheBuster,
+  }) {
+    final node = getNodeById(nodeId);
+    if (node == null) return null;
+    final normalized = _normalizeBaseUrl(_baseUrlFor(node));
+    final params = <String, String>{'novel_id': novelId};
+    if (width != null && width > 0) {
+      params['width'] = width.toString();
+    }
+    // 封面被替换后节点按 id 覆盖写同名文件，URL 不变会导致客户端缓存旧图；
+    // 用书籍 modified_at 作为缓存版本号拼进 URL
+    if (cacheBuster != null && cacheBuster > 0) {
+      params['v'] = cacheBuster.toString();
+    }
+    final digest = _authDigestForUrl(normalized);
+    if (digest != null) {
+      params[_authQueryParamName] = digest;
+    }
+    final uri = Uri.parse('$normalized/node/novel_cover').replace(queryParameters: params);
+    return uri.toString();
   }
 
   Future<List<Map<String, dynamic>>> fetchNodeMediaCollections(NodeEndpoint node) async {
