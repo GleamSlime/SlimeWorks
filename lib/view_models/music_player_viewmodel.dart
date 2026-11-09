@@ -84,6 +84,9 @@ class MusicPlayerViewModel extends BaseViewModel {
   static const _keyPathMappingDirs = 'music_player_path_mapping_dirs';
 
   /// 加载持久化的路径映射
+  /// 性能修复（审计 #6）：扫描已改 async FFI 且本方法在 onInit 里不 await——
+  /// 首屏先渲染，每个目录扫描到货后再逐个挂进 pathMappings 刷新 UI；
+  /// 逐条 add 也让先扫完的目录先显示，不必等最慢的网络卷
   Future<void> _loadPathMappings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -93,8 +96,8 @@ class MusicPlayerViewModel extends BaseViewModel {
         final parts = entry.split('||');
         final dir = parts[0];
         final folderId = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null;
-        if (Directory(dir).existsSync()) {
-          final mapping = music_api.scanPathMapping(dirPath: dir);
+        if (await Directory(dir).exists()) {
+          final mapping = await music_api.scanPathMapping(dirPath: dir);
           final mappingWithFolder = music_api.PathMappingNodeInfo(
             name: mapping.name,
             path: mapping.path,
@@ -104,7 +107,11 @@ class MusicPlayerViewModel extends BaseViewModel {
             hasAudio: mapping.hasAudio,
             folderId: folderId,
           );
-          pathMappings.add(mappingWithFolder);
+          // await 期间 VM 可能已销毁 / 用户可能已拖入同路径映射：去重防重复挂载
+          if (_isDisposed) return;
+          if (!pathMappings.any((m) => m.path == mappingWithFolder.path)) {
+            pathMappings.add(mappingWithFolder);
+          }
           validEntries.add(entry);
         }
       }
@@ -138,9 +145,23 @@ class MusicPlayerViewModel extends BaseViewModel {
   Future<void> refreshPathMapping(String path) async {
     try {
       final index = pathMappings.indexWhere((m) => m.path == path);
-      if (index >= 0 && Directory(path).existsSync()) {
-        final mapping = music_api.scanPathMapping(dirPath: path);
-        pathMappings[index] = mapping;
+      if (index >= 0 && await Directory(path).exists()) {
+        final folderId = pathMappings[index].folderId;
+        final mapping = await music_api.scanPathMapping(dirPath: path);
+        // 扫描期间用户可能已移除该映射：按 path 重新定位，且保留原 folderId
+        //（Rust 返回的 folderId 恒为 null，直接整节点替换会把映射从当前目录弄丢）
+        final newIndex = pathMappings.indexWhere((m) => m.path == path);
+        if (newIndex >= 0) {
+          pathMappings[newIndex] = music_api.PathMappingNodeInfo(
+            name: mapping.name,
+            path: mapping.path,
+            nodeType: mapping.nodeType,
+            fileSize: mapping.fileSize,
+            children: mapping.children,
+            hasAudio: mapping.hasAudio,
+            folderId: folderId,
+          );
+        }
       }
     } catch (e) {
       _logger.info('[播放器] 刷新路径映射失败: $e');
@@ -521,7 +542,9 @@ class MusicPlayerViewModel extends BaseViewModel {
           (currentIndex.value >= 0 && currentIndex.value < currentItems.length)
               ? currentItems[currentIndex.value].id
               : null;
-      final items = music_api.getPlaylistItems(playlistId: playlistId);
+      final items = await music_api.getPlaylistItems(playlistId: playlistId);
+      // async FFI 到货时用户可能已切到别的列表，写回前校验，避免旧列表覆盖新列表
+      if (currentPlaylistId.value != playlistId) return;
       currentItems.value = items;
       if (playingId != null) {
         final newIndex = items.indexWhere((i) => i.id == playingId);
@@ -548,7 +571,11 @@ class MusicPlayerViewModel extends BaseViewModel {
           _logger.info('[播放器] 修复了 ${count.toInt()} 条元数据');
           // 修复期间用户可能已切到别的列表，写回前校验，避免旧列表覆盖新列表
           if (currentPlaylistId.value == playlistId) {
-            currentItems.value = music_api.getPlaylistItems(playlistId: playlistId);
+            final refreshed = await music_api.getPlaylistItems(playlistId: playlistId);
+            // await 期间也可能切列表，到货后再校验一次
+            if (currentPlaylistId.value == playlistId) {
+              currentItems.value = refreshed;
+            }
           }
         }
       } catch (e) {
@@ -684,7 +711,7 @@ class MusicPlayerViewModel extends BaseViewModel {
   void _precomputeWaveformsInBackground(String playlistId) {
     Future(() async {
       try {
-        final items = music_api.getPlaylistItems(playlistId: playlistId);
+        final items = await music_api.getPlaylistItems(playlistId: playlistId);
         int computed = 0;
         for (final item in items) {
           try {
@@ -753,7 +780,7 @@ class MusicPlayerViewModel extends BaseViewModel {
       final dirName = Directory(folder).path.split(Platform.pathSeparator).last;
       try {
         // 扫描路径映射（显示完整文件/文件夹结构）
-        final mapping = music_api.scanPathMapping(dirPath: folder);
+        final mapping = await music_api.scanPathMapping(dirPath: folder);
         // 关联到当前文件夹
         final mappingWithFolder = music_api.PathMappingNodeInfo(
           name: mapping.name,

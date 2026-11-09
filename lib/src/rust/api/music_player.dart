@@ -49,10 +49,12 @@ bool deletePlaylist({required String playlistId}) => RustLib.instance.api
     .crateApiMusicPlayerDeletePlaylist(playlistId: playlistId);
 
 /// 获取播放列表内的音乐条目
-List<MusicItem> getPlaylistItems({required String playlistId}) => RustLib
-    .instance
-    .api
-    .crateApiMusicPlayerGetPlaylistItems(playlistId: playlistId);
+/// 性能修复（审计 #4）：去掉 #[frb(sync)]——整表读/反序列化不再冻结主 isolate，
+/// 在工作线程执行；Rust 侧已改走 get_all_music_items 内存缓存
+Future<List<MusicItem>> getPlaylistItems({required String playlistId}) =>
+    RustLib.instance.api.crateApiMusicPlayerGetPlaylistItems(
+      playlistId: playlistId,
+    );
 
 /// 获取所有音乐条目
 List<MusicItem> getAllMusicItems() =>
@@ -255,7 +257,9 @@ Future<Float64List> extractWaveformForMedia({
 );
 
 /// 扫描文件夹路径映射（返回树形结构，不限制文件类型，不限深度）
-PathMappingNodeInfo scanPathMapping({required String dirPath}) =>
+/// 性能修复（审计 #6）：去掉 #[frb(sync)]——大目录/网络卷的递归扫描（万级 stat）
+/// 移出主 isolate，在工作线程执行；Dart 侧首屏不再阻塞等待
+Future<PathMappingNodeInfo> scanPathMapping({required String dirPath}) =>
     RustLib.instance.api.crateApiMusicPlayerScanPathMapping(dirPath: dirPath);
 
 class CueSheetInfo {

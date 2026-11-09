@@ -309,7 +309,8 @@ pub fn delete_playlist(playlist_id: String) -> anyhow::Result<bool> {
 }
 
 /// 获取播放列表内的音乐条目
-#[frb(sync)]
+/// 性能修复（审计 #4）：去掉 #[frb(sync)]——整表读/反序列化不再冻结主 isolate，
+/// 在工作线程执行；Rust 侧已改走 get_all_music_items 内存缓存
 pub fn get_playlist_items(playlist_id: String) -> anyhow::Result<Vec<MusicItem>> {
     music_player::get_playlist_items(playlist_id)
         .map(|items| items.into_iter().map(convert_item).collect())
@@ -832,7 +833,8 @@ fn _write_waveform_cache(cache_path: &str, samples: u32, data: &[f64]) -> std::i
 // ── 路径映射 API ────────────────────────────────────────────────────────────────
 
 /// 扫描文件夹路径映射（返回树形结构，不限制文件类型，不限深度）
-#[frb(sync)]
+/// 性能修复（审计 #6）：去掉 #[frb(sync)]——大目录/网络卷的递归扫描（万级 stat）
+/// 移出主 isolate，在工作线程执行；Dart 侧首屏不再阻塞等待
 pub fn scan_path_mapping(dir_path: String) -> anyhow::Result<PathMappingNodeInfo> {
     music_player::scan_path_mapping(dir_path)
         .map(convert_path_mapping_node)

@@ -333,17 +333,20 @@ class _FolderTile extends StatelessWidget {
   }
 
   /// 批量识别文件夹下的所有音频
-  void _transcribeFolder(BuildContext context) {
+  /// 性能修复（审计 #4）：getPlaylistItems 已改 async FFI，这里随之 await 化，
+  /// 全部入队完成后再提示，不再同步阻塞 UI
+  Future<void> _transcribeFolder(BuildContext context) async {
     final viewModel = Get.find<MusicPlayerViewModel>();
     final queue = getIt<TranscriptionTaskQueue>();
     // 获取该文件夹下所有播放列表的歌曲
     final folderPlaylists = viewModel.playlists.where((p) => p.folderId == folder.id);
     for (final playlist in folderPlaylists) {
-      final items = music_api.getPlaylistItems(playlistId: playlist.id);
+      final items = await music_api.getPlaylistItems(playlistId: playlist.id);
       for (final item in items) {
         queue.enqueue(audioFilePath: item.filePath, displayName: item.title);
       }
     }
+    if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('已添加文件夹「${folder.name}」的音频到识别队列')));

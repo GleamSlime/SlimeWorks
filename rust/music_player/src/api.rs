@@ -330,14 +330,16 @@ pub fn delete_playlist(playlist_id: String) -> Result<bool, String> {
 }
 
 // ── 音乐条目 CRUD ─────────────────────────────────────────────────────────────
+/// 获取播放列表内的音乐条目。
+/// 性能修复（审计 #4）：原先 `db_list_values(item_table())` 每次整表读 + 全量
+/// JSON 反序列化再按 playlist_id 过滤（1 万首 ≈ 10MB，且在主 isolate 同步执行）；
+/// 现改走 `get_all_music_items()` 的进程级内存缓存——所有写路径（导入/删除/
+/// 更新/排序/收藏/封面/元数据修复）都已维护缓存失效，命中时零 DB 读。
+/// 未建 playlist_id 索引表：缓存失效点分散在 ~15 处，索引表需逐一同步维护，
+/// 收益（免一次内存过滤）不抵维护风险，故取「走缓存」的稳妥方案。
 pub fn get_playlist_items(playlist_id: String) -> Result<Vec<MusicItem>, String> {
-    ensure_db();
-    let _ = db_module::db_register_table(item_table());
-
-    let raw = db_list_values(item_table())?;
-    let mut items: Vec<MusicItem> = raw
+    let mut items: Vec<MusicItem> = get_all_music_items()?
         .into_iter()
-        .filter_map(|v| serde_json::from_str::<MusicItem>(&v).ok())
         .filter(|i| i.playlist_id == playlist_id)
         .collect();
     items.sort_by_key(|i| i.order);
@@ -830,9 +832,17 @@ pub fn delete_eq_preset(preset_id: String) -> Result<bool, String> {
 }
 
 // ── 内部辅助 ──────────────────────────────────────────────────────────────────
+/// 重算播放列表条目数并落库。
+/// 注意：必须绕过 get_playlist_items 的内存缓存直读 DB——各导入/删除写路径
+/// 都是「先写库 → update_playlist_count → 再清缓存」的顺序，此刻缓存还是
+/// 旧数据；若走缓存会把旧条目数写回（导入后列表计数不涨的回归）。
 fn update_playlist_count(playlist_id: &str) -> Result<(), String> {
-    let items = get_playlist_items(playlist_id.to_string()).unwrap_or_default();
-    let count = items.len();
+    let _ = db_module::db_register_table(item_table());
+    let count = db_list_values(item_table())?
+        .into_iter()
+        .filter_map(|v| serde_json::from_str::<MusicItem>(&v).ok())
+        .filter(|i| i.playlist_id == playlist_id)
+        .count();
 
     let _ = db_module::db_register_table(playlist_table());
     let raw =
@@ -1675,8 +1685,17 @@ mod tests {
         assert!(listed.windows(2).all(|w| w[0].order <= w[1].order));
 
         // 播放列表 item_count 同步为 2
+        //（回归防护：get_playlist_items 改走内存缓存后，update_playlist_count
+        //  必须直读 DB——写路径是「先写库→重算计数→再清缓存」，走缓存会拿旧值）
         let p: Playlist = serde_json::from_str(&db_row(playlist_table(), &pl.id).unwrap()).unwrap();
         assert_eq!(p.item_count, 2);
+        // 缓存里的计数也必须是新值（导入后侧栏立即显示正确曲目数）
+        let cached_pl = get_all_playlists()
+            .unwrap()
+            .into_iter()
+            .find(|p| p.id == pl.id)
+            .unwrap();
+        assert_eq!(cached_pl.item_count, 2, "导入后播放列表缓存计数应同步为 2");
 
         // 目录不存在 → 错误分支
         assert!(import_music_folder(pl.id.clone(), format!("/nonexistent/{tag}")).is_err());
