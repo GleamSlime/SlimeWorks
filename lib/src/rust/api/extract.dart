@@ -26,7 +26,10 @@ bool extractUpdatePasswordRemark({required String id, String? remark}) =>
       remark: remark,
     );
 
-String extractScanArchivesJson({required String dir}) =>
+/// 递归扫描目录内的压缩包。扫描是重 IO 操作（下载盘/网络卷大目录可达分钟级），
+/// 移入 spawn_blocking 在后台线程执行，避免同步 FFI 冻结整个 UI isolate（审计 #9）。
+/// 扫描逻辑本身已有限深 32 / 跳软链防御，无需改动。
+Future<String> extractScanArchivesJson({required String dir}) =>
     RustLib.instance.api.crateApiExtractExtractScanArchivesJson(dir: dir);
 
 String extractGetProgressJson() =>

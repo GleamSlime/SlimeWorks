@@ -25,9 +25,16 @@ pub fn extract_update_password_remark(id: String, remark: Option<String>) -> boo
     extract_module::extract_update_password_remark(id, remark)
 }
 
-#[frb(sync)]
-pub fn extract_scan_archives_json(dir: String) -> String {
-    extract_module::extract_scan_archives_json(dir)
+/// 递归扫描目录内的压缩包。扫描是重 IO 操作（下载盘/网络卷大目录可达分钟级），
+/// 移入 spawn_blocking 在后台线程执行，避免同步 FFI 冻结整个 UI isolate（审计 #9）。
+/// 扫描逻辑本身已有限深 32 / 跳软链防御，无需改动。
+pub async fn extract_scan_archives_json(dir: String) -> String {
+    tokio::task::spawn_blocking(move || extract_module::extract_scan_archives_json(dir))
+        .await
+        .unwrap_or_else(|e| {
+            crate::api::logger::log_error(&format!("扫描压缩包任务调度失败: {}", e));
+            "[]".to_string()
+        })
 }
 
 #[frb(sync)]

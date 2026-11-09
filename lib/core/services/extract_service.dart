@@ -193,7 +193,8 @@ class ExtractService extends GetxService {
 
   Future<List<ArchiveInfo>> scanArchives(String dir) async {
     try {
-      final json = rust_api.extractScanArchivesJson(dir: dir);
+      // async FFI：扫描在 Rust 后台线程执行，不再冻结 UI isolate（审计 #9）
+      final json = await rust_api.extractScanArchivesJson(dir: dir);
       final list = jsonDecode(json) as List<dynamic>;
       return list
           .map(

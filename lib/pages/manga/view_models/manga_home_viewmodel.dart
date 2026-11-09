@@ -86,9 +86,21 @@ class MangaHomeViewModel extends BaseViewModel {
     await loadHomeData();
   }
 
+  /// 首屏预取上限：只预取首屏可视区数量的封面，
+  /// 避免一次性把 collections + random 全部（轻松 100~200 张）同时预取（审计 #8）
+  static const int _kFirstScreenPrefetchCount = 24;
+
   /// 后台预取封面图，加速卡片首次显示速度
+  /// [comics] 为空时预取首屏内容：随机推荐 + 精选集合按展示顺序取前 [_kFirstScreenPrefetchCount] 张；
+  /// 滚动加载更多 / 换一批时由调用方传入新批次，同样不超过首屏上限
   void _prefetchCovers([List<MangaComic>? comics]) {
-    final list = comics ?? [...randomComics, for (final c in collections) ...c.comics];
+    final list = (comics ??
+            [
+              ...randomComics,
+              for (final c in collections) ...c.comics,
+            ])
+        .take(_kFirstScreenPrefetchCount)
+        .toList();
     _service.prefetchImages(list.map((c) => c.thumb).toList());
   }
 }

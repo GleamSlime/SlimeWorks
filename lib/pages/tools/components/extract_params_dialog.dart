@@ -30,8 +30,19 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
   final bool _deleteAfterExtract = false;
   bool _isScanning = false;
   List<ArchiveInfo> _scannedArchives = [];
+
+  /// 扫描代际号：每次发起扫描 +1，结果到货时核对；
+  /// 用户重新选目录或关闭弹窗后，过期扫描结果直接丢弃，不再 setState（审计 #9）
+  int _scanGeneration = 0;
   bool _isDraggingSource = false;
   bool _isDraggingOutput = false;
+
+  @override
+  void dispose() {
+    // 弹窗关闭后作废在飞扫描，到货结果不再落地
+    _scanGeneration++;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -415,18 +426,23 @@ class _ExtractParamsDialogState extends State<ExtractParamsDialog> {
 
   Future<void> _scanArchives() async {
     if (_sourceDir.isEmpty) return;
+    // 递增代际号：本次扫描到货时若代际已变（重选目录/弹窗关闭）则丢弃结果
+    final generation = ++_scanGeneration;
     setState(() => _isScanning = true);
     try {
       final service = getIt.get<ExtractService>();
       final archives = await service.scanArchives(_sourceDir);
-      if (mounted) {
+      // async FFI 扫描期间弹窗可能已关闭或用户已重选目录，过期结果不再 setState
+      if (mounted && generation == _scanGeneration) {
         setState(() {
           _scannedArchives = archives;
           _isScanning = false;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isScanning = false);
+      if (mounted && generation == _scanGeneration) {
+        setState(() => _isScanning = false);
+      }
     }
   }
 

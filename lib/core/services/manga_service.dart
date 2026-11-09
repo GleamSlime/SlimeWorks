@@ -3,6 +3,7 @@
 // 封装 Rust FFI 调用，提供高层业务 API
 // 使用 GetIt 注入，全局单例
 
+import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -60,6 +61,48 @@ enum MangaChannelMode {
   );
 }
 
+/// 预取并发闸门（信号量语义）：同时在飞的任务数不超过 [maxConcurrent]，
+/// 超出的任务排队等待空位；前一个任务结束后把空位直接移交给队首等待者。
+/// 独立成类便于单测验证「同时在飞不超上限」。
+class PrefetchLimiter {
+  PrefetchLimiter(this.maxConcurrent) : assert(maxConcurrent > 0);
+
+  /// 并发上限
+  final int maxConcurrent;
+
+  /// 当前在飞任务数
+  int _active = 0;
+
+  /// 排队等待空位的任务
+  final Queue<Completer<void>> _waiters = Queue<Completer<void>>();
+
+  int get activeCount => _active;
+
+  int get queuedCount => _waiters.length;
+
+  /// 在闸门内执行 [task]，超过并发上限时排队
+  Future<T> run<T>(Future<T> Function() task) async {
+    if (_active >= maxConcurrent) {
+      final waiter = Completer<void>();
+      _waiters.add(waiter);
+      await waiter.future;
+      // 空位由上一个任务直接移交，_active 不变
+    } else {
+      _active++;
+    }
+    try {
+      return await task();
+    } finally {
+      if (_waiters.isNotEmpty) {
+        // 把空位移交给队首等待者，避免先减后加造成的瞬时超限/空转
+        _waiters.removeFirst().complete();
+      } else {
+        _active--;
+      }
+    }
+  }
+}
+
 /// Manga 服务
 class MangaService {
   MangaService._();
@@ -81,8 +124,19 @@ class MangaService {
   /// 图片字节 LRU 缓存，最多保留 [_kImageCacheMaxSize] 条
   /// 使用 LinkedHashMap 保留访问顺序，容量超限时淘汰最久未用的条目
   /// 显示大量漫画图片时内存占用较高，缩小缓存上限防止 OOM
-  static const int _kImageCacheMaxSize = 60;
+  /// 上限 200：与「首页首屏卡片 + 阅读器预取 20 张」匹配，
+  /// 原 60 条会在预取完成后把前面的封面驱逐掉，导致显示时二次下载；
+  /// 200 × 约 300KB ≈ 60MB，内存可接受
+  static const int _kImageCacheMaxSize = 200;
   final LinkedHashMap<String, Uint8List> _imageCache = LinkedHashMap<String, Uint8List>();
+
+  /// 预取并发上限：防止首页上百张封面同时起飞抢占带宽/连接池，
+  /// 把正文 API 请求也挤慢（审计 #8）
+  static const int _kPrefetchConcurrency = 4;
+  final PrefetchLimiter _prefetchLimiter = PrefetchLimiter(_kPrefetchConcurrency);
+
+  /// 已入队/在飞的预取 key，避免同一张图重复排队
+  final Set<String> _prefetchPendingKeys = <String>{};
 
   /// 初始化服务（从持久化存储恢复 Token、代理和分流配置）
   Future<void> init() async {
@@ -284,12 +338,25 @@ class MangaService {
   }
 
   /// 后台静默预取图片列表（不抛异常，不重复拉取已缓存图片）
+  /// 通过 [PrefetchLimiter] 限制并发（同时最多 [_kPrefetchConcurrency] 张在飞），
+  /// 防止一次性把整页上百张封面全部同时起飞造成连接风暴（审计 #8）
   void prefetchImages(List<MangaImage> images) {
     for (final image in images) {
       final key = buildImageUrl(image);
-      if (!_imageCache.containsKey(key)) {
-        fetchImageBytes(image).ignore();
-      }
+      // 已缓存或已入队/在飞的跳过，避免重复排队
+      if (_imageCache.containsKey(key) || !_prefetchPendingKeys.add(key)) continue;
+      // 后台任务失败静默忽略（预取本来就是尽力而为）
+      unawaited(
+        _prefetchLimiter.run(() async {
+          try {
+            await fetchImageBytes(image);
+          } catch (_) {
+            // 预取失败不影响显示链路，卡片显示时会自行重试
+          } finally {
+            _prefetchPendingKeys.remove(key);
+          }
+        }),
+      );
     }
   }
 
