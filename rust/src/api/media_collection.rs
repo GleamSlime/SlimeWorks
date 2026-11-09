@@ -591,7 +591,10 @@ fn convert_smart_folder(sf: media_collection::types::SmartFolder) -> SmartFolder
     }
 }
 
-#[frb(sync)]
+/// 读智能文件夹列表。
+/// 异步：内部 get_smart_folders 首次访问要等 initialize_db（SMB 卷唤醒/磁盘忙时
+/// 秒级），sync FFI 会把整个 Dart UI isolate 卡住——实测进媒体库首屏因此白等
+/// 8~12 秒（日志时间线：onInitAsync 00:34:31 → 智能文件夹加载完成 00:34:43）。
 pub fn get_all_smart_folders() -> anyhow::Result<Vec<SmartFolderInfo>> {
     let sfs = media_collection::get_all_smart_folders().map_err(|e| anyhow::anyhow!(e))?;
     Ok(sfs.into_iter().map(convert_smart_folder).collect())
@@ -713,6 +716,42 @@ pub fn has_video_waveform(file_path: String, bins: u32) -> bool {
     read_video_waveform(file_path, bins).is_some()
 }
 
+/// 波形解码并发闸门：最多 2 路同时解码。
+///
+/// 为什么 Rust 侧也要一道（Dart VideoWaveformService 已有一道）：
+/// 节点服务器（node_server）也会调 ensure_video_waveform 给远程客户端算波形，
+/// 那条路不经过 Dart 服务层的闸门。FRB 默认线程池大小 = CPU 核数，
+/// 超大视频（几 GB / 几小时）整段音频解码是分钟级重活，不设闸就会把池占满，
+/// 封面生成（同池的 ensureCoverThumbnail / extractVideoScrubFrames）全部排队。
+/// 实测：8 路 symphonia 解码占满池后，封面队列 123/190 停滞 6 分钟。
+/// 波形是后台补齐（预览才用），封面是用户立刻可见的，算力优先给封面。
+static WAVEFORM_DECODE_PERMITS: std::sync::OnceLock<(std::sync::Mutex<usize>, std::sync::Condvar)> =
+    std::sync::OnceLock::new();
+
+const WAVEFORM_MAX_CONCURRENT: usize = 2;
+
+struct WaveformPermit;
+impl Drop for WaveformPermit {
+    fn drop(&mut self) {
+        if let Some((lock, cvar)) = WAVEFORM_DECODE_PERMITS.get() {
+            let mut count = lock.lock().unwrap_or_else(|e| e.into_inner());
+            *count = count.saturating_sub(1);
+            cvar.notify_all();
+        }
+    }
+}
+
+fn acquire_waveform_permit() -> WaveformPermit {
+    let (lock, cvar) =
+        WAVEFORM_DECODE_PERMITS.get_or_init(|| (std::sync::Mutex::new(0), std::sync::Condvar::new()));
+    let guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let mut count = cvar
+        .wait_while(guard, |c| *c >= WAVEFORM_MAX_CONCURRENT)
+        .unwrap_or_else(|e| e.into_inner());
+    *count += 1;
+    WaveformPermit
+}
+
 /// 生成（或读缓存）视频/音频的振幅数组，归一化到 0~1，长度 = bins。
 ///
 /// 优先 symphonia 流式解码（内存只留 bins 个峰值）；解不了的容器/编码回退
@@ -726,6 +765,14 @@ pub fn ensure_video_waveform(file_path: String, bins: u32) -> anyhow::Result<Vec
     let meta = std::fs::metadata(&file_path)
         .map_err(|e| anyhow::anyhow!("源文件不可读: {}", e))?;
     let identity = waveform_identity(&meta);
+
+    // 缓存未命中才取解码许可：命中缓存的调用（重扫时大多数文件）不占名额、
+    // 不排队，秒回；真正解码的重活最多 2 路并行（见上方闸门注释）。
+    let _permit = acquire_waveform_permit();
+    // 取到许可后再查一次缓存：排队期间可能已被另一路算好落盘
+    if let Some(cached) = read_video_waveform(file_path.clone(), bins) {
+        return Ok(cached);
+    }
 
     // ① symphonia：常见 MP4/MP3/FLAC 直接命中，最快
     let peaks = match crate::api::music_player::extract_waveform_for_media(file_path.clone(), bins) {

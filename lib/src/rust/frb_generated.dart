@@ -578,7 +578,7 @@ abstract class RustLibApi extends BaseApi {
 
   List<Playlist> crateApiMusicPlayerGetAllPlaylists();
 
-  List<SmartFolderInfo> crateApiMediaCollectionGetAllSmartFolders();
+  Future<List<SmartFolderInfo>> crateApiMediaCollectionGetAllSmartFolders();
 
   Future<List<CachedCollectionStats>>
   crateApiMediaCollectionGetCachedCollectionLiveStats();
@@ -5714,16 +5714,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_all_playlists", argNames: []);
 
   @override
-  List<SmartFolderInfo> crateApiMediaCollectionGetAllSmartFolders() {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<List<SmartFolderInfo>> crateApiMediaCollectionGetAllSmartFolders() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 141,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_smart_folder_info,

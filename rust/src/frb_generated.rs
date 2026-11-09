@@ -4975,15 +4975,16 @@ fn wire__crate__api__music_player__get_all_playlists_impl(
     )
 }
 fn wire__crate__api__media_collection__get_all_smart_folders_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_all_smart_folders",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -4996,12 +4997,14 @@ fn wire__crate__api__media_collection__get_all_smart_folders_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::media_collection::get_all_smart_folders()?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::media_collection::get_all_smart_folders()?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -16823,6 +16826,12 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
+        141 => wire__crate__api__media_collection__get_all_smart_folders_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         142 => wire__crate__api__media_collection__get_cached_collection_live_stats_impl(
             port,
             ptr,
@@ -17502,11 +17511,6 @@ fn pde_ffi_dispatcher_sync_impl(
         }
         138 => wire__crate__api__novel_reader__get_all_novels_impl(ptr, rust_vec_len, data_len),
         140 => wire__crate__api__music_player__get_all_playlists_impl(ptr, rust_vec_len, data_len),
-        141 => wire__crate__api__media_collection__get_all_smart_folders_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         143 => wire__crate__api__capture__get_capture_stats_impl(ptr, rust_vec_len, data_len),
         144 => wire__crate__api__capture__get_captured_images_impl(ptr, rust_vec_len, data_len),
         145 => wire__crate__api__capture__get_captured_javascript_impl(ptr, rust_vec_len, data_len),

@@ -6,8 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `extract_waveform_via_ffmpeg`, `from_inner`, `missing`, `no_cover`, `normalize_waveform`, `pending`, `ready`, `resample_peaks`, `waveform_cache_path`, `waveform_identity`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These functions are ignored because they are not marked as `pub`: `acquire_waveform_permit`, `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `extract_waveform_via_ffmpeg`, `from_inner`, `missing`, `no_cover`, `normalize_waveform`, `pending`, `ready`, `resample_peaks`, `waveform_cache_path`, `waveform_identity`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `WaveformPermit`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 /// 注册 ffmpeg/ffprobe 可执行文件的绝对路径到 media_collection 模块。
 /// 必须在应用启动时（RustLib.init 之后）调用，确保缩略图生成能找到 ffmpeg。
@@ -264,7 +265,11 @@ void saveFavoriteCollectionIds({required List<String> ids}) => RustLib
     .api
     .crateApiMediaCollectionSaveFavoriteCollectionIds(ids: ids);
 
-List<SmartFolderInfo> getAllSmartFolders() =>
+/// 读智能文件夹列表。
+/// 异步：内部 get_smart_folders 首次访问要等 initialize_db（SMB 卷唤醒/磁盘忙时
+/// 秒级），sync FFI 会把整个 Dart UI isolate 卡住——实测进媒体库首屏因此白等
+/// 8~12 秒（日志时间线：onInitAsync 00:34:31 → 智能文件夹加载完成 00:34:43）。
+Future<List<SmartFolderInfo>> getAllSmartFolders() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllSmartFolders();
 
 SmartFolderInfo createSmartFolder({
