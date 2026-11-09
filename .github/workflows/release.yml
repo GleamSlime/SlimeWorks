@@ -255,9 +255,51 @@ jobs:
           gem install cocoapods -n /usr/local/bin --no-document
           pod --version
 
+      # 与 iOS 同源：media_kit_libs_macos_video 的 podspec 也是 `system("make")`，
+      # 每次 pod install 都要从 GitHub Releases 拉 libmpv tarball 并校验 SHA256，
+      # 没有重试、返回值也没人检查。断流时下载会得到错误页 → 校验 FAILED →
+      # Frameworks/ 不生成 → 静默拖到链接期才炸（ld: framework 'Mpv' not found）。
+      - name: 预拉 libmpv xcframework（带重试）
+        working-directory: macos
+        run: |
+          PKG_DIR=$(ls -d "$HOME"/.pub-cache/hosted/pub.dev/media_kit_libs_macos_video-*/macos | tail -1)
+          if [ -z "$PKG_DIR" ] || [ ! -f "$PKG_DIR/Makefile" ]; then
+            echo "⚠️ 找不到 media_kit_libs_macos_video 包目录，交给 pod install 自己处理"
+            exit 0
+          fi
+          echo "包目录: $PKG_DIR"
+          for attempt in 1 2 3 4; do
+            echo "--- 第 $attempt 次尝试 make ---"
+            if ( cd "$PKG_DIR" && make ); then
+              echo "✅ libmpv xcframework 就绪"
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "❌ 连续 4 次拉取 libmpv 失败（GitHub Releases 不可达或校验不匹配）"
+              ls -la "$PKG_DIR/.cache/xcframeworks" 2>/dev/null || true
+              exit 1
+            fi
+            rm -rf "$PKG_DIR/.cache/xcframeworks"
+            sleep $((attempt * 10))
+          done
+          if [ ! -d "$PKG_DIR/Frameworks/Mpv.xcframework" ]; then
+            echo "❌ make 返回成功但 Frameworks/Mpv.xcframework 不存在"
+            ls -la "$PKG_DIR/Frameworks" 2>/dev/null || true
+            exit 1
+          fi
+
       - name: 安装 CocoaPods 依赖
         working-directory: macos
-        run: pod install --repo-update
+        run: |
+          pod install --repo-update
+          # libmpv 没下来时 pod install 照样"成功"，报错要等链接期才出现。当场查一次。
+          MPV_FW=$(ls -d ../.symlinks/plugins/media_kit_libs_macos_video/macos/Frameworks/Mpv.xcframework 2>/dev/null || true)
+          if [ -z "$MPV_FW" ]; then
+            echo "❌ Mpv.xcframework 不存在：libmpv 下载/校验失败（见上一步 make 输出）"
+            ls -la ../.symlinks/plugins/media_kit_libs_macos_video/macos/Frameworks 2>/dev/null || true
+            exit 1
+          fi
+          echo "✅ Mpv.xcframework 就绪: $MPV_FW"
 
       - name: 安装 appdmg
         run: npm install -g appdmg
@@ -731,6 +773,46 @@ jobs:
           gem install cocoapods -n /usr/local/bin --no-document
           pod --version
 
+      - name: 预拉 libmpv xcframework（带重试）
+        working-directory: ios
+        run: |
+          # media_kit_libs_ios_video 的 podspec 第一行是 `system("make")`，每次 pod install
+          # 都会去 GitHub Releases 下一个 19.8MB 的 libmpv tarball 并校验 SHA256。
+          # 该下载**没有任何重试**，而且 `system()` 的返回值没人检查：
+          #   · 偶发断流时 curl 会把错误页（实测 92 字节）当成功写进 .tmp，
+          #   · shasum 校验 FAILED → make 退出 1 → Frameworks/ 根本没生成，
+          #   · 这个失败被完全静默吞掉，要一直拖到 archive 链接阶段才暴露成
+          #     「ld: framework 'Mpv' not found」+ exit 65，白烧 40 分钟。
+          # 这里先把产物准备好，让 pod install 里的 make 直接命中缓存（Makefile 按文件存在判断）。
+          PKG_DIR=$(ls -d "$HOME"/.pub-cache/hosted/pub.dev/media_kit_libs_ios_video-*/ios | tail -1)
+          if [ -z "$PKG_DIR" ] || [ ! -f "$PKG_DIR/Makefile" ]; then
+            echo "⚠️ 找不到 media_kit_libs_ios_video 包目录，交给 pod install 自己处理"
+            exit 0
+          fi
+          echo "包目录: $PKG_DIR"
+          for attempt in 1 2 3 4; do
+            echo "--- 第 $attempt 次尝试 make ---"
+            if ( cd "$PKG_DIR" && make ); then
+              echo "✅ libmpv xcframework 就绪"
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "❌ 连续 4 次拉取 libmpv 失败（GitHub Releases 不可达或校验不匹配）"
+              echo "--- 残留的 .cache 内容（诊断用）---"
+              ls -la "$PKG_DIR/.cache/xcframeworks" 2>/dev/null || true
+              exit 1
+            fi
+            # Makefile 会 rm 掉 .tmp 重下，但失败时可能留下半截产物，清干净再试
+            rm -rf "$PKG_DIR/.cache/xcframeworks"
+            sleep $((attempt * 10))
+          done
+          # 产物必须真的存在：Frameworks/Mpv.xcframework 在，链接期才不会找不着框架
+          if [ ! -d "$PKG_DIR/Frameworks/Mpv.xcframework" ]; then
+            echo "❌ make 返回成功但 Frameworks/Mpv.xcframework 不存在"
+            ls -la "$PKG_DIR/Frameworks" 2>/dev/null || true
+            exit 1
+          fi
+
       - name: 安装 CocoaPods 依赖
         working-directory: ios
         run: |
@@ -748,6 +830,15 @@ jobs:
             echo "❌ iOS 工程已迁移到 SPM，与本 job 的 CocoaPods 路线冲突：回退工程迁移，或改走 flutter build ios --config-only"
             exit 1
           fi
+          # ③ libmpv 没下来时 pod install 照样"成功"，报错要等 archive 链接期才出现
+          #    （ld: framework 'Mpv' not found）。这里当场查一次，省掉那 40 分钟。
+          MPV_FW=$(ls -d ../.symlinks/plugins/media_kit_libs_ios_video/ios/Frameworks/Mpv.xcframework 2>/dev/null || true)
+          if [ -z "$MPV_FW" ]; then
+            echo "❌ Mpv.xcframework 不存在：libmpv 下载/校验失败（见上一步 make 输出）"
+            ls -la ../.symlinks/plugins/media_kit_libs_ios_video/ios/Frameworks 2>/dev/null || true
+            exit 1
+          fi
+          echo "✅ Mpv.xcframework 就绪: $MPV_FW"
           echo "✅ Pods 形态正常（插件全进 Pods，工程未做 SPM 迁移）"
 
       - name: 验证证书可用性
