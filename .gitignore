@@ -63,6 +63,12 @@ rust/**/gen/schemas
 *.sqlite
 *.crt
 *.key
+*.p12
+*.pem
+
+# 自签代码签名证书产物（含私钥，绝不入库）。重新生成等于换签名身份，
+# 用户机器上的 TCC 授权（完全磁盘访问/外置卷）会全部失效，所以必须挡住误提交。
+mac_signing_cert/
 
 *.g.dart
 *_keyword.json

@@ -51,8 +51,18 @@ echo "② 打包 p12（CI 与本机都要用它签名）"
 read -r -s -p "设置 p12 口令（GitHub Secret MAC_SIGN_IDENTITY_PASSWORD 用）: " P12_PASS; echo
 read -r -s -p "再输一遍确认: " P12_PASS2; echo
 if [ "$P12_PASS" != "$P12_PASS2" ]; then echo "❌ 两次口令不一致"; exit 1; fi
+# ⚠️ 必须用传统算法（PBE-SHA1-3DES + SHA1 MAC）导出。
+# OpenSSL 3.x 起 pkcs12 -export 的默认算法变成 PBES2/PBKDF2/AES-256-CBC，
+# 而 macOS 的 `security import` 解析不了这种格式，会报
+#   SecKeychainItemImport: MAC verification failed during PKCS12 import (wrong password?)
+# ——报错说"口令错误"，其实口令完全正确，是算法不被支持。已在 macOS 上实测复现：
+#   OpenSSL3 默认格式 → MAC verification failed（退出码 1）
+#   传统格式（本命令）→ 1 identity imported（退出码 0）
+# CI 上表现为打包成功之后倒在签名步骤，很容易被误判成 secret 填错。
 openssl pkcs12 -export -out "$P12" -inkey "$KEY_PEM" -in "$CERT_PEM" \
-  -passout pass:"$P12_PASS" -name "$CN"
+  -passout pass:"$P12_PASS" -name "$CN" \
+  -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1
+echo "   （已用传统算法导出：兼容 macOS security import）"
 
 echo "③ 导入本机登录钥匙串并设为信任（可能弹系统授权框，请允许）"
 security import "$P12" -k "$HOME/Library/Keychains/login.keychain-db" \

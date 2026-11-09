@@ -421,6 +421,35 @@ jobs:
           security unlock-keychain -p "$KCPASS" "$KC"
           security set-keychain-settings -t 1800 "$KC"
           printf '%s' "$MAC_SIGN_IDENTITY_P12" | tr -d ' \t\r\n' | base64 --decode > "$RUNNER_TEMP/signer.p12"
+          # 导入前先看 p12 的加密算法。OpenSSL 3.x 起 `pkcs12 -export` 的默认算法变成
+          # PBES2/PBKDF2/AES-256-CBC，而 macOS 的 security import 解析不了，会报
+          #   MAC verification failed during PKCS12 import (wrong password?)
+          # ——文案说"口令错误"，但口令往往是完全正确的，真因是算法不被支持。
+          # 这个报错极具误导性（会把排查引向检查 secret 有没有填错），已在 macOS 实测复现：
+          #   OpenSSL3 默认格式 → 失败；传统格式（3DES/SHA1）→ 1 identity imported。
+          # 这里直接就地转换，而不是报错让人去重新生成 secret：
+          # ① 口令本来就在 secret 里，CI 完全有能力自己转；
+          # ② 重导出不会改变证书身份（实测 SHA256 指纹逐字节一致），
+          #    用户的 TCC 授权（完全磁盘访问/外置卷）不受影响，不需要换证书。
+          # 注意 openssl 的 -info 输出走 stderr，必须 2>&1 才能 grep 到。
+          if openssl pkcs12 -in "$RUNNER_TEMP/signer.p12" -info -noout \
+               -passin pass:"$MAC_SIGN_IDENTITY_PASSWORD" 2>&1 | grep -q "PBES2"; then
+            echo "⚠️ p12 为 PBES2/AES 加密（OpenSSL 3 默认），macOS 不支持；就地转为传统格式"
+            if openssl pkcs12 -in "$RUNNER_TEMP/signer.p12" -nodes \
+                 -passin pass:"$MAC_SIGN_IDENTITY_PASSWORD" -out "$RUNNER_TEMP/signer.pem" 2>/dev/null; then
+              openssl pkcs12 -export -out "$RUNNER_TEMP/signer.legacy.p12" \
+                -in "$RUNNER_TEMP/signer.pem" \
+                -passout pass:"$MAC_SIGN_IDENTITY_PASSWORD" \
+                -name "$MAC_SIGN_IDENTITY_NAME" \
+                -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1
+              mv "$RUNNER_TEMP/signer.legacy.p12" "$RUNNER_TEMP/signer.p12"
+              rm -f "$RUNNER_TEMP/signer.pem"
+              echo "✅ 已转为传统格式（证书身份不变）"
+            else
+              echo "::error::p12 解密失败：MAC_SIGN_IDENTITY_PASSWORD 与 p12 口令不一致"
+              exit 1
+            fi
+          fi
           security import "$RUNNER_TEMP/signer.p12" -k "$KC" -P "$MAC_SIGN_IDENTITY_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPASS" "$KC" >/dev/null 2>&1
           rm -f "$RUNNER_TEMP/signer.p12"
@@ -762,6 +791,26 @@ jobs:
           file certificate.p12
           # SHA-256 可与本机 `shasum -a 256 ios-dist.p12` 直接对比，确认传上去的是哪一份
           echo "certificate.p12 SHA-256=$(shasum -a 256 certificate.p12 | awk '{print $1}')"
+          # 与 build-macos 同源处理：OpenSSL 3 默认导出的 PBES2/AES p12，macOS security import
+          # 读不了，会报 "MAC verification failed during PKCS12 import (wrong password?)"
+          # ——文案甩锅给口令，实际是算法不支持。既然口令就在 secret 里，就地转格式即可；
+          # 重导出不改变证书身份，已装设备上的描述文件/信任不受影响。
+          if openssl pkcs12 -in certificate.p12 -info -noout \
+               -passin pass:"$IOS_CERTIFICATE_PASSWORD" 2>&1 | grep -q "PBES2"; then
+            echo "⚠️ iOS p12 为 PBES2/AES 加密，macOS 不支持；就地转为传统格式"
+            if openssl pkcs12 -in certificate.p12 -nodes \
+                 -passin pass:"$IOS_CERTIFICATE_PASSWORD" -out cert.pem.tmp 2>/dev/null; then
+              openssl pkcs12 -export -out certificate.legacy.p12 -in cert.pem.tmp \
+                -passout pass:"$IOS_CERTIFICATE_PASSWORD" \
+                -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1
+              mv certificate.legacy.p12 certificate.p12
+              rm -f cert.pem.tmp
+              echo "✅ 已转为传统格式（证书身份不变）"
+            else
+              echo "❌ p12 解密失败：IOS_CERTIFICATE_PASSWORD 与 p12 口令不一致"
+              exit 1
+            fi
+          fi
           security import certificate.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           # 允许 codesign 非交互访问私钥。分区列表必须带 codesign:，
           # 少了它 codesign 会弹 SecurityAgent 授权框，CI 无人值守 = 永久挂死。
