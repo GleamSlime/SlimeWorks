@@ -828,6 +828,9 @@ fn try_ffmpeg_video_frame(
                     seek_secs,
                     "-i",
                     src,
+                    "-an",
+                    "-sn",
+                    "-dn",
                     "-vf",
                     &format!("scale={}:-1", width),
                     "-q:v",
@@ -1804,12 +1807,13 @@ fn try_extract_video_thumbnail(video_path: &str, thumb_id: &str) -> Option<Strin
     }
     let out_str = out.to_string_lossy().into_owned();
     // Try progressively earlier seek positions in case the video is short.
+    // -ss 放 -i 之前（输入 seek）：放后面会从文件头解码丢弃到目标点，大文件上等于全量读盘。
     for seek in &["00:00:10", "00:00:03", "00:00:00"] {
         let ok = run_tracked_command(
             std::process::Command::new(ffmpeg_cmd())
                 .args([
-                    "-nostdin", "-i", video_path, "-ss", seek, "-vframes", "1", "-q:v", "3", "-y",
-                    &out_str,
+                    "-nostdin", "-ss", seek, "-i", video_path, "-an", "-sn", "-dn", "-vframes", "1",
+                    "-q:v", "3", "-y", &out_str,
                 ])
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
@@ -1934,14 +1938,25 @@ pub fn extract_video_scrub_frames(
             seek,
             video_path
         );
+        // -ss 必须放在 -i **之前**（输入 seek，直接 seek 到最近关键帧再做小范围精确化）；
+        // 放在 -i 之后是输出 seek，ffmpeg 必须从文件头开始**解码丢弃**一路到目标时间点。
+        // 实测 8.8GB / 5.7 小时 / 60fps 的 SMB 网络盘视频抽 8 帧：
+        //   输出 seek → 第 4 帧（约 25% 处）单帧就要 593s；
+        //   输入 seek → 8 帧全部合计 3.55s（单帧 0.4~1.9s，与文件大小/远近距离无关）。
+        // 卡点是「解码丢弃的路程」，不是网络传输，也不是 jpeg 编码。
+        // 该文件的 GOP 是 1s，seek 到整秒恰好落在关键帧上，前置 seek 出来的帧与后置完全一致（PSNR inf）。
+        // -an/-sn/-dn 顺手丢掉音轨/字幕/数据流，只为出一张图没必要顺带读一条 320kbps 的 AAC。
         let ok = run_tracked_command(
             std::process::Command::new(ffmpeg_cmd())
                 .args([
                     "-nostdin",
-                    "-i",
-                    &video_path,
                     "-ss",
                     &seek,
+                    "-i",
+                    &video_path,
+                    "-an",
+                    "-sn",
+                    "-dn",
                     "-vframes",
                     "1",
                     "-vf",
