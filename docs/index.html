@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>史莱姆工坊 SlimeWorks — 跨平台数字内容管理工坊</title>
+<meta name="description" content="史莱姆工坊：媒体库、书库、漫画、游戏库、音乐播放器、局域网互传、流水账，一个应用管理你的全部数字生活。Flutter + Rust 打造，支持 macOS / Windows / Android / iOS。">
+<meta property="og:title" content="史莱姆工坊 SlimeWorks">
+<meta property="og:description" content="跨平台数字内容管理工坊 — 你的照片、小说、漫画、游戏、音乐与账单，一处安放。">
+<meta property="og:image" content="https://works.gleamslime.com/assets/logo-512.png">
+<meta property="og:url" content="https://works.gleamslime.com/">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+<link rel="apple-touch-icon" href="assets/logo-180.png">
+<style>
+/* ============ 设计变量：与应用暗色主题同源（软紫 primary #A89FEE） ============ */
+:root{
+  --bg:#0b0b12;
+  --bg-soft:#11111b;
+  --card:#161624;
+  --card-hover:#1b1b2e;
+  --line:rgba(168,159,238,.14);
+  --line-strong:rgba(168,159,238,.28);
+  --primary:#a89fee;
+  --primary-deep:#7f74d8;
+  --cyan:#7dd3c8;
+  --pink:#e8a0bf;
+  --amber:#e8c98f;
+  --text:#eceaf6;
+  --text-2:#a9a6c2;
+  --text-3:#6f6c8a;
+  --radius:20px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);font-family:var(--font);
+  line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+::selection{background:rgba(168,159,238,.35)}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+
+/* ============ 背景氛围：网格 + 光晕 ============ */
+.bg-grid{
+  position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(168,159,238,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(168,159,238,.045) 1px,transparent 1px);
+  background-size:56px 56px;
+  mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 30%,transparent 75%);
+  -webkit-mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 30%,transparent 75%);
+}
+.bg-glow{
+  position:fixed;z-index:-1;pointer-events:none;border-radius:50%;
+  filter:blur(110px);opacity:.5;
+}
+.bg-glow.g1{width:560px;height:560px;left:-140px;top:-160px;background:radial-gradient(circle,rgba(127,116,216,.4),transparent 70%)}
+.bg-glow.g2{width:640px;height:640px;right:-200px;top:120px;background:radial-gradient(circle,rgba(125,211,200,.16),transparent 70%)}
+.bg-glow.g3{width:520px;height:520px;left:30%;top:1400px;background:radial-gradient(circle,rgba(232,160,191,.10),transparent 70%)}
+
+/* ============ 导航 ============ */
+nav{
+  position:sticky;top:0;z-index:50;
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  background:rgba(11,11,18,.72);border-bottom:1px solid rgba(168,159,238,.08);
+}
+.nav-inner{display:flex;align-items:center;gap:28px;height:64px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:700;font-size:16px;letter-spacing:.2px}
+.brand img{width:32px;height:32px;border-radius:8px}
+.brand small{color:var(--text-3);font-weight:500;font-size:12px;margin-left:2px}
+.nav-links{display:flex;gap:26px;margin-left:auto;font-size:14px;color:var(--text-2)}
+.nav-links a{transition:color .2s}
+.nav-links a:hover{color:var(--text)}
+.nav-cta{
+  font-size:13.5px;font-weight:600;padding:8px 18px;border-radius:999px;
+  background:var(--primary);color:#16132b;transition:transform .2s,box-shadow .2s;
+}
+.nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(168,159,238,.35)}
+@media(max-width:720px){.nav-links{display:none}}
+
+/* ============ Hero ============ */
+.hero{padding:96px 0 72px;text-align:center;position:relative}
+.hero-logo{
+  width:112px;height:112px;margin:0 auto 30px;border-radius:26px;
+  box-shadow:0 20px 60px rgba(127,116,216,.35),0 0 0 1px rgba(255,255,255,.06);
+  animation:float 6s ease-in-out infinite;
+}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2);
+  border:1px solid var(--line-strong);border-radius:999px;padding:6px 16px;margin-bottom:26px;
+  background:rgba(168,159,238,.06);
+}
+.hero-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+h1{
+  font-size:clamp(38px,6.4vw,68px);font-weight:800;line-height:1.18;letter-spacing:1px;
+  margin-bottom:8px;
+}
+h1 .grad{
+  background:linear-gradient(120deg,var(--primary) 10%,var(--cyan) 55%,var(--pink) 95%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero-en{font-size:clamp(15px,2vw,19px);color:var(--text-3);letter-spacing:6px;font-weight:500;margin-bottom:24px;text-transform:uppercase}
+.hero-sub{max-width:620px;margin:0 auto 40px;font-size:clamp(15px,2vw,18px);color:var(--text-2)}
+.hero-sub strong{color:var(--text);font-weight:600}
+.hero-actions{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:22px}
+.btn{
+  display:inline-flex;align-items:center;gap:9px;font-size:15px;font-weight:600;
+  padding:13px 30px;border-radius:14px;transition:transform .2s,box-shadow .2s,background .2s;
+}
+.btn svg{width:18px;height:18px;flex:none}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-deep));color:#14112a;box-shadow:0 8px 30px rgba(127,116,216,.35)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(127,116,216,.5)}
+.btn-ghost{border:1px solid var(--line-strong);color:var(--text);background:rgba(168,159,238,.05)}
+.btn-ghost:hover{background:rgba(168,159,238,.12);transform:translateY(-2px)}
+.hero-platforms{font-size:13px;color:var(--text-3);display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap}
+.hero-platforms span{display:inline-flex;align-items:center;gap:5px}
+.hero-platforms svg{width:14px;height:14px;opacity:.75}
+.hero-platforms i{font-style:normal;opacity:.4}
+
+/* ============ 数据条 ============ */
+.stats{padding:14px 0 64px}
+.stats-row{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:1px;overflow:hidden;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--line);
+}
+.stat{background:var(--bg-soft);padding:26px 18px;text-align:center}
+.stat b{display:block;font-size:clamp(22px,3vw,30px);font-weight:800;color:var(--primary);letter-spacing:.5px}
+.stat span{font-size:13px;color:var(--text-3)}
+@media(max-width:640px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+
+/* ============ 通用 Section ============ */
+section{padding:64px 0}
+.sec-head{text-align:center;margin-bottom:52px}
+.sec-kicker{font-size:13px;letter-spacing:4px;color:var(--primary);font-weight:600;text-transform:uppercase;margin-bottom:12px}
+h2{font-size:clamp(26px,4vw,38px);font-weight:800;letter-spacing:.5px;margin-bottom:14px}
+.sec-desc{color:var(--text-2);max-width:560px;margin:0 auto;font-size:15.5px}
+
+/* ============ 功能卡片 ============ */
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:900px){.features-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.features-grid{grid-template-columns:1fr}}
+.feature{
+  position:relative;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius);padding:30px 26px;overflow:hidden;
+  transition:transform .25s,border-color .25s,background .25s;
+}
+.feature:hover{transform:translateY(-4px);border-color:var(--line-strong);background:var(--card-hover)}
+.feature::before{
+  content:"";position:absolute;inset:0 0 auto 0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent,var(--primary)),transparent);
+  opacity:0;transition:opacity .25s;
+}
+.feature:hover::before{opacity:.8}
+.feature .icon{
+  width:48px;height:48px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+  margin-bottom:20px;background:color-mix(in srgb,var(--accent,var(--primary)) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent,var(--primary)) 25%,transparent);
+}
+.feature .icon svg{width:24px;height:24px;stroke:var(--accent,var(--primary))}
+.feature h3{font-size:18px;font-weight:700;margin-bottom:9px}
+.feature p{font-size:14px;color:var(--text-2);line-height:1.75}
+.feature .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
+.feature .tag{
+  font-size:11.5px;color:var(--text-3);border:1px solid var(--line);
+  border-radius:6px;padding:2px 9px;background:rgba(168,159,238,.04);
+}
+
+/* ============ 节点架构 ============ */
+.arch{background:var(--bg-soft);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.arch-layout{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+@media(max-width:860px){.arch-layout{grid-template-columns:1fr;gap:36px}}
+.arch-copy h2{text-align:left}
+.arch-copy .sec-kicker{text-align:left}
+.arch-copy p{color:var(--text-2);font-size:15.5px;margin-bottom:22px}
+.arch-points{list-style:none;display:flex;flex-direction:column;gap:14px}
+.arch-points li{display:flex;gap:12px;font-size:14.5px;color:var(--text-2)}
+.arch-points li b{color:var(--text);font-weight:600}
+.arch-points .check{
+  flex:none;width:22px;height:22px;border-radius:7px;margin-top:2px;
+  background:rgba(125,211,200,.12);border:1px solid rgba(125,211,200,.3);
+  display:flex;align-items:center;justify-content:center;
+}
+.arch-points .check svg{width:12px;height:12px;stroke:var(--cyan)}
+/* 节点拓扑示意图（纯 CSS/SVG） */
+.topo{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:34px 26px;position:relative;
+}
+.topo-title{font-size:12px;color:var(--text-3);letter-spacing:2px;text-align:center;margin-bottom:24px;text-transform:uppercase}
+.topo svg{width:100%;height:auto;display:block}
+
+/* ============ 技术栈 ============ */
+.tech-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:760px){.tech-grid{grid-template-columns:1fr}}
+.tech{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:28px 26px;text-align:center;
+}
+.tech .t-icon{font-size:30px;margin-bottom:12px}
+.tech h3{font-size:17px;margin-bottom:8px}
+.tech h3 em{font-style:normal;color:var(--primary)}
+.tech p{font-size:13.5px;color:var(--text-2)}
+
+/* ============ 下载 ============ */
+.download{position:relative}
+.dl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:26px}
+@media(max-width:900px){.dl-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.dl-grid{grid-template-columns:1fr}}
+.dl-card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:30px 22px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;
+  transition:transform .25s,border-color .25s,box-shadow .25s;
+}
+.dl-card:hover{transform:translateY(-4px);border-color:var(--line-strong);box-shadow:0 16px 44px rgba(0,0,0,.4)}
+.dl-card svg{width:36px;height:36px;margin-bottom:10px;fill:var(--text)}
+.dl-card h3{font-size:17px;font-weight:700}
+.dl-card .fmt{font-size:12px;color:var(--text-3);margin-bottom:14px}
+.dl-card .dl-btn{
+  margin-top:auto;font-size:13.5px;font-weight:600;padding:9px 22px;border-radius:10px;
+  background:rgba(168,159,238,.12);border:1px solid var(--line-strong);color:var(--primary);
+  transition:background .2s;
+}
+.dl-card:hover .dl-btn{background:rgba(168,159,238,.22)}
+.dl-note{text-align:center;font-size:13px;color:var(--text-3)}
+.dl-note a{color:var(--primary);border-bottom:1px dashed var(--line-strong)}
+.dl-note a:hover{border-bottom-style:solid}
+
+/* ============ Footer ============ */
+footer{border-top:1px solid var(--line);padding:40px 0 48px;margin-top:32px}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.foot .brand img{width:26px;height:26px}
+.foot-links{display:flex;gap:22px;font-size:13px;color:var(--text-3)}
+.foot-links a:hover{color:var(--text-2)}
+.copyright{font-size:12.5px;color:var(--text-3)}
+
+/* ============ 入场动画 ============ */
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+.reveal.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  .reveal{opacity:1;transform:none;transition:none}
+  .hero-logo{animation:none}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-glow g1"></div>
+<div class="bg-glow g2"></div>
+<div class="bg-glow g3"></div>
+
+<!-- ================= 导航 ================= -->
+<nav>
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top">
+      <img src="assets/logo.svg" alt="SlimeWorks Logo">
+      史莱姆工坊 <small>SlimeWorks</small>
+    </a>
+    <div class="nav-links">
+      <a href="#features">功能</a>
+      <a href="#nodes">多端互联</a>
+      <a href="#tech">技术</a>
+      <a href="#download">下载</a>
+    </div>
+    <a class="nav-cta" href="#download">立即下载</a>
+  </div>
+</nav>
+
+<!-- ================= Hero ================= -->
+<header class="hero" id="top">
+  <div class="wrap">
+    <img class="hero-logo" src="assets/logo.svg" alt="史莱姆工坊应用图标">
+    <div><span class="hero-badge"><span class="dot"></span>v1.0.0 现已发布 · macOS / Windows / Android / iOS</span></div>
+    <h1>你的数字生活<br><span class="grad">一处安放</span></h1>
+    <div class="hero-en">SlimeWorks · Digital Content Workshop</div>
+    <p class="hero-sub">照片视频、小说漫画、游戏收藏、音乐账单——<strong>史莱姆工坊</strong>把散落在各处的数字内容收进同一个工坊，桌面与手机之间无缝流转。</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#download">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>
+        免费下载
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/GleamSlime/SlimeWorks" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.15c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.75 2.69 1.25 3.34.95.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 015.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.38-5.27 5.66.41.36.78 1.06.78 2.14v3.17c0 .3.21.67.8.55A11.51 11.51 0 0023.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+        GitHub
+      </a>
+    </div>
+    <div class="hero-platforms">
+      <span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>macOS</span><i>·</i>
+      <span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10.5 4.4v7.1H3V5.5zm0 13l7.5 1.1v-7.1H3v6zm8.5 1.2L21 21v-8.5h-9.5v7.2zm0-15.4v7.2H21V3l-9.5 1.3z"/></svg>Windows</span><i>·</i>
+      <span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18a.38.38 0 00-.66-.38l-1.86 3.22a11.4 11.4 0 00-9.84 0L5.22 5.92a.38.38 0 00-.66.38L6.4 9.48A10.8 10.8 0 001 18.5h22a10.8 10.8 0 00-5.4-9.02zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z"/></svg>Android</span><i>·</i>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10 18.5h4"/></svg>iOS</span>
+    </div>
+  </div>
+</header>
+
+<!-- ================= 数据条 ================= -->
+<div class="stats">
+  <div class="wrap reveal">
+    <div class="stats-row">
+      <div class="stat"><b>8+</b><span>内容管理模块</span></div>
+      <div class="stat"><b>4</b><span>平台原生体验</span></div>
+      <div class="stat"><b>20+</b><span>Rust 高性能模块</span></div>
+      <div class="stat"><b>0</b><span>云端依赖 · 数据自持</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 功能 ================= -->
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-kicker">Features</div>
+      <h2>一个工坊，装下所有热爱</h2>
+      <p class="sec-desc">每个模块都为「重度收藏者」设计：大库不卡、跨端同步、细节到位。</p>
+    </div>
+    <div class="features-grid">
+
+      <div class="feature reveal" style="--accent:#a89fee">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
+        <h3>媒体库</h3>
+        <p>照片、视频、音频按文件夹与智能规则组织。Rust 驱动的缩略图引擎，海量图库秒开；视频支持振幅进度条、断点续播与拖动快进预览。</p>
+        <div class="tags"><span class="tag">智能文件夹</span><span class="tag">远程节点浏览</span><span class="tag">封面秒扫</span></div>
+      </div>
+
+      <div class="feature reveal" style="--accent:#7dd3c8">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20V4a2 2 0 00-2-2H6.5A2.5 2.5 0 004 4.5v15z"/><path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/></svg></div>
+        <h3>书库</h3>
+        <p>TXT / EPUB 电子书统一入库，章节解析、全文搜索、阅读进度与标签管理一应俱全，手机接着电脑的那一页继续读。</p>
+        <div class="tags"><span class="tag">TXT / EPUB</span><span class="tag">进度同步</span><span class="tag">全文搜索</span></div>
+      </div>
+
+      <div class="feature reveal" style="--accent:#e8a0bf">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 014 4v12a3 3 0 00-3-3H2V4z"/><path d="M22 4h-6a4 4 0 00-4 4v12a3 3 0 013-3h7V4z"/></svg></div>
+        <h3>漫画</h3>
+        <p>内嵌漫画源：登录、搜索、推荐、章节阅读、收藏与历史记录，图片经 Rust 代理统一拉取，支持离线下载与屏蔽词过滤。</p>
+        <div class="tags"><span class="tag">在线阅读</span><span class="tag">下载队列</span><span class="tag">收藏 / 历史</span></div>
+      </div>
+
+      <div class="feature reveal" style="--accent:#e8c98f">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h4m-2-2v4"/><circle cx="16.5" cy="10.5" r=".8" fill="currentColor"/><circle cx="18.5" cy="13" r=".8" fill="currentColor"/><path d="M17.3 5H6.7a4.7 4.7 0 00-4.6 5.6l1 5.2a3.4 3.4 0 006.2 1.2l1-1.5h3.4l1 1.5a3.4 3.4 0 006.2-1.2l1-5.2A4.7 4.7 0 0017.3 5z"/></svg></div>
+        <h3>游戏库</h3>
+        <p>Galgame 与 PC 游戏的收藏管家：Steam / VNDB / Bangumi 元数据自动刮削，进程监听自动记录游玩时长，路线进度与笔记随手记。</p>
+        <div class="tags"><span class="tag">元数据刮削</span><span class="tag">时长追踪</span><span class="tag">路线笔记</span></div>
+      </div>
+
+      <div class="feature reveal" style="--accent:#a89fee">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3a9 9 0 019 9"/></svg></div>
+        <h3>音乐播放器</h3>
+        <p>黑胶唱片动效、模糊封面背景、CUE 分轨解析、10 段均衡器与预设。本地与远程节点的音乐，都在同一张歌单里。</p>
+        <div class="tags"><span class="tag">黑胶动效</span><span class="tag">CUE 分轨</span><span class="tag">均衡器</span></div>
+      </div>
+
+      <div class="feature reveal" style="--accent:#7dd3c8">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3m8 0h3a2 2 0 002-2v-3"/><path d="M7 12h10m0 0l-3-3m3 3l-3 3"/></svg></div>
+        <h3>局域网互传</h3>
+        <p>mDNS 自动发现附近设备，TCP 直连高速传输，无需数据线、不经过任何服务器。信任管理让每一次接收都可控。</p>
+        <div class="tags"><span class="tag">设备自动发现</span><span class="tag">点对点直传</span><span class="tag">信任管理</span></div>
+      </div>
+
+      <div class="feature reveal" style="--accent:#e8a0bf">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg></div>
+        <h3>流水账</h3>
+        <p>连接邮箱自动收取账单，模板解析入账、待确认队列、统计报表与多账户管理。IMAP / POP3 全程 TLS，口令安全存储。</p>
+        <div class="tags"><span class="tag">邮箱账单解析</span><span class="tag">自动入账</span><span class="tag">统计报表</span></div>
+      </div>
+
+      <div class="feature reveal" style="--accent:#e8c98f">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></div>
+        <h3>解压工具</h3>
+        <p>压缩包一键解压，密码库记住常用口令，进度实时可见。下载回来的资源，落地即整理。</p>
+        <div class="tags"><span class="tag">密码库</span><span class="tag">进度轮询</span></div>
+      </div>
+
+      <div class="feature reveal" style="--accent:#7dd3c8">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-6m0 0V4m0 10h6m-6 0H6"/><circle cx="12" cy="4" r="1.6"/><circle cx="18" cy="14" r="1.6"/><circle cx="6" cy="14" r="1.6"/><path d="M4 20h16"/></svg></div>
+        <h3>AI 翻译</h3>
+        <p>接入 Ollama 私有化大模型，多服务器轮询、流式生成。生肉小说与外文内容，在你自己的设备上翻译。</p>
+        <div class="tags"><span class="tag">Ollama</span><span class="tag">流式生成</span><span class="tag">本地私有</span></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= 多端互联 ================= -->
+<section class="arch" id="nodes">
+  <div class="wrap arch-layout">
+    <div class="arch-copy reveal">
+      <div class="sec-kicker">Node Network</div>
+      <h2>设备即节点<br>内容自由流动</h2>
+      <p>每台运行史莱姆工坊的设备都是一个「节点」。电脑上的媒体库、书库与音乐，手机直接浏览播放；文件上传、远程管理，全部在局域网内完成。</p>
+      <ul class="arch-points">
+        <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span><span><b>数据自持</b> — 没有云端中转，你的内容只属于你的设备</span></li>
+        <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span><span><b>多节点聚合</b> — 一个界面联合浏览多台设备的内容库</span></li>
+        <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span><span><b>流量可见</b> — 实时速率、请求统计与熔断保护，一目了然</span></li>
+        <li><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg></span><span><b>断点续传体验</b> — 视频 Range 流式播放，看到哪续到哪</span></li>
+      </ul>
+    </div>
+    <div class="topo reveal">
+      <div class="topo-title">Local Node Network</div>
+      <svg viewBox="0 0 420 300" fill="none">
+        <!-- 连线 -->
+        <g stroke="rgba(168,159,238,.35)" stroke-width="1.5" stroke-dasharray="5 5">
+          <path d="M210 150 L90 70"/>
+          <path d="M210 150 L330 70"/>
+          <path d="M210 150 L90 235"/>
+          <path d="M210 150 L330 235"/>
+        </g>
+        <!-- 中心节点 -->
+        <circle cx="210" cy="150" r="46" fill="rgba(168,159,238,.1)" stroke="#a89fee" stroke-width="1.5"/>
+        <image href="assets/logo.svg" x="182" y="122" width="56" height="56"/>
+        <text x="210" y="218" text-anchor="middle" fill="#a9a6c2" font-size="12" font-family="inherit">桌面节点 · 媒体 / 书库 / 音乐</text>
+        <!-- 周边设备 -->
+        <g>
+          <rect x="62" y="42" width="56" height="44" rx="9" fill="#161624" stroke="rgba(125,211,200,.5)" stroke-width="1.5"/>
+          <rect x="72" y="52" width="36" height="20" rx="3" fill="none" stroke="#7dd3c8" stroke-width="1.5"/>
+          <path d="M80 78h20" stroke="#7dd3c8" stroke-width="1.5" stroke-linecap="round"/>
+          <text x="90" y="106" text-anchor="middle" fill="#6f6c8a" font-size="11">Mac / PC</text>
+        </g>
+        <g>
+          <rect x="308" y="38" width="44" height="52" rx="9" fill="#161624" stroke="rgba(232,160,191,.5)" stroke-width="1.5"/>
+          <rect x="317" y="46" width="26" height="32" rx="4" fill="none" stroke="#e8a0bf" stroke-width="1.5"/>
+          <circle cx="330" cy="83" r="2" fill="#e8a0bf"/>
+          <text x="330" y="106" text-anchor="middle" fill="#6f6c8a" font-size="11">iPhone</text>
+        </g>
+        <g>
+          <rect x="68" y="212" width="44" height="50" rx="9" fill="#161624" stroke="rgba(232,201,143,.5)" stroke-width="1.5"/>
+          <rect x="77" y="220" width="26" height="30" rx="4" fill="none" stroke="#e8c98f" stroke-width="1.5"/>
+          <circle cx="90" cy="255" r="2" fill="#e8c98f"/>
+          <text x="90" y="280" text-anchor="middle" fill="#6f6c8a" font-size="11">Android</text>
+        </g>
+        <g>
+          <rect x="302" y="214" width="56" height="42" rx="9" fill="#161624" stroke="rgba(168,159,238,.5)" stroke-width="1.5"/>
+          <path d="M312 244h36M330 244v8" stroke="#a89fee" stroke-width="1.5" stroke-linecap="round"/>
+          <rect x="312" y="222" width="36" height="20" rx="3" fill="none" stroke="#a89fee" stroke-width="1.5"/>
+          <text x="330" y="280" text-anchor="middle" fill="#6f6c8a" font-size="11">另一台电脑</text>
+        </g>
+        <!-- 流动光点 -->
+        <circle r="3" fill="#7dd3c8"><animateMotion dur="3s" repeatCount="indefinite" path="M210 150 L90 70"/></circle>
+        <circle r="3" fill="#e8a0bf"><animateMotion dur="3.6s" repeatCount="indefinite" path="M330 70 L210 150"/></circle>
+        <circle r="3" fill="#e8c98f"><animateMotion dur="4.2s" repeatCount="indefinite" path="M210 150 L90 235"/></circle>
+        <circle r="3" fill="#a89fee"><animateMotion dur="3.3s" repeatCount="indefinite" path="M330 235 L210 150"/></circle>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 技术栈 ================= -->
+<section id="tech">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-kicker">Under the Hood</div>
+      <h2>好看的皮囊，硬核的内芯</h2>
+      <p class="sec-desc">UI 与内核各司其职：Flutter 负责每一帧的顺滑，Rust 扛下所有重活。</p>
+    </div>
+    <div class="tech-grid">
+      <div class="tech reveal">
+        <div class="t-icon">🎨</div>
+        <h3><em>Flutter</em> 全平台 UI</h3>
+        <p>一套代码覆盖桌面与移动，深浅双主题、响应式布局，窗口收窄自动切换移动模式。</p>
+      </div>
+      <div class="tech reveal">
+        <div class="t-icon">⚙️</div>
+        <h3><em>Rust</em> 高性能内核</h3>
+        <p>扫描、解码、数据库、HTTP 服务全部由 20+ 个 Rust 模块承担，大库操作不阻塞界面。</p>
+      </div>
+      <div class="tech reveal">
+        <div class="t-icon">🔗</div>
+        <h3><em>flutter_rust_bridge</em> 无缝桥接</h3>
+        <p>类型安全的 FFI 边界，Dart 与 Rust 同构数据模型，性能与开发体验兼得。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 下载 ================= -->
+<section class="download" id="download">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-kicker">Download</div>
+      <h2>把工坊带回家</h2>
+      <p class="sec-desc">免费使用，持续更新。桌面端支持应用内自动升级。</p>
+    </div>
+    <div class="dl-grid">
+      <a class="dl-card reveal" data-asset="slime_works-1.0.0+173-macos.dmg" href="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0%2B20261108.7b92b2b/slime_works-1.0.0+173-macos.dmg">
+        <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        <h3>macOS</h3>
+        <div class="fmt">.dmg · Apple Silicon / Intel</div>
+        <span class="dl-btn">下载</span>
+      </a>
+      <a class="dl-card reveal" data-asset="_1.0.0+173_windows_x64.exe" href="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0%2B20261108.7b92b2b/_1.0.0+173_windows_x64.exe">
+        <svg viewBox="0 0 24 24"><path d="M3 5.5L10.5 4.4v7.1H3V5.5zm0 13l7.5 1.1v-7.1H3v6zm8.5 1.2L21 21v-8.5h-9.5v7.2zm0-15.4v7.2H21V3l-9.5 1.3z"/></svg>
+        <h3>Windows</h3>
+        <div class="fmt">.exe · x64 安装器</div>
+        <span class="dl-btn">下载</span>
+      </a>
+      <a class="dl-card reveal" data-asset="app-release.apk" href="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0%2B20261108.7b92b2b/app-release.apk">
+        <svg viewBox="0 0 24 24"><path d="M17.6 9.48l1.84-3.18a.38.38 0 00-.66-.38l-1.86 3.22a11.4 11.4 0 00-9.84 0L5.22 5.92a.38.38 0 00-.66.38L6.4 9.48A10.8 10.8 0 001 18.5h22a10.8 10.8 0 00-5.4-9.02zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z"/></svg>
+        <h3>Android</h3>
+        <div class="fmt">.apk · 直接安装</div>
+        <span class="dl-btn">下载</span>
+      </a>
+      <a class="dl-card reveal" data-asset="default.ipa" href="https://github.com/GleamSlime/SlimeWorks/releases/download/v1.0.0%2B20261108.7b92b2b/default.ipa">
+        <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        <h3>iOS</h3>
+        <div class="fmt">.ipa · 需自签名安装</div>
+        <span class="dl-btn">下载</span>
+      </a>
+    </div>
+    <p class="dl-note reveal">全部版本与更新日志见 <a href="https://github.com/GleamSlime/SlimeWorks/releases" target="_blank" rel="noopener">GitHub Releases</a> · macOS 首次打开如提示无法验证，请在「系统设置 → 隐私与安全性」中允许</p>
+  </div>
+</section>
+
+<!-- ================= Footer ================= -->
+<footer>
+  <div class="wrap foot">
+    <a class="brand" href="#top">
+      <img src="assets/logo.svg" alt="">
+      史莱姆工坊
+    </a>
+    <div class="foot-links">
+      <a href="https://github.com/GleamSlime/SlimeWorks" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/GleamSlime/SlimeWorks/releases" target="_blank" rel="noopener">Releases</a>
+      <a href="https://github.com/GleamSlime/SlimeWorks/issues" target="_blank" rel="noopener">反馈问题</a>
+    </div>
+    <div class="copyright">© 2026 GleamSlime · Made with Flutter &amp; Rust</div>
+  </div>
+</footer>
+
+<script>
+// 滚动入场动画（IntersectionObserver，尊重减弱动效偏好）
+(function(){
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var els = document.querySelectorAll('.reveal');
+  if (reduce || !('IntersectionObserver' in window)) {
+    els.forEach(function(el){ el.classList.add('in'); });
+    return;
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -30px 0px' });
+  els.forEach(function(el){ io.observe(el); });
+})();
+
+// 下载链接自动跟随最新 Release：
+// 页面静态兜底为已验证的固定版本直链；加载后异步查询 GitHub API，
+// 按资产名后缀匹配最新版本（构建号会随发版变化，不能写死）。
+// API 失败（限流/离线）时保持兜底链接不动，页面永远可用。
+(function(){
+  var cards = document.querySelectorAll('.dl-card[data-asset]');
+  if (!cards.length || !window.fetch) return;
+  // 从兜底资产名中提取平台匹配特征（去掉会变化的构建号段）
+  function matcher(name){
+    if (/macos\.dmg$/.test(name)) return function(a){ return /macos\.dmg$/.test(a); };
+    if (/windows_x64\.exe$/.test(name)) return function(a){ return /windows_x64\.exe$/.test(a); };
+    return function(a){ return a === name; };
+  }
+  fetch('https://api.github.com/repos/GleamSlime/SlimeWorks/releases/latest', {
+    headers: { 'Accept': 'application/vnd.github+json' }
+  }).then(function(r){ return r.ok ? r.json() : null; }).then(function(rel){
+    if (!rel || !rel.assets) return;
+    cards.forEach(function(card){
+      var m = matcher(card.getAttribute('data-asset'));
+      var hit = rel.assets.find(function(a){ return m(a.name); });
+      if (hit && hit.browser_download_url) card.href = hit.browser_download_url;
+    });
+  }).catch(function(){ /* 静默保持兜底链接 */ });
+})();
+</script>
+</body>
+</html>
