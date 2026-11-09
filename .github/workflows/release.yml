@@ -255,6 +255,15 @@ jobs:
           gem install cocoapods -n /usr/local/bin --no-document
           pod --version
 
+      # libmpv tarball 跨 run 复用：GitHub Releases 偶发降级/限流时（实测 runner 只拿到
+      # 92 字节错误页而本地能正常下到 16MB），有这个缓存就能直接跳过下载。
+      # key 里带 Makefile 的版本号+校验和，上游换版本会自动失效重建。
+      - name: 缓存 libmpv tarball（macOS）
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/slimeworks-libmpv/macos
+          key: libmpv-macos-v0.6.0-84d2ad98
+
       # 与 iOS 同源：media_kit_libs_macos_video 的 podspec 也是 `system("make")`，
       # 每次 pod install 都要从 GitHub Releases 拉 libmpv tarball 并校验 SHA256，
       # 没有重试、返回值也没人检查。断流时下载会得到错误页 → 校验 FAILED →
@@ -262,31 +271,77 @@ jobs:
       - name: 预拉 libmpv xcframework（带重试）
         working-directory: macos
         run: |
+          # 与 build-ios 完全同源的逻辑（同一套 libmpv-darwin-build Makefile），
+          # 详细背景见 build-ios 里的同名步骤注释。要点：上游 curl 没带 -f，
+          # GitHub 降级时会把错误页当成 tarball 写盘，校验失败后 `system("make")`
+          # 的返回值又没人检查，最终静默拖到链接期才报 `ld: framework 'Mpv' not found`。
           PKG_DIR=$(ls -d "$HOME"/.pub-cache/hosted/pub.dev/media_kit_libs_macos_video-*/macos | tail -1)
           if [ -z "$PKG_DIR" ] || [ ! -f "$PKG_DIR/Makefile" ]; then
             echo "⚠️ 找不到 media_kit_libs_macos_video 包目录，交给 pod install 自己处理"
             exit 0
           fi
           echo "包目录: $PKG_DIR"
-          for attempt in 1 2 3 4; do
-            echo "--- 第 $attempt 次尝试 make ---"
-            if ( cd "$PKG_DIR" && make ); then
-              echo "✅ libmpv xcframework 就绪"
-              break
-            fi
-            if [ "$attempt" -eq 4 ]; then
-              echo "❌ 连续 4 次拉取 libmpv 失败（GitHub Releases 不可达或校验不匹配）"
-              ls -la "$PKG_DIR/.cache/xcframeworks" 2>/dev/null || true
+          VER=$(grep -oE 'MPV_XCFRAMEWORKS_VERSION=.*' "$PKG_DIR/Makefile" | cut -d= -f2 | tr -d '[:space:]')
+          SHA=$(grep -oE 'MPV_XCFRAMEWORKS_SHA256SUM=.*' "$PKG_DIR/Makefile" | cut -d= -f2 | tr -d '[:space:]')
+          URL="https://github.com/media-kit/libmpv-darwin-build/releases/download/${VER}/libmpv-xcframeworks_${VER}_macos-universal-video-default.tar.gz"
+          echo "版本: $VER"
+          echo "期望 SHA256: $SHA"
+          CACHE_DIR="$PKG_DIR/.cache/xcframeworks"
+          TARGET="$CACHE_DIR/libmpv-xcframeworks-${VER}-macos-universal.tar.gz"
+          mkdir -p "$CACHE_DIR"
+          # 优先用 actions/cache 里跨 run 复用的 tarball（GitHub 降级时的保险）
+          PERSIST="$HOME/.cache/slimeworks-libmpv/macos/libmpv.tar.gz"
+          if [ -f "$PERSIST" ] && [ "$(shasum -a 256 "$PERSIST" | cut -d' ' -f1)" = "$SHA" ]; then
+            echo "✅ 命中持久化缓存（$PERSIST），跳过下载"
+            cp "$PERSIST" "$TARGET"
+          fi
+          if [ -f "$TARGET" ] && [ "$(shasum -a 256 "$TARGET" | cut -d' ' -f1)" = "$SHA" ]; then
+            echo "✅ 已有校验通过的产物，跳过下载"
+          else
+            OK=0
+            for attempt in 1 2 3 4 5 6; do
+              echo "--- 第 $attempt 次尝试下载 ---"
+              if curl -fL --retry 3 --retry-delay 5 --connect-timeout 20 --max-time 300 \
+                   "$URL" -o "$CACHE_DIR/dl.tmp"; then
+                SIZE=$(wc -c < "$CACHE_DIR/dl.tmp" | tr -d ' ')
+                ACTUAL=$(shasum -a 256 "$CACHE_DIR/dl.tmp" | cut -d' ' -f1)
+                echo "下载大小: ${SIZE}B / 实际 SHA256: $ACTUAL"
+                if [ "$ACTUAL" = "$SHA" ]; then
+                  mv "$CACHE_DIR/dl.tmp" "$TARGET"
+                  mkdir -p "$(dirname "$PERSIST")"
+                  cp "$TARGET" "$PERSIST" 2>/dev/null || true
+                  echo "✅ 校验通过"
+                  OK=1
+                  break
+                fi
+                echo "⚠️ 校验不匹配（典型是 GitHub 降级返回的错误页，正常产物约 16MB）"
+              else
+                echo "⚠️ curl 失败（HTTP 错误或超时）"
+              fi
+              rm -f "$CACHE_DIR/dl.tmp"
+              if [ "$attempt" -lt 6 ]; then
+                WAIT=$(( attempt * 30 ))
+                [ "$WAIT" -gt 300 ] && WAIT=300
+                echo "等待 ${WAIT}s 后重试……"
+                sleep $WAIT
+              fi
+            done
+            if [ "$OK" -ne 1 ]; then
+              echo "❌ 连续 6 次拉取 libmpv 失败（GitHub Releases 不可达/降级）"
+              echo "这是外部服务问题，不是代码问题；稍后重跑即可。"
               exit 1
             fi
-            rm -rf "$PKG_DIR/.cache/xcframeworks"
-            sleep $((attempt * 10))
-          done
+          fi
+          ln -sf "libmpv-xcframeworks-${VER}-macos-universal.tar.gz" \
+                 "$CACHE_DIR/libmpv-xcframeworks-macos-universal.tar.gz"
+          touch "$TARGET"
+          ( cd "$PKG_DIR" && make ) || true
           if [ ! -d "$PKG_DIR/Frameworks/Mpv.xcframework" ]; then
-            echo "❌ make 返回成功但 Frameworks/Mpv.xcframework 不存在"
+            echo "❌ Frameworks/Mpv.xcframework 仍不存在（tarball 已下载但解包/建链失败）"
             ls -la "$PKG_DIR/Frameworks" 2>/dev/null || true
             exit 1
           fi
+          echo "✅ libmpv xcframework 就绪"
 
       - name: 安装 CocoaPods 依赖
         working-directory: macos
@@ -773,45 +828,104 @@ jobs:
           gem install cocoapods -n /usr/local/bin --no-document
           pod --version
 
+      # 同 macOS：跨 run 复用 tarball，避免被 GitHub Releases 的降级/限流卡住。
+      - name: 缓存 libmpv tarball（iOS）
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/slimeworks-libmpv/ios
+          key: libmpv-ios-v0.6.0-a95bc185
+
       - name: 预拉 libmpv xcframework（带重试）
         working-directory: ios
         run: |
           # media_kit_libs_ios_video 的 podspec 第一行是 `system("make")`，每次 pod install
           # 都会去 GitHub Releases 下一个 19.8MB 的 libmpv tarball 并校验 SHA256。
           # 该下载**没有任何重试**，而且 `system()` 的返回值没人检查：
-          #   · 偶发断流时 curl 会把错误页（实测 92 字节）当成功写进 .tmp，
+          #   · GitHub 降级/限流时 curl 会把一个 92 字节的错误页当成功写进 .tmp，
           #   · shasum 校验 FAILED → make 退出 1 → Frameworks/ 根本没生成，
           #   · 这个失败被完全静默吞掉，要一直拖到 archive 链接阶段才暴露成
           #     「ld: framework 'Mpv' not found」+ exit 65，白烧 40 分钟。
-          # 这里先把产物准备好，让 pod install 里的 make 直接命中缓存（Makefile 按文件存在判断）。
+          # 这里自己下载并按 Makefile 的缓存布局放好，让 pod install 里的 make 直接命中
+          # （Makefile 只看文件是否存在，实测命中 0.01s），过程完全可控。
+          #
+          # 为什么不用 `make` 直接重试：上游 curl 没带 -f，错误响应体会被当成文件；
+          # 真失败时每轮都要重跑最慢的「下载 10 秒超时 + 校验」，且 GitHub 降级通常是
+          # 持续几分钟到几十分钟的，短间隔重试只是空转。这里自己控测速+退避。
           PKG_DIR=$(ls -d "$HOME"/.pub-cache/hosted/pub.dev/media_kit_libs_ios_video-*/ios | tail -1)
           if [ -z "$PKG_DIR" ] || [ ! -f "$PKG_DIR/Makefile" ]; then
             echo "⚠️ 找不到 media_kit_libs_ios_video 包目录，交给 pod install 自己处理"
             exit 0
           fi
           echo "包目录: $PKG_DIR"
-          for attempt in 1 2 3 4; do
-            echo "--- 第 $attempt 次尝试 make ---"
-            if ( cd "$PKG_DIR" && make ); then
-              echo "✅ libmpv xcframework 就绪"
-              break
-            fi
-            if [ "$attempt" -eq 4 ]; then
-              echo "❌ 连续 4 次拉取 libmpv 失败（GitHub Releases 不可达或校验不匹配）"
-              echo "--- 残留的 .cache 内容（诊断用）---"
-              ls -la "$PKG_DIR/.cache/xcframeworks" 2>/dev/null || true
+          VER=$(grep -oE 'MPV_XCFRAMEWORKS_VERSION=.*' "$PKG_DIR/Makefile" | cut -d= -f2 | tr -d '[:space:]')
+          SHA=$(grep -oE 'MPV_XCFRAMEWORKS_SHA256SUM=.*' "$PKG_DIR/Makefile" | cut -d= -f2 | tr -d '[:space:]')
+          URL="https://github.com/media-kit/libmpv-darwin-build/releases/download/${VER}/libmpv-xcframeworks_${VER}_ios-universal-video-default.tar.gz"
+          echo "版本: $VER"
+          echo "期望 SHA256: $SHA"
+          CACHE_DIR="$PKG_DIR/.cache/xcframeworks"
+          TARGET="$CACHE_DIR/libmpv-xcframeworks-${VER}-ios-universal.tar.gz"
+          mkdir -p "$CACHE_DIR"
+          # 优先用 actions/cache 里跨 run 复用的 tarball（GitHub 降级时的保险）
+          PERSIST="$HOME/.cache/slimeworks-libmpv/ios/libmpv.tar.gz"
+          if [ -f "$PERSIST" ] && [ "$(shasum -a 256 "$PERSIST" | cut -d' ' -f1)" = "$SHA" ]; then
+            echo "✅ 命中持久化缓存（$PERSIST），跳过下载"
+            cp "$PERSIST" "$TARGET"
+          fi
+          # 已经就绪（比如 restore 了缓存）就不用再下
+          if [ -f "$TARGET" ] && [ "$(shasum -a 256 "$TARGET" | cut -d' ' -f1)" = "$SHA" ]; then
+            echo "✅ 已有校验通过的产物，跳过下载"
+          else
+            OK=0
+            for attempt in 1 2 3 4 5 6; do
+              echo "--- 第 $attempt 次尝试下载 ---"
+              # -f：HTTP 4xx/5xx 直接失败，不会把错误页当文件（上游 curl 就缺这个）
+              # --retry：curl 自己处理连接层抖动，比外面重跑整条链路省事
+              if curl -fL --retry 3 --retry-delay 5 --connect-timeout 20 --max-time 300 \
+                   "$URL" -o "$CACHE_DIR/dl.tmp"; then
+                SIZE=$(wc -c < "$CACHE_DIR/dl.tmp" | tr -d ' ')
+                ACTUAL=$(shasum -a 256 "$CACHE_DIR/dl.tmp" | cut -d' ' -f1)
+                echo "下载大小: ${SIZE}B / 实际 SHA256: $ACTUAL"
+                if [ "$ACTUAL" = "$SHA" ]; then
+                  mv "$CACHE_DIR/dl.tmp" "$TARGET"
+                  mkdir -p "$(dirname "$PERSIST")"
+                  cp "$TARGET" "$PERSIST" 2>/dev/null || true
+                  echo "✅ 校验通过"
+                  OK=1
+                  break
+                fi
+                echo "⚠️ 校验不匹配（典型是 GitHub 降级返回的错误页，正常产物约 20MB）"
+              else
+                echo "⚠️ curl 失败（HTTP 错误或超时）"
+              fi
+              rm -f "$CACHE_DIR/dl.tmp"
+              if [ "$attempt" -lt 6 ]; then
+                # 退避 30/60/120/240/300s：GitHub 的降级窗口通常以分钟计，
+                # 短间隔重试只会持续撞在同一个窗口上。
+                WAIT=$(( attempt * 30 ))
+                [ "$WAIT" -gt 300 ] && WAIT=300
+                echo "等待 ${WAIT}s 后重试……"
+                sleep $WAIT
+              fi
+            done
+            if [ "$OK" -ne 1 ]; then
+              echo "❌ 连续 6 次拉取 libmpv 失败（GitHub Releases 不可达/降级）"
+              echo "这是外部服务问题，不是代码问题；稍后重跑即可。"
               exit 1
             fi
-            # Makefile 会 rm 掉 .tmp 重下，但失败时可能留下半截产物，清干净再试
-            rm -rf "$PKG_DIR/.cache/xcframeworks"
-            sleep $((attempt * 10))
-          done
+          fi
+          # 还要把 Makefile 认的符号链接和正式文件名补齐，否则 make 会认为缓存未命中。
+          # （Makefile 的规则名是 libmpv-xcframeworks-ios-universal.tar.gz，指向带版本号的真文件）
+          ln -sf "libmpv-xcframeworks-${VER}-ios-universal.tar.gz" \
+                 "$CACHE_DIR/libmpv-xcframeworks-ios-universal.tar.gz"
+          touch "$TARGET"
+          ( cd "$PKG_DIR" && make ) || true
           # 产物必须真的存在：Frameworks/Mpv.xcframework 在，链接期才不会找不着框架
           if [ ! -d "$PKG_DIR/Frameworks/Mpv.xcframework" ]; then
-            echo "❌ make 返回成功但 Frameworks/Mpv.xcframework 不存在"
+            echo "❌ Frameworks/Mpv.xcframework 仍不存在（tarball 已下载但解包/建链失败）"
             ls -la "$PKG_DIR/Frameworks" 2>/dev/null || true
             exit 1
           fi
+          echo "✅ libmpv xcframework 就绪"
 
       - name: 安装 CocoaPods 依赖
         working-directory: ios
