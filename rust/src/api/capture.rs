@@ -225,3 +225,23 @@ pub fn write_log_info(message: String) {
 pub fn write_log_error(message: String) {
     log_error(&message);
 }
+
+/// 批量写入 Dart 侧日志（一次 FFI 调用写多行）。
+///
+/// 为什么需要批量：Dart 的 `Loggers` 原本只 `debugPrint` + 内存环形缓冲，
+/// **完全不落文件**——release 版里队列调度、封面入队这些关键信息在日志文件里
+/// 一片空白，排查性能问题时会误判成"功能没生效"。
+/// 但 `write_log_info` 是 sync FFI，每行调用一次会把 UI 线程卡在
+/// 「取 Mutex + write + flush」上（Rust 侧自身也在高频写同一个文件，
+/// 锁竞争会把主线程拖住）。所以这里收成一个批量入口：
+/// Dart 侧攒够一批或定时器到点才调一次，把 N 行压成 1 次跨语言调用。
+///
+/// 每行由 Dart 侧拼好 `[级别] 内容`，这里只补时间戳前缀，
+/// 保证与 Rust 侧日志同一格式、同一文件、同一天滚动。
+#[frb(sync)]
+pub fn write_log_lines(lines: Vec<String>) {
+    if lines.is_empty() {
+        return;
+    }
+    slime_logger::write_log_lines(&lines);
+}

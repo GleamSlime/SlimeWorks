@@ -58,6 +58,32 @@ fn write_log(message: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 批量写入多行（一次加锁、一次 flush）。
+///
+/// 每行由调用方给成 `[级别] 内容`，这里统一补时间戳前缀，与单行日志同格式。
+/// 给 Dart 侧批量日志用：sync FFI 每次调用都过一遍锁与 flush，
+/// 高频小日志必须攒批，否则会把主线程拖在文件锁上。
+pub fn write_log_lines(lines: &[String]) {
+    if lines.is_empty() {
+        return;
+    }
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
+    let mut buf = String::with_capacity(lines.len() * 96);
+    for line in lines {
+        buf.push('[');
+        buf.push_str(&timestamp.to_string());
+        buf.push_str("] ");
+        buf.push_str(line);
+        buf.push('\n');
+    }
+    let mut log_file = LOG_FILE.lock().unwrap();
+    if let Some(ref mut file) = *log_file {
+        // 整批一次写 + 一次 flush：失败也不panic，日志丢一批不该拖垮调用方
+        let _ = file.write_all(buf.as_bytes());
+        let _ = file.flush();
+    }
+}
+
 pub fn log_info(message: &str) {
     let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
     let log_msg = format!("[{}] [INFO] {}", timestamp, message);

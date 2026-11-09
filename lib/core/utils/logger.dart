@@ -10,6 +10,8 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../../src/rust/api/capture.dart' show writeLogLines;
+
 // Loggers log = Loggers();
 Loggers logger = const Loggers();
 
@@ -21,6 +23,80 @@ class Loggers {
   /// 文件日志已由 Rust slime_logger 按天滚动，这份副本只用于界面查看。
   static const int _maxLogEntries = 5000;
   static List<String> get allLogs => List.unmodifiable(_logs);
+
+  // ── 落文件（第 3 项：让 Dart 日志也能在 release 版日志里看到）────────────
+  //
+  // 背景：`log()` 原本只 debugPrint + 内存环形缓冲，**完全不写文件**。
+  // release 版里 [[Queue]] 入队、[VideoThumb] 封面进度这些关键信息在
+  // slime_works_<日期>.log 里一片空白，排查性能问题时会被误判成
+  // "队列没生效/功能没跑"。所以这里把 Dart 日志接到 Rust 的 slime_logger，
+  // 与 Rust 侧日志同一文件、同一天滚动。
+  //
+  // 为什么要攒批 + 定时 flush：Rust 的 write_log_info 是 sync FFI，
+  // 内部要「取 Mutex + write + flush」；而 Rust 侧自身也在高频写同一个文件。
+  // 每行都同步调用会把 UI 线程堵在文件锁上（实测生成封面时 Rust 日志极密）。
+  // 因此：平时只入队，攒够 _logFlushBatch 行或每 _logFlushInterval 毫秒才
+  // 跨一次 FFI，把 N 行压成 1 次调用。
+  static final List<String> _pendingLogs = <String>[];
+  static Timer? _logFlushTimer;
+  static bool _logFlushScheduled = false;
+  static const int _logFlushBatch = 100;
+  static const Duration _logFlushInterval = Duration(milliseconds: 2000);
+  /// Rust logger 是否已初始化。未初始化时写进去会静默丢（LOG_FILE 是 None），
+  /// 与其空转不如先攒在内存里，等初始化完再放行。
+  static bool _fileLoggingReady = false;
+
+  /// 由 main() 在 Rust logger 初始化完成后调用，开启文件落盘。
+  ///
+  /// 不开也能跑：日志只在内存里（界面可见），不会因为漏调这个而崩。
+  static void enableFileLogging() {
+    _fileLoggingReady = true;
+    _scheduleFlush();
+  }
+
+  /// 把一条日志排进待写队列（不含时间戳，Rust 侧统一补）。
+  static void _enqueueForFile(String levelTag, String message) {
+    if (!_fileLoggingReady) return;
+    // 日志里的换行会把多行拆散成"没有前缀"的碎片，压成一行更易读
+    final oneLine = message.replaceAll('\r', ' ').replaceAll('\n', ' ⏎ ');
+    _pendingLogs.add('$levelTag $oneLine');
+    if (_pendingLogs.length >= _logFlushBatch) {
+      _flushLogs();
+    } else {
+      _scheduleFlush();
+    }
+  }
+
+  static void _scheduleFlush() {
+    if (_logFlushScheduled || _pendingLogs.isEmpty) return;
+    _logFlushScheduled = true;
+    _logFlushTimer?.cancel();
+    _logFlushTimer = Timer(_logFlushInterval, () {
+      _logFlushScheduled = false;
+      _flushLogs();
+    });
+  }
+
+  /// 把待写队列一次性交给 Rust 写盘。失败只吞掉这批，不影响业务。
+  static void _flushLogs() {
+    if (_pendingLogs.isEmpty) return;
+    // 先摘出再调用：FFI 期间新产生的日志留在新队列里，不会被这次清空带走
+    final batch = List<String>.from(_pendingLogs);
+    _pendingLogs.clear();
+    try {
+      writeLogLines(lines: batch);
+    } catch (_) {
+      // 落盘失败不能影响业务；重启后无非少一段 Dart 日志
+    }
+    if (_pendingLogs.isNotEmpty) _scheduleFlush();
+  }
+
+  /// 进程退出前调用，把残留日志刷出去（不调最多丢最后 2 秒）。
+  static void flushLogsNow() {
+    _logFlushTimer?.cancel();
+    _logFlushScheduled = false;
+    _flushLogs();
+  }
 
   /// 追加一条内存日志，超出上限时丢弃最旧的（避免无限增长）
   static void _appendLog(String entry) {
@@ -190,6 +266,7 @@ class Loggers {
     final basicLogEntry = "$timeStr [$name] $message";
     debugPrint(basicLogEntry);
     _appendLog(basicLogEntry);
+    _enqueueForFile('[$name]', message);
 
     // 异步处理上报逻辑（不阻塞日志记录）
     if (reportToLoki) {
@@ -281,6 +358,9 @@ class Loggers {
     final basicLogEntry = "[$name] $timeStr $fullMessage";
     debugPrint(basicLogEntry);
     _appendLog(basicLogEntry);
+    // 错误要立刻落盘：崩在这一刻就再也刷不出去了
+    _enqueueForFile('[$name]', fullMessage);
+    _flushLogs();
 
     // 异步处理上报逻辑
     if (reportToLoki) {

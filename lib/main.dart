@@ -138,6 +138,12 @@ Future<void> _postAppInit(TimeConsumptionTest desktopTest) async {
       ? '$macHome/Library/Logs/史莱姆工坊'
       : null;
   initializeLogger(installDir: logInstallDir);
+  // Rust 日志文件已开：放行 Dart 侧日志落盘（攒批 + 定时器，见 Loggers 注释）。
+  // 必须在这之后调，否则写进去时 LOG_FILE 还是 None，日志会被静默丢弃。
+  // 关键作用：队列调度（[Queue] 入队/执行/完成）、封面进度（[VideoThumb]）
+  // 这些只在 Dart 侧的日志，以前 release 版完全不落文件，排查性能问题时
+  // 会被误判成"队列没生效"。
+  Loggers.enableFileLogging();
 
   // 应用初始化完毕：确认远程节点连通性并预热远程媒体库元数据。
   // 放在这里而不是 NodeSettingsService.init()：那一步在 runApp 之前，
