@@ -62,11 +62,8 @@ class GameLibraryViewModel extends BaseViewModel {
   Future<void> refresh() async {
     final List<GameItem> all = await _service.getGames();
     games.assignAll(all);
-    // 批量加载收藏状态
-    final Set<String> favs = <String>{};
-    for (final GameItem g in all) {
-      if (await _service.isFavorite(g.id)) favs.add(g.id);
-    }
+    // 批量加载收藏状态（审计 #7：一次 FFI 取集合，替代逐游戏 N+1 串行查询）
+    final Set<String> favs = await _service.getFavoriteIds();
     favoriteIds.assignAll(favs);
   }
 

@@ -219,6 +219,20 @@ class MockGameData {
 
   bool isFavorite(String gameId) => favourites.contains(gameId);
 
+  /// 批量收藏 ID（与 Rust game_library_get_favorite_ids 对齐）
+  List<String> favouriteIds() => favourites.toList(growable: false);
+
+  /// 按分类过滤游戏列表（与 Rust game_library_get_games_by_category_json 对齐）
+  String getGamesByCategoryJson(String categoryId) {
+    // 收藏走 favourites 集合；普通分类走 gameCategories 关联
+    final hit = games.where((g) {
+      final id = g['id'] as String;
+      if (categoryId == 'system:favorites') return favourites.contains(id);
+      return gameCategories[id]?.contains(categoryId) ?? false;
+    }).toList();
+    return jsonEncode(hit);
+  }
+
   void addSession(String sessionJson) {
     final map = jsonDecode(sessionJson) as Map<String, dynamic>;
     map['id'] ??= 'sess-${++_seq}';

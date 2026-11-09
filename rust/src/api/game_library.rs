@@ -192,6 +192,18 @@ pub async fn game_library_is_favorite(game_id: String) -> Result<bool> {
     game_library::game_library_is_favorite(game_id).await
 }
 
+/// 一次性返回全部收藏游戏 ID（替代 Dart 侧逐游戏 N+1 查询，审计 #7）
+pub async fn game_library_get_favorite_ids() -> Result<Vec<String>> {
+    game_library::game_library_get_favorite_ids().await
+}
+
+/// 按分类过滤游戏列表（SQL 下推，替代「全量游戏 + 每游戏分类查询」，审计 #7）
+pub async fn game_library_get_games_by_category_json(category_id: String) -> Result<String> {
+    let games = game_library::game_library_get_games_by_category(category_id).await?;
+    let arr: Vec<Value> = games.iter().map(game_to_json).collect();
+    Ok(serde_json::to_string(&arr).context("序列化分类游戏列表失败")?)
+}
+
 pub async fn game_library_add_play_session_json(session_json: String) -> Result<()> {
     let v: Value = serde_json::from_str(&session_json).context("解析会话 JSON 失败")?;
     game_library::game_library_add_play_session(json_to_session(&v)).await

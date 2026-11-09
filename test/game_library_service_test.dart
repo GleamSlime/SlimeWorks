@@ -435,25 +435,32 @@ void main() {
       expect(removes.any((_MockCall c) => c.args[#categoryId] == 'b'), isFalse);
     });
 
-    test('getGamesByCategory 并行查分类并过滤命中项', () async {
+    test('getGamesByCategory 单次 FFI 下推 SQL 过滤并解析结果（审计 #7）', () async {
       mock.stubJson(
-        'gameLibraryGetGamesJson',
-        jsonEncode(<Object?>[gameJson(<String, Object?>{'id': 'g1'}), gameJson(<String, Object?>{'id': 'g2'})]),
+        'gameLibraryGetGamesByCategoryJson',
+        jsonEncode(<Object?>[gameJson(<String, Object?>{'id': 'g2'})]),
       );
-      mock.responders[fn('gameLibraryGetGameCategoryIds')] =
-          (Map<Symbol, Object?> args) => Future<List<String>>.value(
-                args[#gameId] == 'g2' ? <String>['hot'] : <String>['cold'],
-              );
 
       final List<GameItem> hit = await GameLibraryService().getGamesByCategory('hot');
       expect(hit.map((GameItem g) => g.id), <String>['g2']);
+      // 分类过滤已下推 SQL：不再全量拉游戏、也不再逐游戏查分类
+      final List<_MockCall> calls = mock.callsOf(fn('gameLibraryGetGamesByCategoryJson'));
+      expect(calls, hasLength(1));
+      expect(calls.single.args[#categoryId], 'hot');
+      expect(mock.callsOf(fn('gameLibraryGetGamesJson')), isEmpty);
+      expect(mock.callsOf(fn('gameLibraryGetGameCategoryIds')), isEmpty);
     });
 
-    test('游戏列表为空时短路，不发分类查询', () async {
-      mock.stubJson('gameLibraryGetGamesJson', '[]');
+    test('getGamesByCategory 空结果与坏条目容错', () async {
+      mock.stubJson('gameLibraryGetGamesByCategoryJson', '[]');
+      expect(await GameLibraryService().getGamesByCategory('hot'), isEmpty);
+
+      mock.stubJson(
+        'gameLibraryGetGamesByCategoryJson',
+        jsonEncode(<Object?>['坏条目', 42, gameJson(<String, Object?>{'id': 'g1'})]),
+      );
       final List<GameItem> hit = await GameLibraryService().getGamesByCategory('hot');
-      expect(hit, isEmpty);
-      expect(mock.callsOf(fn('gameLibraryGetGameCategoryIds')), isEmpty);
+      expect(hit.map((GameItem g) => g.id), <String>['g1']);
     });
   });
 
@@ -467,6 +474,15 @@ void main() {
       final _MockCall call = mock.callsOf(fn('gameLibraryToggleFavorite')).last;
       expect(call.args[#gameId], 'g1');
       expect(call.args[#favorite], isTrue);
+    });
+
+    test('getFavoriteIds 单次 FFI 返回去重集合（审计 #7）', () async {
+      mock.stubStrings('gameLibraryGetFavoriteIds', <String>['g1', 'g2', 'g1']);
+      final Set<String> favs = await GameLibraryService().getFavoriteIds();
+      expect(favs, <String>{'g1', 'g2'});
+      expect(mock.callsOf(fn('gameLibraryGetFavoriteIds')), hasLength(1));
+      // 不应再触发逐游戏查询
+      expect(mock.callsOf(fn('gameLibraryIsFavorite')), isEmpty);
     });
 
     test('addPlaySession 时长<=0 直接跳过，不发 FFI', () async {

@@ -870,6 +870,101 @@ pub async fn game_library_is_favorite(game_id: String) -> Result<bool> {
     })
 }
 
+/// 一次性返回全部收藏游戏 ID（性能审计 #7：替代 Dart 侧逐游戏 N+1 查询）。
+/// 走 idx_game_categories_category 索引，单条 SELECT 完成。
+pub async fn game_library_get_favorite_ids() -> Result<Vec<String>> {
+    with_conn(|conn| {
+        let mut stmt = conn
+            .prepare(
+                "SELECT game_id FROM game_categories WHERE category_id = ?1",
+            )
+            .context("准备收藏列表查询失败")?;
+        let rows = stmt
+            .query_map(params![SYSTEM_FAVORITES_ID], |row| row.get::<_, String>(0))
+            .context("查询收藏列表失败")?;
+        let mut ids = Vec::new();
+        for row in rows {
+            ids.push(row.context("读取收藏记录失败")?);
+        }
+        Ok(ids)
+    })
+}
+
+/// 按分类过滤游戏列表（性能审计 #7：分类过滤下推 SQL，替代「全量游戏 + 每游戏一次分类查询」）。
+/// EXISTS 子查询走 idx_game_categories_category 索引；字段与 game_library_get_games 完全一致。
+pub async fn game_library_get_games_by_category(category_id: String) -> Result<Vec<Game>> {
+    with_conn(|conn| {
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT
+                    g.id,
+                    g.name,
+                    g.cover_path,
+                    g.company,
+                    g.summary,
+                    g.rating,
+                    g.release_date,
+                    g.path,
+                    g.status,
+                    g.created_at,
+                    g.updated_at,
+                    (
+                        SELECT MAX(ps.end_time)
+                        FROM play_sessions ps
+                        WHERE ps.game_id = g.id
+                    ) AS last_played_at,
+                    COALESCE((
+                        SELECT SUM(ps.duration_sec)
+                        FROM play_sessions ps
+                        WHERE ps.game_id = g.id
+                    ), 0) AS total_play_time_sec,
+                    COALESCE(g.tags, '[]') AS tags,
+                    COALESCE(g.exe_paths, '[]') AS exe_paths,
+                    COALESCE(g.game_dir, '') AS game_dir
+                FROM games g
+                WHERE EXISTS (
+                    SELECT 1 FROM game_categories gc
+                    WHERE gc.game_id = g.id AND gc.category_id = ?1
+                )
+                ORDER BY g.updated_at DESC
+                "#,
+            )
+            .context("准备分类游戏列表查询失败")?;
+
+        let rows = stmt
+            .query_map(params![category_id], |row| {
+                let tags_str: String = row.get(13)?;
+                let exe_paths_str: String = row.get(14)?;
+                Ok(Game {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    cover_path: row.get(2)?,
+                    company: row.get(3)?,
+                    summary: row.get(4)?,
+                    rating: row.get(5)?,
+                    release_date: row.get(6)?,
+                    path: row.get(7)?,
+                    status: row.get(8)?,
+                    created_at: row.get(9)?,
+                    updated_at: row.get(10)?,
+                    last_played_at: row.get(11)?,
+                    total_play_time_sec: row.get(12)?,
+                    tags: parse_json_str_list(&tags_str),
+                    exe_paths: parse_json_str_list(&exe_paths_str),
+                    game_dir: row.get(15)?,
+                })
+            })
+            .context("查询分类游戏列表失败")?;
+
+        let mut games = Vec::new();
+        for row in rows {
+            games.push(row.context("读取分类游戏记录失败")?);
+        }
+        Ok(games)
+    })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 游戏启动（OS 进程管理）
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2311,6 +2406,92 @@ mod tests {
             !block_on(game_library_is_favorite("no-such-game".to_string()))
                 .expect("查询不存在游戏收藏状态失败")
         );
+    }
+
+    // ── 批量收藏 ID 查询（性能审计 #7：替代 N+1） ─────────────────────────
+
+    #[test]
+    fn get_favorite_ids_returns_only_favorited_games() {
+        let _guard = lock_api();
+        init_temp_db();
+
+        for id in ["fav-a", "fav-b", "plain-c"] {
+            block_on(game_library_add_game(make_game(id, "收藏批量测试"))).expect("新增游戏失败");
+        }
+        // 普通分类关联不应混入收藏集合
+        block_on(game_library_add_game_to_category(
+            "plain-c".to_string(),
+            "custom-cat".to_string(),
+        ))
+        .expect("加普通分类失败");
+
+        // 空库（无收藏）返回空集合
+        assert!(block_on(game_library_get_favorite_ids())
+            .expect("查询收藏集合失败")
+            .is_empty());
+
+        block_on(game_library_toggle_favorite("fav-a".to_string(), true)).expect("收藏失败");
+        block_on(game_library_toggle_favorite("fav-b".to_string(), true)).expect("收藏失败");
+        let ids = block_on(game_library_get_favorite_ids()).expect("查询收藏集合失败");
+        let mut sorted = ids.clone();
+        sorted.sort();
+        assert_eq!(sorted, vec!["fav-a".to_string(), "fav-b".to_string()]);
+
+        // 与逐个 is_favorite 的结果一致
+        for id in ["fav-a", "fav-b", "plain-c"] {
+            assert_eq!(
+                ids.iter().any(|i| i == id),
+                block_on(game_library_is_favorite(id.to_string())).expect("查询失败"),
+                "批量结果应与逐个查询一致: {id}"
+            );
+        }
+
+        // 取消收藏后集合收缩
+        block_on(game_library_toggle_favorite("fav-a".to_string(), false)).expect("取消收藏失败");
+        let ids = block_on(game_library_get_favorite_ids()).expect("查询收藏集合失败");
+        assert_eq!(ids, vec!["fav-b".to_string()]);
+    }
+
+    // ── 分类过滤下推 SQL（性能审计 #7） ───────────────────────────────────
+
+    #[test]
+    fn get_games_by_category_filters_in_sql() {
+        let _guard = lock_api();
+        init_temp_db();
+
+        for id in ["cat-g1", "cat-g2", "cat-g3"] {
+            block_on(game_library_add_game(make_game(id, "分类过滤测试"))).expect("新增游戏失败");
+        }
+        block_on(game_library_add_game_to_category("cat-g1".to_string(), "hot".to_string()))
+            .expect("加分类失败");
+        block_on(game_library_add_game_to_category("cat-g2".to_string(), "hot".to_string()))
+            .expect("加分类失败");
+        block_on(game_library_add_game_to_category("cat-g3".to_string(), "cold".to_string()))
+            .expect("加分类失败");
+        // 给 cat-g1 写一条游玩记录，验证子查询字段照常聚合
+        block_on(game_library_add_play_session(make_session("cat-g1", 1_600_000_000, 600)))
+            .expect("写会话失败");
+
+        let hot = block_on(game_library_get_games_by_category("hot".to_string()))
+            .expect("分类查询失败");
+        let mut ids: Vec<String> = hot.iter().map(|g| g.id.clone()).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["cat-g1".to_string(), "cat-g2".to_string()]);
+        let g1 = hot.iter().find(|g| g.id == "cat-g1").expect("cat-g1 应命中");
+        assert_eq!(g1.total_play_time_sec, 600, "分类查询应保留时长聚合");
+        assert_eq!(g1.last_played_at, Some(1_600_000_600));
+
+        // 收藏系统分类同样可用（收藏页复用该接口）
+        block_on(game_library_toggle_favorite("cat-g3".to_string(), true)).expect("收藏失败");
+        let favs = block_on(game_library_get_games_by_category(SYSTEM_FAVORITES_ID.to_string()))
+            .expect("收藏分类查询失败");
+        assert_eq!(favs.len(), 1);
+        assert_eq!(favs[0].id, "cat-g3");
+
+        // 不存在的分类返回空列表
+        assert!(block_on(game_library_get_games_by_category("no-such-cat".to_string()))
+            .expect("查询失败")
+            .is_empty());
     }
 
     // ── 游玩记录与 stats 时间窗口聚合 ─────────────────────────────────────

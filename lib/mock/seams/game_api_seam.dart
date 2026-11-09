@@ -121,6 +121,18 @@ Future<bool> gameLibraryIsFavorite({required String gameId}) async {
   return rust.gameLibraryIsFavorite(gameId: gameId);
 }
 
+Future<List<String>> gameLibraryGetFavoriteIds() async {
+  if (MockMode.enabled) return _m.favouriteIds();
+  return rust.gameLibraryGetFavoriteIds();
+}
+
+Future<String> gameLibraryGetGamesByCategoryJson({
+  required String categoryId,
+}) async {
+  if (MockMode.enabled) return _m.getGamesByCategoryJson(categoryId);
+  return rust.gameLibraryGetGamesByCategoryJson(categoryId: categoryId);
+}
+
 Future<void> gameLibraryAddPlaySessionJson({
   required String sessionJson,
 }) async {

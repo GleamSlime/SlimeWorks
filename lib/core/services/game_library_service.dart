@@ -159,18 +159,17 @@ class GameLibraryService {
     }
   }
 
-  /// 获取某分类下的游戏列表（全量游戏+并行分类查询，避免串行 N+1 问题）
+  /// 获取某分类下的游戏列表（审计 #7：分类过滤已下推 Rust SQL，
+  /// 单条 EXISTS 查询走 idx_game_categories_category 索引，不再全量拉取+逐游戏查分类）
   Future<List<GameItem>> getGamesByCategory(String categoryId) async {
-    final List<GameItem> all = await getGames();
-    if (all.isEmpty) return <GameItem>[];
-    // 并行查询所有游戏的分类 ID，将 N 次串行调用压缩为单次等待
-    final List<Set<String>> allCatSets = await Future.wait(
-      all.map((GameItem g) => getCategoryIdsByGameId(g.id)),
+    final String json = await rust_api.gameLibraryGetGamesByCategoryJson(
+      categoryId: categoryId,
     );
-    return <GameItem>[
-      for (int i = 0; i < all.length; i++)
-        if (allCatSets[i].contains(categoryId)) all[i],
-    ];
+    final List<dynamic> list = jsonDecode(json) as List<dynamic>;
+    return list
+        .whereType<Map>()
+        .map((Map e) => GameItem.fromJson(Map<String, dynamic>.from(e)))
+        .toList(growable: false);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -179,6 +178,12 @@ class GameLibraryService {
 
   Future<bool> isFavorite(String gameId) async {
     return rust_api.gameLibraryIsFavorite(gameId: gameId);
+  }
+
+  /// 一次性获取全部收藏游戏 ID 集合（审计 #7：替代逐游戏 isFavorite 的 N+1）
+  Future<Set<String>> getFavoriteIds() async {
+    final List<String> ids = await rust_api.gameLibraryGetFavoriteIds();
+    return ids.toSet();
   }
 
   Future<void> toggleFavorite(String gameId, bool favorite) async {

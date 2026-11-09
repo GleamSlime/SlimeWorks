@@ -87,6 +87,17 @@ Future<bool> gameLibraryIsFavorite({required String gameId}) => RustLib
     .api
     .crateApiGameLibraryGameLibraryIsFavorite(gameId: gameId);
 
+/// 一次性返回全部收藏游戏 ID（替代 Dart 侧逐游戏 N+1 查询，审计 #7）
+Future<List<String>> gameLibraryGetFavoriteIds() =>
+    RustLib.instance.api.crateApiGameLibraryGameLibraryGetFavoriteIds();
+
+/// 按分类过滤游戏列表（SQL 下推，替代「全量游戏 + 每游戏分类查询」，审计 #7）
+Future<String> gameLibraryGetGamesByCategoryJson({
+  required String categoryId,
+}) => RustLib.instance.api.crateApiGameLibraryGameLibraryGetGamesByCategoryJson(
+  categoryId: categoryId,
+);
+
 Future<void> gameLibraryAddPlaySessionJson({required String sessionJson}) =>
     RustLib.instance.api.crateApiGameLibraryGameLibraryAddPlaySessionJson(
       sessionJson: sessionJson,
