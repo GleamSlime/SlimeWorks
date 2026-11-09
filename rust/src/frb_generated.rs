@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -993410552;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1087080992;
 
 // Section: executor
 
@@ -2956,15 +2956,16 @@ fn wire__crate__api__extract__extract_remove_password_impl(
     )
 }
 fn wire__crate__api__extract__extract_scan_archives_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "extract_scan_archives_json",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -2978,11 +2979,17 @@ fn wire__crate__api__extract__extract_scan_archives_json_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_dir = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok =
-                    Result::<_, ()>::Ok(crate::api::extract::extract_scan_archives_json(api_dir))?;
-                Ok(output_ok)
-            })())
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok(
+                            crate::api::extract::extract_scan_archives_json(api_dir).await,
+                        )?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
         },
     )
 }
@@ -3691,6 +3698,42 @@ fn wire__crate__api__game_library__game_library_get_categories_json_impl(
         },
     )
 }
+fn wire__crate__api__game_library__game_library_get_favorite_ids_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_favorite_ids",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_get_favorite_ids().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__game_library__game_library_get_game_by_id_json_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3759,6 +3802,46 @@ fn wire__crate__api__game_library__game_library_get_game_category_ids_impl(
                         let output_ok =
                             crate::api::game_library::game_library_get_game_category_ids(
                                 api_game_id,
+                            )
+                            .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__game_library__game_library_get_games_by_category_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game_library_get_games_by_category_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_category_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::game_library::game_library_get_games_by_category_json(
+                                api_category_id,
                             )
                             .await?;
                         Ok(output_ok)
@@ -5484,15 +5567,16 @@ fn wire__crate__api__novel_reader__get_novel_content_impl(
     )
 }
 fn wire__crate__api__music_player__get_playlist_items_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "get_playlist_items",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -5506,12 +5590,15 @@ fn wire__crate__api__music_player__get_playlist_items_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_playlist_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::music_player::get_playlist_items(api_playlist_id)?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::music_player::get_playlist_items(api_playlist_id)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -12122,15 +12209,16 @@ fn wire__crate__api__novel_reader__scan_novels_folder_batched_impl(
     )
 }
 fn wire__crate__api__music_player__scan_path_mapping_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "scan_path_mapping",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -12144,12 +12232,14 @@ fn wire__crate__api__music_player__scan_path_mapping_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_dir_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                (move || {
-                    let output_ok = crate::api::music_player::scan_path_mapping(api_dir_path)?;
-                    Ok(output_ok)
-                })(),
-            )
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::music_player::scan_path_mapping(api_dir_path)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -16382,6 +16472,12 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
+        86 => wire__crate__api__extract__extract_scan_archives_json_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         89 => wire__crate__api__media_collection__extract_video_scrub_frames_impl(
             port,
             ptr,
@@ -16463,630 +16559,654 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        106 => wire__crate__api__game_library__game_library_get_game_by_id_json_impl(
+        106 => wire__crate__api__game_library__game_library_get_favorite_ids_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__api__game_library__game_library_get_game_category_ids_impl(
+        107 => wire__crate__api__game_library__game_library_get_game_by_id_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        108 => wire__crate__api__game_library__game_library_get_games_json_impl(
+        108 => wire__crate__api__game_library__game_library_get_game_category_ids_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        109 => wire__crate__api__game_library__game_library_get_home_page_data_json_impl(
+        109 => wire__crate__api__game_library__game_library_get_games_by_category_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        110 => wire__crate__api__game_library__game_library_get_play_sessions_json_impl(
+        110 => wire__crate__api__game_library__game_library_get_games_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        111 => wire__crate__api__game_library__game_library_get_progress_json_impl(
+        111 => wire__crate__api__game_library__game_library_get_home_page_data_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        112 => wire__crate__api__game_library__game_library_get_settings_json_impl(
+        112 => wire__crate__api__game_library__game_library_get_play_sessions_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        113 => wire__crate__api__game_library__game_library_get_stats_json_impl(
+        113 => wire__crate__api__game_library__game_library_get_progress_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        115 => wire__crate__api__game_library__game_library_is_favorite_impl(
+        114 => wire__crate__api__game_library__game_library_get_settings_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        117 => wire__crate__api__game_library__game_library_launch_game_impl(
+        115 => wire__crate__api__game_library__game_library_get_stats_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        118 => wire__crate__api__game_library__game_library_remove_game_from_category_impl(
+        117 => wire__crate__api__game_library__game_library_is_favorite_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        119 => wire__crate__api__game_library__game_library_save_settings_json_impl(
+        119 => wire__crate__api__game_library__game_library_launch_game_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        120 => wire__crate__api__game_library__game_library_scan_directory_json_impl(
+        120 => wire__crate__api__game_library__game_library_remove_game_from_category_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        121 => wire__crate__api__game_library__game_library_search_2dfan_subject_impl(
+        121 => wire__crate__api__game_library__game_library_save_settings_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        122 => wire__crate__api__game_library__game_library_toggle_favorite_impl(
+        122 => wire__crate__api__game_library__game_library_scan_directory_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        123 => wire__crate__api__game_library__game_library_update_game_json_impl(
+        123 => wire__crate__api__game_library__game_library_search_2dfan_subject_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        124 => wire__crate__api__game_library__game_library_upsert_category_json_impl(
+        124 => wire__crate__api__game_library__game_library_toggle_favorite_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        125 => wire__crate__api__game_library__game_library_upsert_progress_json_impl(
+        125 => wire__crate__api__game_library__game_library_update_game_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        126 => wire__crate__api__ffmpeg__generate_video_thumbnail_impl(
+        126 => wire__crate__api__game_library__game_library_upsert_category_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        127 => wire__crate__api__media_collection__get_all_collection_counts_impl(
+        127 => wire__crate__api__game_library__game_library_upsert_progress_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        128 => wire__crate__api__media_collection__get_all_collection_live_stats_impl(
+        128 => wire__crate__api__ffmpeg__generate_video_thumbnail_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        129 => wire__crate__api__media_collection__get_all_collection_orders_impl(
+        129 => wire__crate__api__media_collection__get_all_collection_counts_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        132 => wire__crate__api__media_collection__get_all_media_collections_impl(
+        130 => wire__crate__api__media_collection__get_all_collection_live_stats_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        133 => wire__crate__api__media_collection__get_all_media_folders_impl(
+        131 => wire__crate__api__media_collection__get_all_collection_orders_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        136 => wire__crate__api__media_collection__get_all_pending_thumbnail_tasks_impl(
+        134 => wire__crate__api__media_collection__get_all_media_collections_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        139 => wire__crate__api__media_collection__get_cached_collection_live_stats_impl(
+        135 => wire__crate__api__media_collection__get_all_media_folders_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        145 => wire__crate__api__novel_reader__get_chapter_content_impl(
+        138 => wire__crate__api__media_collection__get_all_pending_thumbnail_tasks_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        147 => wire__crate__api__media_collection__get_child_media_folders_impl(
+        141 => wire__crate__api__media_collection__get_cached_collection_live_stats_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        148 => wire__crate__api__media_collection__get_collection_file_paths_impl(
+        147 => wire__crate__api__novel_reader__get_chapter_content_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        150 => wire__crate__api__media_collection__get_favorite_collection_ids_impl(
+        149 => wire__crate__api__media_collection__get_child_media_folders_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        152 => wire__crate__api__ffmpeg__get_ffmpeg_version_impl(port, ptr, rust_vec_len, data_len),
-        153 => wire__crate__api__logger__get_log_dir_impl(port, ptr, rust_vec_len, data_len),
-        155 => wire__crate__api__media_collection__get_media_collection_items_impl(
+        150 => wire__crate__api__media_collection__get_collection_file_paths_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        156 => wire__crate__api__novel_reader__get_novel_content_impl(
+        152 => wire__crate__api__media_collection__get_favorite_collection_ids_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        163 => wire__crate__api__ffmpeg__get_video_metadata_impl(port, ptr, rust_vec_len, data_len),
-        166 => wire__crate__api__media_collection__import_media_folder_impl(
+        154 => wire__crate__api__ffmpeg__get_ffmpeg_version_impl(port, ptr, rust_vec_len, data_len),
+        155 => wire__crate__api__logger__get_log_dir_impl(port, ptr, rust_vec_len, data_len),
+        157 => wire__crate__api__media_collection__get_media_collection_items_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        168 => wire__crate__api__music_player__import_music_folder_impl(
+        158 => wire__crate__api__novel_reader__get_novel_content_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        169 => wire__crate__api__music_player__import_music_paths_impl(
+        159 => wire__crate__api__music_player__get_playlist_items_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        171 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        173 => wire__crate__api__logger__init_logger_impl(port, ptr, rust_vec_len, data_len),
-        174 => wire__crate__api__ffmpeg__initialize_ffmpeg_impl(port, ptr, rust_vec_len, data_len),
-        178 => wire__crate__api__module_loader__is_capture_proxy_downloaded_impl(
+        165 => wire__crate__api__ffmpeg__get_video_metadata_impl(port, ptr, rust_vec_len, data_len),
+        168 => wire__crate__api__media_collection__import_media_folder_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        179 => {
+        170 => wire__crate__api__music_player__import_music_folder_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        171 => wire__crate__api__music_player__import_music_paths_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        173 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        175 => wire__crate__api__logger__init_logger_impl(port, ptr, rust_vec_len, data_len),
+        176 => wire__crate__api__ffmpeg__initialize_ffmpeg_impl(port, ptr, rust_vec_len, data_len),
+        180 => wire__crate__api__module_loader__is_capture_proxy_downloaded_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        181 => {
             wire__crate__api__ffmpeg__is_ffmpeg_installed_impl(port, ptr, rust_vec_len, data_len)
         }
-        184 => wire__crate__api__lan_transfer__lan_transfer_accept_impl(
+        186 => wire__crate__api__lan_transfer__lan_transfer_accept_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        185 => wire__crate__api__lan_transfer__lan_transfer_add_trusted_impl(
+        187 => wire__crate__api__lan_transfer__lan_transfer_add_trusted_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        186 => wire__crate__api__lan_transfer__lan_transfer_cancel_impl(
+        188 => wire__crate__api__lan_transfer__lan_transfer_cancel_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        187 => wire__crate__api__lan_transfer__lan_transfer_get_devices_impl(
+        189 => wire__crate__api__lan_transfer__lan_transfer_get_devices_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        188 => wire__crate__api__lan_transfer__lan_transfer_get_local_device_impl(
+        190 => wire__crate__api__lan_transfer__lan_transfer_get_local_device_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        189 => wire__crate__api__lan_transfer__lan_transfer_get_transfers_impl(
+        191 => wire__crate__api__lan_transfer__lan_transfer_get_transfers_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        190 => wire__crate__api__lan_transfer__lan_transfer_get_trusted_devices_impl(
+        192 => wire__crate__api__lan_transfer__lan_transfer_get_trusted_devices_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        192 => wire__crate__api__lan_transfer__lan_transfer_is_trusted_impl(
+        194 => wire__crate__api__lan_transfer__lan_transfer_is_trusted_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        193 => wire__crate__api__lan_transfer__lan_transfer_reject_impl(
+        195 => wire__crate__api__lan_transfer__lan_transfer_reject_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        194 => wire__crate__api__lan_transfer__lan_transfer_remove_trusted_impl(
+        196 => wire__crate__api__lan_transfer__lan_transfer_remove_trusted_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        195 => wire__crate__api__lan_transfer__lan_transfer_send_file_impl(
+        197 => wire__crate__api__lan_transfer__lan_transfer_send_file_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        196 => wire__crate__api__lan_transfer__lan_transfer_send_text_impl(
+        198 => wire__crate__api__lan_transfer__lan_transfer_send_text_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        197 => wire__crate__api__lan_transfer__lan_transfer_set_access_code_impl(
+        199 => wire__crate__api__lan_transfer__lan_transfer_set_access_code_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        198 => wire__crate__api__lan_transfer__lan_transfer_start_impl(
+        200 => wire__crate__api__lan_transfer__lan_transfer_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        199 => wire__crate__api__lan_transfer__lan_transfer_stop_impl(
+        201 => wire__crate__api__lan_transfer__lan_transfer_stop_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        201 => {
+        203 => {
             wire__crate__api__ledger__ledger_backfill_rule_impl(port, ptr, rust_vec_len, data_len)
         }
-        203 => wire__crate__api__ledger__ledger_check_rule_impl(port, ptr, rust_vec_len, data_len),
-        213 => {
+        205 => wire__crate__api__ledger__ledger_check_rule_impl(port, ptr, rust_vec_len, data_len),
+        215 => {
             wire__crate__api__ledger__ledger_fetch_emails_impl(port, ptr, rust_vec_len, data_len)
         }
-        223 => {
+        225 => {
             wire__crate__api__ledger__ledger_list_folders_impl(port, ptr, rust_vec_len, data_len)
         }
-        244 => {
+        246 => {
             wire__crate__api__ledger__ledger_test_connection_impl(port, ptr, rust_vec_len, data_len)
         }
-        250 => wire__crate__api__logger__log_debug_impl(port, ptr, rust_vec_len, data_len),
-        251 => wire__crate__api__logger__log_error_impl(port, ptr, rust_vec_len, data_len),
-        252 => wire__crate__api__logger__log_info_impl(port, ptr, rust_vec_len, data_len),
-        253 => wire__crate__api__logger__log_warn_impl(port, ptr, rust_vec_len, data_len),
-        256 => wire__crate__api__manga__manga_fetch_image_impl(port, ptr, rust_vec_len, data_len),
-        257 => {
+        252 => wire__crate__api__logger__log_debug_impl(port, ptr, rust_vec_len, data_len),
+        253 => wire__crate__api__logger__log_error_impl(port, ptr, rust_vec_len, data_len),
+        254 => wire__crate__api__logger__log_info_impl(port, ptr, rust_vec_len, data_len),
+        255 => wire__crate__api__logger__log_warn_impl(port, ptr, rust_vec_len, data_len),
+        258 => wire__crate__api__manga__manga_fetch_image_impl(port, ptr, rust_vec_len, data_len),
+        259 => {
             wire__crate__api__manga__manga_get_categories_impl(port, ptr, rust_vec_len, data_len)
         }
-        258 => {
+        260 => {
             wire__crate__api__manga__manga_get_collections_impl(port, ptr, rust_vec_len, data_len)
         }
-        259 => {
+        261 => {
             wire__crate__api__manga__manga_get_comic_detail_impl(port, ptr, rust_vec_len, data_len)
         }
-        260 => wire__crate__api__manga__manga_get_comic_eps_impl(port, ptr, rust_vec_len, data_len),
-        261 => wire__crate__api__manga__manga_get_comic_recommendations_impl(
+        262 => wire__crate__api__manga__manga_get_comic_eps_impl(port, ptr, rust_vec_len, data_len),
+        263 => wire__crate__api__manga__manga_get_comic_recommendations_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        262 => wire__crate__api__manga__manga_get_comics_by_category_impl(
+        264 => wire__crate__api__manga__manga_get_comics_by_category_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        263 => wire__crate__api__manga__manga_get_comment_children_impl(
+        265 => wire__crate__api__manga__manga_get_comment_children_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        264 => wire__crate__api__manga__manga_get_comments_impl(port, ptr, rust_vec_len, data_len),
-        265 => wire__crate__api__manga__manga_get_eps_pages_impl(port, ptr, rust_vec_len, data_len),
-        266 => {
+        266 => wire__crate__api__manga__manga_get_comments_impl(port, ptr, rust_vec_len, data_len),
+        267 => wire__crate__api__manga__manga_get_eps_pages_impl(port, ptr, rust_vec_len, data_len),
+        268 => {
             wire__crate__api__manga__manga_get_favourites_impl(port, ptr, rust_vec_len, data_len)
         }
-        268 => wire__crate__api__manga__manga_get_keywords_impl(port, ptr, rust_vec_len, data_len),
-        269 => {
+        270 => wire__crate__api__manga__manga_get_keywords_impl(port, ptr, rust_vec_len, data_len),
+        271 => {
             wire__crate__api__manga__manga_get_random_comics_impl(port, ptr, rust_vec_len, data_len)
         }
-        270 => wire__crate__api__manga__manga_get_rankings_impl(port, ptr, rust_vec_len, data_len),
-        272 => {
+        272 => wire__crate__api__manga__manga_get_rankings_impl(port, ptr, rust_vec_len, data_len),
+        274 => {
             wire__crate__api__manga__manga_get_user_profile_impl(port, ptr, rust_vec_len, data_len)
         }
-        275 => wire__crate__api__manga__manga_like_comment_impl(port, ptr, rust_vec_len, data_len),
-        277 => wire__crate__api__manga__manga_login_impl(port, ptr, rust_vec_len, data_len),
-        279 => wire__crate__api__manga__manga_punch_in_impl(port, ptr, rust_vec_len, data_len),
-        281 => wire__crate__api__manga__manga_search_comics_impl(port, ptr, rust_vec_len, data_len),
-        282 => wire__crate__api__manga__manga_send_comment_impl(port, ptr, rust_vec_len, data_len),
-        287 => wire__crate__api__manga__manga_test_channel_impl(port, ptr, rust_vec_len, data_len),
-        288 => {
+        277 => wire__crate__api__manga__manga_like_comment_impl(port, ptr, rust_vec_len, data_len),
+        279 => wire__crate__api__manga__manga_login_impl(port, ptr, rust_vec_len, data_len),
+        281 => wire__crate__api__manga__manga_punch_in_impl(port, ptr, rust_vec_len, data_len),
+        283 => wire__crate__api__manga__manga_search_comics_impl(port, ptr, rust_vec_len, data_len),
+        284 => wire__crate__api__manga__manga_send_comment_impl(port, ptr, rust_vec_len, data_len),
+        289 => wire__crate__api__manga__manga_test_channel_impl(port, ptr, rust_vec_len, data_len),
+        290 => {
             wire__crate__api__manga__manga_toggle_favourite_impl(port, ptr, rust_vec_len, data_len)
         }
-        289 => wire__crate__api__manga__manga_toggle_like_impl(port, ptr, rust_vec_len, data_len),
-        290 => wire__crate__api__module_manager__module_check_update_impl(
+        291 => wire__crate__api__manga__manga_toggle_like_impl(port, ptr, rust_vec_len, data_len),
+        292 => wire__crate__api__module_manager__module_check_update_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        291 => wire__crate__api__module_manager__module_get_available_impl(
+        293 => wire__crate__api__module_manager__module_get_available_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        292 => {
+        294 => {
             wire__crate__api__module_manager__module_install_impl(port, ptr, rust_vec_len, data_len)
         }
-        294 => wire__crate__api__module_manager__module_list_all_impl(
+        296 => wire__crate__api__module_manager__module_list_all_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        296 => wire__crate__api__module_manager__module_list_versions_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        297 => {
-            wire__crate__api__module_manager__module_load_impl(port, ptr, rust_vec_len, data_len)
-        }
-        298 => wire__crate__api__module_manager__module_reinstall_impl(
+        298 => wire__crate__api__module_manager__module_list_versions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
         299 => {
-            wire__crate__api__module_manager__module_reload_impl(port, ptr, rust_vec_len, data_len)
+            wire__crate__api__module_manager__module_load_impl(port, ptr, rust_vec_len, data_len)
         }
-        300 => wire__crate__api__module_manager__module_uninstall_impl(
+        300 => wire__crate__api__module_manager__module_reinstall_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
         301 => {
+            wire__crate__api__module_manager__module_reload_impl(port, ptr, rust_vec_len, data_len)
+        }
+        302 => wire__crate__api__module_manager__module_uninstall_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        303 => {
             wire__crate__api__module_manager__module_unload_impl(port, ptr, rust_vec_len, data_len)
         }
-        310 => wire__crate__api__media_collection__open_in_file_manager_impl(
+        312 => wire__crate__api__media_collection__open_in_file_manager_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        313 => wire__crate__api__power_stats__power_stats_fetch_once_impl(
+        315 => wire__crate__api__power_stats__power_stats_fetch_once_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        321 => wire__crate__api__power_stats__power_stats_start_polling_impl(
+        323 => wire__crate__api__power_stats__power_stats_start_polling_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        322 => wire__crate__api__power_stats__power_stats_stop_polling_impl(
+        324 => wire__crate__api__power_stats__power_stats_stop_polling_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        324 => wire__crate__api__media_collection__read_video_waveform_impl(
+        326 => wire__crate__api__media_collection__read_video_waveform_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        325 => wire__crate__api__media_collection__ready_cover_thumbnail_path_impl(
+        327 => wire__crate__api__media_collection__ready_cover_thumbnail_path_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        337 => wire__crate__api__music_player__repair_missing_metadata_impl(
+        339 => wire__crate__api__music_player__repair_missing_metadata_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        338 => wire__crate__api__media_collection__rescan_media_folder_impl(
+        340 => wire__crate__api__media_collection__rescan_media_folder_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        343 => wire__crate__api__media_collection__scan_media_folders_impl(
+        345 => wire__crate__api__media_collection__scan_media_folders_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        345 => wire__crate__api__novel_reader__scan_novels_folder_batched_impl(
+        347 => wire__crate__api__novel_reader__scan_novels_folder_batched_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        347 => wire__crate__api__novel_reader__search_in_all_novels_impl(
+        348 => wire__crate__api__music_player__scan_path_mapping_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        348 => wire__crate__api__novel_reader__search_in_all_novels_batched_impl(
+        349 => wire__crate__api__novel_reader__search_in_all_novels_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        349 => {
+        350 => wire__crate__api__novel_reader__search_in_all_novels_batched_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        351 => {
             wire__crate__api__novel_reader__search_in_novel_impl(port, ptr, rust_vec_len, data_len)
         }
-        350 => wire__crate__api__sentry_log__sentry_log_clear_project_events_impl(
+        352 => wire__crate__api__sentry_log__sentry_log_clear_project_events_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        351 => wire__crate__api__sentry_log__sentry_log_delete_event_impl(
+        353 => wire__crate__api__sentry_log__sentry_log_delete_event_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        352 => wire__crate__api__sentry_log__sentry_log_delete_events_impl(
+        354 => wire__crate__api__sentry_log__sentry_log_delete_events_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        353 => wire__crate__api__sentry_log__sentry_log_export_json_impl(
+        355 => wire__crate__api__sentry_log__sentry_log_export_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        354 => wire__crate__api__sentry_log__sentry_log_get_event_impl(
+        356 => wire__crate__api__sentry_log__sentry_log_get_event_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        355 => wire__crate__api__sentry_log__sentry_log_get_projects_impl(
+        357 => wire__crate__api__sentry_log__sentry_log_get_projects_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        356 => wire__crate__api__sentry_log__sentry_log_get_stats_impl(
+        358 => wire__crate__api__sentry_log__sentry_log_get_stats_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        358 => {
+        360 => {
             wire__crate__api__sentry_log__sentry_log_query_impl(port, ptr, rust_vec_len, data_len)
         }
-        359 => wire__crate__api__sentry_log__sentry_log_update_project_name_impl(
+        361 => wire__crate__api__sentry_log__sentry_log_update_project_name_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        366 => wire__crate__api__media_collection__transfer_collections_impl(
+        368 => wire__crate__api__media_collection__transfer_collections_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        370 => wire__crate__api__novel_reader__update_novel_cover_impl(
+        372 => wire__crate__api__novel_reader__update_novel_cover_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        378 => wire__crate__api__whisper__whisper_download_model_impl(
+        380 => wire__crate__api__whisper__whisper_download_model_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        384 => {
+        386 => {
             wire__crate__api__whisper__whisper_transcribe_impl(port, ptr, rust_vec_len, data_len)
         }
-        387 => {
+        389 => {
             wire__crate__api__websocket__ws_client_connect_impl(port, ptr, rust_vec_len, data_len)
         }
-        388 => wire__crate__api__websocket__ws_client_disconnect_impl(
+        390 => wire__crate__api__websocket__ws_client_disconnect_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        389 => {
+        391 => {
             wire__crate__api__websocket__ws_client_get_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        390 => wire__crate__api__websocket__ws_client_is_connected_impl(
+        392 => wire__crate__api__websocket__ws_client_is_connected_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        392 => wire__crate__api__websocket__ws_client_receive_message_impl(
+        394 => wire__crate__api__websocket__ws_client_receive_message_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        393 => wire__crate__api__websocket__ws_client_send_binary_impl(
+        395 => wire__crate__api__websocket__ws_client_send_binary_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        394 => {
+        396 => {
             wire__crate__api__websocket__ws_client_send_text_impl(port, ptr, rust_vec_len, data_len)
         }
-        399 => {
+        401 => {
             wire__crate__api__websocket__ws_server_broadcast_impl(port, ptr, rust_vec_len, data_len)
         }
-        400 => wire__crate__api__websocket__ws_server_get_client_count_impl(
+        402 => wire__crate__api__websocket__ws_server_get_client_count_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        402 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
-        403 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
-        404 => {
+        404 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
+        405 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
+        406 => {
             wire__crate__api__extract__zip_directory_to_tmp_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -17252,9 +17372,6 @@ fn pde_ffi_dispatcher_sync_impl(
             wire__crate__api__extract__extract_list_passwords_json_impl(ptr, rust_vec_len, data_len)
         }
         85 => wire__crate__api__extract__extract_remove_password_impl(ptr, rust_vec_len, data_len),
-        86 => {
-            wire__crate__api__extract__extract_scan_archives_json_impl(ptr, rust_vec_len, data_len)
-        }
         87 => wire__crate__api__extract__extract_start_impl(ptr, rust_vec_len, data_len),
         88 => wire__crate__api__extract__extract_update_password_remark_impl(
             ptr,
@@ -17272,295 +17389,293 @@ fn pde_ffi_dispatcher_sync_impl(
             rust_vec_len,
             data_len,
         ),
-        114 => wire__crate__api__game_library__game_library_init_impl(ptr, rust_vec_len, data_len),
-        116 => {
+        116 => wire__crate__api__game_library__game_library_init_impl(ptr, rust_vec_len, data_len),
+        118 => {
             wire__crate__api__game_library__game_library_is_ready_impl(ptr, rust_vec_len, data_len)
         }
-        130 => wire__crate__api__music_player__get_all_folders_impl(ptr, rust_vec_len, data_len),
-        131 => wire__crate__api__novel_reader__get_all_folders_impl(ptr, rust_vec_len, data_len),
-        134 => {
+        132 => wire__crate__api__music_player__get_all_folders_impl(ptr, rust_vec_len, data_len),
+        133 => wire__crate__api__novel_reader__get_all_folders_impl(ptr, rust_vec_len, data_len),
+        136 => {
             wire__crate__api__music_player__get_all_music_items_impl(ptr, rust_vec_len, data_len)
         }
-        135 => wire__crate__api__novel_reader__get_all_novels_impl(ptr, rust_vec_len, data_len),
-        137 => wire__crate__api__music_player__get_all_playlists_impl(ptr, rust_vec_len, data_len),
-        138 => wire__crate__api__media_collection__get_all_smart_folders_impl(
+        137 => wire__crate__api__novel_reader__get_all_novels_impl(ptr, rust_vec_len, data_len),
+        139 => wire__crate__api__music_player__get_all_playlists_impl(ptr, rust_vec_len, data_len),
+        140 => wire__crate__api__media_collection__get_all_smart_folders_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        140 => wire__crate__api__capture__get_capture_stats_impl(ptr, rust_vec_len, data_len),
-        141 => wire__crate__api__capture__get_captured_images_impl(ptr, rust_vec_len, data_len),
-        142 => wire__crate__api__capture__get_captured_javascript_impl(ptr, rust_vec_len, data_len),
-        143 => wire__crate__api__capture__get_captured_json_impl(ptr, rust_vec_len, data_len),
-        144 => wire__crate__api__capture__get_captured_videos_impl(ptr, rust_vec_len, data_len),
-        146 => wire__crate__api__novel_reader__get_child_folders_impl(ptr, rust_vec_len, data_len),
-        149 => wire__crate__api__music_player__get_eq_presets_impl(ptr, rust_vec_len, data_len),
-        151 => wire__crate__api__music_player__get_favorite_items_impl(ptr, rust_vec_len, data_len),
-        154 => wire__crate__api__capture__get_logger_directory_impl(ptr, rust_vec_len, data_len),
-        157 => wire__crate__api__music_player__get_playlist_items_impl(ptr, rust_vec_len, data_len),
-        158 => wire__crate__api__music_player__get_playlists_by_folder_impl(
+        142 => wire__crate__api__capture__get_capture_stats_impl(ptr, rust_vec_len, data_len),
+        143 => wire__crate__api__capture__get_captured_images_impl(ptr, rust_vec_len, data_len),
+        144 => wire__crate__api__capture__get_captured_javascript_impl(ptr, rust_vec_len, data_len),
+        145 => wire__crate__api__capture__get_captured_json_impl(ptr, rust_vec_len, data_len),
+        146 => wire__crate__api__capture__get_captured_videos_impl(ptr, rust_vec_len, data_len),
+        148 => wire__crate__api__novel_reader__get_child_folders_impl(ptr, rust_vec_len, data_len),
+        151 => wire__crate__api__music_player__get_eq_presets_impl(ptr, rust_vec_len, data_len),
+        153 => wire__crate__api__music_player__get_favorite_items_impl(ptr, rust_vec_len, data_len),
+        156 => wire__crate__api__capture__get_logger_directory_impl(ptr, rust_vec_len, data_len),
+        160 => wire__crate__api__music_player__get_playlists_by_folder_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        159 => wire__crate__api__music_player__get_recent_played_impl(ptr, rust_vec_len, data_len),
-        160 => {
+        161 => wire__crate__api__music_player__get_recent_played_impl(ptr, rust_vec_len, data_len),
+        162 => {
             wire__crate__api__http_bridge__get_registered_handlers_impl(ptr, rust_vec_len, data_len)
         }
-        161 => wire__crate__api__music_player__get_sub_folders_impl(ptr, rust_vec_len, data_len),
-        162 => wire__crate__api__system_metrics__get_system_resource_snapshot_impl(
+        163 => wire__crate__api__music_player__get_sub_folders_impl(ptr, rust_vec_len, data_len),
+        164 => wire__crate__api__system_metrics__get_system_resource_snapshot_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        164 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        165 => {
+        166 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        167 => {
             wire__crate__api__media_collection__has_video_waveform_impl(ptr, rust_vec_len, data_len)
         }
-        167 => wire__crate__api__music_player__import_music_file_impl(ptr, rust_vec_len, data_len),
-        170 => wire__crate__api__music_player__increment_folder_play_count_impl(
+        169 => wire__crate__api__music_player__import_music_file_impl(ptr, rust_vec_len, data_len),
+        172 => wire__crate__api__music_player__increment_folder_play_count_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        172 => wire__crate__api__http_bridge__init_http_bridge_impl(ptr, rust_vec_len, data_len),
-        175 => wire__crate__api__capture__initialize_logger_impl(ptr, rust_vec_len, data_len),
-        176 => wire__crate__api__capture__install_ca_certificate_impl(ptr, rust_vec_len, data_len),
-        177 => {
+        174 => wire__crate__api__http_bridge__init_http_bridge_impl(ptr, rust_vec_len, data_len),
+        177 => wire__crate__api__capture__initialize_logger_impl(ptr, rust_vec_len, data_len),
+        178 => wire__crate__api__capture__install_ca_certificate_impl(ptr, rust_vec_len, data_len),
+        179 => {
             wire__crate__api__capture__is_ca_certificate_installed_impl(ptr, rust_vec_len, data_len)
         }
-        180 => {
+        182 => {
             wire__crate__api__http_bridge__is_node_server_running_impl(ptr, rust_vec_len, data_len)
         }
-        181 => wire__crate__api__capture__is_proxy_running_impl(ptr, rust_vec_len, data_len),
-        182 => {
+        183 => wire__crate__api__capture__is_proxy_running_impl(ptr, rust_vec_len, data_len),
+        184 => {
             wire__crate__api__capture__is_running_as_administrator_impl(ptr, rust_vec_len, data_len)
         }
-        183 => wire__crate__api__media_collection__kill_all_ffmpeg_processes_impl(
+        185 => wire__crate__api__media_collection__kill_all_ffmpeg_processes_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        191 => wire__crate__api__lan_transfer__lan_transfer_init_impl(ptr, rust_vec_len, data_len),
-        200 => wire__crate__api__ledger__ledger_add_transaction_impl(ptr, rust_vec_len, data_len),
-        202 => wire__crate__api__ledger__ledger_check_duplicate_impl(ptr, rust_vec_len, data_len),
-        204 => wire__crate__api__ledger__ledger_clear_logs_impl(ptr, rust_vec_len, data_len),
-        205 => wire__crate__api__ledger__ledger_confirm_all_impl(ptr, rust_vec_len, data_len),
-        206 => wire__crate__api__ledger__ledger_confirm_tx_impl(ptr, rust_vec_len, data_len),
-        207 => {
+        193 => wire__crate__api__lan_transfer__lan_transfer_init_impl(ptr, rust_vec_len, data_len),
+        202 => wire__crate__api__ledger__ledger_add_transaction_impl(ptr, rust_vec_len, data_len),
+        204 => wire__crate__api__ledger__ledger_check_duplicate_impl(ptr, rust_vec_len, data_len),
+        206 => wire__crate__api__ledger__ledger_clear_logs_impl(ptr, rust_vec_len, data_len),
+        207 => wire__crate__api__ledger__ledger_confirm_all_impl(ptr, rust_vec_len, data_len),
+        208 => wire__crate__api__ledger__ledger_confirm_tx_impl(ptr, rust_vec_len, data_len),
+        209 => {
             wire__crate__api__ledger__ledger_count_transactions_impl(ptr, rust_vec_len, data_len)
         }
-        208 => wire__crate__api__ledger__ledger_delete_account_impl(ptr, rust_vec_len, data_len),
-        209 => wire__crate__api__ledger__ledger_delete_category_impl(ptr, rust_vec_len, data_len),
-        210 => wire__crate__api__ledger__ledger_delete_rule_impl(ptr, rust_vec_len, data_len),
-        211 => {
+        210 => wire__crate__api__ledger__ledger_delete_account_impl(ptr, rust_vec_len, data_len),
+        211 => wire__crate__api__ledger__ledger_delete_category_impl(ptr, rust_vec_len, data_len),
+        212 => wire__crate__api__ledger__ledger_delete_rule_impl(ptr, rust_vec_len, data_len),
+        213 => {
             wire__crate__api__ledger__ledger_delete_transaction_impl(ptr, rust_vec_len, data_len)
         }
-        212 => {
+        214 => {
             wire__crate__api__ledger__ledger_email_transactions_impl(ptr, rust_vec_len, data_len)
         }
-        214 => wire__crate__api__ledger__ledger_forget_merchant_impl(ptr, rust_vec_len, data_len),
-        215 => wire__crate__api__ledger__ledger_get_logs_impl(ptr, rust_vec_len, data_len),
-        216 => wire__crate__api__ledger__ledger_has_rule_password_impl(ptr, rust_vec_len, data_len),
-        217 => wire__crate__api__ledger__ledger_ignore_email_impl(ptr, rust_vec_len, data_len),
-        218 => wire__crate__api__ledger__ledger_ignore_tx_impl(ptr, rust_vec_len, data_len),
-        219 => wire__crate__api__ledger__ledger_init_impl(ptr, rust_vec_len, data_len),
-        220 => wire__crate__api__ledger__ledger_is_ready_impl(ptr, rust_vec_len, data_len),
-        221 => wire__crate__api__ledger__ledger_list_accounts_impl(ptr, rust_vec_len, data_len),
-        222 => wire__crate__api__ledger__ledger_list_categories_impl(ptr, rust_vec_len, data_len),
-        224 => {
+        216 => wire__crate__api__ledger__ledger_forget_merchant_impl(ptr, rust_vec_len, data_len),
+        217 => wire__crate__api__ledger__ledger_get_logs_impl(ptr, rust_vec_len, data_len),
+        218 => wire__crate__api__ledger__ledger_has_rule_password_impl(ptr, rust_vec_len, data_len),
+        219 => wire__crate__api__ledger__ledger_ignore_email_impl(ptr, rust_vec_len, data_len),
+        220 => wire__crate__api__ledger__ledger_ignore_tx_impl(ptr, rust_vec_len, data_len),
+        221 => wire__crate__api__ledger__ledger_init_impl(ptr, rust_vec_len, data_len),
+        222 => wire__crate__api__ledger__ledger_is_ready_impl(ptr, rust_vec_len, data_len),
+        223 => wire__crate__api__ledger__ledger_list_accounts_impl(ptr, rust_vec_len, data_len),
+        224 => wire__crate__api__ledger__ledger_list_categories_impl(ptr, rust_vec_len, data_len),
+        226 => {
             wire__crate__api__ledger__ledger_list_merchant_memory_impl(ptr, rust_vec_len, data_len)
         }
-        225 => wire__crate__api__ledger__ledger_list_pending_impl(ptr, rust_vec_len, data_len),
-        226 => {
+        227 => wire__crate__api__ledger__ledger_list_pending_impl(ptr, rust_vec_len, data_len),
+        228 => {
             wire__crate__api__ledger__ledger_list_received_emails_impl(ptr, rust_vec_len, data_len)
         }
-        227 => wire__crate__api__ledger__ledger_list_rules_impl(ptr, rust_vec_len, data_len),
-        228 => wire__crate__api__ledger__ledger_list_transactions_impl(ptr, rust_vec_len, data_len),
-        229 => wire__crate__api__ledger__ledger_parse_preview_impl(ptr, rust_vec_len, data_len),
-        230 => wire__crate__api__ledger__ledger_pending_count_impl(ptr, rust_vec_len, data_len),
-        231 => wire__crate__api__ledger__ledger_purge_email_impl(ptr, rust_vec_len, data_len),
-        232 => wire__crate__api__ledger__ledger_rule_detail_impl(ptr, rust_vec_len, data_len),
-        233 => wire__crate__api__ledger__ledger_scheduler_start_impl(ptr, rust_vec_len, data_len),
-        234 => wire__crate__api__ledger__ledger_scheduler_status_impl(ptr, rust_vec_len, data_len),
-        235 => wire__crate__api__ledger__ledger_scheduler_stop_impl(ptr, rust_vec_len, data_len),
-        236 => wire__crate__api__ledger__ledger_set_rule_enabled_impl(ptr, rust_vec_len, data_len),
-        237 => wire__crate__api__ledger__ledger_set_rule_password_impl(ptr, rust_vec_len, data_len),
-        238 => wire__crate__api__ledger__ledger_stats_by_category_impl(ptr, rust_vec_len, data_len),
-        239 => wire__crate__api__ledger__ledger_stats_by_day_impl(ptr, rust_vec_len, data_len),
-        240 => wire__crate__api__ledger__ledger_stats_by_merchant_impl(ptr, rust_vec_len, data_len),
-        241 => wire__crate__api__ledger__ledger_stats_by_month_impl(ptr, rust_vec_len, data_len),
-        242 => wire__crate__api__ledger__ledger_stats_summary_impl(ptr, rust_vec_len, data_len),
-        243 => wire__crate__api__ledger__ledger_templates_impl(ptr, rust_vec_len, data_len),
-        245 => {
+        229 => wire__crate__api__ledger__ledger_list_rules_impl(ptr, rust_vec_len, data_len),
+        230 => wire__crate__api__ledger__ledger_list_transactions_impl(ptr, rust_vec_len, data_len),
+        231 => wire__crate__api__ledger__ledger_parse_preview_impl(ptr, rust_vec_len, data_len),
+        232 => wire__crate__api__ledger__ledger_pending_count_impl(ptr, rust_vec_len, data_len),
+        233 => wire__crate__api__ledger__ledger_purge_email_impl(ptr, rust_vec_len, data_len),
+        234 => wire__crate__api__ledger__ledger_rule_detail_impl(ptr, rust_vec_len, data_len),
+        235 => wire__crate__api__ledger__ledger_scheduler_start_impl(ptr, rust_vec_len, data_len),
+        236 => wire__crate__api__ledger__ledger_scheduler_status_impl(ptr, rust_vec_len, data_len),
+        237 => wire__crate__api__ledger__ledger_scheduler_stop_impl(ptr, rust_vec_len, data_len),
+        238 => wire__crate__api__ledger__ledger_set_rule_enabled_impl(ptr, rust_vec_len, data_len),
+        239 => wire__crate__api__ledger__ledger_set_rule_password_impl(ptr, rust_vec_len, data_len),
+        240 => wire__crate__api__ledger__ledger_stats_by_category_impl(ptr, rust_vec_len, data_len),
+        241 => wire__crate__api__ledger__ledger_stats_by_day_impl(ptr, rust_vec_len, data_len),
+        242 => wire__crate__api__ledger__ledger_stats_by_merchant_impl(ptr, rust_vec_len, data_len),
+        243 => wire__crate__api__ledger__ledger_stats_by_month_impl(ptr, rust_vec_len, data_len),
+        244 => wire__crate__api__ledger__ledger_stats_summary_impl(ptr, rust_vec_len, data_len),
+        245 => wire__crate__api__ledger__ledger_templates_impl(ptr, rust_vec_len, data_len),
+        247 => {
             wire__crate__api__ledger__ledger_update_transaction_impl(ptr, rust_vec_len, data_len)
         }
-        246 => wire__crate__api__ledger__ledger_upsert_account_impl(ptr, rust_vec_len, data_len),
-        247 => wire__crate__api__ledger__ledger_upsert_category_impl(ptr, rust_vec_len, data_len),
-        248 => wire__crate__api__ledger__ledger_upsert_rule_impl(ptr, rust_vec_len, data_len),
-        249 => wire__crate__api__ledger__ledger_version_impl(ptr, rust_vec_len, data_len),
-        254 => wire__crate__api__manga__manga_build_image_url_impl(ptr, rust_vec_len, data_len),
-        255 => wire__crate__api__manga__manga_clear_history_impl(ptr, rust_vec_len, data_len),
-        267 => wire__crate__api__manga__manga_get_image_server_impl(ptr, rust_vec_len, data_len),
-        271 => wire__crate__api__manga__manga_get_token_impl(ptr, rust_vec_len, data_len),
-        273 => wire__crate__api__manga__manga_init_impl(ptr, rust_vec_len, data_len),
-        274 => wire__crate__api__manga__manga_init_history_impl(ptr, rust_vec_len, data_len),
-        276 => wire__crate__api__manga__manga_load_history_impl(ptr, rust_vec_len, data_len),
-        278 => wire__crate__api__manga__manga_logout_impl(ptr, rust_vec_len, data_len),
-        280 => wire__crate__api__manga__manga_save_history_raw_impl(ptr, rust_vec_len, data_len),
-        283 => wire__crate__api__manga__manga_set_channel_impl(ptr, rust_vec_len, data_len),
-        284 => wire__crate__api__manga__manga_set_image_server_impl(ptr, rust_vec_len, data_len),
-        285 => wire__crate__api__manga__manga_set_proxy_impl(ptr, rust_vec_len, data_len),
-        286 => wire__crate__api__manga__manga_set_token_impl(ptr, rust_vec_len, data_len),
-        293 => wire__crate__api__module_manager__module_is_loaded_impl(ptr, rust_vec_len, data_len),
-        295 => {
+        248 => wire__crate__api__ledger__ledger_upsert_account_impl(ptr, rust_vec_len, data_len),
+        249 => wire__crate__api__ledger__ledger_upsert_category_impl(ptr, rust_vec_len, data_len),
+        250 => wire__crate__api__ledger__ledger_upsert_rule_impl(ptr, rust_vec_len, data_len),
+        251 => wire__crate__api__ledger__ledger_version_impl(ptr, rust_vec_len, data_len),
+        256 => wire__crate__api__manga__manga_build_image_url_impl(ptr, rust_vec_len, data_len),
+        257 => wire__crate__api__manga__manga_clear_history_impl(ptr, rust_vec_len, data_len),
+        269 => wire__crate__api__manga__manga_get_image_server_impl(ptr, rust_vec_len, data_len),
+        273 => wire__crate__api__manga__manga_get_token_impl(ptr, rust_vec_len, data_len),
+        275 => wire__crate__api__manga__manga_init_impl(ptr, rust_vec_len, data_len),
+        276 => wire__crate__api__manga__manga_init_history_impl(ptr, rust_vec_len, data_len),
+        278 => wire__crate__api__manga__manga_load_history_impl(ptr, rust_vec_len, data_len),
+        280 => wire__crate__api__manga__manga_logout_impl(ptr, rust_vec_len, data_len),
+        282 => wire__crate__api__manga__manga_save_history_raw_impl(ptr, rust_vec_len, data_len),
+        285 => wire__crate__api__manga__manga_set_channel_impl(ptr, rust_vec_len, data_len),
+        286 => wire__crate__api__manga__manga_set_image_server_impl(ptr, rust_vec_len, data_len),
+        287 => wire__crate__api__manga__manga_set_proxy_impl(ptr, rust_vec_len, data_len),
+        288 => wire__crate__api__manga__manga_set_token_impl(ptr, rust_vec_len, data_len),
+        295 => wire__crate__api__module_manager__module_is_loaded_impl(ptr, rust_vec_len, data_len),
+        297 => {
             wire__crate__api__module_manager__module_list_loaded_impl(ptr, rust_vec_len, data_len)
         }
-        302 => wire__crate__api__media_collection__move_media_collection_to_folder_impl(
+        304 => wire__crate__api__media_collection__move_media_collection_to_folder_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        303 => {
+        305 => {
             wire__crate__api__novel_reader__move_novel_to_folder_impl(ptr, rust_vec_len, data_len)
         }
-        304 => {
+        306 => {
             wire__crate__api__music_player__music_initialize_db_impl(ptr, rust_vec_len, data_len)
         }
-        305 => wire__crate__api__ncm_decrypt__ncm_decrypt_cancel_impl(ptr, rust_vec_len, data_len),
-        306 => wire__crate__api__ncm_decrypt__ncm_decrypt_start_impl(ptr, rust_vec_len, data_len),
-        307 => {
+        307 => wire__crate__api__ncm_decrypt__ncm_decrypt_cancel_impl(ptr, rust_vec_len, data_len),
+        308 => wire__crate__api__ncm_decrypt__ncm_decrypt_start_impl(ptr, rust_vec_len, data_len),
+        309 => {
             wire__crate__api__ncm_decrypt__ncm_get_progress_json_impl(ptr, rust_vec_len, data_len)
         }
-        308 => wire__crate__api__ncm_decrypt__ncm_get_result_json_impl(ptr, rust_vec_len, data_len),
-        309 => wire__crate__api__ncm_decrypt__ncm_scan_files_json_impl(ptr, rust_vec_len, data_len),
-        311 => wire__crate__api__music_player__parse_cue_file_impl(ptr, rust_vec_len, data_len),
-        312 => {
+        310 => wire__crate__api__ncm_decrypt__ncm_get_result_json_impl(ptr, rust_vec_len, data_len),
+        311 => wire__crate__api__ncm_decrypt__ncm_scan_files_json_impl(ptr, rust_vec_len, data_len),
+        313 => wire__crate__api__music_player__parse_cue_file_impl(ptr, rust_vec_len, data_len),
+        314 => {
             wire__crate__api__power_stats__power_stats_clear_logs_impl(ptr, rust_vec_len, data_len)
         }
-        314 => wire__crate__api__power_stats__power_stats_get_aggregated_impl(
+        316 => wire__crate__api__power_stats__power_stats_get_aggregated_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        315 => {
+        317 => {
             wire__crate__api__power_stats__power_stats_get_config_impl(ptr, rust_vec_len, data_len)
         }
-        316 => {
+        318 => {
             wire__crate__api__power_stats__power_stats_get_logs_impl(ptr, rust_vec_len, data_len)
         }
-        317 => {
+        319 => {
             wire__crate__api__power_stats__power_stats_get_status_impl(ptr, rust_vec_len, data_len)
         }
-        318 => {
+        320 => {
             wire__crate__api__power_stats__power_stats_get_summary_impl(ptr, rust_vec_len, data_len)
         }
-        319 => wire__crate__api__power_stats__power_stats_init_impl(ptr, rust_vec_len, data_len),
-        320 => {
+        321 => wire__crate__api__power_stats__power_stats_init_impl(ptr, rust_vec_len, data_len),
+        322 => {
             wire__crate__api__power_stats__power_stats_set_enabled_impl(ptr, rust_vec_len, data_len)
         }
-        323 => wire__crate__api__power_stats__power_stats_update_config_impl(
+        325 => wire__crate__api__power_stats__power_stats_update_config_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        326 => wire__crate__api__music_player__record_play_impl(ptr, rust_vec_len, data_len),
-        327 => wire__crate__api__media_collection__register_ffmpeg_concurrency_impl(
+        328 => wire__crate__api__music_player__record_play_impl(ptr, rust_vec_len, data_len),
+        329 => wire__crate__api__media_collection__register_ffmpeg_concurrency_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        328 => wire__crate__api__media_collection__register_ffmpeg_paths_impl(
+        330 => wire__crate__api__media_collection__register_ffmpeg_paths_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        329 => wire__crate__api__novel_reader__remove_novel_impl(ptr, rust_vec_len, data_len),
-        330 => {
+        331 => wire__crate__api__novel_reader__remove_novel_impl(ptr, rust_vec_len, data_len),
+        332 => {
             wire__crate__api__novel_reader__remove_novel_with_file_impl(ptr, rust_vec_len, data_len)
         }
-        331 => wire__crate__api__music_player__rename_folder_impl(ptr, rust_vec_len, data_len),
-        332 => wire__crate__api__novel_reader__rename_folder_impl(ptr, rust_vec_len, data_len),
-        333 => wire__crate__api__media_collection__rename_media_collection_impl(
+        333 => wire__crate__api__music_player__rename_folder_impl(ptr, rust_vec_len, data_len),
+        334 => wire__crate__api__novel_reader__rename_folder_impl(ptr, rust_vec_len, data_len),
+        335 => wire__crate__api__media_collection__rename_media_collection_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        334 => wire__crate__api__media_collection__rename_media_folder_impl(
+        336 => wire__crate__api__media_collection__rename_media_folder_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        335 => wire__crate__api__novel_reader__rename_novel_impl(ptr, rust_vec_len, data_len),
-        336 => wire__crate__api__music_player__rename_playlist_impl(ptr, rust_vec_len, data_len),
-        339 => wire__crate__api__media_collection__save_collection_order_impl(
+        337 => wire__crate__api__novel_reader__rename_novel_impl(ptr, rust_vec_len, data_len),
+        338 => wire__crate__api__music_player__rename_playlist_impl(ptr, rust_vec_len, data_len),
+        341 => wire__crate__api__media_collection__save_collection_order_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        340 => wire__crate__api__music_player__save_eq_preset_impl(ptr, rust_vec_len, data_len),
-        341 => wire__crate__api__media_collection__save_favorite_collection_ids_impl(
+        342 => wire__crate__api__music_player__save_eq_preset_impl(ptr, rust_vec_len, data_len),
+        343 => wire__crate__api__media_collection__save_favorite_collection_ids_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        342 => {
+        344 => {
             wire__crate__api__music_player__save_playlist_order_impl(ptr, rust_vec_len, data_len)
         }
-        344 => wire__crate__api__novel_reader__scan_novels_folder_impl(ptr, rust_vec_len, data_len),
-        346 => wire__crate__api__music_player__scan_path_mapping_impl(ptr, rust_vec_len, data_len),
-        357 => wire__crate__api__sentry_log__sentry_log_init_impl(ptr, rust_vec_len, data_len),
-        360 => wire__crate__api__novel_reader__set_novel_favorite_impl(ptr, rust_vec_len, data_len),
-        361 => wire__crate__api__capture__start_capture_proxy_impl(ptr, rust_vec_len, data_len),
-        362 => wire__crate__api__http_bridge__start_node_server_impl(ptr, rust_vec_len, data_len),
-        363 => wire__crate__api__capture__stop_capture_proxy_impl(ptr, rust_vec_len, data_len),
-        364 => wire__crate__api__http_bridge__stop_node_server_impl(ptr, rust_vec_len, data_len),
-        365 => wire__crate__api__music_player__toggle_favorite_impl(ptr, rust_vec_len, data_len),
-        367 => wire__crate__api__music_player__update_folder_impl(ptr, rust_vec_len, data_len),
-        368 => wire__crate__api__music_player__update_music_item_impl(ptr, rust_vec_len, data_len),
-        369 => {
+        346 => wire__crate__api__novel_reader__scan_novels_folder_impl(ptr, rust_vec_len, data_len),
+        359 => wire__crate__api__sentry_log__sentry_log_init_impl(ptr, rust_vec_len, data_len),
+        362 => wire__crate__api__novel_reader__set_novel_favorite_impl(ptr, rust_vec_len, data_len),
+        363 => wire__crate__api__capture__start_capture_proxy_impl(ptr, rust_vec_len, data_len),
+        364 => wire__crate__api__http_bridge__start_node_server_impl(ptr, rust_vec_len, data_len),
+        365 => wire__crate__api__capture__stop_capture_proxy_impl(ptr, rust_vec_len, data_len),
+        366 => wire__crate__api__http_bridge__stop_node_server_impl(ptr, rust_vec_len, data_len),
+        367 => wire__crate__api__music_player__toggle_favorite_impl(ptr, rust_vec_len, data_len),
+        369 => wire__crate__api__music_player__update_folder_impl(ptr, rust_vec_len, data_len),
+        370 => wire__crate__api__music_player__update_music_item_impl(ptr, rust_vec_len, data_len),
+        371 => {
             wire__crate__api__novel_reader__update_novel_author_impl(ptr, rust_vec_len, data_len)
         }
-        371 => wire__crate__api__novel_reader__update_novel_info_impl(ptr, rust_vec_len, data_len),
-        372 => wire__crate__api__novel_reader__update_novel_notes_impl(ptr, rust_vec_len, data_len),
-        373 => wire__crate__api__novel_reader__update_novel_order_impl(ptr, rust_vec_len, data_len),
-        374 => wire__crate__api__novel_reader__update_novel_tags_impl(ptr, rust_vec_len, data_len),
-        375 => wire__crate__api__novel_reader__update_reading_progress_impl(
+        373 => wire__crate__api__novel_reader__update_novel_info_impl(ptr, rust_vec_len, data_len),
+        374 => wire__crate__api__novel_reader__update_novel_notes_impl(ptr, rust_vec_len, data_len),
+        375 => wire__crate__api__novel_reader__update_novel_order_impl(ptr, rust_vec_len, data_len),
+        376 => wire__crate__api__novel_reader__update_novel_tags_impl(ptr, rust_vec_len, data_len),
+        377 => wire__crate__api__novel_reader__update_reading_progress_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        376 => wire__crate__api__media_collection__update_smart_folder_impl(
+        378 => wire__crate__api__media_collection__update_smart_folder_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        377 => wire__crate__api__whisper__whisper_delete_model_impl(ptr, rust_vec_len, data_len),
-        379 => {
+        379 => wire__crate__api__whisper__whisper_delete_model_impl(ptr, rust_vec_len, data_len),
+        381 => {
             wire__crate__api__whisper__whisper_get_model_statuses_impl(ptr, rust_vec_len, data_len)
         }
-        380 => {
+        382 => {
             wire__crate__api__whisper__whisper_get_selected_model_impl(ptr, rust_vec_len, data_len)
         }
-        381 => wire__crate__api__whisper__whisper_get_transcription_progress_impl(
+        383 => wire__crate__api__whisper__whisper_get_transcription_progress_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        382 => wire__crate__api__whisper__whisper_initialize_impl(ptr, rust_vec_len, data_len),
-        383 => {
+        384 => wire__crate__api__whisper__whisper_initialize_impl(ptr, rust_vec_len, data_len),
+        385 => {
             wire__crate__api__whisper__whisper_set_selected_model_impl(ptr, rust_vec_len, data_len)
         }
-        385 => wire__crate__api__capture__write_log_error_impl(ptr, rust_vec_len, data_len),
-        386 => wire__crate__api__capture__write_log_info_impl(ptr, rust_vec_len, data_len),
-        391 => wire__crate__api__websocket__ws_client_new_impl(ptr, rust_vec_len, data_len),
-        395 => wire__crate__api__websocket__ws_message_get_data_impl(ptr, rust_vec_len, data_len),
-        396 => {
+        387 => wire__crate__api__capture__write_log_error_impl(ptr, rust_vec_len, data_len),
+        388 => wire__crate__api__capture__write_log_info_impl(ptr, rust_vec_len, data_len),
+        393 => wire__crate__api__websocket__ws_client_new_impl(ptr, rust_vec_len, data_len),
+        397 => wire__crate__api__websocket__ws_message_get_data_impl(ptr, rust_vec_len, data_len),
+        398 => {
             wire__crate__api__websocket__ws_message_get_timestamp_impl(ptr, rust_vec_len, data_len)
         }
-        397 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
-        398 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
-        401 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
+        399 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
+        400 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
+        403 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
