@@ -805,17 +805,84 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
   }
 
   Future<String?> _doGetAudioCover(String filePath) async {
-    // 通过 Rust FFI 调用 ensure_cover_thumbnail（已支持音频封面提取）
     try {
-      // 磁盘已就绪就直接用，别为了一张已有的封面再去解一遍文件
-      final ready = await media_api.readyCoverThumbnailPath(filePath: filePath, width: 300);
-      if (ready != null && ready.isNotEmpty) return ready;
-      return await media_api.ensureCoverThumbnail(
-        filePath: filePath,
-        width: 300,
-      );
+      // 批量就绪判定（攒批）：一屏几十个音频 tile 同时请求时合成一次 FFI，
+      // 不再每文件一次 readyCoverThumbnailPath 往返。
+      final readiness = await _requestAudioCoverReadiness(filePath);
+      switch (readiness.status) {
+        case 'ready':
+          // 磁盘已有封面，直接用，别再解一遍文件
+          final p = readiness.path;
+          return (p != null && p.isNotEmpty) ? p : null;
+        case 'no_cover':
+        case 'missing':
+          // 结论已定：没有内嵌封面 / 文件不存在。不再调 ensure——
+          // 旧实现对每个无封面音频都要白跑一次 ensureCoverThumbnail
+          // （Rust 侧负缓存命中即返回，但那次 FFI 往返与排队本身也是开销）。
+          return null;
+        default:
+          // pending：真去生成（内部仍会先查一次缓存，语义不变）
+          return await media_api.ensureCoverThumbnail(
+            filePath: filePath,
+            width: 300,
+          );
+      }
     } catch (_) {
       return null;
+    }
+  }
+
+  /// 攒批请求音频封面就绪状态：16ms 窗口或满 32 个就合成一次
+  /// [media_api.coverReadinessBatch]。单独一个请求也走这条路（最多多等
+  /// 16ms），换来的是滚动/重扫时 N 次 FFI 往返压成 1 次。
+  Future<media_api.CoverReadiness> _requestAudioCoverReadiness(String filePath) {
+    final existing = _audioReadinessPending[filePath];
+    if (existing != null) return existing.future;
+    final completer = Completer<media_api.CoverReadiness>();
+    _audioReadinessPending[filePath] = completer;
+    if (_audioReadinessPending.length >= 32) {
+      _flushAudioReadiness();
+    } else {
+      _audioReadinessTimer ??= Timer(
+        const Duration(milliseconds: 16),
+        _flushAudioReadiness,
+      );
+    }
+    return completer.future;
+  }
+
+  Future<void> _flushAudioReadiness() async {
+    _audioReadinessTimer?.cancel();
+    _audioReadinessTimer = null;
+    if (_audioReadinessPending.isEmpty) return;
+    final batch = Map<String, Completer<media_api.CoverReadiness>>.from(
+      _audioReadinessPending,
+    );
+    _audioReadinessPending.clear();
+    final paths = batch.keys.toList();
+    try {
+      final results = await media_api.coverReadinessBatch(
+        filePaths: paths,
+        width: 300,
+      );
+      for (var i = 0; i < paths.length; i++) {
+        final c = batch[paths[i]]!;
+        if (c.isCompleted) continue;
+        c.complete(
+          i < results.length
+              ? results[i]
+              : const media_api.CoverReadiness(status: 'pending'),
+        );
+      }
+    } catch (e) {
+      // 批量查询失败：全部按 pending 收尾，让调用方走 ensure 兜底，
+      // 不能把异常抛给卡片（那会把整屏音频封面打成错误态）
+      _logger.error('[AudioCover] 批量就绪查询失败: $e');
+      for (final c in batch.values) {
+        if (!c.isCompleted) {
+          c.complete(const media_api.CoverReadiness(status: 'pending'));
+        }
+      }
     }
   }
 

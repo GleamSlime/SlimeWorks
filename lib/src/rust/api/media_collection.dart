@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `extract_waveform_via_ffmpeg`, `from_inner`, `normalize_waveform`, `resample_peaks`, `waveform_cache_path`, `waveform_identity`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `extract_waveform_via_ffmpeg`, `from_inner`, `missing`, `no_cover`, `normalize_waveform`, `pending`, `ready`, `resample_peaks`, `waveform_cache_path`, `waveform_identity`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 /// 注册 ffmpeg/ffprobe 可执行文件的绝对路径到 media_collection 模块。
 /// 必须在应用启动时（RustLib.init 之后）调用，确保缩略图生成能找到 ffmpeg。
@@ -159,6 +159,26 @@ Future<String?> readyCoverThumbnailPath({
   required int width,
 }) => RustLib.instance.api.crateApiMediaCollectionReadyCoverThumbnailPath(
   filePath: filePath,
+  width: width,
+);
+
+/// 批量版：一次 FFI 判定一整批文件的封面就绪状态（三态）。
+///
+/// 为什么要有它：单个版每个文件要跨语言往返一次，调用方还要再调一次
+/// `ensure_cover_thumbnail`，一个目录几十个音频就是上百次往返。
+/// 实测导入后封面队列的平均出图间隔被拖到 75 秒（真正抽帧只需 2.7 秒），
+/// 大头全耗在这些空转调用上。
+///
+/// 三态（对应 [media_collection::CoverReadiness]）：
+/// - `Ready{path}` 磁盘已有封面，直接显示，不要再入队；
+/// - `NoCover`     音频确定没有内嵌封面（负缓存命中），永远拿不到，别再排队；
+/// - `Pending`     还没生成，需要走生成路径；
+/// - `Missing`     源文件不存在。
+Future<List<CoverReadiness>> coverReadinessBatch({
+  required List<String> filePaths,
+  required int width,
+}) => RustLib.instance.api.crateApiMediaCollectionCoverReadinessBatch(
+  filePaths: filePaths,
   width: width,
 );
 
@@ -397,6 +417,37 @@ class CollectionLiveStats {
           collectionId == other.collectionId &&
           liveSize == other.liveSize &&
           liveCount == other.liveCount;
+}
+
+/// 封面就绪状态三态（FRB 导出）。
+///
+/// 这里**重新定义**而不是复用 media_collection 的同名类型：FRB 只扫描
+/// `crate::api` 下的类型，crate 外来的 enum 会被降级成不透明的
+/// `RustOpaqueInterface`（Dart 侧无法 switch、拿不到字段）。
+///
+/// 用「状态码 + 可选路径」的扁平结构，而不是 `Ready { path }` 这种带字段的
+/// enum 变体：后者会让 FRB 要求 Dart 侧引入 freezed（本项目没有这个依赖，
+/// 为一个三态判定加整套代码生成不划算）。扁平结构生成的 plain class
+/// 在 Dart 侧判断同样直接。
+class CoverReadiness {
+  /// 状态码：`ready` / `no_cover` / `pending` / `missing`
+  final String status;
+
+  /// `status == "ready"` 时的封面缓存路径，其余状态为 None
+  final String? path;
+
+  const CoverReadiness({required this.status, this.path});
+
+  @override
+  int get hashCode => status.hashCode ^ path.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CoverReadiness &&
+          runtimeType == other.runtimeType &&
+          status == other.status &&
+          path == other.path;
 }
 
 class MediaCollection {

@@ -6,6 +6,7 @@ import 'package:slime_works/src/rust/api/media_collection.dart'
         CachedCollectionStats,
         CollectionCount,
         CollectionLiveStats,
+        CoverReadiness,
         MediaCollection,
         MediaFolder,
         MediaItem,
@@ -18,6 +19,7 @@ export 'package:slime_works/src/rust/api/media_collection.dart'
         CachedCollectionStats,
         CollectionCount,
         CollectionLiveStats,
+        CoverReadiness,
         MediaCollection,
         MediaFolder,
         MediaItem,
@@ -179,6 +181,26 @@ Future<String?> readyCoverThumbnailPath({
 }) async {
   if (MockMode.enabled) return null;
   return rust.readyCoverThumbnailPath(filePath: filePath, width: width);
+}
+
+/// 批量版就绪判定：一次 FFI 判一整批文件（三态：ready/no_cover/pending/missing）。
+///
+/// 用途：重扫封面、启动预热这类「一上来就是几十上百个文件」的场景。
+/// 逐个调 [readyCoverThumbnailPath] 是每文件一次跨语言往返，实测一个
+/// 34 个 m4a 的目录要空转几十秒；批量把 N 次往返压成 1 次。
+/// Mock 模式没有真实磁盘，一律 pending 让上层走正常生成路径。
+Future<List<CoverReadiness>> coverReadinessBatch({
+  required List<String> filePaths,
+  required int width,
+}) async {
+  if (filePaths.isEmpty) return const <CoverReadiness>[];
+  if (MockMode.enabled) {
+    return List<CoverReadiness>.filled(
+      filePaths.length,
+      const CoverReadiness(status: 'pending'),
+    );
+  }
+  return rust.coverReadinessBatch(filePaths: filePaths, width: width);
 }
 
 /// 只查不生成：读取资源旁已缓存的振幅波形（没有/源文件已变则 null）。

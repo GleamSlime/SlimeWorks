@@ -1,5 +1,61 @@
 use flutter_rust_bridge::frb;
 
+/// 封面就绪状态三态（FRB 导出）。
+///
+/// 这里**重新定义**而不是复用 media_collection 的同名类型：FRB 只扫描
+/// `crate::api` 下的类型，crate 外来的 enum 会被降级成不透明的
+/// `RustOpaqueInterface`（Dart 侧无法 switch、拿不到字段）。
+///
+/// 用「状态码 + 可选路径」的扁平结构，而不是 `Ready { path }` 这种带字段的
+/// enum 变体：后者会让 FRB 要求 Dart 侧引入 freezed（本项目没有这个依赖，
+/// 为一个三态判定加整套代码生成不划算）。扁平结构生成的 plain class
+/// 在 Dart 侧判断同样直接。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoverReadiness {
+    /// 状态码：`ready` / `no_cover` / `pending` / `missing`
+    pub status: String,
+    /// `status == "ready"` 时的封面缓存路径，其余状态为 None
+    pub path: Option<String>,
+}
+
+impl CoverReadiness {
+    fn ready(path: String) -> Self {
+        Self {
+            status: "ready".to_string(),
+            path: Some(path),
+        }
+    }
+    fn no_cover() -> Self {
+        Self {
+            status: "no_cover".to_string(),
+            path: None,
+        }
+    }
+    fn pending() -> Self {
+        Self {
+            status: "pending".to_string(),
+            path: None,
+        }
+    }
+    fn missing() -> Self {
+        Self {
+            status: "missing".to_string(),
+            path: None,
+        }
+    }
+}
+
+impl From<media_collection::CoverReadiness> for CoverReadiness {
+    fn from(value: media_collection::CoverReadiness) -> Self {
+        match value {
+            media_collection::CoverReadiness::Ready { path } => CoverReadiness::ready(path),
+            media_collection::CoverReadiness::NoCover => CoverReadiness::no_cover(),
+            media_collection::CoverReadiness::Pending => CoverReadiness::pending(),
+            media_collection::CoverReadiness::Missing => CoverReadiness::missing(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum MediaKind {
     Image,
@@ -296,6 +352,25 @@ pub fn ensure_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
 /// 就绪时返回缓存路径（可直接用于显示）；音频"无内嵌封面"负缓存命中时返回 None。
 pub fn ready_cover_thumbnail_path(file_path: String, width: u32) -> Option<String> {
     media_collection::ready_cover_thumbnail_path(file_path, width)
+}
+
+/// 批量版：一次 FFI 判定一整批文件的封面就绪状态（三态）。
+///
+/// 为什么要有它：单个版每个文件要跨语言往返一次，调用方还要再调一次
+/// `ensure_cover_thumbnail`，一个目录几十个音频就是上百次往返。
+/// 实测导入后封面队列的平均出图间隔被拖到 75 秒（真正抽帧只需 2.7 秒），
+/// 大头全耗在这些空转调用上。
+///
+/// 三态（对应 [media_collection::CoverReadiness]）：
+/// - `Ready{path}` 磁盘已有封面，直接显示，不要再入队；
+/// - `NoCover`     音频确定没有内嵌封面（负缓存命中），永远拿不到，别再排队；
+/// - `Pending`     还没生成，需要走生成路径；
+/// - `Missing`     源文件不存在。
+pub fn cover_readiness_batch(file_paths: Vec<String>, width: u32) -> Vec<CoverReadiness> {
+    media_collection::cover_readiness_batch(file_paths, width)
+        .into_iter()
+        .map(CoverReadiness::from)
+        .collect()
 }
 
 // get_all_collection_stats FFI 导出已删除（遗留死接口，理由见上方注释）。

@@ -401,6 +401,13 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// filePath → 音频封面缩略图路径的异步缓存。
   final _audioCoverCache = <String, Future<String?>>{};
 
+  /// 音频封面「批量就绪判定」的攒批缓冲（攒批逻辑在 media_library_vm_sources
+  /// 的 _requestAudioCoverReadiness）。滚动列表一屏几十个音频 tile 同时请求
+  /// 封面时，逐个 FFI 往返会把封面队列拖成几十秒；攒 16ms 或满 32 个合成
+  /// 一次 coverReadinessBatch 调用。字段放主类：extension 里不能声明实例字段。
+  final _audioReadinessPending = <String, Completer<media_api.CoverReadiness>>{};
+  Timer? _audioReadinessTimer;
+
   final _lostCollections = <String, bool>{};
   final _lostFolders = <String, bool>{};
   final _lostSmartFolders = <String, bool>{};
@@ -703,6 +710,14 @@ class MediaLibraryViewModel extends BaseViewModel {
     _searchNotifyTimer = null;
     _liveStatsFollowUpTimer?.cancel();
     _liveStatsFollowUpTimer = null;
+    _audioReadinessTimer?.cancel();
+    _audioReadinessTimer = null;
+    // 攒批中的音频就绪请求：VM 已关闭，没人再消费结果，按 pending 收尾
+    // 避免 Completer 永远不完成（卡片侧 await 会挂死）
+    for (final c in _audioReadinessPending.values) {
+      if (!c.isCompleted) c.complete(const media_api.CoverReadiness(status: 'pending'));
+    }
+    _audioReadinessPending.clear();
     super.onClose();
   }
 

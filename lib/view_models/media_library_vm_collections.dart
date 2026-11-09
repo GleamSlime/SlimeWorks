@@ -712,6 +712,29 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
             final items = await media_api.getMediaCollectionItems(
               collectionId: collection.id,
             );
+            // 音频封面批量预检：一次 FFI 判完整集合的音频（三态），
+            // 替代旧实现里每文件一次 readyCoverThumbnailPath 往返——
+            // 实测一个 34 个 m4a 的集合要空转几十秒，大头全在逐次 FFI 上。
+            final audioItems = items
+                .where((it) => it.kind == media_api.MediaKind.audio)
+                .toList();
+            Map<String, media_api.CoverReadiness> audioReadiness = const {};
+            if (audioItems.isNotEmpty && !force) {
+              try {
+                final states = await media_api.coverReadinessBatch(
+                  filePaths: audioItems.map((it) => it.filePath).toList(),
+                  width: 300,
+                );
+                audioReadiness = {
+                  for (var j = 0; j < audioItems.length; j++)
+                    if (j < states.length) audioItems[j].filePath: states[j],
+                };
+              } catch (e) {
+                // 批量查询失败就退回逐文件的生成路径（getAudioCoverSource
+                // 内部还有攒批就绪判定兜底），不让整集合检查失败
+                _logger.error('[RescanCover] 音频批量就绪查询失败: $e');
+              }
+            }
             for (final item in items) {
               itemCount++;
               // 视频/音频：振幅缺失就补齐（长按覆盖模式下先清进程缓存，
@@ -728,16 +751,20 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
                 case media_api.MediaKind.video:
                   _enqueueOrPrioritizeScrub(item.filePath);
                 case media_api.MediaKind.audio:
-                  // 音频封面走独立缓存：先查磁盘，已就绪就不必重提
-                  final ready = await media_api.readyCoverThumbnailPath(
-                    filePath: item.filePath,
-                    width: 300,
-                  );
-                  if (ready == null || ready.isEmpty) {
+                  final state = audioReadiness[item.filePath];
+                  if (state != null && state.status == 'ready') {
+                    // 磁盘已就绪：直接写缓存，不产生任何生成任务
+                    final p = state.path;
+                    if (p != null && p.isNotEmpty) {
+                      _audioCoverCache[item.filePath] = Future.value(p);
+                    }
+                  } else if (state != null && state.status == 'no_cover') {
+                    // 确定没有内嵌封面：记住结论，别再排队白跑 ensure
+                    _audioCoverCache[item.filePath] = Future.value(null);
+                  } else {
+                    // pending / missing / force / 批量查询失败：走生成路径
                     _audioCoverCache.remove(item.filePath);
                     getAudioCoverSource(item.filePath).ignore();
-                  } else {
-                    _audioCoverCache[item.filePath] = Future.value(ready);
                   }
               }
             }

@@ -8,8 +8,8 @@ use std::sync::{Arc, Condvar, Mutex, OnceLock, RwLock};
 
 use crate::scanner::MediaFolderScanner;
 use crate::types::{
-    MediaCollection, MediaFolder, MediaItem, MediaKind, SmartFolder, SmartFolderFileType,
-    SmartFolderRegexTarget,
+    CoverReadiness, MediaCollection, MediaFolder, MediaItem, MediaKind, SmartFolder,
+    SmartFolderFileType, SmartFolderRegexTarget,
 };
 
 // ── FFmpeg/FFprobe 可执行文件路径（由外部初始化时注入）───────────────────────
@@ -529,6 +529,75 @@ pub fn ready_cover_thumbnail_path(file_path: String, width: u32) -> Option<Strin
     } else {
         None
     }
+}
+
+/// 批量判定「封面是否已就绪」——一次 FFI 调用判一整批文件。
+///
+/// 为什么要批量：`ready_cover_thumbnail_path` 是每个文件一次跨语言调用，
+/// 调用方对每个条目还要再调一次 `ensure_cover_thumbnail`（两次 FFI/文件）。
+/// 一个目录几十个音频就是上百次往返，实测导入后封面队列的平均出图间隔
+/// 被拖到 75 秒（而真正抽帧只要 2.7 秒），大头全耗在这些空转调用上。
+/// 这里把「同一个宽度、同一批文件」合成一次调用，往返次数从 2N 降到 1。
+///
+/// 语义与逐个调用 `ready_cover_thumbnail_path` 完全一致：
+/// 返回 `Some(路径)` = 磁盘已有可用封面（可直接显示）；
+/// 返回 `None` = 未就绪或该文件压根没有封面（音频负缓存命中）。
+/// 注意 `None` 同时覆盖"没有"和"还没做"，调用方要区分见
+/// [`cover_readiness_batch`]。
+pub fn ready_cover_thumbnail_paths(file_paths: Vec<String>, width: u32) -> Vec<Option<String>> {
+    file_paths
+        .iter()
+        .map(|path| ready_cover_thumbnail_path(path.clone(), width))
+        .collect()
+}
+
+/// 批量封面就绪状态，能区分「已有封面」「确定没有封面」「还没生成」三态。
+///
+/// 与 [`ready_cover_thumbnail_paths`] 的差别只在返回信息量：
+/// 音频负缓存命中时它明确告诉调用方"这个文件永远不会有封面"，
+/// 调用方据此直接标空、不再入队（避免每个无封面音频反复占用队列名额）。
+///
+/// 返回值与入参一一对应：`CoverReadiness`。
+pub fn cover_readiness_batch(file_paths: Vec<String>, width: u32) -> Vec<CoverReadiness> {
+    file_paths
+        .iter()
+        .map(|path| {
+            let src_path = Path::new(path);
+            if !src_path.is_file() {
+                // 文件不在了：既不是"有封面"也不是"确定没有"，交给失败路径
+                return CoverReadiness::Missing;
+            }
+            let lower = path.to_lowercase();
+            let is_audio = lower.ends_with(".mp3")
+                || lower.ends_with(".flac")
+                || lower.ends_with(".aac")
+                || lower.ends_with(".m4a")
+                || lower.ends_with(".ogg")
+                || lower.ends_with(".opus")
+                || lower.ends_with(".wav")
+                || lower.ends_with(".wma")
+                || lower.ends_with(".ape")
+                || lower.ends_with(".aiff")
+                || lower.ends_with(".alac");
+            if is_audio {
+                if let Ok(meta) = std::fs::metadata(src_path) {
+                    let identity = file_identity(&meta);
+                    if audio_cover_absent_in_memory(path, &identity)
+                        || audio_cover_absent_on_disk(src_path, &identity)
+                    {
+                        // 结论已定：这个文件没有内嵌封面，别再排队了
+                        return CoverReadiness::NoCover;
+                    }
+                }
+            }
+            match adjacent_cache_path(src_path, width) {
+                Some(cache) if is_valid_cache_hit(&cache) => CoverReadiness::Ready {
+                    path: cache.to_string_lossy().into_owned(),
+                },
+                _ => CoverReadiness::Pending,
+            }
+        })
+        .collect()
 }
 
 /// Generate (or retrieve from disk cache) a JPEG thumbnail for `file_path`
@@ -5337,6 +5406,101 @@ mod tests {
         std::fs::write(&txt, b"x").unwrap();
         assert!(ensure_cover_thumbnail(txt.to_string_lossy().into_owned(), 320).is_none());
         assert!(!root.join("sub").exists());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 批量封面就绪判定（cover_readiness_batch）──────────────────────────
+
+    #[test]
+    fn cover_readiness_batch_distinguishes_three_states() {
+        let root = fake_media_root("readiness_batch");
+        std::fs::create_dir_all(&root).unwrap();
+
+        // ① 已就绪：图片 + 预先写好的邻近缓存
+        let ready_src = root.join("ready.bmp");
+        write_test_image(&ready_src);
+        let ready_cache = adjacent_cache_path(&ready_src, 240).unwrap();
+        std::fs::create_dir_all(ready_cache.parent().unwrap()).unwrap();
+        std::fs::write(&ready_cache, b"cached-bytes").unwrap();
+
+        // ② 待生成：图片但还没有缓存
+        let pending_src = root.join("pending.bmp");
+        write_test_image(&pending_src);
+
+        // ③ 确定没有封面：音频 + 负缓存标记命中
+        let noart_src = root.join("noart.mp3");
+        std::fs::write(&noart_src, b"fake-mp3").unwrap();
+        let meta = std::fs::metadata(&noart_src).unwrap();
+        let identity = file_identity(&meta);
+        record_audio_cover_absent(&noart_src.to_string_lossy(), &identity);
+
+        // ④ 文件不存在
+        let missing = root.join("nope.bmp");
+
+        let input: Vec<String> = [
+            &ready_src,
+            &pending_src,
+            &noart_src,
+            &missing,
+        ]
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+        let got = cover_readiness_batch(input, 240);
+
+        assert_eq!(got.len(), 4, "返回必须与入参一一对应");
+        assert!(
+            matches!(&got[0], CoverReadiness::Ready { path } if path == &ready_cache.to_string_lossy()),
+            "缓存命中应报 Ready 并给出缓存路径，实际={:?}",
+            got[0]
+        );
+        assert_eq!(got[1], CoverReadiness::Pending, "无缓存应报 Pending");
+        assert_eq!(
+            got[2],
+            CoverReadiness::NoCover,
+            "音频负缓存命中应报 NoCover（别再排队）"
+        );
+        assert_eq!(got[3], CoverReadiness::Missing, "文件不存在应报 Missing");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cover_readiness_batch_matches_single_path_variant() {
+        // 批量版与逐个版必须同源同判：同样的输入给出同样的"是否就绪"结论，
+        // 否则调用方换用批量接口后会出现「有的封面突然不显示了」。
+        let root = fake_media_root("readiness_parity");
+        std::fs::create_dir_all(&root).unwrap();
+        let ready_src = root.join("a.bmp");
+        write_test_image(&ready_src);
+        let cache = adjacent_cache_path(&ready_src, 200).unwrap();
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        std::fs::write(&cache, b"bytes").unwrap();
+        let pending_src = root.join("b.bmp");
+        write_test_image(&pending_src);
+
+        let input: Vec<String> = [&ready_src, &pending_src]
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+
+        let singly = ready_cover_thumbnail_paths(input.clone(), 200);
+        let tri = cover_readiness_batch(input, 200);
+
+        for (i, single) in singly.iter().enumerate() {
+            let ready_from_tri = matches!(tri[i], CoverReadiness::Ready { .. });
+            assert_eq!(
+                single.is_some(),
+                ready_from_tri,
+                "第 {i} 项：单个版 is_some={} 与批量版 Ready={} 不一致",
+                single.is_some(),
+                ready_from_tri
+            );
+            if let (Some(path), CoverReadiness::Ready { path: tri_path }) = (single, &tri[i]) {
+                assert_eq!(path, tri_path, "第 {i} 项给出的缓存路径必须相同");
+            }
+        }
 
         let _ = std::fs::remove_dir_all(&root);
     }

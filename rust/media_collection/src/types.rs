@@ -140,6 +140,24 @@ pub struct SmartFolder {
     pub target_folder_ids: Vec<String>,
 }
 
+/// 单个文件的封面就绪状态（[cover_readiness_batch] 的返回元素）。
+///
+/// 三态是必要的：调用方要能区分「已有封面（直接显示）」「确定没有封面
+/// （永远拿不到，别再排队）」「还没生成（该排队去做）」。
+/// 只用 Option<String> 会把后两者混在一起，导致无封面的音频每次进页面
+/// 都要重新排队跑一趟 FFI——实测一个 34 个 m4a 的目录要空转几十秒。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CoverReadiness {
+    /// 磁盘已有可用封面，直接用这个路径显示
+    Ready { path: String },
+    /// 结论已定：该文件没有内嵌封面（音频负缓存命中），不必再生成
+    NoCover,
+    /// 还没生成，需要走生成路径
+    Pending,
+    /// 源文件不存在
+    Missing,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
