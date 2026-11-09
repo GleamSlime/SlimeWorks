@@ -16,6 +16,7 @@ import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
+import 'package:slime_works/core/utils/system_proxy.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -215,6 +216,11 @@ class AppUpdateService {
   /// 通过 GitHub REST API 获取最新 Release，组装各平台所需信息。
   Future<AppUpdateInfo?> _fetchLatestRelease() async {
     try {
+      // GitHub 在部分网络环境需走代理：每次检查前自适应探测系统代理
+      // （env 变量 → macOS scutil → Windows 注册表），带 TTL 缓存，
+      // 用户中途开关代理也能在下一次缓存过期后跟上。
+      final proxy = SystemProxy.applyToDio(_dio);
+      _logger.info('[应用更新] 检查更新，代理: ${proxy ?? '直连'}');
       final resp = await _dio.get<dynamic>(
         '$_apiBase/repos/$_repo/releases/latest',
         options: Options(responseType: ResponseType.plain),

@@ -1,0 +1,6 @@
+# 测试配置：live 标签为真实网络冒烟测试（依赖外网/系统代理），
+# 默认全量 flutter test 排除；手动运行：
+#   flutter test test/system_proxy_live_test.dart --tags live --run-skipped
+tags:
+  live:
+    skip: "真实网络冒烟测试，默认跳过；手动运行加 --tags live --run-skipped"

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/core/utils/system_proxy.dart';
 
 /// macOS 全自动更新安装器：下载 DMG → sha256 校验 → 挂载 → 落盘替换 → 自动重启。
 ///
@@ -42,9 +43,13 @@ class MacosUpdateInstaller {
     final target = File('${dir.path}/$fileName');
 
     // 边下边写盘；完成后从盘上流式算 sha256（OS 页缓存命中，不占双份内存）
+    // GitHub Release 资产下载在部分网络环境必须走系统代理，这里自适应探测注入
+    final dio = Dio();
+    final proxy = SystemProxy.applyToDio(dio);
+    logger.info('[macOS安装] 开始下载 DMG，代理: ${proxy ?? '直连'}');
     final sink = target.openWrite();
     try {
-      final resp = await Dio().get<ResponseBody>(
+      final resp = await dio.get<ResponseBody>(
         url,
         options: Options(
           responseType: ResponseType.stream,

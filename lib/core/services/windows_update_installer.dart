@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 
 import '../utils/logger.dart';
+import '../utils/system_proxy.dart';
 
 /// Windows 全自动更新安装器（与 MacosUpdateInstaller 同构，语义对齐）。
 ///
@@ -23,11 +24,18 @@ class WindowsUpdateInstaller {
 
   static const _workDirName = 'SlimeWorksUpdate';
 
-  Dio get _dio => Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(minutes: 30),
-        followRedirects: true,
-      ));
+  Dio get _dio {
+    final dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(minutes: 30),
+      followRedirects: true,
+    ));
+    // GitHub 直链在部分网络环境不可达：自适应探测系统代理
+    // （env 变量 → Windows 注册表 Internet Settings），无代理则直连
+    final proxy = SystemProxy.applyToDio(dio);
+    logger.info('[Windows 更新] 下载客户端就绪，代理: ${proxy ?? '直连'}');
+    return dio;
+  }
 
   /// 更新工作目录（%TEMP%\SlimeWorksUpdate）
   Directory get _workDir {
