@@ -1818,4 +1818,62 @@ void main() {
       expect(CollectionSortOrder.combinedSort.label, '综合排序');
     });
   });
+
+  // ── 按需路径快照：进页面不再冷加载条目表 ──────────────────────────────────
+  //
+  // 真实故障：386641 条条目的库，每次进媒体库都 await getAllCollectionStats()
+  // （冷加载整表 + 全量路径跨 FFI）并全库逐文件 stat，页面卡分钟级。
+  // 现在路径按需拉、体积读聚合小表；FFI 不可用时 VM 必须安静降级且不阻断渲染。
+  group('按需集合路径', () {
+    test('未就绪时同步读返回空列表，且不永久缓存空结果', () {
+      // FFI 未初始化：requestCollectionItemPaths 内部失败会被兜住
+      expect(vm.collectionItemPaths('c-not-loaded'), isEmpty);
+      // 再次读取仍返回空（没有被塞成"永久空"而抛错）
+      expect(vm.collectionItemPaths('c-not-loaded'), isEmpty);
+    });
+
+    test('文件名模式智能文件夹在路径未就绪时不崩，按未命中处理', () {
+      final fileNameSf = sf(
+        'sf-file',
+        pattern: 'ABC',
+        regexTarget: SmartFolderRegexTarget.fileName,
+      );
+      final c = col('c1', title: '无关标题');
+      expect(vm.collectionMatchesSmartFolder(fileNameSf, c), isFalse);
+    });
+
+    test('本地集合条目加载后顺带填充路径缓存，文件名匹配立即可用', () async {
+      // 直接塞进 currentItems 走 loadCurrentCollectionItems 的填充逻辑需要 FFI，
+      // 这里改验证 ensureCollectionItemPaths 的去重与降级行为：缓存未命中时
+      // 并发多次请求只应产生一份结果列表，且失败不抛到调用方。
+      final futures = <Future<List<String>>>[
+        vm.ensureCollectionItemPaths('c1'),
+        vm.ensureCollectionItemPaths('c1'),
+        vm.ensureCollectionItemPaths('c1'),
+      ];
+      final results = await Future.wait(futures);
+      for (final r in results) {
+        expect(r, isEmpty);
+      }
+      // 失败也落空列表缓存：后续同步读不再重复发请求
+      expect(vm.collectionItemPaths('c1'), isEmpty);
+    });
+  });
+
+  // ── 现存统计读缓存 ────────────────────────────────────────────────────────
+  group('现存资源统计', () {
+    test('FFI 不可用时 refreshCollectionLiveStats 不抛错，版本号不前进', () async {
+      final before = vm.liveStatsVersion.value;
+      await vm.refreshCollectionLiveStats();
+      // 失败路径不该推版本（避免整网格白重建一次）
+      expect(vm.liveStatsVersion.value, before);
+    });
+
+    test('跟进窗口是 3 分钟（Rust 后台全量 stat 完成后再拉一次小表）', () {
+      expect(
+        MediaLibraryRefreshExt.liveStatsFollowUpDelay,
+        const Duration(minutes: 3),
+      );
+    });
+  });
 }

@@ -49,6 +49,13 @@ extension MediaLibraryNavigationExt on MediaLibraryViewModel {
         );
         if (!_isCurrentLoad(generation, collectionId)) return;
         currentItems.assignAll(items);
+        // 条目已经拿到手，顺带把路径快照填进按需缓存，免一次额外 FFI
+        if (!collectionId.startsWith('remote-media')) {
+          _collectionItemPaths[collectionId] = items
+              .map((item) => item.filePath)
+              .toList(growable: false);
+          _itemPathsEpoch++;
+        }
         // 预热 item 丢失状态：一次 FFI 批量检查，避免 build 期间每张卡片同步调 FFI 阻塞 UI
         await _prewarmItemLostCache(items);
       }

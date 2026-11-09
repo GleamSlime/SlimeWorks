@@ -246,6 +246,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
+  CachedCollectionStats dco_decode_cached_collection_stats(dynamic raw);
+
+  @protected
   CaptureProxyModule dco_decode_capture_proxy_module(dynamic raw);
 
   @protected
@@ -307,6 +310,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<bool> dco_decode_list_bool(dynamic raw);
+
+  @protected
+  List<CachedCollectionStats> dco_decode_list_cached_collection_stats(
+    dynamic raw,
+  );
 
   @protected
   List<CollectionCount> dco_decode_list_collection_count(dynamic raw);
@@ -750,6 +758,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
+  CachedCollectionStats sse_decode_cached_collection_stats(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   CaptureProxyModule sse_decode_capture_proxy_module(
     SseDeserializer deserializer,
   );
@@ -823,6 +836,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<bool> sse_decode_list_bool(SseDeserializer deserializer);
+
+  @protected
+  List<CachedCollectionStats> sse_decode_list_cached_collection_stats(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<CollectionCount> sse_decode_list_collection_count(
@@ -1369,6 +1387,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
+  void sse_encode_cached_collection_stats(
+    CachedCollectionStats self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_capture_proxy_module(
     CaptureProxyModule self,
     SseSerializer serializer,
@@ -1460,6 +1484,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_bool(List<bool> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_cached_collection_stats(
+    List<CachedCollectionStats> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_collection_count(

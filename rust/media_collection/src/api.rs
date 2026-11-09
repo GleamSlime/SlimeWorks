@@ -2574,6 +2574,10 @@ pub struct CollectionAggregate {
     /// live 值出自哪一次扫描（Unix 秒），None = 从未 stat 过
     #[serde(default)]
     pub live_checked_at: Option<i64>,
+    /// 条目文件路径快照（导入/重扫时落册）。旧聚合行没有该字段，
+    /// 由 `get_all_collection_aggregates` 的补齐逻辑一次性回填。
+    #[serde(default)]
+    pub file_paths: Vec<String>,
 }
 
 impl CollectionAggregate {
@@ -2637,7 +2641,11 @@ fn persist_collection_aggregates(aggregates: &[CollectionAggregate]) -> Result<(
 }
 
 /// 导入/重扫后写记录体积。`live_*` 一并作废：条目集合已经变了，
-/// 旧的 stat 结论不再描述现状，等下一次 `get_all_collection_live_stats` 重新填。
+/// 旧的 stat 结论不再描述现状，等下一次后台重扫重新填。
+/// 文件路径列表在同一趟写入时顺带落册：浏览层的文件名智能文件夹/
+/// 深度搜索/悬停预览需要它，但整库几十万条路径不能每次进页面都
+/// 冷加载条目表现算再跨 FFI 全量传输——路径只在导入/重扫时变化，
+/// 落进聚合行后读路径按需查这张小表即可。
 fn record_collection_size(collection_id: &str, items: &[MediaItem]) -> Result<(), String> {
     let aggregate = CollectionAggregate {
         collection_id: collection_id.to_string(),
@@ -2645,13 +2653,18 @@ fn record_collection_size(collection_id: &str, items: &[MediaItem]) -> Result<()
         live_size: None,
         live_count: None,
         live_checked_at: None,
+        file_paths: items.iter().map(|item| item.file_path.clone()).collect(),
     };
     persist_collection_aggregates(std::slice::from_ref(&aggregate))
 }
 
 /// 读全部集合的聚合值。**旧库升级兼容**：集合表里有、聚合表里没记录的，
-/// 说明这条记录早于本次改造，补算一趟整表并落册 —— 只有真缺时才付这一次
-/// 整表代价，之后无论缓存怎么释放都不会再走条目表。
+/// 补算一趟整表并落册 —— 只有真缺时才付这一次整表代价，之后无论缓存怎么释放
+/// 都不会再走条目表。
+///
+/// 路径快照**不**在这里回填：整库几十万条路径一次性写回是个大 IO，
+/// 而绝大多数会话根本用不到它（只有文件名智能文件夹/深度搜索/悬停预览要）。
+/// 旧行缺路径时由 [get_collection_file_paths] 按集合懒回填。
 pub fn get_all_collection_aggregates() -> Result<Vec<CollectionAggregate>, String> {
     let mut map = load_collection_aggregates();
     let missing: Vec<String> = {
@@ -2705,7 +2718,7 @@ pub fn get_all_collection_aggregates() -> Result<Vec<CollectionAggregate>, Strin
 }
 
 /// 把逐文件 stat 的结论回写聚合表，供读路径直接查表。
-/// 只动 `live_*`，不覆盖 `recorded_size`。
+/// 只动 `live_*`，不覆盖 `recorded_size` 与路径快照。
 ///
 /// 两趟之间做一次比较：库没变时整批一行都不写，免得每次进媒体库都刷一次盘。
 /// 聚合表里还没有这个集合（旧库尚未补算）时不插入半行 —— 那样会把
@@ -2720,6 +2733,7 @@ fn persist_live_stats(stats: &[CollectionLiveStats]) -> Result<(), String> {
         };
         if existing.live_size == Some(stat.live_size)
             && existing.live_count == Some(stat.live_count)
+            && existing.live_checked_at.is_some()
         {
             continue;
         }
@@ -2731,6 +2745,96 @@ fn persist_live_stats(stats: &[CollectionLiveStats]) -> Result<(), String> {
         });
     }
     persist_collection_aggregates(&changed)
+}
+
+/// 全库现存资源重扫的最小间隔：SMB/外置卷上几十万次 stat 是分钟级开销，
+/// 每次进页面都跑一遍毫无必要——磁盘变化由导入/重扫/删除的写入点实时回写，
+/// 这趟全量扫只兜「用户在文件管理器里直接删改」的底。
+static LIVE_STATS_RESCAN_SECS: u64 = 30 * 60;
+
+/// 后台重扫是否在跑（进程内防重入）。
+static LIVE_STATS_RESCAN_RUNNING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// 读缓存版现存统计：只查聚合小表，毫秒级返回；数据太旧时后台补一轮全量 stat。
+///
+/// 这是客户端进媒体库的读路径。旧实现每次都同步跑 `get_all_collection_live_stats`
+/// （冷加载 511MB 条目表 + 38 万次网络卷 stat），页面因此每次打开都卡分钟级。
+/// 返回的行里 `live_size == None` 表示该集合从未 stat 过，调用方退回记录值。
+pub fn get_cached_collection_live_stats() -> Result<Vec<CollectionAggregate>, String> {
+    let aggregates = get_all_collection_aggregates()?;
+    maybe_spawn_live_stats_rescan(&aggregates);
+    Ok(aggregates)
+}
+
+/// 聚合数据超过阈值没刷新时起一个后台线程补全量 stat；已在跑/还新鲜则不动。
+fn maybe_spawn_live_stats_rescan(aggregates: &[CollectionAggregate]) {
+    let now = Utc::now().timestamp();
+    let stale = aggregates.iter().any(|aggregate| {
+        // 没有任何条目记录的空集合不参与判旧
+        aggregate.live_checked_at.map_or(true, |checked| {
+            now.saturating_sub(checked) > LIVE_STATS_RESCAN_SECS as i64
+        })
+    });
+    if !stale {
+        return;
+    }
+    if LIVE_STATS_RESCAN_RUNNING
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        )
+        .is_err()
+    {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("media-live-stats".into())
+        .spawn(|| {
+            let started = std::time::Instant::now();
+            match get_all_collection_live_stats() {
+                Ok(stats) => sw_info!(
+                    "[media_stats] 后台现存资源重扫完成：{} 个集合(+{:.3}s)",
+                    stats.len(),
+                    started.elapsed().as_secs_f64()
+                ),
+                Err(error) => sw_warn!("[media_stats] 后台现存资源重扫失败: {}", error),
+            }
+            LIVE_STATS_RESCAN_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+        });
+    if spawned.is_err() {
+        LIVE_STATS_RESCAN_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// 按需取单个集合的文件路径快照（文件名智能文件夹/深度搜索/悬停预览用）。
+/// 聚合行里没有（旧库未回填）时退回条目表现算，并把快照落册，
+/// 下次直接查表，不再反复冷加载条目表。
+pub fn get_collection_file_paths(collection_id: String) -> Result<Vec<String>, String> {
+    let mut aggregates = load_collection_aggregates();
+    if let Some(aggregate) = aggregates.get(&collection_id) {
+        if !aggregate.file_paths.is_empty() {
+            return Ok(aggregate.file_paths.clone());
+        }
+    }
+    let items = get_media_collection_items(collection_id.clone())?;
+    let paths: Vec<String> = items.iter().map(|item| item.file_path.clone()).collect();
+    if !paths.is_empty() {
+        let mut aggregate = aggregates
+            .remove(&collection_id)
+            .unwrap_or_else(|| CollectionAggregate {
+                collection_id: collection_id.clone(),
+                ..Default::default()
+            });
+        aggregate.recorded_size = items.iter().map(|item| item.file_size).sum();
+        aggregate.file_paths = paths.clone();
+        if let Err(error) = persist_collection_aggregates(std::slice::from_ref(&aggregate)) {
+            sw_warn!("[media_stats] 路径快照回填失败 id={}: {}", collection_id, error);
+        }
+    }
+    Ok(paths)
 }
 
 /// Per-collection stats counting only resources that still exist on disk.
@@ -3122,6 +3226,8 @@ fn refresh_collection_live_stats(collection_id: &str) -> Result<(), String> {
             live_size: Some(live_size),
             live_count: Some(live_count),
             live_checked_at: Some(Utc::now().timestamp()),
+            // 条目刚取过，顺带把路径快照落齐，省一次未来的回填
+            file_paths: items.iter().map(|item| item.file_path.clone()).collect(),
         },
     };
     persist_collection_aggregates(std::slice::from_ref(&aggregate))
@@ -4563,6 +4669,17 @@ mod tests {
         assert_eq!(stored.recorded_size, size_both);
         assert_eq!(stored.live_size, None, "没 stat 过不应有 live 值");
         assert_eq!(stored.display_size(), size_both, "无 stat 结论时退回记录值");
+        assert_eq!(stored.file_paths.len(), 2, "导入时应同步落册路径快照");
+
+        // 按需路径读：缓存释放后也不应触发条目表冷加载
+        release_items_from_memory();
+        let paths = get_collection_file_paths(collection.id.clone()).unwrap();
+        assert_eq!(paths.len(), 2);
+        assert_eq!(
+            LAST_MEDIA_ITEMS_ACCESS_SECS.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "路径快照命中聚合行，不应加载 media_items"
+        );
 
         // 读路径只查表：条目缓存被释放后取聚合，不应再冷加载整张 media_items
         release_items_from_memory();

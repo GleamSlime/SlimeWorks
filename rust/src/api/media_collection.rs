@@ -332,6 +332,41 @@ pub struct CollectionLiveStats {
     pub live_count: u32,
 }
 
+/// 缓存版集合统计行：recorded 为库内记录值，live_* 为最近一次后台 stat 的
+/// 现存结论（None = 从未 stat 过，调用方退回记录值口径）。
+pub struct CachedCollectionStats {
+    pub collection_id: String,
+    pub recorded_size: u64,
+    pub live_size: Option<u64>,
+    pub live_count: Option<u32>,
+}
+
+/// 读缓存版现存统计：只查聚合小表（毫秒级），数据过期时 Rust 侧自动起
+/// 后台线程补全量 stat。客户端进媒体库的读路径，替代每次全量逐文件 stat。
+// 异步：旧库首次补齐可能要冷加载条目表，必须离开 Dart UI 线程
+pub fn get_cached_collection_live_stats() -> anyhow::Result<Vec<CachedCollectionStats>> {
+    media_collection::get_cached_collection_live_stats()
+        .map(|aggregates| {
+            aggregates
+                .into_iter()
+                .map(|a| CachedCollectionStats {
+                    collection_id: a.collection_id,
+                    recorded_size: a.recorded_size,
+                    live_size: a.live_size,
+                    live_count: a.live_count,
+                })
+                .collect()
+        })
+        .map_err(|error| anyhow::anyhow!(error))
+}
+
+/// 按需取单个集合的文件路径快照（文件名智能文件夹/深度搜索/悬停预览用）。
+/// 优先查聚合行；旧库未回填时退回条目表现算并落册。
+// 异步：兜底路径可能冷加载条目表
+pub fn get_collection_file_paths(collection_id: String) -> anyhow::Result<Vec<String>> {
+    media_collection::get_collection_file_paths(collection_id).map_err(|error| anyhow::anyhow!(error))
+}
+
 /// 每个集合「磁盘上仍然存在」的资源体积与条数（失效资源不计）。
 // 异步：全库逐文件 stat，必须离开 Dart UI 线程
 pub fn get_all_collection_live_stats() -> anyhow::Result<Vec<CollectionLiveStats>> {

@@ -280,8 +280,19 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// collectionId → 该集合内所有 MediaItem.fileSize 的总和（懒计算）。
   final _collectionSizes = <String, BigInt>{};
 
-  /// collectionId → 该集合内所有媒体文件路径列表（供智能文件夹文件名匹配使用，懒加载）。
+  /// collectionId → 该集合内所有媒体文件路径列表（按需加载，见
+  /// [ensureCollectionItemPaths]）。导入/重扫时 Rust 侧已把快照落进聚合行，
+  /// 这里只是本页实例内的读缓存。
   final _collectionItemPaths = <String, List<String>>{};
+
+  /// 正在异步拉取路径的集合（同一集合的并发请求合并成一个）。
+  final _localItemPathsLoading = <String, Future<List<String>>>{};
+
+  /// Rust 后台全量 stat 完成后的跟进拉取（见 refreshCollectionLiveStats）。
+  Timer? _liveStatsFollowUpTimer;
+
+  /// 跟进拉取已执行轮次（每次 loadCollections 重置）。
+  int _liveStatsFollowUpRounds = 0;
 
   /// collectionId → 该集合「磁盘上仍然存在」的体积与条数。
   /// 库里记录的 fileSize 不会因外部删文件而变小，父级文件夹要如实汇总现存体积
@@ -690,6 +701,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     _searchDebounceTimer = null;
     _searchNotifyTimer?.cancel();
     _searchNotifyTimer = null;
+    _liveStatsFollowUpTimer?.cancel();
+    _liveStatsFollowUpTimer = null;
     super.onClose();
   }
 

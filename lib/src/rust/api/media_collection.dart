@@ -172,6 +172,18 @@ Future<List<CollectionStats>> getAllCollectionStats() =>
 Future<List<bool>> checkPathsExist({required List<String> paths}) =>
     RustLib.instance.api.crateApiMediaCollectionCheckPathsExist(paths: paths);
 
+/// 读缓存版现存统计：只查聚合小表（毫秒级），数据过期时 Rust 侧自动起
+/// 后台线程补全量 stat。客户端进媒体库的读路径，替代每次全量逐文件 stat。
+Future<List<CachedCollectionStats>> getCachedCollectionLiveStats() =>
+    RustLib.instance.api.crateApiMediaCollectionGetCachedCollectionLiveStats();
+
+/// 按需取单个集合的文件路径快照（文件名智能文件夹/深度搜索/悬停预览用）。
+/// 优先查聚合行；旧库未回填时退回条目表现算并落册。
+Future<List<String>> getCollectionFilePaths({required String collectionId}) =>
+    RustLib.instance.api.crateApiMediaCollectionGetCollectionFilePaths(
+      collectionId: collectionId,
+    );
+
 /// 每个集合「磁盘上仍然存在」的资源体积与条数（失效资源不计）。
 Future<List<CollectionLiveStats>> getAllCollectionLiveStats() =>
     RustLib.instance.api.crateApiMediaCollectionGetAllCollectionLiveStats();
@@ -306,6 +318,39 @@ Future<Float64List> ensureVideoWaveform({
   filePath: filePath,
   bins: bins,
 );
+
+/// 缓存版集合统计行：recorded 为库内记录值，live_* 为最近一次后台 stat 的
+/// 现存结论（None = 从未 stat 过，调用方退回记录值口径）。
+class CachedCollectionStats {
+  final String collectionId;
+  final BigInt recordedSize;
+  final BigInt? liveSize;
+  final int? liveCount;
+
+  const CachedCollectionStats({
+    required this.collectionId,
+    required this.recordedSize,
+    this.liveSize,
+    this.liveCount,
+  });
+
+  @override
+  int get hashCode =>
+      collectionId.hashCode ^
+      recordedSize.hashCode ^
+      liveSize.hashCode ^
+      liveCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CachedCollectionStats &&
+          runtimeType == other.runtimeType &&
+          collectionId == other.collectionId &&
+          recordedSize == other.recordedSize &&
+          liveSize == other.liveSize &&
+          liveCount == other.liveCount;
+}
 
 /// FFI version of [media_collection::CollectionCount].
 class CollectionCount {

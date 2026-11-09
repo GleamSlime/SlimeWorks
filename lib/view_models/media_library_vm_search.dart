@@ -208,9 +208,13 @@ extension MediaLibrarySearchExt on MediaLibraryViewModel {
                       .toLowerCase()
                       .contains(query));
         } else {
-          itemHit = _getCollectionItemPaths(
-            c.id,
-          ).any((p) =>
+          // 路径未就绪时后台补拉，本轮按未命中处理（到货后 _itemPathsEpoch++
+          // 会让深度搜索整体重算一次）
+          final cachedPaths = _getCollectionItemPaths(c.id);
+          if (cachedPaths.isEmpty && c.itemCount > BigInt.zero) {
+            requestCollectionItemPaths(c.id);
+          }
+          itemHit = cachedPaths.any((p) =>
               MediaLibraryViewModel._pathBasename(p)
                   .toLowerCase()
                   .contains(query));

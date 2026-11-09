@@ -623,9 +623,16 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
     final cached = _hoverSourcesCache[collection.id];
     if (cached != null) return cached;
     try {
-      // 从预热缓存读取文件路径，避免 build 期间同步 FFI 调用阻塞 UI
+      // 从按需缓存读取文件路径，避免 build 期间同步 FFI 调用阻塞 UI
       final paths = _getCollectionItemPaths(collection.id);
-      if (paths.isEmpty) return _hoverSourcesCache[collection.id] = const [];
+      if (paths.isEmpty) {
+        // 路径还没到：后台补拉，结果到达时 _invalidateVisible 会让卡片重算。
+        // 注意**不**缓存空结果——缓存了就再也不会重新计算悬停源。
+        if (collection.itemCount > BigInt.zero) {
+          requestCollectionItemPaths(collection.id);
+        }
+        return const [];
+      }
       final n = paths.length;
       final count = n.clamp(1, MediaLibraryViewModel._kHoverScrubFrames);
       final result = <String?>[];

@@ -19,17 +19,21 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       final sf = getSmartFolder(smartFolderId);
       if (sf == null) return;
       containerName = sf.name;
-      toTransfer = mergedCollections
-          .where((c) {
-            if (!sf.matchesCollection(c)) return false;
-            if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
-              final paths = _getCollectionItemPaths(c.id);
-              return sf.matchesFileNames(paths);
-            }
-            return true;
-          })
-          .where((c) => !isRemoteCollection(c.id))
-          .toList();
+      // 文件名模式的智能文件夹要逐集合读路径：这里在选中阶段就 await 补齐，
+      // 不像卡片 build 那样只能后台排队（用户明确点了「转移」，等一会儿是预期的）。
+      final candidates = mergedCollections
+          .where((c) => sf.matchesCollection(c) && !isRemoteCollection(c.id))
+          .toList(growable: false);
+      if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
+        await Future.wait(
+          candidates.map((c) => ensureCollectionItemPaths(c.id)),
+        );
+        toTransfer = candidates
+            .where((c) => sf.matchesFileNames(_getCollectionItemPaths(c.id)))
+            .toList();
+      } else {
+        toTransfer = candidates;
+      }
     } else if (folderId != null) {
       final folder = mergedFolders.firstWhereOrNull((f) => f.id == folderId);
       if (folder == null) return;

@@ -304,6 +304,12 @@ extension MediaLibraryBrowseExt on MediaLibraryViewModel {
     if (!matchResult) return false;
     if (sf.regexTarget == SmartFolderRegexTarget.fileName) {
       final paths = _getCollectionItemPaths(c.id);
+      // 路径尚未就绪：按「不命中」出图并后台补拉，到货后 _itemPathsEpoch++
+      // 触发浏览层重算（否则首屏会漏掉全部文件名命中的集合）。
+      if (paths.isEmpty && c.itemCount > BigInt.zero) {
+        requestCollectionItemPaths(c.id);
+        return false;
+      }
       final fileMatch = sf.matchesFileNames(paths);
       if (!fileMatch) {
         _logger.info(

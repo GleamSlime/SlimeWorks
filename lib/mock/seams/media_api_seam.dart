@@ -3,6 +3,7 @@ import 'package:slime_works/mock/mock_assets.dart';
 import 'package:slime_works/mock/mock_mode.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart'
     show
+        CachedCollectionStats,
         CollectionCount,
         CollectionLiveStats,
         CollectionStats,
@@ -15,6 +16,7 @@ import 'package:slime_works/src/rust/api/media_collection.dart' as rust;
 
 export 'package:slime_works/src/rust/api/media_collection.dart'
     show
+        CachedCollectionStats,
         CollectionCount,
         CollectionLiveStats,
         CollectionStats,
@@ -230,6 +232,31 @@ Future<List<CollectionLiveStats>> getAllCollectionLiveStats() async {
     }).toList();
   }
   return rust.getAllCollectionLiveStats();
+}
+
+/// 读缓存版现存统计：只查聚合小表，过期时 Rust 侧后台补扫。
+Future<List<CachedCollectionStats>> getCachedCollectionLiveStats() async {
+  if (MockMode.enabled) {
+    return _m.collections.map((c) {
+      final list = _m.itemsOf(c.id);
+      final size = list.fold(BigInt.zero, (sum, e) => sum + e.fileSize);
+      return CachedCollectionStats(
+        collectionId: c.id,
+        recordedSize: size,
+        liveSize: size,
+        liveCount: list.length,
+      );
+    }).toList();
+  }
+  return rust.getCachedCollectionLiveStats();
+}
+
+/// 按需取单个集合的文件路径快照。
+Future<List<String>> getCollectionFilePaths({required String collectionId}) async {
+  if (MockMode.enabled) {
+    return _m.itemsOf(collectionId).map((e) => e.filePath).toList();
+  }
+  return rust.getCollectionFilePaths(collectionId: collectionId);
 }
 
 Future<List<CollectionCount>> getAllCollectionCounts() async {
