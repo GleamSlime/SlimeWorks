@@ -65,6 +65,32 @@ class _StubNodeSettingsService extends NodeSettingsService {
   final List<String> deletedCollectionRawIds = <String>[];
   final List<String> deletedFolderRawIds = <String>[];
 
+  // ── 缩略图进度轮询的桩数据 ────────────────────────────────────────────────
+
+  /// callNodeAction 的调用轨迹（nodeId:action），断言死节点不被打接口。
+  final List<String> nodeActionCalls = <String>[];
+
+  /// nodeId → get_thumb_progress 返回的 data；不在表里的节点返回空 data。
+  final Map<String, Map<String, dynamic>> thumbProgressByNode = {};
+
+  /// 让这些节点的 callNodeAction 抛错（模拟挂起/不可达）。
+  final Set<String> nodeActionFailingIds = <String>{};
+
+  @override
+  Future<Map<String, dynamic>> callNodeAction({
+    required String nodeId,
+    required String action,
+    Map<String, dynamic> params = const {},
+  }) async {
+    nodeActionCalls.add('$nodeId:$action');
+    if (nodeActionFailingIds.contains(nodeId)) {
+      throw StateError('节点不可达: $nodeId');
+    }
+    return <String, dynamic>{
+      'data': thumbProgressByNode[nodeId] ?? <String, dynamic>{},
+    };
+  }
+
   @override
   Future<int> deleteNodeCollectionLocalFiles({
     required String nodeId,
@@ -1874,6 +1900,64 @@ void main() {
         MediaLibraryRefreshExt.liveStatsFollowUpDelay,
         const Duration(minutes: 3),
       );
+    });
+  });
+
+  // ── 远程缩略图进度轮询（审计 H1：不打通死节点）────────────────────────────
+  group('远程缩略图进度轮询', () {
+    /// 挂两个节点并把连通状态写成指定值。
+    void mountNodes({required Map<String, bool> connectivity}) {
+      nodeService.remoteNodes.addAll(
+        connectivity.keys.map(
+          (id) => NodeEndpoint(
+            id: id,
+            name: id,
+            apiBaseUrl: 'http://127.0.0.1:17888',
+          ),
+        ),
+      );
+      connectivity.forEach((id, online) {
+        nodeService.nodeConnectivity[id] = online;
+      });
+    }
+
+    test('离线/未确认连通的节点不被打接口，只汇总在线节点进度', () async {
+      mountNodes(connectivity: {'alive': true, 'dead': false, 'unknown': true});
+      // unknown 再改成未确认（map 里没有值）
+      nodeService.nodeConnectivity.remove('unknown');
+      nodeService.thumbProgressByNode['alive'] = {'total': '10', 'completed': '4'};
+      nodeService.thumbProgressByNode['dead'] = {'total': '99', 'completed': '0'};
+
+      await vm.pollRemoteThumbProgress();
+
+      // 只有在线节点被请求；死节点的 99 不进分母
+      expect(nodeService.nodeActionCalls, ['alive:get_thumb_progress']);
+      expect(vm.remoteThumbProgress.value, (4, 10));
+      vm.onClose();
+    });
+
+    test('单节点失败不拖垮汇总，其余节点进度照常', () async {
+      mountNodes(connectivity: {'ok': true, 'hang': true});
+      nodeService.thumbProgressByNode['ok'] = {'total': '5', 'completed': '5'};
+      nodeService.nodeActionFailingIds.add('hang');
+
+      await vm.pollRemoteThumbProgress();
+
+      expect(nodeService.nodeActionCalls.toSet(),
+          {'ok:get_thumb_progress', 'hang:get_thumb_progress'});
+      expect(vm.remoteThumbProgress.value, (5, 5));
+      vm.onClose();
+    });
+
+    test('全部节点离线时不发任何请求且清空进度', () async {
+      mountNodes(connectivity: {'dead-1': false, 'dead-2': false});
+      vm.remoteThumbProgress.value = (1, 2);
+
+      await vm.pollRemoteThumbProgress();
+
+      expect(nodeService.nodeActionCalls, isEmpty);
+      expect(vm.remoteThumbProgress.value, isNull);
+      vm.onClose();
     });
   });
 }

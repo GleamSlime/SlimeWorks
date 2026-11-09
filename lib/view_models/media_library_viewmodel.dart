@@ -457,7 +457,7 @@ class MediaLibraryViewModel extends BaseViewModel {
 
   void _scheduleRemoteThumbPoll([Duration delay = const Duration(seconds: 2)]) {
     _remoteThumbPollTimer?.cancel();
-    _remoteThumbPollTimer = Timer(delay, () => _pollRemoteThumbProgress());
+    _remoteThumbPollTimer = Timer(delay, () => pollRemoteThumbProgress());
   }
 
   /// 上一轮远程缩略图进度轮询是否仍在执行（防重叠）。

@@ -5,12 +5,29 @@ part of 'media_library_viewmodel.dart';
 extension RemoteNodeOperationsExt on MediaLibraryViewModel {
   /// 轮询所有已启用远程节点的缩略图生成进度，合计后写入 [remoteThumbProgress]。
   /// 节点不可达时忽略本轮结果，避免误清正在显示的进度。
-  Future<void> _pollRemoteThumbProgress() async {
+  ///
+  /// 只轮询「当前在线且未熔断」的节点：死节点的复活探测交给进页面/手动刷新时的
+  /// recheckOfflineNodes，轮询这条常驻链路不再每 15s（忙时 2s）对每个死节点付
+  /// 一整轮确认档复探（审计 H1：K 个死节点每轮 K×3s 常驻探测流量）。
+  /// 节点恢复时 libraryMutationTick 触发全量刷新，自然重新纳入轮询。
+  /// 公开供定时器与单测直接驱动（无其它生产调用方）。
+  Future<void> pollRemoteThumbProgress() async {
     if (_remoteThumbPolling) return;
-    final nodes = nodeSettingsService.enabledRemoteNodes;
+    final nodes = nodeSettingsService.enabledRemoteNodes
+        .where((n) =>
+            !nodeSettingsService.isNodeCircuitBreaked(n.id) &&
+            nodeSettingsService.nodeConnectivity[n.id] == true)
+        .toList(growable: false);
     if (nodes.isEmpty) {
       if (remoteThumbProgress.value != null) {
         remoteThumbProgress.value = null;
+      }
+      // 一个启用节点都没有：停表（与旧行为一致，启用节点由 UI 操作触发
+      // refreshAll 重新拉起）。有启用节点但全离线：维持 15s 心跳，
+      // 节点恢复连接后（checkNodeConnectivity 只写 nodeConnectivity）
+      // 下一轮能自动纳入，不必等用户再进一次页面
+      if (nodeSettingsService.enabledRemoteNodes.isNotEmpty) {
+        _scheduleRemoteThumbPoll(const Duration(seconds: 15));
       }
       return;
     }
@@ -18,9 +35,9 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
     // 每 2s 一轮，只在明显变慢时留痕（这条链一慢就会连带拖住首屏取数）
     final trace = TimingTrace('轮询远程缩略图进度', scope: '${nodes.length}个节点');
     try {
-      var total = 0;
-      var completed = 0;
-      for (final node in nodes) {
+      // 节点间并发：旧串行 for 里一个挂起节点会吞掉整轮 54s+（审计 H2 的
+      // 轮询侧），并发后本轮墙钟 = 最慢单节点，快节点的进度不被扣住
+      final results = await Future.wait(nodes.map((node) async {
         try {
           final response = await nodeSettingsService.callNodeAction(
             nodeId: node.id,
@@ -28,12 +45,21 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
           );
           final data = response['data'];
           if (data is Map) {
-            total += int.tryParse('${data['total']}') ?? 0;
-            completed += int.tryParse('${data['completed']}') ?? 0;
+            return (
+              total: int.tryParse('${data['total']}') ?? 0,
+              completed: int.tryParse('${data['completed']}') ?? 0,
+            );
           }
         } catch (_) {
           // 单个节点失败不影响其余节点进度汇总
         }
+        return (total: 0, completed: 0);
+      }));
+      var total = 0;
+      var completed = 0;
+      for (final r in results) {
+        total += r.total;
+        completed += r.completed;
       }
       if (total > 0 && completed < total) {
         remoteThumbProgress.value = (completed, total);
