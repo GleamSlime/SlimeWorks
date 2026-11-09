@@ -464,9 +464,19 @@ jobs:
           fi
           STAGE="$RUNNER_TEMP/stage"
           mkdir -p "$STAGE"
-          ditto "$APP_DIR" "$STAGE/"
-          hdiutil detach "$MOUNT" -quiet
           APP_NAME=$(basename "$APP_DIR")
+          # ⚠️ ditto 的目标必须带上 .app 名字：`ditto "$APP_DIR" "$STAGE/"` 不会在
+          # stage 下建出 app 包，而是把 .app 的**内容**（Contents/…）平铺进去，
+          # 于是后面 codesign "$STAGE/$APP_NAME" 报 "No such file or directory"。
+          # 这个步骤此前从没跑到过（一直卡在更早的 libmpv/证书），所以一直没暴露。
+          ditto "$APP_DIR" "$STAGE/$APP_NAME"
+          hdiutil detach "$MOUNT" -quiet
+          # 二次确认：真有这个 app 包再签，避免又走成"到签名才发现路径不对"
+          if [ ! -d "$STAGE/$APP_NAME" ]; then
+            echo "::error::暂存目录里没有 $APP_NAME（ditto 未能建出 app 包）"
+            ls -la "$STAGE" || true
+            exit 1
+          fi
           codesign --force --deep --sign "$MAC_SIGN_IDENTITY_NAME" \
             --entitlements macos/Runner/Release.entitlements \
             --timestamp=none "$STAGE/$APP_NAME"
