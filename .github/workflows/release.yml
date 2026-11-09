@@ -348,9 +348,26 @@ jobs:
         run: |
           pod install --repo-update
           # libmpv 没下来时 pod install 照样"成功"，报错要等链接期才出现。当场查一次。
-          MPV_FW=$(ls -d ../.symlinks/plugins/media_kit_libs_macos_video/macos/Frameworks/Mpv.xcframework 2>/dev/null || true)
+          # 路径按候选列表逐个找：不同 Flutter 版本/工程形态下 symlink 位置不完全一样
+          # （ios/.symlinks 或 macos/.symlinks，插件目录大小写也有差异），
+          # 写死单一路径会把「已经就绪」误判成「不存在」。
+          MPV_FW=""
+          for cand in \
+            ".symlinks/plugins/media_kit_libs_macos_video/macos/Frameworks/Mpv.xcframework" \
+            "../.symlinks/plugins/media_kit_libs_macos_video/macos/Frameworks/Mpv.xcframework" \
+            "Pods/Mpv.xcframework"; do
+            if [ -d "$cand" ]; then MPV_FW="$cand"; break; fi
+          done
+          # 兜底：实在找不到就按包缓存里的产物判断（上一阶段已校验过它）
+          if [ -z "$MPV_FW" ]; then
+            PKG_DIR=$(ls -d "$HOME"/.pub-cache/hosted/pub.dev/media_kit_libs_macos_video-*/macos | tail -1)
+            if [ -n "$PKG_DIR" ] && [ -d "$PKG_DIR/Frameworks/Mpv.xcframework" ]; then
+              MPV_FW="$PKG_DIR/Frameworks/Mpv.xcframework（pub-cache）"
+            fi
+          fi
           if [ -z "$MPV_FW" ]; then
             echo "❌ Mpv.xcframework 不存在：libmpv 下载/校验失败（见上一步 make 输出）"
+            ls -la .symlinks/plugins/media_kit_libs_macos_video/macos/Frameworks 2>/dev/null || true
             ls -la ../.symlinks/plugins/media_kit_libs_macos_video/macos/Frameworks 2>/dev/null || true
             exit 1
           fi
@@ -946,9 +963,25 @@ jobs:
           fi
           # ③ libmpv 没下来时 pod install 照样"成功"，报错要等 archive 链接期才出现
           #    （ld: framework 'Mpv' not found）。这里当场查一次，省掉那 40 分钟。
-          MPV_FW=$(ls -d ../.symlinks/plugins/media_kit_libs_ios_video/ios/Frameworks/Mpv.xcframework 2>/dev/null || true)
+          # 路径按候选列表逐个找：不同 Flutter 版本/工程形态下 symlink 位置不完全一样
+          # （ios/.symlinks 或 ios/../.symlinks），写死单一路径会把「已经就绪」误判成「不存在」。
+          MPV_FW=""
+          for cand in \
+            ".symlinks/plugins/media_kit_libs_ios_video/ios/Frameworks/Mpv.xcframework" \
+            "../.symlinks/plugins/media_kit_libs_ios_video/ios/Frameworks/Mpv.xcframework" \
+            "Pods/Mpv.xcframework"; do
+            if [ -d "$cand" ]; then MPV_FW="$cand"; break; fi
+          done
+          # 兜底：按 pub-cache 里的产物判断（上一阶段已校验并解包过它）
+          if [ -z "$MPV_FW" ]; then
+            PKG_DIR=$(ls -d "$HOME"/.pub-cache/hosted/pub.dev/media_kit_libs_ios_video-*/ios | tail -1)
+            if [ -n "$PKG_DIR" ] && [ -d "$PKG_DIR/Frameworks/Mpv.xcframework" ]; then
+              MPV_FW="$PKG_DIR/Frameworks/Mpv.xcframework（pub-cache）"
+            fi
+          fi
           if [ -z "$MPV_FW" ]; then
             echo "❌ Mpv.xcframework 不存在：libmpv 下载/校验失败（见上一步 make 输出）"
+            ls -la .symlinks/plugins/media_kit_libs_ios_video/ios/Frameworks 2>/dev/null || true
             ls -la ../.symlinks/plugins/media_kit_libs_ios_video/ios/Frameworks 2>/dev/null || true
             exit 1
           fi
