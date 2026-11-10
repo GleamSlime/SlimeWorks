@@ -480,6 +480,9 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 进度通知节流窗口（250ms 合并一次 Rx 写入，见 onInitAsync 内注释）。
   Timer? _thumbProgressNotifyTimer;
 
+  /// 浏览层切换后的封面补预热去抖（200ms，见 _scheduleVisiblePrewarm）。
+  Timer? _visiblePrewarmTimer;
+
   /// 远程节点进度「100% 完成」短暂显示的独立定时器。
   /// 与本地进度分开：共用同一个定时器会让两边的完成态互相清掉。
   Timer? _remoteThumbCompleteTimer;
@@ -492,7 +495,12 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 才注册，未经该生命周期的实例（如单测直接 new）会永远读到失效前的陈旧缓存。
   void _bindVisibleInvalidation() {
     _visibleInvalidationWorkers ??= [
-      ever<String?>(currentFolderId, (_) => _invalidateVisible()),
+      ever<String?>(currentFolderId, (_) {
+        _invalidateVisible();
+        // 换层就补预热该层可见集合的封面（去抖后只预热最后一层）。
+        // 全库预热不再开机做——见 prewarmLocalCollectionCovers 注释。
+        _scheduleVisiblePrewarm();
+      }),
       ever<String>(searchQuery, (value) => _scheduleSearchApply(value)),
       ever<String>(appliedSearchQuery, (_) {
         // 换了查询词就重开一轮预热：上一轮失败的集合值得再试（503 多是瞬时过载）
@@ -701,12 +709,12 @@ class MediaLibraryViewModel extends BaseViewModel {
     _logger.info(
       '[媒体库] onInitAsync: refreshAll 完成，collections=${collections.length}，folders=${folders.length}',
     );
-    // 应用启动时恢复未完成的缩略图任务（pending/running/failed 全部重新入队）
+    // 应用启动时恢复未完成的缩略图任务（只恢复当前层可见的，见函数注释）
     // 延后到首屏渲染后执行，避免大量任务入队阻塞首帧绘制
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _restorePendingThumbnailTasks();
-      // 本地集合封面没有持久化任务表：按当前集合列表主动预热，
-      // 否则要等用户点进文件夹、卡片 build 时才惰性生成。
+      // 只预热当前浏览层的集合封面：全库预热会让「只看到三个文件夹」的根目录
+      // 给整个库排上万条 SMB 任务（实测卡死转圈的元凶之一）。
       prewarmLocalCollectionCovers();
     });
     // 启动远程节点缩略图进度自适应轮询
@@ -734,6 +742,8 @@ class MediaLibraryViewModel extends BaseViewModel {
     _thumbCompleteTimer = null;
     _thumbProgressNotifyTimer?.cancel();
     _thumbProgressNotifyTimer = null;
+    _visiblePrewarmTimer?.cancel();
+    _visiblePrewarmTimer = null;
     _remoteThumbCompleteTimer?.cancel();
     _remoteThumbCompleteTimer = null;
     _coverNotifyTimer?.cancel();

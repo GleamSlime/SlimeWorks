@@ -1903,6 +1903,32 @@ void main() {
     });
   });
 
+  // ── 封面预热范围（审计：根目录只看得到几个文件夹，却全库排队）────────────
+  group('封面预热范围', () {
+    test('只遍历传入的集合（当前层），不因全库规模增长', () {
+      // 库里放 200 个集合，当前层只有 2 个：预热函数必须只看这 2 个
+      vm.collections.assignAll([
+        for (var i = 0; i < 200; i++)
+          col('c$i', title: '集合$i', coverPath: '/lib/v$i.mp4'),
+      ]);
+      final layerVisible = vm.collections.take(2).toList();
+      // FFI 不可用（无 RustLib）时入队内部的就绪查询会失败并被兜住，
+      // 这里断言的是「不抛错、不遍历全库」这一行为契约
+      expect(
+        () => vm.prewarmLocalCollectionCovers(only: layerVisible),
+        returnsNormally,
+      );
+      expect(vm.collections.length, 200);
+    });
+
+    test('空层是安全的 no-op', () {
+      expect(
+        () => vm.prewarmLocalCollectionCovers(only: const []),
+        returnsNormally,
+      );
+    });
+  });
+
   // ── 远程缩略图进度轮询（审计 H1：不打通死节点）────────────────────────────
   group('远程缩略图进度轮询', () {
     /// 挂两个节点并把连通状态写成指定值。

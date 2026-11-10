@@ -260,11 +260,21 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
     }
   }
 
-  /// 应用启动后预热本地集合封面：不再等用户点进文件夹才由卡片惰性触发。
-  void prewarmLocalCollectionCovers() {
+  /// 预热**当前浏览层级可见的**本地集合封面。
+  ///
+  /// ★ 只预热当前层：旧实现遍历全库 `collections`（实测 4496 个集合 / 上万条
+  /// SMB ffmpeg 任务），而用户打开根目录只看得到三个文件夹——界面画 3 张卡，
+  /// 后台给整个库排队，卡顿与"鼠标转圈"都源于此（Dart 日志实测 9418 次
+  /// [Queue] enqueue）。进下层文件夹时由 [_prewarmVisibleCovers] 再补预热该层。
+  ///
+  /// [only] 不传则取当前层 [currentCollections]；单测/导入流程可显式指定。
+  void prewarmLocalCollectionCovers({
+    Iterable<media_api.MediaCollection>? only,
+  }) {
     if (thumbGenerationPaused.value) return;
+    final source = only ?? currentCollections;
     int count = 0;
-    for (final collection in collections) {
+    for (final collection in source) {
       if (isRemoteCollection(collection.id)) continue;
       final coverPath = collection.coverPath;
       if (coverPath == null || coverPath.isEmpty) continue;
@@ -281,8 +291,18 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
       count++;
     }
     if (count > 0) {
-      _logger.info('[CoverPrewarm] 启动预热 $count 个本地集合封面');
+      _logger.info('[CoverPrewarm] 预热当前层 $count 个本地集合封面');
     }
+  }
+
+  /// 浏览层切换后的补预热（去抖 200ms）：快速连点上下层时只预热最后一层。
+  void _scheduleVisiblePrewarm() {
+    _visiblePrewarmTimer?.cancel();
+    _visiblePrewarmTimer = Timer(const Duration(milliseconds: 200), () {
+      _visiblePrewarmTimer = null;
+      if (isClosed || isInDetail) return;
+      prewarmLocalCollectionCovers();
+    });
   }
 
   /// 从帧列表中挑选封面帧：优先选第一个文件体积大于 1KB 的帧，
@@ -560,15 +580,34 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
   }
 
   /// 应用启动时从持久化任务表恢复未完成的缩略图任务。
-  /// 包括 pending/running/failed 状态，全部重新入队到 VideoThumbQueue。
-  /// failed 任务从 _itemThumbFailed 移除以允许重试。
+  ///
+  /// ★ 只恢复**当前浏览层级可见条目**的任务：旧实现把持久化表里的全部任务
+  /// （实测上万条 SMB 抽帧）一次性重新入队，开机即打满队列。
+  /// 任务表的价值是"不丢任务"，不是"开机全排"——用户翻到哪就恢复哪一片，
+  /// 其余任务留在表里等下次进入对应集合时按需恢复。
+  /// 失败任务从 _itemThumbFailed 移除以允许重试。
   Future<void> _restorePendingThumbnailTasks() async {
     try {
       final tasks = await media_api.getAllPendingThumbnailTasks();
       if (tasks.isEmpty) return;
-      _logger.info('[ThumbRestore] 发现 ${tasks.length} 个未完成缩略图任务，开始重新入队');
+      // 当前层可见条目的路径集合：只有这些才值得开机恢复
+      final visiblePaths = <String>{
+        for (final item in sortedCurrentItems) item.filePath,
+      };
+      final wanted = visiblePaths.isEmpty
+          ? tasks
+          : tasks.where((t) => visiblePaths.contains(t.filePath)).toList();
+      if (wanted.isEmpty) {
+        _logger.info(
+          '[ThumbRestore] 待恢复 ${tasks.length} 个任务均不在当前层，留给按需恢复',
+        );
+        return;
+      }
+      _logger.info(
+        '[ThumbRestore] 待恢复 ${tasks.length} 个任务，当前层命中 ${wanted.length} 个',
+      );
       int restored = 0;
-      for (final task in tasks) {
+      for (final task in wanted) {
         if (task.filePath.isEmpty) continue;
         // 失败任务重新尝试：从失败集合中移除以便重新入队
         _itemThumbFailed.remove(task.filePath);
