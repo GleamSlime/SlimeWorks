@@ -690,6 +690,30 @@ fn has_audio_stream(file_path: &str) -> bool {
     }
 }
 
+/// 波形 dB 动态范围的**上限**（dB）。
+///
+/// 实际使用的跨度由本片自身的 min/max 量出来（见 normalize_waveform），
+/// 这个常量只在两种情况下兜底：
+/// - 素材几乎全平（跨度 <1dB）时避免把噪声放大成一片花纹；
+/// - 素材含完全静音（min≈0，算不出跨度）时退化成固定范围。
+///
+/// 取 20 而不是常见的 45~60：输入是**每段的 RMS 能量**不是采样瞬时峰值，
+/// RMS 已被平均过，同一部片内通常只跨 10~20 dB；用 45 dB 去铺会把安静段
+/// 推到 0.6 以上，看上去还是一排差不多高的柱子。
+const DB_RANGE: f64 = 20.0;
+
+/// 波形柱的最低显示高度（占满格的比例）：极静处仍保留一条可见的细线。
+const MIN_BAR: f64 = 0.02;
+
+/// 波形算法版本。改动归一化/映射算法时递增，旧缓存会自动失效重算。
+///
+/// 缓存里带这个字段。历史上踩过两次：
+/// - v1「峰值拉满 + gamma 0.85」：响段一排齐平顶到天花板；
+/// - v2 只换 dB 轴但聚合仍取 max：一个 bin 覆盖几秒音频时 100% 的柱子被
+///   单个瞬态顶满，依旧是平的。
+/// 不失效的话用户升级后看到的还是旧图，会以为没修好，故每次改算法都 +1。
+const WAVEFORM_ALGO_VERSION: u32 = 3;
+
 /// 资源旁的波形缓存文件路径：`<父目录>/.SlimeWorks/waveform/<文件名>.w<bins>.json`。
 fn waveform_cache_path(file_path: &str, bins: u32) -> Option<std::path::PathBuf> {
     let src = std::path::Path::new(file_path);
@@ -717,13 +741,18 @@ fn waveform_identity(meta: &std::fs::Metadata) -> String {
     format!("{}|{}", meta.len(), mtime)
 }
 
-/// 只查不生成：读取已缓存的波形。没有缓存 / 源文件已变 / bins 不符 → 返回 None。
+/// 只查不生成：读取已缓存的波形。没有缓存 / 源文件已变 / bins 不符 /
+/// 算法版本过期 → 返回 None。
 ///
 /// 纯读盘，不解码、不起子进程，可安全高频调用（预览打开时先走这条）。
 pub fn read_video_waveform(file_path: String, bins: u32) -> Option<Vec<f64>> {
     let cache = waveform_cache_path(&file_path, bins)?;
     let raw = std::fs::read_to_string(&cache).ok()?;
     let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    // 算法版本校验：旧算法算出来的图看着"都差不多高"，必须重算
+    if value.get("algo").and_then(|v| v.as_u64()) != Some(WAVEFORM_ALGO_VERSION as u64) {
+        return None;
+    }
     // 身份校验：文件换了就不能用旧波形
     let meta = std::fs::metadata(&file_path).ok()?;
     if value.get("identity").and_then(|v| v.as_str()) != Some(waveform_identity(&meta).as_str()) {
@@ -935,6 +964,7 @@ pub fn ensure_video_waveform(file_path: String, bins: u32) -> anyhow::Result<Vec
                 let payload = serde_json::json!({
                     "identity": identity,
                     "bins": bins,
+                    "algo": WAVEFORM_ALGO_VERSION,
                     "data": normalized,
                 });
                 if let Ok(text) = serde_json::to_string(&payload) {
@@ -946,19 +976,47 @@ pub fn ensure_video_waveform(file_path: String, bins: u32) -> anyhow::Result<Vec
     Ok(normalized)
 }
 
-/// 按全局峰值归一化到 0~1，并轻微抬升中小音量段（gamma 0.85）。
+/// 把线性峰值序列映射成 0~1 的显示高度（**按 dB 动态范围**，不是按最大值拉满）。
 ///
-/// 用户的验收点是"能显著看出哪里高声"：不归一的话整段低音量的片子会糊成
-/// 一排矮条；纯线性又让安静对白几乎看不见，故用 <1 的指数抬中段、高声段仍顶满。
+/// 为什么不能用 `peaks/max` + gamma：那样所有接近峰值的段落都会一起顶到 1.0，
+/// 整条波形看起来一排齐平的满高柱子，"哪里更响"完全读不出来（用户实测反馈）。
+/// 归一化只是把绝对电平搬到显示区间，不该压平相对差异。
+///
+/// 做法：以本片最响处为 0 dBFS 基准，向下取 [DB_RANGE] 的动态范围线性映射。
+/// 峰值电平在真实素材里普遍逼近 0 dB，而安静段常在 -20~-40 dB，用 dB 轴才能
+/// 把"大声/中等/安静"三档拉开；线性轴下中低音量会全部挤在顶端附近。
 fn normalize_waveform(peaks: Vec<f64>) -> Vec<f64> {
-    let max = peaks.iter().cloned().fold(0.0f64, f64::max);
-    if max <= 1e-6 {
-        return vec![0.05; peaks.len()];
+    if peaks.is_empty() {
+        return Vec::new();
     }
-    let scale = 1.0 / max;
+    let max = peaks.iter().cloned().fold(0.0f64, f64::max);
+    let min = peaks.iter().cloned().fold(f64::MAX, f64::min);
+    if max <= 1e-6 {
+        // 全程静音（如纯黑画面转出的空音轨）：给统一的最低高度，不留空白
+        return vec![MIN_BAR; peaks.len()];
+    }
+    // ★ 动态范围自适应：固定 dB 范围对"素材本身的起伏幅度"是猜的 ——
+    //   同一部片内 RMS 往往只跨几 dB，用固定 20dB 去铺只会拉出 0.7~1.0 的
+    //   一条带，仍显得差不多高。这里量出本片实际的 dB 跨度，再铺满高度区间，
+    //   保证任何素材（极平的配音片 / 起伏极大的音乐片）都能看出层次。
+    //   上限 DB_RANGE 挡住"几乎全平"的素材被噪声放大成一片花纹。
+    let span_db = if min > 1e-6 {
+        (20.0 * (max / min).log10()).min(DB_RANGE).max(1.0)
+    } else {
+        DB_RANGE
+    };
     peaks
         .iter()
-        .map(|v| (v * scale).powf(0.85).clamp(0.0, 1.0))
+        .map(|v| {
+            let ratio = v / max;
+            if ratio <= 1e-6 {
+                return MIN_BAR;
+            }
+            // 0 dB = 本片最响；低于 -span_db 的压到底
+            let db = 20.0 * ratio.log10();
+            let t = (1.0 + db / span_db).clamp(0.0, 1.0);
+            (MIN_BAR + (1.0 - MIN_BAR) * t).clamp(MIN_BAR, 1.0)
+        })
         .collect()
 }
 
@@ -1017,7 +1075,16 @@ fn extract_waveform_via_ffmpeg(file_path: &str, bins: u32) -> Option<Vec<f64>> {
     Some(resample_peaks(&block_peaks, bins as usize))
 }
 
-/// 把任意长度的峰值序列重采样到 bins 个（每段取最大值，保住高声段不被平均掉）。
+/// 把细粒度峰值重采样成 bins 个显示值。
+///
+/// ★ 用**均方根**而不是最大值。这是「波形看着都差不多高」的真正根因：
+///   每块约 31ms，一个 bin 要覆盖几秒音频（2 小时片压 1200 bins 时每格约 6 秒），
+///   这几秒里只要有一个响点（鼓点、爆破音、椅子响）就会把 max 顶到接近满刻度，
+///   于是绝大多数柱子都被拉到天花板，只剩一条齐平的边。实测模拟里取 max 时
+///   100% 的 bin 都 >0.95。
+///   RMS 反映的是这一段的**平均能量**，不会被单个瞬态劫持，响段/中等/安静
+///   才能分出层次；它仍是幂平均，响段依然明显高于安静段，
+///   "一眼看出哪里高声"的验收点不受影响。
 fn resample_peaks(peaks: &[f64], bins: usize) -> Vec<f64> {
     if peaks.len() == bins {
         return peaks.to_vec();
@@ -1026,7 +1093,9 @@ fn resample_peaks(peaks: &[f64], bins: usize) -> Vec<f64> {
     for (i, slot) in out.iter_mut().enumerate() {
         let start = i * peaks.len() / bins;
         let end = ((i + 1) * peaks.len() / bins).max(start + 1).min(peaks.len());
-        *slot = peaks[start..end].iter().cloned().fold(0.0f64, f64::max);
+        let slice = &peaks[start..end];
+        let sum_sq: f64 = slice.iter().map(|v| v * v).sum();
+        *slot = (sum_sq / slice.len() as f64).sqrt();
     }
     out
 }
@@ -1095,13 +1164,48 @@ mod waveform_tests {
         let data: Vec<f64> = (0..bins).map(|i| i as f64 / bins as f64).collect();
         std::fs::write(
             &cache,
-            serde_json::json!({"identity": identity, "bins": bins, "data": data}).to_string(),
+            serde_json::json!({
+                "identity": identity,
+                "bins": bins,
+                "algo": WAVEFORM_ALGO_VERSION,
+                "data": data,
+            })
+            .to_string(),
         )
         .unwrap();
 
         let got = read_video_waveform(src_str.clone(), bins).expect("应命中缓存");
         assert_eq!(got.len(), bins as usize);
         assert!((got[4] - data[4]).abs() < 1e-9);
+
+        // 算法版本过期 → 不命中（强制用新算法重算，避免旧图"看着都差不多高"）
+        std::fs::write(
+            &cache,
+            serde_json::json!({
+                "identity": identity,
+                "bins": bins,
+                "algo": WAVEFORM_ALGO_VERSION - 1,
+                "data": data,
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert!(
+            read_video_waveform(src_str.clone(), bins).is_none(),
+            "旧算法缓存必须失效"
+        );
+        // 恢复成当前版本继续后面的身份校验
+        std::fs::write(
+            &cache,
+            serde_json::json!({
+                "identity": identity,
+                "bins": bins,
+                "algo": WAVEFORM_ALGO_VERSION,
+                "data": data,
+            })
+            .to_string(),
+        )
+        .unwrap();
 
         // bins 不符 → 不命中
         assert!(read_video_waveform(src_str.clone(), bins + 1).is_none());
@@ -1118,25 +1222,94 @@ mod waveform_tests {
 
     #[test]
     fn normalize_keeps_relative_loudness_and_floor() {
-        // 全局峰值归一化：最大值顶到 1，相对响度保留
+        // dB 动态范围映射：最响处到顶，但**不能把其它响段一起拉平**
         let out = normalize_waveform(vec![0.0, 0.25, 0.5, 1.0]);
-        assert!((out[3] - 1.0).abs() < 1e-9);
-        assert!(out[2] > out[1] && out[1] > out[0]);
+        assert!((out[3] - 1.0).abs() < 1e-9, "最响处应到顶: {out:?}");
+        assert!(out[2] > out[1] && out[1] > out[0], "相对响度必须保留: {out:?}");
+        // 关键回归：半幅峰值的柱子不能也顶到天花板（旧算法 gamma 抬升的毛病）
+        assert!(
+            out[2] < 0.95,
+            "半幅峰值不应接近满高，否则响段看着都差不多: {out:?}"
+        );
         // 全零输入不能产出全零（否则波形整排看不见），给最低高度
         let silent = normalize_waveform(vec![0.0, 0.0, 0.0]);
         assert!(silent.iter().all(|v| *v > 0.0));
     }
 
     #[test]
-    fn resample_preserves_peaks_not_average() {
-        // 每段取最大值：高声段不能被平均掉（这是"看出哪里高声"的关键）
+    fn normalize_separates_loud_from_medium() {
+        // 真实素材的长尾分布：少数炸裂段落 + 大量中等 + 一些安静。
+        // 关键验收点是"炸裂/正常/安静"三档能看出差别，而不是一起顶满。
+        let mut peaks = vec![0.12f64; 80]; // 安静底噪
+        peaks.extend(std::iter::repeat_n(0.35f64, 15)); // 正常对白
+        peaks.extend(std::iter::repeat_n(0.9f64, 5)); // 炸点
+        let out = normalize_waveform(peaks);
+
+        let quiet = out[0];
+        let dialogue = out[80];
+        let loud = out[95];
+        assert!(loud > dialogue, "炸点应高于对白: {loud:.2} vs {dialogue:.2}");
+        assert!(dialogue > quiet, "对白应高于底噪: {dialogue:.2} vs {quiet:.2}");
+        // 三档之间要有肉眼可分辨的差距（不是都挤在天花板）
+        assert!(
+            loud - quiet > 0.25,
+            "静音与炸点的高度差太小: {loud:.2} vs {quiet:.2}"
+        );
+        // 且不能全都顶满 —— 这正是用户反馈的毛病
+        let saturated = out.iter().filter(|v| **v > 0.97).count();
+        assert!(
+            saturated < out.len() * 3 / 10,
+            "顶满的柱子过多（{saturated}/{}），波形会看着一片齐平",
+            out.len()
+        );
+    }
+
+    #[test]
+    fn resample_uses_rms_not_max() {
+        // 关键回归：不能被单个瞬态劫持。
+        // 前段 0,0,1,0 若取 max 得 1.0（满格），RMS 得 0.5 —— 后者才反映"这一段
+        // 整体不怎么响"。一个 bin 覆盖好几秒音频时，取 max 会让几乎所有柱子顶满。
         let peaks = vec![0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.8, 0.0];
         let out = resample_peaks(&peaks, 2);
         assert_eq!(out.len(), 2);
-        assert!((out[0] - 1.0).abs() < 1e-9);
-        assert!((out[1] - 0.8).abs() < 1e-9);
+        assert!(
+            (out[0] - 0.5).abs() < 1e-9,
+            "单瞬态段应被平均，实际 {}",
+            out[0]
+        );
+        assert!(
+            (out[1] - 0.4).abs() < 1e-9,
+            "0,0,0.8,0 的 RMS 应为 0.4，实际 {}",
+            out[1]
+        );
+        // 纯响段仍明显高于纯静段：响度对比不能被抹平
+        let contrast = resample_peaks(&[1.0, 1.0, 0.1, 0.1], 2);
+        assert!(contrast[0] > contrast[1] * 5.0, "响/静段必须拉开: {contrast:?}");
         // 等长时原样返回
         assert_eq!(resample_peaks(&peaks, peaks.len()), peaks);
+    }
+
+    #[test]
+    fn normalize_maps_monotonically_and_hits_ceiling() {
+        // 窄分布素材（0.5~1.0）也必须把差异拉开，而不是压成一条平线
+        let peaks: Vec<f64> = (0..100).map(|i| 0.5 + i as f64 / 200.0).collect();
+        let out = normalize_waveform(peaks);
+        assert_eq!(out.len(), 100);
+        let max = out.iter().cloned().fold(0.0f64, f64::max);
+        let min = out.iter().cloned().fold(1.0f64, f64::min);
+        assert!(max > 0.98, "最大值应接近满高: {max}");
+        // 关键：最矮与最高必须拉开足够高度差，否则"看着都差不多"
+        assert!(
+            max - min > 0.5,
+            "窄分布也要拉开层次，实际 {min:.2}~{max:.2}"
+        );
+        // 单调性：原始越大，显示越高（不能打乱相对关系）
+        for w in out.windows(2) {
+            assert!(w[1] >= w[0] - 1e-9, "高度必须与原始能量同序: {w:?}");
+        }
+        // 全程静音不留空白
+        let silent = normalize_waveform(vec![0.0; 10]);
+        assert!(silent.iter().all(|v| (*v - MIN_BAR).abs() < 1e-9));
     }
 
     // ── 「没有音轨」负缓存 ─────────────────────────────────────────────

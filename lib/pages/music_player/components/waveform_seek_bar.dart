@@ -154,7 +154,10 @@ class _WaveformPainter extends CustomPainter {
     final activeBarCount = (progress * totalBars).round();
 
     for (int i = 0; i < totalBars; i++) {
-      final amplitude = waveform[i].clamp(0.05, 1.0); // 最低 5% 高度
+      // 最低高度与动态范围由数据侧统一决定（Rust 的 dB 映射已保证不会贴到 0），
+      // 这里只做防御性收敛。不能在这里再抬下界：那会把安静段整体垫高、
+      // 拉平本就不大的差异，正是"显得都差不多"的另一半成因。
+      final amplitude = waveform[i].clamp(0.0, 1.0);
       final barHeight = height * amplitude;
       final x = i * (barWidth + barGap);
       final y = (height - barHeight) / 2;
