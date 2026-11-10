@@ -212,6 +212,17 @@ Future<List<double>?> readVideoWaveform({
   return rust.readVideoWaveform(filePath: filePath, bins: bins);
 }
 
+/// 该文件是否「已知没有音轨」（负缓存命中）。
+///
+/// GIF 转出来的 mp4、纯画面录屏根本没有音频流，补波形注定失败。Rust 侧按
+/// 文件身份（size|mtime）记住这个结论，这里在入队前先问一句，命中就完全不
+/// 排任务——省掉每次导入/重扫对这些文件白跑一遍 symphonia + ffmpeg 探测。
+/// 纯 stat + 读小标记文件，开销可忽略。
+bool videoWaveformAbsent({required String filePath}) {
+  if (MockMode.enabled) return false;
+  return rust.videoWaveformAbsent(filePath: filePath);
+}
+
 /// 生成（或读缓存）振幅波形，结果写入资源旁 .SlimeWorks/waveform。
 Future<List<double>> ensureVideoWaveform({
   required String filePath,

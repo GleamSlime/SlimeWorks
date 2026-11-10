@@ -535,6 +535,14 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         ? buildMediaSource(item, isCover: false)
         : item.filePath;
     if (source == null || source.isEmpty || !service.supports(source)) return;
+    // 已知没有音轨（GIF 转的 mp4 / 纯画面录屏）直接跳过：这类文件补波形注定
+    // 失败，以前每次导入/重扫都要白跑一遍 symphonia + ffmpeg 探测，还在日志里
+    // 刷一片"振幅补齐失败"。结论由 Rust 按文件身份记住，这里只问一句。
+    // 远程来源不解码（节点侧算），不查这个本地标记。
+    if (!VideoWaveformService.isRemoteSource(source) &&
+        media_api.videoWaveformAbsent(filePath: source)) {
+      return;
+    }
     unawaited(
       service.waveformFor(source).then((data) {
         if (data == null) {

@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `acquire_waveform_permit`, `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `extract_waveform_via_ffmpeg`, `from_inner`, `missing`, `no_cover`, `normalize_waveform`, `pending`, `ready`, `resample_peaks`, `waveform_cache_path`, `waveform_identity`
+// These functions are ignored because they are not marked as `pub`: `acquire_waveform_permit`, `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `extract_waveform_via_ffmpeg`, `from_inner`, `has_audio_stream`, `missing`, `no_cover`, `normalize_waveform`, `pending`, `ready`, `record_waveform_no_audio`, `resample_peaks`, `waveform_cache_path`, `waveform_identity`, `waveform_known_no_audio`, `waveform_no_audio_map`, `waveform_no_audio_marker_path`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `WaveformPermit`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
@@ -325,6 +325,12 @@ bool hasVideoWaveform({required String filePath, required int bins}) => RustLib
     .instance
     .api
     .crateApiMediaCollectionHasVideoWaveform(filePath: filePath, bins: bins);
+
+/// 该文件是不是「已知没有音轨」——导入/重扫前批量查，命中就完全不排波形任务。
+///
+/// 纯 stat + 读标记，不解码不起进程，可以安全地在入队前逐个调用。
+bool videoWaveformAbsent({required String filePath}) => RustLib.instance.api
+    .crateApiMediaCollectionVideoWaveformAbsent(filePath: filePath);
 
 /// 生成（或读缓存）视频/音频的振幅数组，归一化到 0~1，长度 = bins。
 ///

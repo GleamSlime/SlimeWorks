@@ -659,6 +659,37 @@ pub fn delete_smart_folder(id: String) -> anyhow::Result<bool> {
 // 3. 只查不生成的读取口（read_video_waveform）与生成口（ensure_video_waveform）
 //    分开，导入/重扫时用后者补齐，预览时用前者优先命中。
 
+/// 返回给上层的「该文件没有音轨」标记文案。
+/// Dart 侧据此把它和「真故障」区分开：前者不必重试、不必提示失败。
+pub const WAVE_NONE_AUDIO_MARKER: &str = "该文件没有音轨";
+
+/// 该文件是否真的含有音频流。用于「两条链路都解不出」时判断是
+/// 「本来就没音轨」还是「有音轨但解坏了/环境异常」——只有前者才值得记负缓存。
+fn has_audio_stream(file_path: &str) -> bool {
+    let output = std::process::Command::new(media_collection::ffprobe_cmd())
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=index",
+            "-of",
+            "csv=p=0",
+            file_path,
+        ])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output();
+    match output {
+        // 有音频流时 ffprobe 会输出流索引（如 "1"）；空输出 = 没有音轨。
+        // 探测本身失败（ffprobe 缺失等）一律当作「有音轨」，避免误记负缓存。
+        Ok(out) => !String::from_utf8_lossy(&out.stdout).trim().is_empty(),
+        Err(_) => true,
+    }
+}
+
 /// 资源旁的波形缓存文件路径：`<父目录>/.SlimeWorks/waveform/<文件名>.w<bins>.json`。
 fn waveform_cache_path(file_path: &str, bins: u32) -> Option<std::path::PathBuf> {
     let src = std::path::Path::new(file_path);
@@ -716,6 +747,96 @@ pub fn has_video_waveform(file_path: String, bins: u32) -> bool {
     read_video_waveform(file_path, bins).is_some()
 }
 
+/// 「该文件没有音轨」的负缓存标记路径：
+/// `<父目录>/.SlimeWorks/waveform/<文件名>.noaudio`。
+///
+/// 为什么要它：GIF 转出来的 mp4、纯画面录屏这类文件**根本没有音频流**，
+/// 补波形注定失败。但每次导入/重扫都会对它们重新走一遍探测
+/// （symphonia 建解码器 + ffmpeg 兜底起子进程），日志里刷一片
+/// 「振幅补齐失败（下次预览再试）」，白耗 CPU 且永远不可能成功。
+/// 用负缓存把「没有音轨」这个结论钉住：按文件身份（size|mtime）判断，
+/// 文件被替换（补了音轨）自动失效、重新探测。
+/// `noaudio` 与 `w<bins>.json` 分开：后者是数据，前者是结论。
+fn waveform_no_audio_marker_path(file_path: &str) -> Option<std::path::PathBuf> {
+    let src = std::path::Path::new(file_path);
+    let parent = src.parent()?;
+    let name = src.file_name()?.to_string_lossy();
+    if name.is_empty() {
+        return None;
+    }
+    Some(
+        parent
+            .join(".SlimeWorks")
+            .join("waveform")
+            .join(format!("{}.noaudio", name)),
+    )
+}
+
+/// 进程内「无音轨」缓存（源文件路径 → 身份），避免每次都读盘。
+static WAVEFORM_NO_AUDIO: std::sync::OnceLock<
+    std::sync::Mutex<std::collections::HashMap<String, String>>,
+> = std::sync::OnceLock::new();
+
+fn waveform_no_audio_map(
+) -> &'static std::sync::Mutex<std::collections::HashMap<String, String>> {
+    WAVEFORM_NO_AUDIO.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// 该文件是否已被判定「没有音轨」（进程内或资源旁标记，身份一致才算）。
+fn waveform_known_no_audio(file_path: &str, identity: &str) -> bool {
+    let map = waveform_no_audio_map()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if map.get(file_path).map(String::as_str) == Some(identity) {
+        return true;
+    }
+    drop(map);
+    let Some(marker) = waveform_no_audio_marker_path(file_path) else {
+        return false;
+    };
+    let Ok(recorded) = std::fs::read_to_string(&marker) else {
+        return false;
+    };
+    let hit = recorded.trim() == identity;
+    if hit {
+        waveform_no_audio_map()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(file_path.to_string(), identity.to_string());
+    }
+    hit
+}
+
+/// 记下「该文件没有音轨」，落盘标记供跨重启复用。写失败不影响正确性。
+fn record_waveform_no_audio(file_path: &str, identity: &str) {
+    waveform_no_audio_map()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(file_path.to_string(), identity.to_string());
+    let Some(marker) = waveform_no_audio_marker_path(file_path) else {
+        return;
+    };
+    let Some(dir) = marker.parent() else {
+        return;
+    };
+    if std::fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    let _ = std::fs::write(&marker, identity);
+}
+
+/// 该文件是不是「已知没有音轨」——导入/重扫前批量查，命中就完全不排波形任务。
+///
+/// 纯 stat + 读标记，不解码不起进程，可以安全地在入队前逐个调用。
+#[frb(sync)]
+pub fn video_waveform_absent(file_path: String) -> bool {
+    let Ok(meta) = std::fs::metadata(&file_path) else {
+        // 文件不在：当作"没有"，别再排任务（真回来了下次导入会重新进来）
+        return true;
+    };
+    waveform_known_no_audio(&file_path, &waveform_identity(&meta))
+}
+
 /// 波形解码并发闸门：最多 2 路同时解码。
 ///
 /// 为什么 Rust 侧也要一道（Dart VideoWaveformService 已有一道）：
@@ -766,6 +887,13 @@ pub fn ensure_video_waveform(file_path: String, bins: u32) -> anyhow::Result<Vec
         .map_err(|e| anyhow::anyhow!("源文件不可读: {}", e))?;
     let identity = waveform_identity(&meta);
 
+    // 「已知没有音轨」直接短路：GIF 转的 mp4、纯画面录屏本来就没有音频流，
+    // 再探一遍也不可能出波形，只是白跑 symphonia + ffmpeg 兜底（见负缓存注释）。
+    // 放在取许可之前：这类文件不该占解码名额、不该排队。
+    if waveform_known_no_audio(&file_path, &identity) {
+        return Err(anyhow::anyhow!(WAVE_NONE_AUDIO_MARKER));
+    }
+
     // 缓存未命中才取解码许可：命中缓存的调用（重扫时大多数文件）不占名额、
     // 不排队，秒回；真正解码的重活最多 2 路并行（见上方闸门注释）。
     let _permit = acquire_waveform_permit();
@@ -782,8 +910,20 @@ pub fn ensure_video_waveform(file_path: String, bins: u32) -> anyhow::Result<Vec
     // ② ffmpeg 兜底：symphonia 解不了的（部分 MKV/WMV/TS 等）
     let peaks = match peaks {
         Some(v) => v,
-        None => extract_waveform_via_ffmpeg(&file_path, bins)
-            .ok_or_else(|| anyhow::anyhow!("无法从该文件提取音频振幅"))?,
+        None => match extract_waveform_via_ffmpeg(&file_path, bins) {
+            Some(v) => v,
+            None => {
+                // 两条链路都拿不到音频：绝大多数情况是文件压根没有音轨。
+                // 记下结论（按身份），下次导入/重扫/预览直接跳过，不再重复探测。
+                // 注意仍需排除"ffmpeg 不可用"这种环境问题——那种情况会立刻失败且
+                // 文件清单里通常成片出现，记成无音轨会把整个库的波形永久封死。
+                if !media_collection::ffmpeg_cmd().is_empty() && !has_audio_stream(&file_path) {
+                    record_waveform_no_audio(&file_path, &identity);
+                    return Err(anyhow::anyhow!(WAVE_NONE_AUDIO_MARKER));
+                }
+                return Err(anyhow::anyhow!("无法从该文件提取音频振幅"));
+            }
+        },
     };
     let normalized = normalize_waveform(peaks);
 
@@ -996,5 +1136,78 @@ mod waveform_tests {
         assert!((out[1] - 0.8).abs() < 1e-9);
         // 等长时原样返回
         assert_eq!(resample_peaks(&peaks, peaks.len()), peaks);
+    }
+
+    // ── 「没有音轨」负缓存 ─────────────────────────────────────────────
+
+    #[test]
+    fn no_audio_marker_roundtrip_and_identity_guard() {
+        // 记下的结论要能跨进程复用（落盘），且换文件后必须失配重新探测
+        let dir = temp_dir("noaudio_marker");
+        let src = dir.join("silent.mp4");
+        std::fs::write(&src, b"fake-video-bytes").unwrap();
+        let path = src.to_string_lossy().into_owned();
+
+        let meta = std::fs::metadata(&src).unwrap();
+        let identity = waveform_identity(&meta);
+
+        // 未记录前不认为"没有音轨"
+        assert!(!waveform_known_no_audio(&path, &identity));
+
+        record_waveform_no_audio(&path, &identity);
+        // 进程内 + 落盘双份：这里清掉进程内那份，只验证磁盘标记仍生效
+        waveform_no_audio_map()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&path);
+        assert!(
+            waveform_known_no_audio(&path, &identity),
+            "落盘标记必须能独立命中（跨重启复用）"
+        );
+
+        // 文件被替换（身份变化）→ 结论失效，应重新探测
+        std::fs::write(&src, b"another-video-with-audio").unwrap();
+        let new_meta = std::fs::metadata(&src).unwrap();
+        let new_identity = waveform_identity(&new_meta);
+        assert_ne!(identity, new_identity, "写入不同内容后身份必须变化");
+        waveform_no_audio_map()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&path);
+        assert!(
+            !waveform_known_no_audio(&path, &new_identity),
+            "身份变了就不能沿用旧的「没有音轨」结论"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn video_waveform_absent_short_circuits_generator() {
+        // ensure_video_waveform 在负缓存命中时必须直接返回、不起解码
+        let dir = temp_dir("noaudio_short");
+        let src = dir.join("silent2.mp4");
+        std::fs::write(&src, b"silent-bytes").unwrap();
+        let meta = std::fs::metadata(&src).unwrap();
+        let identity = waveform_identity(&meta);
+        record_waveform_no_audio(&src.to_string_lossy(), &identity);
+
+        // frb(sync) 入口应报 true（导入/重扫据此不排队）
+        assert!(video_waveform_absent(src.to_string_lossy().into_owned()));
+
+        let err = ensure_video_waveform(src.to_string_lossy().into_owned(), 1200)
+            .expect_err("负缓存命中不该返回波形");
+        assert!(
+            err.to_string().contains(WAVE_NONE_AUDIO_MARKER),
+            "错误文案要能被上层识别成「没有音轨」而不是真故障，实际={}",
+            err
+        );
+
+        // 不存在的文件也当作"没有"，别再排任务
+        assert!(video_waveform_absent(
+            dir.join("nope.mp4").to_string_lossy().into_owned()
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

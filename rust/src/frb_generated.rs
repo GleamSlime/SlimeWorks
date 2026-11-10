@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1613239623;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1533380783;
 
 // Section: executor
 
@@ -13374,6 +13374,38 @@ fn wire__crate__api__media_collection__update_smart_folder_impl(
         },
     )
 }
+fn wire__crate__api__media_collection__video_waveform_absent_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "video_waveform_absent",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_file_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::media_collection::video_waveform_absent(api_file_path),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__whisper__whisper_delete_model_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -17264,60 +17296,60 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        381 => wire__crate__api__whisper__whisper_download_model_impl(
+        382 => wire__crate__api__whisper__whisper_download_model_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        387 => {
+        388 => {
             wire__crate__api__whisper__whisper_transcribe_impl(port, ptr, rust_vec_len, data_len)
         }
-        391 => {
+        392 => {
             wire__crate__api__websocket__ws_client_connect_impl(port, ptr, rust_vec_len, data_len)
         }
-        392 => wire__crate__api__websocket__ws_client_disconnect_impl(
+        393 => wire__crate__api__websocket__ws_client_disconnect_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        393 => {
+        394 => {
             wire__crate__api__websocket__ws_client_get_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        394 => wire__crate__api__websocket__ws_client_is_connected_impl(
+        395 => wire__crate__api__websocket__ws_client_is_connected_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        396 => wire__crate__api__websocket__ws_client_receive_message_impl(
+        397 => wire__crate__api__websocket__ws_client_receive_message_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        397 => wire__crate__api__websocket__ws_client_send_binary_impl(
+        398 => wire__crate__api__websocket__ws_client_send_binary_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        398 => {
+        399 => {
             wire__crate__api__websocket__ws_client_send_text_impl(port, ptr, rust_vec_len, data_len)
         }
-        403 => {
+        404 => {
             wire__crate__api__websocket__ws_server_broadcast_impl(port, ptr, rust_vec_len, data_len)
         }
-        404 => wire__crate__api__websocket__ws_server_get_client_count_impl(
+        405 => wire__crate__api__websocket__ws_server_get_client_count_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        406 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
-        407 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
-        408 => {
+        407 => wire__crate__api__websocket__ws_server_start_impl(port, ptr, rust_vec_len, data_len),
+        408 => wire__crate__api__websocket__ws_server_stop_impl(port, ptr, rust_vec_len, data_len),
+        409 => {
             wire__crate__api__extract__zip_directory_to_tmp_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -17756,33 +17788,38 @@ fn pde_ffi_dispatcher_sync_impl(
             rust_vec_len,
             data_len,
         ),
-        380 => wire__crate__api__whisper__whisper_delete_model_impl(ptr, rust_vec_len, data_len),
-        382 => {
-            wire__crate__api__whisper__whisper_get_model_statuses_impl(ptr, rust_vec_len, data_len)
-        }
-        383 => {
-            wire__crate__api__whisper__whisper_get_selected_model_impl(ptr, rust_vec_len, data_len)
-        }
-        384 => wire__crate__api__whisper__whisper_get_transcription_progress_impl(
+        380 => wire__crate__api__media_collection__video_waveform_absent_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        385 => wire__crate__api__whisper__whisper_initialize_impl(ptr, rust_vec_len, data_len),
-        386 => {
+        381 => wire__crate__api__whisper__whisper_delete_model_impl(ptr, rust_vec_len, data_len),
+        383 => {
+            wire__crate__api__whisper__whisper_get_model_statuses_impl(ptr, rust_vec_len, data_len)
+        }
+        384 => {
+            wire__crate__api__whisper__whisper_get_selected_model_impl(ptr, rust_vec_len, data_len)
+        }
+        385 => wire__crate__api__whisper__whisper_get_transcription_progress_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        386 => wire__crate__api__whisper__whisper_initialize_impl(ptr, rust_vec_len, data_len),
+        387 => {
             wire__crate__api__whisper__whisper_set_selected_model_impl(ptr, rust_vec_len, data_len)
         }
-        388 => wire__crate__api__capture__write_log_error_impl(ptr, rust_vec_len, data_len),
-        389 => wire__crate__api__capture__write_log_info_impl(ptr, rust_vec_len, data_len),
-        390 => wire__crate__api__capture__write_log_lines_impl(ptr, rust_vec_len, data_len),
-        395 => wire__crate__api__websocket__ws_client_new_impl(ptr, rust_vec_len, data_len),
-        399 => wire__crate__api__websocket__ws_message_get_data_impl(ptr, rust_vec_len, data_len),
-        400 => {
+        389 => wire__crate__api__capture__write_log_error_impl(ptr, rust_vec_len, data_len),
+        390 => wire__crate__api__capture__write_log_info_impl(ptr, rust_vec_len, data_len),
+        391 => wire__crate__api__capture__write_log_lines_impl(ptr, rust_vec_len, data_len),
+        396 => wire__crate__api__websocket__ws_client_new_impl(ptr, rust_vec_len, data_len),
+        400 => wire__crate__api__websocket__ws_message_get_data_impl(ptr, rust_vec_len, data_len),
+        401 => {
             wire__crate__api__websocket__ws_message_get_timestamp_impl(ptr, rust_vec_len, data_len)
         }
-        401 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
-        402 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
-        405 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
+        402 => wire__crate__api__websocket__ws_message_is_binary_impl(ptr, rust_vec_len, data_len),
+        403 => wire__crate__api__websocket__ws_message_is_text_impl(ptr, rust_vec_len, data_len),
+        406 => wire__crate__api__websocket__ws_server_new_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
