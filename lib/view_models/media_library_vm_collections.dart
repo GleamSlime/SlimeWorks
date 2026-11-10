@@ -512,8 +512,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         final items = await media_api.getMediaCollectionItems(collectionId: collection.id);
         for (final item in items) {
           _enqueueItemThumbnail(item.filePath);
-          // 视频/音频顺带补齐振幅：预览时就不用现算，打开即有波形
-          _ensureItemWaveform(item);
+          // 视频/音频顺带补齐振幅：预览时就不用现算，打开即有波形。
+          // 不 await：导入流程不等解码（服务层闸门限 2 路，其余排队）
+          unawaited(_ensureItemWaveform(item));
         }
       } catch (e) {
         _logger.error('[ImportThumb] 集合条目获取失败: ${collection.id} err=$e');
@@ -526,7 +527,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   /// 只补缺失的：Rust 侧 ensure 会先读资源旁 `.SlimeWorks/waveform` 缓存，
   /// 已有且源文件没变就秒回，不会重复解码。图片没有音轨，直接跳过。
   /// 后台执行不阻塞导入流程；失败只记日志，下次预览打开时还会再试。
-  void _ensureItemWaveform(media_api.MediaItem item) {
+  /// 返回的 Future 供重扫循环限速（几百个条目同时起飞会挤爆解码闸门的排队）。
+  Future<void> _ensureItemWaveform(media_api.MediaItem item) async {
     if (item.kind != media_api.MediaKind.video && item.kind != media_api.MediaKind.audio) {
       return;
     }
@@ -539,17 +541,15 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     // 失败，以前每次导入/重扫都要白跑一遍 symphonia + ffmpeg 探测，还在日志里
     // 刷一片"振幅补齐失败"。结论由 Rust 按文件身份记住，这里只问一句。
     // 远程来源不解码（节点侧算），不查这个本地标记。
+    // ★ 异步查询：内部 stat 在网络卷上是往返开销，sync 会卡死 UI isolate。
     if (!VideoWaveformService.isRemoteSource(source) &&
-        media_api.videoWaveformAbsent(filePath: source)) {
+        await media_api.videoWaveformAbsent(filePath: source)) {
       return;
     }
-    unawaited(
-      service.waveformFor(source).then((data) {
-        if (data == null) {
-          _logger.info('[Waveform] 振幅补齐失败（下次预览再试）: $source');
-        }
-      }),
-    );
+    final data = await service.waveformFor(source);
+    if (data == null) {
+      _logger.info('[Waveform] 振幅补齐失败（下次预览再试）: $source');
+    }
   }
 
   /// 重新扫描选中（或当前打开）集合的物理目录，增量同步磁盘变动。
@@ -746,11 +746,12 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
             for (final item in items) {
               itemCount++;
               // 视频/音频：振幅缺失就补齐（长按覆盖模式下先清进程缓存，
-              // 让它重新走一遍 ensure；Rust 侧仍按源文件身份判断是否真需重算）
+              // 让它重新走一遍 ensure；Rust 侧仍按源文件身份判断是否真需重算）。
+              // 不 await：扫描进度不等解码（服务层闸门限 2 路，其余排队）
               if (force) {
                 getIt<VideoWaveformService>().invalidate(item.filePath);
               }
-              _ensureItemWaveform(item);
+              unawaited(_ensureItemWaveform(item));
               switch (item.kind) {
                 case media_api.MediaKind.image:
                   _itemThumbFailed.remove(item.filePath);

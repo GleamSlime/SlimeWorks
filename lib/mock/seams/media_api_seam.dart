@@ -217,8 +217,8 @@ Future<List<double>?> readVideoWaveform({
 /// GIF 转出来的 mp4、纯画面录屏根本没有音频流，补波形注定失败。Rust 侧按
 /// 文件身份（size|mtime）记住这个结论，这里在入队前先问一句，命中就完全不
 /// 排任务——省掉每次导入/重扫对这些文件白跑一遍 symphonia + ffmpeg 探测。
-/// 纯 stat + 读小标记文件，开销可忽略。
-bool videoWaveformAbsent({required String filePath}) {
+/// 异步：内部 stat 在网络卷上是往返开销，不能挂在 UI isolate（见 Rust 侧注释）。
+Future<bool> videoWaveformAbsent({required String filePath}) async {
   if (MockMode.enabled) return false;
   return rust.videoWaveformAbsent(filePath: filePath);
 }

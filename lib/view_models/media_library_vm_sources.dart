@@ -287,10 +287,12 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
 
   /// 从帧列表中挑选封面帧：优先选第一个文件体积大于 1KB 的帧，
   /// 避免选中纯黑帧（部分视频开头/中间为黑屏，生成的封面看起来像没有封面）。
-  String _pickCoverFrame(List<String> frames) {
+  /// 异步 stat：帧文件可能在网络卷/外置卷上，lengthSync 会把 UI isolate
+  /// 卡在逐帧网络往返上（重扫封面时每个集合都要挑一次帧）。
+  Future<String> _pickCoverFrame(List<String> frames) async {
     for (final path in frames) {
       try {
-        if (File(path).lengthSync() > 1024) return path;
+        if (await File(path).length() > 1024) return path;
       } catch (_) {}
     }
     return frames[frames.length ~/ 2];
@@ -373,7 +375,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
               _notifyCoverChanged();
               return;
             }
-            final thumb = _pickCoverFrame(frames);
+            final thumb = await _pickCoverFrame(frames);
             _logger.info(
               '[VideoThumb] 封面生成成功: collectionId=$collectionId thumb=$thumb',
             );

@@ -152,6 +152,11 @@ extension MediaLibraryActionsExt on MediaLibraryViewModel {
   /// 该集合当前是否有可直接显示的封面（远程 URL / 已缓存缩略图 / 图片源文件）。
   ///
   /// 纯判定、不触发任何生成：文件夹封面只是"顺带展示"，不该因此点起一堆任务。
+  /// ★ build 期间被逐文件夹卡调用，**绝不做磁盘 IO**：旧版对图片封面
+  /// existsSync，SMB/外置卷每卡一趟网络往返，一屏文件夹卡重建就是几十次
+  /// 同步 stat 卡死 UI。存在性交给 _prewarmCollectionCoverLoss 的后台批量
+  /// 结论（_lostCollections）：未证实丢失就按可用出图，丢失结论落地后
+  /// _notifyCoverChanged 会重建换图。
   bool _collectionHasUsableCover(media_api.MediaCollection collection) {
     final coverPath = collection.coverPath;
     if (coverPath == null || coverPath.isEmpty) return false;
@@ -161,11 +166,8 @@ extension MediaLibraryActionsExt on MediaLibraryViewModel {
     final lower = coverPath.toLowerCase();
     const imageExts = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.heic', '.avif'];
     if (imageExts.any(lower.endsWith)) {
-      try {
-        return File(coverPath).existsSync();
-      } catch (_) {
-        return false;
-      }
+      // 后台批量检查已证实丢失才跳过；未检查/未丢失都先按可用展示
+      return _lostCollections[collection.id] != true;
     }
     // 视频/音频封面依赖异步提取：当前没缓存就先跳过，让文件夹卡继续往下一层找
     return false;

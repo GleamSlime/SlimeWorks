@@ -328,8 +328,12 @@ bool hasVideoWaveform({required String filePath, required int bins}) => RustLib
 
 /// 该文件是不是「已知没有音轨」——导入/重扫前批量查，命中就完全不排波形任务。
 ///
-/// 纯 stat + 读标记，不解码不起进程，可以安全地在入队前逐个调用。
-bool videoWaveformAbsent({required String filePath}) => RustLib.instance.api
+/// 纯 stat + 读标记，不解码不起进程；但**必须异步**：SMB/外置卷上 stat 是
+/// 网络往返（卷休眠时秒级），sync FFI 在 Dart 主线程执行，重扫循环里逐条目
+/// 调用会把整个 UI 卡死（实测鼠标转圈 App 无响应）。
+Future<bool> videoWaveformAbsent({required String filePath}) => RustLib
+    .instance
+    .api
     .crateApiMediaCollectionVideoWaveformAbsent(filePath: filePath);
 
 /// 生成（或读缓存）视频/音频的振幅数组，归一化到 0~1，长度 = bins。

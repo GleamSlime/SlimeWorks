@@ -13375,15 +13375,16 @@ fn wire__crate__api__media_collection__update_smart_folder_impl(
     )
 }
 fn wire__crate__api__media_collection__video_waveform_absent_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "video_waveform_absent",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -13397,12 +13398,14 @@ fn wire__crate__api__media_collection__video_waveform_absent_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_file_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::media_collection::video_waveform_absent(api_file_path),
-                )?;
-                Ok(output_ok)
-            })())
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::media_collection::video_waveform_absent(api_file_path),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
         },
     )
 }
@@ -17296,6 +17299,12 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
+        380 => wire__crate__api__media_collection__video_waveform_absent_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         382 => wire__crate__api__whisper__whisper_download_model_impl(
             port,
             ptr,
@@ -17784,11 +17793,6 @@ fn pde_ffi_dispatcher_sync_impl(
             data_len,
         ),
         379 => wire__crate__api__media_collection__update_smart_folder_impl(
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        380 => wire__crate__api__media_collection__video_waveform_absent_impl(
             ptr,
             rust_vec_len,
             data_len,

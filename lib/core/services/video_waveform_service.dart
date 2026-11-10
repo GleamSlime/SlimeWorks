@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
@@ -80,21 +79,23 @@ class VideoWaveformService {
   static bool isRemoteSource(String source) =>
       source.startsWith('http://') || source.startsWith('https://');
 
-  /// 该播放源是否有振幅可用。
+  /// 该播放源是否有振幅可用（**同步版，零磁盘 IO**）。
   ///
   /// 全平台可用：本地文件交给本机 Rust；远程节点交给节点算，客户端只取 JSON，
   /// 所以移动端也能用（这正是把解码移出客户端的目的）。
+  ///
+  /// ★ 本地文件不做存在性检查：旧版这里 `existsSync`，SMB/外置卷每次 stat
+  /// 一趟网络往返（卷休眠时秒级），重扫封面对每个条目调一次 = 主 isolate
+  /// 被几百次同步 stat 卡死（鼠标转圈整个 App 无响应的直接根因）。
+  /// 文件不存在的情况交给 _load 里 Rust 的 metadata 检查兜底（在 FRB 池线程，
+  /// 不占 UI），语义不变：不存在的源最终照样返回 null。
   bool supports(String? source) {
     if (source == null || source.isEmpty) return false;
     if (isRemoteSource(source)) {
       // 能反查到节点才有取数通道；外链视频没有节点侧算力可用
       return nodeService.resolveNodeFromMediaUrl(source) != null;
     }
-    try {
-      return File(source).existsSync();
-    } catch (_) {
-      return false;
-    }
+    return true;
   }
 
   /// 取波形（0~1，长度 = bins）。失败返回 null。

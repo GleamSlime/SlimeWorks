@@ -1414,7 +1414,9 @@ abstract class RustLibApi extends BaseApi {
     required List<String> targetFolderIds,
   });
 
-  bool crateApiMediaCollectionVideoWaveformAbsent({required String filePath});
+  Future<bool> crateApiMediaCollectionVideoWaveformAbsent({
+    required String filePath,
+  });
 
   bool crateApiWhisperWhisperDeleteModel({required String presetName});
 
@@ -13298,17 +13300,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  bool crateApiMediaCollectionVideoWaveformAbsent({required String filePath}) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<bool> crateApiMediaCollectionVideoWaveformAbsent({
+    required String filePath,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(filePath, serializer);
-          return pdeCallFfi(
+          pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 380,
-          )!;
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,

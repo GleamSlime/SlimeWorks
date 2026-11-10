@@ -827,8 +827,9 @@ fn record_waveform_no_audio(file_path: &str, identity: &str) {
 
 /// 该文件是不是「已知没有音轨」——导入/重扫前批量查，命中就完全不排波形任务。
 ///
-/// 纯 stat + 读标记，不解码不起进程，可以安全地在入队前逐个调用。
-#[frb(sync)]
+/// 纯 stat + 读标记，不解码不起进程；但**必须异步**：SMB/外置卷上 stat 是
+/// 网络往返（卷休眠时秒级），sync FFI 在 Dart 主线程执行，重扫循环里逐条目
+/// 调用会把整个 UI 卡死（实测鼠标转圈 App 无响应）。
 pub fn video_waveform_absent(file_path: String) -> bool {
     let Ok(meta) = std::fs::metadata(&file_path) else {
         // 文件不在：当作"没有"，别再排任务（真回来了下次导入会重新进来）
