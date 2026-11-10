@@ -1212,3 +1212,34 @@ mod waveform_tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+/// 判定视频容器是否已 faststart（`moov` 在 `mdat` 之前）。
+///
+/// 只看文件头部的顶层 atom，不解码不整读；非 MP4/MOV 容器返回 None。
+/// 异步：文件在 SMB/外置卷上时 open + seek 也是网络往返，不能挂 UI 线程。
+pub async fn video_is_faststart(file_path: String) -> anyhow::Result<Option<bool>> {
+    media_collection::video_is_faststart(file_path)
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+}
+
+/// 把非 faststart 的 MP4 重封装成 faststart 副本，返回副本路径（已 faststart 返回 None）。
+///
+/// 纯 `-c copy` 重封装：不重编码、画质无损（实测 613MB/118min 用 236s）；
+/// 副本写资源旁 `.SlimeWorks/faststart/<文件名>`，**不修改原文件**。
+/// 由节点在「远程客户端要播非 faststart 视频」时按需调用。
+pub async fn ensure_faststart_copy(file_path: String) -> anyhow::Result<Option<String>> {
+    media_collection::ensure_faststart_copy(file_path)
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+}
+
+/// `ensure_faststart_copy` 的同步版（供节点后台线程直接调用）。
+///
+/// 与异步版共用同一实现：节点在请求线程里排一个后台线程调它，
+/// 这样既不改请求路径的时序，也不会把重封装塞进 tokio worker。
+#[frb(ignore)]
+pub fn ensure_faststart_copy_blocking(file_path: &str) -> anyhow::Result<Option<String>> {
+    media_collection::ensure_faststart_copy_blocking(file_path)
+        .map_err(|error| anyhow::anyhow!(error))
+}

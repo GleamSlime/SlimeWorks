@@ -9,6 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `acquire_waveform_permit`, `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `extract_waveform_via_ffmpeg`, `from_inner`, `has_audio_stream`, `missing`, `no_cover`, `normalize_waveform`, `pending`, `ready`, `record_waveform_no_audio`, `resample_peaks`, `waveform_cache_path`, `waveform_identity`, `waveform_known_no_audio`, `waveform_no_audio_map`, `waveform_no_audio_marker_path`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `WaveformPermit`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `ensure_faststart_copy_blocking`
 
 /// 注册 ffmpeg/ffprobe 可执行文件的绝对路径到 media_collection 模块。
 /// 必须在应用启动时（RustLib.init 之后）调用，确保缩略图生成能找到 ffmpeg。
@@ -348,6 +349,25 @@ Future<Float64List> ensureVideoWaveform({
   filePath: filePath,
   bins: bins,
 );
+
+/// 判定视频容器是否已 faststart（`moov` 在 `mdat` 之前）。
+///
+/// 只看文件头部的顶层 atom，不解码不整读；非 MP4/MOV 容器返回 None。
+/// 异步：文件在 SMB/外置卷上时 open + seek 也是网络往返，不能挂 UI 线程。
+Future<bool?> videoIsFaststart({required String filePath}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionVideoIsFaststart(filePath: filePath);
+
+/// 把非 faststart 的 MP4 重封装成 faststart 副本，返回副本路径（已 faststart 返回 None）。
+///
+/// 纯 `-c copy` 重封装：不重编码、画质无损（实测 613MB/118min 用 236s）；
+/// 副本写资源旁 `.SlimeWorks/faststart/<文件名>`，**不修改原文件**。
+/// 由节点在「远程客户端要播非 faststart 视频」时按需调用。
+Future<String?> ensureFaststartCopy({required String filePath}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionEnsureFaststartCopy(filePath: filePath);
 
 /// 缓存版集合统计行：recorded 为库内记录值，live_* 为最近一次后台 stat 的
 /// 现存结论（None = 从未 stat 过，调用方退回记录值口径）。

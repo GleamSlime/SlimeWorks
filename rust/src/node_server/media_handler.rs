@@ -397,6 +397,58 @@ fn error_plain(status: StatusCode, message: &str) -> Response<Body> {
         .unwrap()
 }
 
+/// 判断 MP4/MOV 的 `moov` 是否在 `mdat` 之前（即已 faststart）。
+///
+/// 为什么这条判定值钱：`moov` 在文件末尾时，播放器必须先跳到文件尾部读索引
+/// 才能开始解码。本地读无所谓，但远程访问每一次跳转都是一趟网络往返，
+/// 叠加本服务端「一个连接只服务一个请求」（`Connection: close`）的约定，
+/// 表现为「打开要等半天、之后播放还断续」。
+///
+/// 实测同一目录 16 个同编码（h264 High/720p/AAC）的视频，卡顿的 5 个全是
+/// `ftyp,free,mdat,moov`，流畅的 11 个全是 `ftyp,moov,...`——与编码无关，
+/// 纯粹是容器布局。
+///
+/// 只看文件头部若干字节的顶层 atom 头，不解码、不整读文件：
+/// 遇到 mdat 就说明 moov 在后面（返回 false），遇到 moov 返回 true。
+pub fn mp4_is_faststart(path: &Path) -> Option<bool> {
+    use std::io::{BufReader, Read, Seek, SeekFrom};
+    let file = fs::File::open(path).ok()?;
+    let total = file.metadata().ok()?.len();
+    let mut reader = BufReader::new(file);
+    let mut offset: u64 = 0;
+    // 顶层 atom 一般不超过十几个，扫 32 个足够，也防异常文件死循环
+    for _ in 0..32 {
+        if offset + 8 > total {
+            return None;
+        }
+        reader.seek(SeekFrom::Start(offset)).ok()?;
+        let mut header = [0u8; 8];
+        reader.read_exact(&mut header).ok()?;
+        let size32 = u32::from_be_bytes([header[0], header[1], header[2], header[3]]);
+        let kind = &header[4..8];
+        let size = match size32 {
+            0 => total - offset, // 延伸到文件尾
+            1 => {
+                // 64 位扩展长度
+                let mut ext = [0u8; 8];
+                reader.read_exact(&mut ext).ok()?;
+                u64::from_be_bytes(ext)
+            }
+            s => s as u64,
+        };
+        if size < 8 {
+            return None; // 结构损坏，别乱判
+        }
+        match kind {
+            b"moov" => return Some(true),
+            b"mdat" => return Some(false),
+            _ => {}
+        }
+        offset = offset.checked_add(size)?;
+    }
+    None
+}
+
 /// 猜测媒体文件的 Content-Type
 pub fn guess_media_content_type(path: &str) -> String {
     let lower = path.to_lowercase();
@@ -1030,6 +1082,44 @@ mod tests {
         assert_eq!(guess_media_content_type("/x/a.unknown_ext"), "application/octet-stream");
     }
 
+    // ── faststart 探测：moov 在 mdat 之前才判 true ────────────────────────
+
+    /// 造一个合成 MP4：按给定顺序写 ftyp/atom，用于测容器布局判定。
+    fn write_fake_mp4(path: &Path, order: &[(&str, u32)]) {
+        use std::io::Write;
+        let mut f = fs::File::create(path).unwrap();
+        for (kind, payload) in order {
+            let size = 8 + payload;
+            f.write_all(&size.to_be_bytes()).unwrap();
+            f.write_all(kind.as_bytes()).unwrap();
+            f.write_all(&vec![0u8; *payload as usize]).unwrap();
+        }
+        f.flush().unwrap();
+    }
+
+    #[test]
+    fn faststart_detection_matches_atom_order() {
+        let dir = std::env::temp_dir().join(format!("sw_faststart_{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+
+        // faststart：ftyp, moov, mdat
+        let fast = dir.join("fast.mp4");
+        write_fake_mp4(&fast, &[("ftyp", 16), ("moov", 64), ("mdat", 128)]);
+        assert_eq!(mp4_is_faststart(&fast), Some(true), "moov 在 mdat 之前应判 faststart");
+
+        // 非 faststart：ftyp, free, mdat, moov（用户实测卡顿的那一组就是这个形状）
+        let slow = dir.join("slow.mp4");
+        write_fake_mp4(&slow, &[("ftyp", 16), ("free", 8), ("mdat", 128), ("moov", 64)]);
+        assert_eq!(mp4_is_faststart(&slow), Some(false), "moov 在 mdat 之后应判非 faststart");
+
+        // 结构异常：长度字段小于 8 时不做判断（返回 None，别误判成卡顿组）
+        let broken = dir.join("broken.mp4");
+        fs::write(&broken, [0u8, 0, 0, 1, b'f', b't', b'y', b'p']).unwrap();
+        assert_eq!(mp4_is_faststart(&broken), None, "损坏结构应返回 None");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     // ── 缩略图进度计数：不触媒体生成也要成对 ─────────────────────────────
 
     #[test]
@@ -1040,4 +1130,49 @@ mod tests {
         let (after_total, after_completed) = thumb_generation_progress();
         assert_eq!((before_total, before_completed), (after_total, after_completed));
     }
+}
+
+/// 非 faststart 的 MP4 优先发送 `.SlimeWorks/faststart/<文件名>` 重封装副本。
+///
+/// 行为约定（**绝不阻塞本次请求**）：
+/// - 副本已存在且不旧于源文件 → 直接返回副本路径；
+/// - 没有副本且源确实非 faststart → 后台线程排一个重封装任务，本次仍返回源路径；
+/// - 非 MP4/已 faststart/判不了 → 原样返回源路径。
+///
+/// 为什么不在请求里同步等：重封装是分钟级（613MB/118min 实测 236s），
+/// 请求线程等它等于把远程播放卡死；复制是纯 `-c copy`，生成期间原文件照常可播。
+pub fn prefer_faststart_variant(file_path: &str) -> String {
+    let lower = file_path.to_lowercase();
+    if !(lower.ends_with(".mp4") || lower.ends_with(".m4v") || lower.ends_with(".mov")) {
+        return file_path.to_string();
+    }
+    let src = Path::new(file_path);
+    let Some(parent) = src.parent() else {
+        return file_path.to_string();
+    };
+    let Some(name) = src.file_name() else {
+        return file_path.to_string();
+    };
+    let dst = parent.join(".SlimeWorks").join("faststart").join(name);
+    if let Ok(meta) = dst.metadata() {
+        // 副本比源新（或不旧）才敢用：源被替换后 mtime 会变新，此时走重建
+        let fresh = match (meta.modified(), src.metadata().and_then(|m| m.modified())) {
+            (Ok(dm), Ok(sm)) => dm >= sm,
+            _ => false,
+        };
+        if fresh {
+            return dst.to_string_lossy().into_owned();
+        }
+    }
+    // 没有可用副本：确认它确实需要重封装，再排后台任务（不阻塞本次请求）
+    if mp4_is_faststart(src) == Some(false) {
+        let owned = file_path.to_string();
+        std::thread::Builder::new()
+            .name("faststart-ensure".into())
+            .spawn(move || {
+                let _ = crate::api::media_collection::ensure_faststart_copy_blocking(&owned);
+            })
+            .ok();
+    }
+    file_path.to_string()
 }

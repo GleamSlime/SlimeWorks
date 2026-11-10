@@ -513,8 +513,12 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
                 }
             }
 
-            // 视频/音频文件：支持 Range 请求的流式分发
-            match media_handler::serve_media_file_with_range(&file_path, range_header.as_deref()) {
+            // 视频/音频文件：支持 Range 请求的流式分发。
+            // 非 faststart 的 MP4（moov 在文件尾）远程播放会反复跳尾读索引，
+            // 表现为「打开半天、之后断续」——有重封装副本就改发副本，
+            // 没有就后台排一个（本次仍发原文件，下次命中）。
+            let served_path = media_handler::prefer_faststart_variant(&file_path);
+            match media_handler::serve_media_file_with_range(&served_path, range_header.as_deref()) {
                 Ok((status, headers, body_bytes)) => {
                     let mut header = format!("HTTP/1.1 {}\r\n", status);
                     for (k, v) in &headers {

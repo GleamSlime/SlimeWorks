@@ -454,3 +454,31 @@ bool deleteSmartFolder({required String id}) {
   if (MockMode.enabled) return _m.deleteSmartFolder(id);
   return rust.deleteSmartFolder(id: id);
 }
+
+/// 该视频容器是否已 faststart（`moov` 在 `mdat` 之前）。
+///
+/// 非 faststart 的 MP4 远程播放要先跳到文件尾读索引，每次跳转都是一趟网络
+/// 往返，表现为「打开半天、之后断续」——与编码无关，纯容器布局问题。
+/// 非 MP4/MOV 返回 null（无从判断，也不需处理）。
+Future<bool?> videoIsFaststart({required String filePath}) async {
+  if (MockMode.enabled) return true;
+  try {
+    return await rust.videoIsFaststart(filePath: filePath);
+  } catch (_) {
+    // 探测是「锦上添花」：拿不到结论按「判不了」处理（返回 null 不改动任何行为），
+    // 不该让它把播放/导入链路打成错误态
+    return null;
+  }
+}
+
+/// 把非 faststart 的 MP4 重封装成 faststart 副本（`-c copy`，无损），返回副本路径。
+/// 已是 faststart 或非 MP4 返回 null；副本写资源旁 `.SlimeWorks/faststart/`。
+Future<String?> ensureFaststartCopy({required String filePath}) async {
+  if (MockMode.enabled) return null;
+  try {
+    return await rust.ensureFaststartCopy(filePath: filePath);
+  } catch (_) {
+    // 重封装失败只意味着「继续用原文件」，调用方无需感知
+    return null;
+  }
+}

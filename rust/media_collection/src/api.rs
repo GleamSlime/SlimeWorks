@@ -5880,3 +5880,158 @@ mod tests {
         assert!(FFMPEG_PIDS.read().unwrap().is_empty());
     }
 }
+
+// ── faststart 探测与重封装（远程播放卡顿的结构性修复）───────────────────────
+//
+// 背景：`moov` 在文件末尾（非 faststart）时，播放器必须先跳到文件尾部读索引
+// 才能开始解码。远程访问每次跳转都是一趟网络往返，叠加节点「一个连接只服务
+// 一个请求」的约定，表现为「打开要等半天、之后播放还断续」。
+// 实测同目录 16 个同编码（h264 High/720p/AAC）视频中，卡顿的 5 个全是
+// `ftyp,free,mdat,moov`，流畅的 11 个全是 `ftyp,moov,...`——与编码无关。
+
+/// 判定 MP4/MOV 的 `moov` 是否在 `mdat` 之前（单测在 node_server 侧覆盖）。
+fn mp4_moov_before_mdat(path: &std::path::Path) -> Option<bool> {
+    use std::io::{BufReader, Read, Seek, SeekFrom};
+    let file = std::fs::File::open(path).ok()?;
+    let total = file.metadata().ok()?.len();
+    let mut reader = BufReader::new(file);
+    let mut offset: u64 = 0;
+    // 顶层 atom 一般十几个，扫 32 个足够，也防异常文件死循环
+    for _ in 0..32 {
+        if offset.saturating_add(8) > total {
+            return None;
+        }
+        reader.seek(SeekFrom::Start(offset)).ok()?;
+        let mut header = [0u8; 8];
+        reader.read_exact(&mut header).ok()?;
+        let size32 = u32::from_be_bytes([header[0], header[1], header[2], header[3]]);
+        let kind = &header[4..8];
+        let size = match size32 {
+            0 => total - offset,
+            1 => {
+                let mut ext = [0u8; 8];
+                reader.read_exact(&mut ext).ok()?;
+                u64::from_be_bytes(ext)
+            }
+            s => s as u64,
+        };
+        if size < 8 {
+            return None; // 结构损坏，不做判断
+        }
+        match kind {
+            b"moov" => return Some(true),
+            b"mdat" => return Some(false),
+            _ => {}
+        }
+        offset = offset.checked_add(size)?;
+    }
+    None
+}
+
+/// 判定视频容器是否已 faststart；非 MP4/MOV 容器返回 None（无从判断/无需处理）。
+///
+/// 异步执行：SMB/外置卷上的 open + seek 是网络往返，不能挂 UI 线程。
+pub async fn video_is_faststart(file_path: String) -> Result<Option<bool>, String> {
+    let lower = file_path.to_lowercase();
+    if !(lower.ends_with(".mp4") || lower.ends_with(".m4v") || lower.ends_with(".mov")) {
+        return Ok(None);
+    }
+    // media_collection 不依赖 tokio：用 std 线程 + 通道把阻塞 IO 挪出调用线程，
+    // 对外仍是 async 签名（FRB 会把它放在自己的线程池上等）。
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("faststart-probe".into())
+        .spawn(move || {
+            let _ = tx.send(mp4_moov_before_mdat(std::path::Path::new(&file_path)));
+        })
+        .map_err(|error| format!("faststart 探测线程启动失败: {}", error))?;
+    rx.recv()
+        .map_err(|_| "faststart 探测线程异常退出".to_string())
+}
+
+/// 把非 faststart 的 MP4 重封装成 faststart 副本，返回副本路径。
+///
+/// - 已是 faststart / 非 MP4：返回 None（调用方继续用原文件）；
+/// - 纯 `-c copy` 重封装，不重编码、画质无损；
+/// - 副本写资源旁 `.SlimeWorks/faststart/<文件名>`，**绝不修改原文件**；
+/// - 副本 mtime 不早于源文件时直接复用，源被替换（mtime 变新）才重建；
+/// - 生成用全局 ffmpeg 信号量，与封面/抽帧共享并发上限。
+pub async fn ensure_faststart_copy(file_path: String) -> Result<Option<String>, String> {
+    // ffmpeg 重封装是分钟级阻塞活：开 std 线程干活，调用线程（FRB 池）只等结果，
+    // 不把池线程占在 Command::status 上。
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("faststart-remux".into())
+        .spawn(move || {
+            let _ = tx.send(ensure_faststart_copy_blocking(&file_path));
+        })
+        .map_err(|error| format!("faststart 重封装线程启动失败: {}", error))?;
+    rx.recv()
+        .map_err(|_| "faststart 重封装线程异常退出".to_string())?
+}
+
+/// [ensure_faststart_copy] 的同步实现（节点后台线程直接调用）。
+///
+/// 逻辑与异步版完全一致，抽出来避免两套代码漂移：
+/// 异步版负责「不占调用线程」，本函数负责真正干活。
+pub fn ensure_faststart_copy_blocking(file_path: &str) -> Result<Option<String>, String> {
+    let src = std::path::PathBuf::from(file_path);
+    if !src.is_file() {
+        return Ok(None);
+    }
+    match mp4_moov_before_mdat(&src) {
+        Some(true) | None => return Ok(None),
+        Some(false) => {}
+    }
+    let parent = match src.parent() {
+        Some(p) => p,
+        None => return Ok(None),
+    };
+    let name = match src.file_name() {
+        Some(n) => n,
+        None => return Ok(None),
+    };
+    let dir = parent.join(".SlimeWorks").join("faststart");
+    let dst = dir.join(name);
+    let fresh = match (dst.metadata(), src.metadata()) {
+        (Ok(d), Ok(s)) => match (d.modified(), s.modified()) {
+            (Ok(dm), Ok(sm)) => dm >= sm,
+            _ => false,
+        },
+        _ => false,
+    };
+    if fresh {
+        return Ok(Some(dst.to_string_lossy().into_owned()));
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建 faststart 缓存目录失败: {}", e))?;
+    let tmp = dir.join(format!(".{}.tmp", name.to_string_lossy()));
+    acquire_thumb_permit();
+    let status = std::process::Command::new(ffmpeg_cmd())
+        .args([
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            &src.to_string_lossy(),
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            "-f",
+            "mp4",
+            &tmp.to_string_lossy(),
+        ])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    release_thumb_permit();
+    let ok = matches!(status, Ok(s) if s.success());
+    if !ok {
+        let _ = std::fs::remove_file(&tmp);
+        return Err("faststart 重封装失败（ffmpeg 退出异常）".to_string());
+    }
+    std::fs::rename(&tmp, &dst).map_err(|e| format!("faststart 副本落盘失败: {}", e))?;
+    sw_info!("[faststart] 已生成重封装副本: {}", dst.display());
+    Ok(Some(dst.to_string_lossy().into_owned()))
+}

@@ -24,6 +24,7 @@ import 'package:slime_works/core/utils/natural_compare.dart';
 import 'package:slime_works/pages/collection/picture/components/media_library_item.dart';
 import 'package:slime_works/pages/collection/picture/components/smart_folder.dart';
 import 'package:slime_works/src/rust/api/media_collection.dart' as media_api;
+import 'package:slime_works/mock/seams/media_api_seam.dart' as media_seam;
 import 'package:slime_works/view_models/media_library_viewmodel.dart';
 
 /// 桩节点服务：网络取数走内存桩，URL 拼接等纯逻辑保留真实实现。
@@ -1926,6 +1927,20 @@ void main() {
         () => vm.prewarmLocalCollectionCovers(only: const []),
         returnsNormally,
       );
+    });
+  });
+
+  // ── faststart 探测（远程播放卡顿的结构性根因）─────────────────────────────
+  //
+  // 实测：同目录 16 个同编码（h264 High/720p/AAC）视频，卡顿的 5 个全是
+  // `ftyp,free,mdat,moov`，流畅的 11 个全是 `ftyp,moov,...`——与编码无关。
+  // 判定在 Rust 侧（mp4_is_faststart，有单测覆盖），这里只锁 Dart 接缝的降级口径。
+  group('faststart 接缝', () {
+    test('FFI 不可用时探测与重封装都安静返回 null，不抛到调用方', () async {
+      // 走 seam（生产链路的入口）：接缝负责把 FRB 未初始化的异常吞成 null，
+      // 调用方（播放/导入）不需要各自 try
+      expect(await media_seam.videoIsFaststart(filePath: '/lib/a.mp4'), isNull);
+      expect(await media_seam.ensureFaststartCopy(filePath: '/lib/a.mp4'), isNull);
     });
   });
 
