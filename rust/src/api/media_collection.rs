@@ -497,12 +497,36 @@ pub fn delete_collection_local_files(collection_id: String) -> anyhow::Result<u3
 }
 
 /// 将集合物理转移到目标目录。
+/// 返回成功转移的集合数（保留旧签名；需要失败数请用
+/// [transfer_collections_with_stats]）。
 pub fn transfer_collections(
     collection_ids: Vec<String>,
     target_dir: String,
 ) -> anyhow::Result<u32> {
     media_collection::transfer_collections(collection_ids, target_dir)
         .map(|c| c as u32)
+        .map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 集合转移的结果：成功数与失败数分开上报。
+///
+/// 旧接口只返回成功数，且历史上把「重新导入失败」也计入成功——用户看到
+/// 「成功转移 N 个」却找不到任何东西。上层据此区分「全部成功 / 部分失败」。
+pub struct TransferOutcome {
+    pub success_count: u32,
+    pub fail_count: u32,
+}
+
+/// 将集合物理转移到目标目录，同时上报成功与失败数量。
+pub fn transfer_collections_with_stats(
+    collection_ids: Vec<String>,
+    target_dir: String,
+) -> anyhow::Result<TransferOutcome> {
+    media_collection::transfer_collections_with_stats(collection_ids, target_dir)
+        .map(|outcome| TransferOutcome {
+            success_count: outcome.success_count,
+            fail_count: outcome.fail_count,
+        })
         .map_err(|e| anyhow::anyhow!(e))
 }
 

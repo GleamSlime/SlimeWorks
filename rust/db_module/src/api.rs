@@ -99,8 +99,8 @@ pub fn db_bind_table(table_name: String, db_path: String) -> DbResult<()> {
         }
         None => {}
     }
-    // 将 String 转换为 'static str（通过泄漏内存，每表仅泄漏一次）
-    let static_name: &'static str = Box::leak(table_name.clone().into_boxed_str());
+    // 表名转 &'static str：同名复用同一份泄漏，避免重复绑定/注册把名字反复泄漏
+    let static_name = intern_table_name(&table_name);
     storage
         .register_table(static_name)
         .map_err(|e| format!("Failed to register table: {}", e))?;
@@ -108,11 +108,36 @@ pub fn db_bind_table(table_name: String, db_path: String) -> DbResult<()> {
     Ok(())
 }
 
+/// 表名 → 已泄漏的 &'static str（同名只泄漏一次）。
+///
+/// redb 的 TableDefinition 要求 &'static str 表名，而这里是运行期字符串，
+/// 早先的实现每次调用都 `Box::leak` 一次：业务代码里几乎每个 API 顶部都调
+/// `db_register_table`，同一张表名被反复泄漏，几十万次调用后是实打实的内存增长。
+/// 表名集合是有限且稳定的，进程内每个名字只留一份即可。
+static STATIC_TABLE_NAMES: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+
+fn static_table_names() -> &'static Mutex<HashMap<String, &'static str>> {
+    STATIC_TABLE_NAMES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 取表名对应的 &'static str；同名复用第一次泄漏出来的那份。
+fn intern_table_name(table_name: &str) -> &'static str {
+    let mut guard = static_table_names()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Some(existing) = guard.get(table_name) {
+        return existing;
+    }
+    let leaked: &'static str = Box::leak(table_name.to_string().into_boxed_str());
+    guard.insert(table_name.to_string(), leaked);
+    leaked
+}
+
 /// 注册表（兼容旧接口：仅当表已绑定时在其绑定的实例上注册；未绑定时为空操作）。
 #[frb(sync)]
 pub fn db_register_table(table_name: String) -> DbResult<()> {
     if let Some(storage) = resolve(&table_name).ok() {
-        let static_name: &'static str = Box::leak(table_name.into_boxed_str());
+        let static_name = intern_table_name(&table_name);
         return storage
             .register_table(static_name)
             .map_err(|e| format!("Failed to register table: {}", e));
@@ -254,11 +279,10 @@ pub fn db_merge_tables(
     let dst = get_or_open(&dst_path)?;
     let mut copied = 0u64;
     for table in &tables {
-        // 在两个实例上注册表定义（不影响全局路由）
-        let src_name: &'static str = Box::leak(table.clone().into_boxed_str());
-        let _ = src.register_table(src_name);
-        let dst_name: &'static str = Box::leak(table.clone().into_boxed_str());
-        let _ = dst.register_table(dst_name);
+        // 在两个实例上注册表定义（不影响全局路由）；同名复用同一份 &'static str
+        let name = intern_table_name(table);
+        let _ = src.register_table(name);
+        let _ = dst.register_table(name);
 
         // 单次读事务拉取源表全部记录
         let src_records = match src.list_all(table) {
@@ -327,6 +351,46 @@ mod tests {
         let root = std::env::temp_dir().join(format!("db_module_api_test_{}", tag));
         std::fs::create_dir_all(&root).expect("应能创建测试临时目录");
         root
+    }
+
+    // ── 表名 intern 化（P3-2）─────────────────────────────────────────────
+
+    /// 回归：同名表反复注册必须复用同一份 &'static str，
+    /// 而不是每次调用都 Box::leak 一份新字符串（表名会被泄漏到进程退出）。
+    #[test]
+    fn interned_table_names_are_stable_per_name() {
+        let a = intern_table_name("intern_probe_tbl");
+        let b = intern_table_name("intern_probe_tbl");
+        assert_eq!(
+            a.as_ptr(),
+            b.as_ptr(),
+            "同名表必须复用同一份泄漏字符串，而不是每次重新 Box::leak"
+        );
+        // 不同名字必须是不同的字符串内容
+        let other = intern_table_name("intern_probe_tbl_2");
+        assert_eq!(other, "intern_probe_tbl_2");
+        assert_ne!(a.as_ptr(), other.as_ptr());
+        // 已有名字再次查询依然是第一次那份
+        assert_eq!(intern_table_name("intern_probe_tbl").as_ptr(), a.as_ptr());
+    }
+
+    /// 业务侧最常见的用法：同一张表在多个 API 顶部反复 db_register_table。
+    /// 只要绑定存在，重复调用必须成功且不改变数据。
+    #[test]
+    fn repeated_db_register_table_is_idempotent_for_same_name() {
+        let tag = unique_tag();
+        let root = temp_root(&tag);
+        let table = format!("regged_tbl_{}", tag);
+        let db_path = root.join("reg.db").to_str().unwrap().to_string();
+
+        db_bind_table(table.clone(), db_path).expect("绑定应成功");
+        for _ in 0..5 {
+            db_register_table(table.clone()).expect("重复注册同名表应幂等成功");
+        }
+        db_set(table.clone(), "k".into(), "v".into()).unwrap();
+        assert_eq!(db_get(table.clone(), "k".into()).unwrap(), Some("v".to_string()));
+
+        std::fs::remove_dir_all(root).ok();
     }
 
     #[test]

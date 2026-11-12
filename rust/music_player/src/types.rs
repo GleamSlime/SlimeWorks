@@ -50,6 +50,12 @@ pub struct Playlist {
     /// （无此字段）反序列化失败，会被调用方的 filter_map 静默丢弃导致数据丢失。
     #[serde(default)]
     pub folder_id: Option<String>,
+    /// 列表内最大 order 的缓存值（列表级元数据，追加新曲时据此取下一个 order）。
+    /// None 表示旧记录还没有这个字段：此时调用方回退成整表算一次并写回，
+    /// 之后走增量维护。用 Option 而不是默认 0，是因为「只有一个 order=0 的列表」
+    /// 与「还不知道」必须区分得开。
+    #[serde(default)]
+    pub max_order: Option<i32>,
 }
 
 /// 音乐条目

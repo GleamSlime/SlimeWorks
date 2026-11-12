@@ -1,9 +1,11 @@
 use hyper::{Body, Request, Response, StatusCode};
 use media_collection::api as media_api;
+use std::collections::HashSet;
 use std::convert::Infallible;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex};
 
 /// 视频/音频流式传输的单次切片上限（2MB）
 const VIDEO_CHUNK_SIZE: u64 = 2 * 1024 * 1024;
@@ -635,6 +637,18 @@ pub fn serve_media_file_with_range(
     let total_length = metadata.len();
     let content_type = guess_media_content_type(file_path);
 
+    // 0 字节文件（空字幕/空附件是常见情形）必须提前回 200 + Content-Length: 0。
+    // 走下面任何一条 Range 路径都会得到 (0, total_length-1) = (0,0) → 长度 1 →
+    // read_exact 撞 EOF 变成 500，客户端把「这个文件是空的」误判成「节点出错」。
+    if total_length == 0 {
+        let headers = vec![
+            ("Content-Type".to_string(), content_type),
+            ("Content-Length".to_string(), "0".to_string()),
+            ("Accept-Ranges".to_string(), "bytes".to_string()),
+        ];
+        return Ok(("200 OK".to_string(), headers, Vec::new()));
+    }
+
     // 对视频/音频限制单次最大传输量，防止将整个大文件载入内存
     let is_av = is_video_file(file_path) || is_audio_file(file_path);
     let (start, capped_end) = match range {
@@ -695,6 +709,15 @@ pub fn serve_media_file_with_range(
 mod tests {
     use super::*;
     use hyper::{Body, Request};
+
+    /// FASTSTART_INFLIGHT 是进程级全局表，而 cargo 默认多线程并发跑用例。
+    /// 凡是要断言「在途计数」的用例都必须拿这把锁串行执行，
+    /// 否则别的用例起/停的重封装任务会串进来，计数断言随机飘。
+    static INFLIGHT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lock_inflight_serial() -> std::sync::MutexGuard<'static, ()> {
+        INFLIGHT_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     /// 构造带唯一后缀的临时媒体目录（与 handlers.rs 测试同一套路：
     /// 纯文件级依赖，不碰 db_module 全局绑定）
@@ -1120,6 +1143,181 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    // ── faststart 副本可用性判定：只看 mtime 会漏掉「新但坏」的副本 ─────────
+
+    #[test]
+    fn faststart_copy_usability_rejects_corrupt_and_empty() {
+        let dir = std::env::temp_dir().join(format!("sw_fastcopy_{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+
+        // 合法 faststart 副本（ftyp, moov, mdat）
+        let good = dir.join("good.mp4");
+        write_fake_mp4(&good, &[("ftyp", 16), ("moov", 64), ("mdat", 128)]);
+        assert!(faststart_copy_is_usable(&good), "合法 faststart 副本应可用");
+
+        // 并发写坏留下的副本：先完成者 rename，其余继续写已改名文件，
+        // 于是内容停在 mdat 中间（moov 在尾部）——mtime 却比源新。
+        let broken = dir.join("broken.mp4");
+        write_fake_mp4(&broken, &[("ftyp", 16), ("free", 8), ("mdat", 128), ("moov", 64)]);
+        assert!(
+            !faststart_copy_is_usable(&broken),
+            "结构非 faststart 的副本必须判为不可用（这正是并发写坏的形状）"
+        );
+
+        // 空文件 / 不存在
+        let empty = dir.join("empty.mp4");
+        fs::write(&empty, b"").unwrap();
+        assert!(!faststart_copy_is_usable(&empty), "空副本不可用");
+        assert!(!faststart_copy_is_usable(&dir.join("nope.mp4")), "不存在的副本不可用");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// 已损坏（mtime 更新但内容不可用）的副本要被删掉并重新排队重建
+    #[test]
+    fn corrupt_fresh_copy_is_discarded_and_requeued() {
+        let _serial = lock_inflight_serial();
+        let dir = std::env::temp_dir().join(format!("sw_fastrequeue_{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        let src = dir.join("movie.mp4");
+        // 源本身非 faststart（mdat 在前），副本目录里放一份 mtime 更新的坏副本
+        write_fake_mp4(&src, &[("ftyp", 16), ("mdat", 128), ("moov", 64)]);
+        let copy_dir = dir.join(".SlimeWorks").join("faststart");
+        fs::create_dir_all(&copy_dir).unwrap();
+        let dst = copy_dir.join("movie.mp4");
+        write_fake_mp4(&dst, &[("ftyp", 16), ("mdat", 128), ("moov", 64)]);
+        // 保证副本 mtime 不早于源：坏副本常带更新 mtime，这是它被误当 fresh 的原因
+        let newer = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        fs::File::options()
+            .write(true)
+            .open(&dst)
+            .unwrap()
+            .set_modified(newer)
+            .unwrap();
+
+        // 本次请求仍返回源路径（不阻塞），但坏副本必须已被删除，
+        // 且重建任务已被登记为在途
+        let served = prefer_faststart_variant(src.to_str().unwrap());
+        assert_eq!(served, src.to_string_lossy(), "本次仍发源文件");
+        assert!(!dst.exists(), "损坏副本必须被删除，否则会被永久当成 fresh 下发");
+
+        // 等在途线程收尾，避免与本目录后续用例串味
+        for _ in 0..100 {
+            if faststart_inflight_count() == 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// 并发场景端到端：多个请求同时进来，重封装任务只被登记一次。
+    ///
+    /// 这是 P0-2 的验收。注意不能依赖真实 ffmpeg 的耗时：重封装一秒内就跑完，
+    /// 用「峰值在途数」断言会随机飘（线程可能早就收尾了）。所以这里直接盯住
+    /// 行为契约——每个请求都立即返回源路径、绝不阻塞；重复起任务这件事由
+    /// faststart_inflight_dedup 用例在 register 层原子地钉住。
+    #[test]
+    fn concurrent_requests_never_block_and_always_fall_back_to_source() {
+        let _serial = lock_inflight_serial();
+        let dir = std::env::temp_dir().join(format!("sw_fastconc_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("concurrent.mp4");
+        write_fake_mp4(&src, &[("ftyp", 16), ("free", 8), ("mdat", 128), ("moov", 64)]);
+
+        let path = src.to_string_lossy().into_owned();
+        // 16 个调用同时读同一源文件：等价于 16 个 Range 请求同时到达
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(16));
+        let mut handles = Vec::new();
+        for _ in 0..16 {
+            let path = path.clone();
+            let barrier = barrier.clone();
+            handles.push(std::thread::spawn(move || {
+                barrier.wait();
+                // 请求线程绝不能被重封装拖住：这条断言就是「不阻塞」本身
+                prefer_faststart_variant(&path)
+            }));
+        }
+        for handle in handles {
+            let served = handle.join().expect("请求线程不应 panic");
+            // 副本还没生成好，本次一律落回源文件
+            assert_eq!(served, path, "首次请求必须仍发源文件");
+        }
+
+        // 收尾：等在途线程彻底退出，别影响后续用例的计数断言
+        for _ in 0..500 {
+            if faststart_inflight_count() == 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert_eq!(faststart_inflight_count(), 0, "任务结束后必须摘干净 key");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── 0 字节文件：必须 200 而不是撞 EOF 变 500 ──────────────────────────
+
+    #[test]
+    fn empty_file_served_as_200_with_zero_length() {
+        let dir = test_dir("empty");
+        let file = dir.join("empty.srt");
+        fs::write(&file, b"").unwrap();
+
+        // 无水 Range：历史实现会算出 (0, total-1) = (0, 0)，即长度 1，
+        // read_exact 立刻 EOF → Err → 连接层 500，客户端把空文件当节点故障。
+        let (status, headers, body) =
+            serve_media_file_with_range(file.to_str().unwrap(), None).unwrap();
+        assert_eq!(status, "200 OK");
+        assert!(body.is_empty());
+        let content_length = headers
+            .iter()
+            .find(|(k, _)| k == "Content-Length")
+            .map(|(_, v)| v.clone())
+            .expect("必须有 Content-Length");
+        assert_eq!(content_length, "0");
+
+        // 带 Range 的空文件同样不能报错（客户端可能先探测大小）
+        let (status, _, body) =
+            serve_media_file_with_range(file.to_str().unwrap(), Some("bytes=0-")).unwrap();
+        assert_eq!(status, "200 OK");
+        assert!(body.is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── faststart 在途去重：同一源文件同时只允许一条重封装线程 ─────────────
+
+    #[test]
+    fn faststart_inflight_dedup_allows_single_owner() {
+        let _serial = lock_inflight_serial();
+        let key = format!("/tmp/sw_inflight_dedup_{}.mp4", std::process::id());
+
+        // 首次登记成功
+        let guard = try_register_faststart_inflight(&key).expect("首次应登记成功");
+        assert_eq!(faststart_inflight_count(), 1);
+
+        // 第二次登记失败：这就是「几十个 Range 请求只起一条线程」的那道闸
+        assert!(
+            try_register_faststart_inflight(&key).is_none(),
+            "同一源文件不得重复登记"
+        );
+        assert_eq!(faststart_inflight_count(), 1, "失败登记不得污染在途表");
+
+        // 不同源文件互不影响
+        let other = format!("/tmp/sw_inflight_other_{}.mp4", std::process::id());
+        let other_guard = try_register_faststart_inflight(&other).expect("不同 key 应能登记");
+        assert_eq!(faststart_inflight_count(), 2);
+
+        // guard drop 后 key 被摘掉，可再次登记（RAII 覆盖提前返回/panic 展开）
+        drop(guard);
+        assert_eq!(faststart_inflight_count(), 1);
+        let again = try_register_faststart_inflight(&key).expect("摘除后应可重新登记");
+        drop(again);
+        drop(other_guard);
+        assert_eq!(faststart_inflight_count(), 0);
+    }
+
     // ── 缩略图进度计数：不触媒体生成也要成对 ─────────────────────────────
 
     #[test]
@@ -1130,6 +1328,60 @@ mod tests {
         let (after_total, after_completed) = thumb_generation_progress();
         assert_eq!((before_total, before_completed), (after_total, after_completed));
     }
+}
+
+/// 全局在途重封装任务表（key = 源文件路径）。
+///
+/// 触发条件要点：本函数有两条早返回（副本新鲜可用、源已 faststart/判不了），
+/// 所以**不是每个请求都起线程**；真正会起线程的是「副本缺失或过期」那一刻。
+/// 而那一刻往往被并发撞上——播放一个视频就是几十上百次 Range 请求，
+/// 首个请求排上重封装后，后续请求在副本落盘前仍会走到同一分支，
+/// 各自再起一条线程写**同一个**目标文件：先完成者 rename、其余继续写已改名文件
+/// → 副本内容错乱；而坏副本 mtime 比源新，于是被永久当 fresh 下发，
+/// 用户侧表现为「这个视频永远打不开」。所以登记点必须在这里（确认要 spawn 之后），
+/// 放在函数入口会误伤「副本已可直发」的绝大多数正常请求。
+static FASTSTART_INFLIGHT: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// 在途表的 RAII 守卫：线程无论正常结束还是提前返回，drop 时都会摘掉 key。
+struct FaststartInflightGuard(String);
+
+impl Drop for FaststartInflightGuard {
+    fn drop(&mut self) {
+        if let Ok(mut set) = FASTSTART_INFLIGHT.lock() {
+            set.remove(&self.0);
+        }
+    }
+}
+
+/// 尝试把源路径登记为「重封装在途」；已有同名在途任务时返回 None。
+fn try_register_faststart_inflight(key: &str) -> Option<FaststartInflightGuard> {
+    let mut set = FASTSTART_INFLIGHT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if !set.insert(key.to_string()) {
+        return None;
+    }
+    Some(FaststartInflightGuard(key.to_string()))
+}
+
+/// 判断已有副本是否真的能播：非空 + 顶层 atom 顺序确实是 faststart。
+///
+/// 只读文件头几十字节，成本可以忽略；不信任 mtime —— 并发写坏的那批副本
+/// 恰恰 mtime 比源新，光看时间戳永远发现不了。
+fn faststart_copy_is_usable(dst: &Path) -> bool {
+    match fs::metadata(dst) {
+        Ok(meta) if meta.is_file() && meta.len() > 0 => mp4_is_faststart(dst) == Some(true),
+        _ => false,
+    }
+}
+
+/// 当前在途的重封装任务数（测试与排查用）。
+pub fn faststart_inflight_count() -> usize {
+    FASTSTART_INFLIGHT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .len()
 }
 
 /// 非 faststart 的 MP4 优先发送 `.SlimeWorks/faststart/<文件名>` 重封装副本。
@@ -1160,19 +1412,33 @@ pub fn prefer_faststart_variant(file_path: &str) -> String {
             (Ok(dm), Ok(sm)) => dm >= sm,
             _ => false,
         };
-        if fresh {
+        if fresh && faststart_copy_is_usable(&dst) {
             return dst.to_string_lossy().into_owned();
+        }
+        if fresh {
+            // mtime 新但内容不可用 ⇒ 这是历史并发写坏留下的损坏副本。
+            // 删掉它再重建：不然 ensure 那里也会把「mtime 新」当成 fresh 直接跳过，
+            // 用户磁盘上那份坏副本会被永久下发（视频永远打不开）。
+            let _ = fs::remove_file(&dst);
         }
     }
     // 没有可用副本：确认它确实需要重封装，再排后台任务（不阻塞本次请求）
     if mp4_is_faststart(src) == Some(false) {
-        let owned = file_path.to_string();
-        std::thread::Builder::new()
-            .name("faststart-ensure".into())
-            .spawn(move || {
-                let _ = crate::api::media_collection::ensure_faststart_copy_blocking(&owned);
-            })
-            .ok();
+        // 在途去重：同一个源文件同时只允许一条重封装线程。
+        // 登记失败说明已有任务在跑，本次请求直接返回源路径即可——
+        // 那个正在跑的任务完成后的下一次请求就会命中副本。
+        if let Some(guard) = try_register_faststart_inflight(file_path) {
+            let owned = file_path.to_string();
+            let spawn_result = std::thread::Builder::new()
+                .name("faststart-ensure".into())
+                .spawn(move || {
+                    // guard 必须 move 进线程：线程退出（含 panic 展开）时才摘 key
+                    let _guard = guard;
+                    let _ = crate::api::media_collection::ensure_faststart_copy_blocking(&owned);
+                });
+            // 线程起不来时 guard 已随 spawn 的 Err 一起被 drop（不进闭包），此处无需额外处理
+            let _ = spawn_result;
+        }
     }
     file_path.to_string()
 }

@@ -13,41 +13,33 @@ use crate::types::{
 };
 
 // ── FFmpeg/FFprobe 可执行文件路径（由外部初始化时注入）───────────────────────
-static FFMPEG_PATH: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
-static FFPROBE_PATH: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+//
+// 注册表本体在 db_module::ffmpeg（基础层共享）：music_player 抽内嵌封面同样要起
+// ffmpeg，而与 media_collection 之间不能互相依赖（media_collection 依赖
+// db_module，反向加边会成环）。各持一份注册表的后果是「Dart 侧只注册到其中
+// 一份」，另一条链路仍按裸名去 PATH 里找，用户装了内置 ffmpeg 时静默失效。
+// 这里只做转发，保持既有函数签名不变。
 
 /// 注册 ffmpeg 可执行文件的绝对路径。
 /// 必须在调用任何缩略图生成函数之前调用（通常在应用启动时由 api/ffmpeg.rs 注入）。
 /// 可多次调用以更新路径（如 ffmpeg 下载完成后重新注册）。
 pub fn register_ffmpeg_path(path: String) {
-    if let Ok(mut guard) = FFMPEG_PATH.write() {
-        *guard = Some(path);
-    }
+    db_module::ffmpeg::register_ffmpeg_path(path);
 }
 
 /// 注册 ffprobe 可执行文件的绝对路径。
 pub fn register_ffprobe_path(path: String) {
-    if let Ok(mut guard) = FFPROBE_PATH.write() {
-        *guard = Some(path);
-    }
+    db_module::ffmpeg::register_ffprobe_path(path);
 }
 
 /// 获取已注册的 ffmpeg 路径，若未注册则回退到系统 PATH 中的 "ffmpeg"。
 pub fn ffmpeg_cmd() -> String {
-    FFMPEG_PATH
-        .read()
-        .ok()
-        .and_then(|g| g.clone())
-        .unwrap_or_else(|| "ffmpeg".to_string())
+    db_module::ffmpeg::ffmpeg_cmd()
 }
 
 /// 获取已注册的 ffprobe 路径，若未注册则回退到系统 PATH 中的 "ffprobe"。
 pub fn ffprobe_cmd() -> String {
-    FFPROBE_PATH
-        .read()
-        .ok()
-        .and_then(|g| g.clone())
-        .unwrap_or_else(|| "ffprobe".to_string())
+    db_module::ffmpeg::ffprobe_cmd()
 }
 
 /// 全局 ffmpeg 子进程并发上限（由 Flutter 端通过 register_ffmpeg_concurrency 设置）。
@@ -1106,17 +1098,65 @@ fn node_thumb_disk_get(path: &std::path::Path) -> Option<Vec<u8>> {
     if !meta.is_file() || meta.len() == 0 {
         return None;
     }
-    std::fs::read(path).ok().filter(|b| !b.is_empty())
+    let bytes = std::fs::read(path).ok()?;
+    // 历史版本用固定名的 .jpg.part 并发写，磁盘上可能已经躺着拼凑坏的图；
+    // 命中坏缓存时删掉它，让本次走重新生成——否则这张封面永远坏下去。
+    if !looks_like_jpeg(&bytes) {
+        let _ = std::fs::remove_file(path);
+        sw_warn!("[node-thumb] 磁盘缓存不是有效 JPEG，已删除并重新生成: {:?}", path);
+        return None;
+    }
+    Some(bytes)
+}
+
+/// 写入磁盘缩略图缓存的临时文件名。
+///
+/// 必须是唯一名：同一张封面会被多个请求并发生成（客户端一屏几十张、超时重发
+/// 都会撞同一 key），固定 `.jpg.part` 让两个线程写同一个临时文件，交错写入后
+/// rename 出去的是一张拼凑的坏图，且它会被当作有效缓存长期下发。
+/// pid + 原子计数足够区分进程内并发与跨进程（多个节点实例共用缓存目录）。
+fn node_thumb_temp_path(path: &std::path::Path) -> std::path::PathBuf {
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("thumb");
+    let temp_name = format!(".{}.{}.{}.part", file_name, std::process::id(), seq);
+    path.with_file_name(temp_name)
+}
+
+/// 这份字节是不是一张完整的 JPEG。
+///
+/// 只判「非空」不够：并发写坏或被进程中途杀掉留下的半截文件同样非空，读出来
+/// 是无法解码的图，客户端每次都要重试却又永远命中这份坏缓存。
+/// 顶层只看 SOI 魔数与 EOI 结束标记，不做完整解码（这条路径每张封面都会走）。
+fn looks_like_jpeg(bytes: &[u8]) -> bool {
+    if bytes.len() < 4 {
+        return false;
+    }
+    // node thumb 的输出固定走 image crate / ffmpeg 的 mjpeg，一定以 SOI(FFD8) 开头
+    let starts = bytes[0] == 0xFF && bytes[1] == 0xD8;
+    // 末尾应有 EOI(FFD9)；给某些编码器多写的填充字节留一小段余量
+    let tail = &bytes[bytes.len().saturating_sub(16)..];
+    let ends = tail.windows(2).any(|window| window == [0xFF, 0xD9]);
+    starts && ends
 }
 
 /// 写磁盘缓存：失败不影响本次响应（只少了一次后续加速）。
 fn node_thumb_disk_put(path: &std::path::Path, bytes: &[u8]) {
+    // 不合格的字节不写盘：宁可不缓存，也不能让坏图占住这个 key
+    if !looks_like_jpeg(bytes) {
+        return;
+    }
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    // 先写临时文件再改名：避免进程在写一半时被杀，留下半张图被当作有效缓存
-    let tmp = path.with_extension("jpg.part");
-    if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, path).is_err() {
+    // 先写临时文件再改名：避免进程在写一半时被杀，留下半张图被当作有效缓存；
+    // 临时名唯一化，防并发写同一 key 时互相覆盖成拼凑图。
+    let tmp = node_thumb_temp_path(path);
+    if std::fs::write(&tmp, bytes).is_ok() {
+        if std::fs::rename(&tmp, path).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+    } else {
         let _ = std::fs::remove_file(&tmp);
     }
 }
@@ -2056,14 +2096,74 @@ pub fn extract_video_scrub_frames(
 
 fn normalize_folder_path(path: &Path) -> Result<String, String> {
     let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    let s = canonical.to_string_lossy().into_owned();
-    // Windows canonicalize adds \\?\ prefix – strip it for consistent storage/comparison
-    #[cfg(windows)]
-    let s = s
-        .strip_prefix("\\\\?\\")
-        .map(|v| v.to_string())
-        .unwrap_or(s);
-    Ok(s)
+    Ok(normalize_path_string(&canonical.to_string_lossy()))
+}
+
+/// 纯字符串层面的路径规范化，**不碰文件系统**。
+///
+/// 存在的意义是让「同一条路径的不同写法」能相互匹配上：嵌套目录被删掉后
+/// 重扫父目录时，DB 里存的历史集合路径可能带尾斜杠、混用分隔符或含 `.`/`..`，
+/// 逐字比较会认不出来、于是又新建一个集合（用户看到的「幽灵集合」），
+/// 而原集合还留着已删条目。
+///
+/// 刻意不做 canonicalize：重扫的目标目录可能已不存在（删除后重扫父目录时
+/// 子目录刚被删），canonicalize 会失败并退回原样，等于什么都没规范化。
+fn normalize_path_string(raw: &str) -> String {
+    // 统一分隔符：Windows 上 / 与 \ 混用是常态
+    let unified = raw.replace('\\', "/");
+    // Windows canonicalize 的 \\?\ 前缀会陷在字符串里，剥掉才与普通写法一致
+    let unified = unified.strip_prefix("//?/").unwrap_or(&unified).to_string();
+    // 盘符统一大写，避免 C: / c: 分家
+    let mut normalized = String::with_capacity(unified.len());
+    let mut chars = unified.chars().peekable();
+    if unified.len() >= 2 && unified.as_bytes()[1] == b':' {
+        let drive = unified.chars().next().unwrap_or('\0');
+        normalized.push(drive.to_ascii_uppercase());
+        normalized.push(':');
+        chars.next();
+        chars.next();
+    }
+    // lexical 折叠 . 与 ..，不解析符号链接
+    let rest: String = chars.collect();
+    let absolute = rest.starts_with('/');
+    let mut segments: Vec<&str> = Vec::new();
+    for segment in rest.split('/') {
+        match segment {
+            "" | "." => continue,
+            ".." => {
+                // 绝对路径上多出来的 .. 直接丢弃（不能越过根）；相对路径则保留
+                if matches!(segments.last(), Some(&last) if last != "..") {
+                    segments.pop();
+                } else if !absolute {
+                    segments.push("..");
+                }
+            }
+            other => segments.push(other),
+        }
+    }
+    if absolute || normalized.ends_with(':') {
+        normalized.push('/');
+    }
+    normalized.push_str(&segments.join("/"));
+    // 尾斜杠统一去掉（根目录 "/" 除外），否则「/a/b」与「/a/b/」是两个集合
+    while normalized.len() > 1 && normalized.ends_with('/') {
+        if normalized == "/" {
+            break;
+        }
+        normalized.pop();
+    }
+    if normalized.is_empty() {
+        normalized.push('/');
+    }
+    normalized
+}
+
+/// 两条路径是否指向同一目录（按规范化后的字符串比较）。
+fn paths_equivalent(left: &str, right: &str) -> bool {
+    if left == right {
+        return true;
+    }
+    normalize_path_string(left) == normalize_path_string(right)
 }
 
 fn collection_table_name() -> String {
@@ -2154,6 +2254,38 @@ fn get_collections() -> &'static Arc<Mutex<Vec<MediaCollection>>> {
     })
 }
 
+/// 取条目缓存锁。
+///
+/// 历史上这里直接 `lock()` 后 `map_err`，于是「某次持锁期间 panic」会把锁永久
+/// 毒化：此后所有 lock 一律返回 Err，媒体库全功能瘫痪直到重启进程。锁内保护的
+/// 只是一个 `Option<Vec<MediaItem>>`，即使 poison 也不可能留下半更新的结构，
+/// 所以直接取回内层数据继续用（`into_inner`）——这才是这类纯数据锁的正确语义。
+fn lock_items() -> std::sync::MutexGuard<'static, Option<Vec<MediaItem>>> {
+    items_mutex().lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// 加载条目并确认缓存已就绪；失败返回中文 Err，不返回 panic。
+///
+/// 调用方拿到的仍是锁内的 `Option`，用 [items_or_err] 取引用而不是 `unwrap()`：
+/// 在持锁期间 panic 会把 items_mutex 毒化（本轮修复的核心问题）。
+/// 刻意返回 `Result<(), _>` 而不是 `Result<Vec<_>, _>`——整表是几十万条，
+/// 无谓的 clone 代价远超这点语法糖。
+fn ensure_items_ready(
+    guard: &mut Option<Vec<MediaItem>>,
+) -> Result<(), String> {
+    ensure_items_loaded(guard)?;
+    // 极少数情况下别的线程刚好把缓存清回 None（release_items_from_memory），
+    // 再补一次加载；仍然拿不到才算真失败。
+    ensure_items_loaded(guard)
+}
+
+/// 从已就绪的缓存里取条目引用；没就绪时报中文错误而不是 unwrap。
+fn items_or_err(items: &Option<Vec<MediaItem>>) -> Result<&Vec<MediaItem>, String> {
+    items
+        .as_ref()
+        .ok_or_else(|| "媒体条目缓存暂不可用，请稍后重试".to_string())
+}
+
 /// 返回 MEDIA_ITEMS 静态 Mutex 的引用。
 /// OnceLock 保证 Mutex 本身只初始化一次；其内 Option<Vec> 可随时清空再重载。
 fn items_mutex() -> &'static Mutex<Option<Vec<MediaItem>>> {
@@ -2166,7 +2298,11 @@ fn items_mutex() -> &'static Mutex<Option<Vec<MediaItem>>> {
 
 /// 若 guard 中的 Option 为 None，则从数据库中加载所有条目到内存；
 /// 同时记录访问时间戳供空闲检测使用。
-fn ensure_items_loaded(items: &mut Option<Vec<MediaItem>>) {
+///
+/// 返回 Err 表示「数据库没就绪、条目也没能加载出来」：调用方必须把这次失败
+/// 当成一次普通错误上报，绝不能 `as_ref().unwrap()`——那会在**持锁期间** panic，
+/// 把 items_mutex 毒化，媒体库从此永久瘫痪。
+fn ensure_items_loaded(items: &mut Option<Vec<MediaItem>>) -> Result<(), String> {
     // 更新最近访问时间戳
     let now_secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -2206,12 +2342,16 @@ fn ensure_items_loaded(items: &mut Option<Vec<MediaItem>>) {
             }
             // 库都没开成：不落 Some(空)，保持 None 下次访问再重试，
             // 免得把故障期的空态永久缓存（同 get_collections 的落册守卫）
-            Err(e) => sw_warn!(
-                "[media_cache] 加载媒体条目失败且数据库未就绪，本次不缓存，下次重试: {}",
-                e
-            ),
+            Err(e) => {
+                sw_warn!(
+                    "[media_cache] 加载媒体条目失败且数据库未就绪，本次不缓存，下次重试: {}",
+                    e
+                );
+                return Err(format!("媒体数据库尚未就绪，无法加载媒体条目: {}", e));
+            }
         }
     }
+    Ok(())
 }
 
 /// 将 MEDIA_ITEMS 内存缓存清空（设回 None），Vec 被 drop，内存立即归还给 OS。
@@ -2353,13 +2493,17 @@ fn upsert_collection_from_folder(
     let normalized_path = normalize_folder_path(folder)?;
     sw_debug!("[media_scan] normalized_path = {:?}", normalized_path);
 
+    // 按「规范化后的路径等价」匹配历史集合，而不是逐字比较：删除嵌套目录后
+    // 重扫父目录时，库里那条记录的路径可能带尾斜杠/不同分隔符/含 ./..，
+    // 逐字比会认不出来而新建一个集合（用户看到的「幽灵集合」），
+    // 旧集合则继续留着已删条目。
     let existing = {
         let collections = get_collections()
             .lock()
             .map_err(|error| error.to_string())?;
         collections
             .iter()
-            .find(|collection| collection.folder_path == normalized_path)
+            .find(|collection| paths_equivalent(&collection.folder_path, &normalized_path))
             .cloned()
     };
 
@@ -2387,11 +2531,9 @@ fn upsert_collection_from_folder(
         let removed_ids = match load_collection_item_ids(&collection_id) {
             Some(ids) => ids,
             None => {
-                let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
-                ensure_items_loaded(&mut guard);
-                guard
-                    .as_ref()
-                    .unwrap()
+                let mut guard = lock_items();
+                ensure_items_ready(&mut guard)?;
+                items_or_err(&guard)?
                     .iter()
                     .filter(|item| item.collection_id == collection_id)
                     .map(|item| item.id.clone())
@@ -2406,12 +2548,12 @@ fn upsert_collection_from_folder(
             Ok(_) => {
                 // 内存缓存只在「已加载」时同步维护；未加载就保持 None，
                 // 不为一次导入付出整表冷加载（下次真有全量需求时再加载）
-                if let Ok(mut guard) = items_mutex().lock() {
-                    if let Some(stored_items) = guard.as_mut() {
-                        stored_items.retain(|item| item.collection_id != collection_id);
-                        stored_items.extend(items.iter().cloned());
-                    }
+                let mut guard = lock_items();
+                if let Some(stored_items) = guard.as_mut() {
+                    stored_items.retain(|item| item.collection_id != collection_id);
+                    stored_items.extend(items.iter().cloned());
                 }
+                drop(guard);
                 // 条目 ID 索引与条目同批落册，读路径从此走单集合快查
                 if let Err(error) = persist_collection_item_ids(&[(
                     collection_id.clone(),
@@ -2673,9 +2815,9 @@ pub fn get_media_collection_items(collection_id: String) -> Result<Vec<MediaItem
 
     // 慢路径（仅旧库首次访问该集合）：整表过滤一次，顺带把索引落册，
     // 之后这个集合永远走快路径。
-    let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
-    ensure_items_loaded(&mut guard);
-    let items = guard.as_ref().unwrap();
+    let mut guard = lock_items();
+    ensure_items_ready(&mut guard)?;
+    let items = items_or_err(&guard)?;
     let mut keyed = items
         .iter()
         .filter(|item| item.collection_id == collection_id)
@@ -2884,18 +3026,15 @@ pub fn get_all_collection_aggregates() -> Result<Vec<CollectionAggregate>, Strin
 
     // 补算走整表：一趟读把所有集合的记录体积算齐，顺带修掉历史漂移
     let sums: HashMap<String, u64> = {
-        let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
-        ensure_items_loaded(&mut guard);
-        guard
-            .as_ref()
-            .map(|items| {
-                let mut sums: HashMap<String, u64> = HashMap::new();
-                for item in items.iter() {
-                    *sums.entry(item.collection_id.clone()).or_default() += item.file_size;
-                }
-                sums
-            })
-            .unwrap_or_default()
+        let mut guard = lock_items();
+        ensure_items_ready(&mut guard)?;
+        let mut sums: HashMap<String, u64> = HashMap::new();
+        if let Some(items) = guard.as_ref() {
+            for item in items.iter() {
+                *sums.entry(item.collection_id.clone()).or_default() += item.file_size;
+            }
+        }
+        sums
     };
     let mut refreshed: Vec<CollectionAggregate> = Vec::with_capacity(sums.len());
     for (collection_id, recorded_size) in sums {
@@ -3203,6 +3342,157 @@ pub fn import_media_folder(folder_path: String) -> Result<MediaCollection, Strin
     upsert_collection_from_folder(Path::new(&folder_path), true)
 }
 
+/// 找出「包含某路径」的已导入集合：路径前缀匹配、取最长（最深）的那个。
+///
+/// 删除任意层级下的文件后，重扫的必须是这个集合的根目录。历史上重扫的是
+/// 文件父目录：文件在 `/相册/2024/pages/` 这种未导入的中间层时，upsert 会
+/// 在那个中间层**新建一个集合**（幽灵集合），而真正拥有这条目的大集合
+/// 一直挂着已删条目。
+/// 同一路径的多种字符串写法：原样规范化 + 「父目录 canonicalize 后再拼回」。
+///
+/// macOS 上 `/var` 是 `/private/var` 的软链，集合的 folder_path 存的是导入时
+/// canonicalize 过的形式，而条目里的文件路径可能是走原样 walk 得到的另一种
+/// 写法；只比一种会把本来属于该集合的文件判成「不属于」。
+/// 父目录 canonicalize 在文件已删除时仍可用（父目录还在），这是删文件后唯一的
+/// 可行时机——文件本身已经不存在，canonicalize 它必然失败。
+fn path_spelling_variants(raw: &str) -> Vec<String> {
+    let mut variants = vec![normalize_path_string(raw)];
+    if let Some(parent) = Path::new(raw).parent() {
+        if let (Ok(canonical_parent), Some(name)) =
+            (std::fs::canonicalize(parent), Path::new(raw).file_name())
+        {
+            let joined = canonical_parent.join(name);
+            let normalized = normalize_path_string(&joined.to_string_lossy());
+            if !variants.contains(&normalized) {
+                variants.push(normalized);
+            }
+        }
+    }
+    variants
+}
+
+fn find_owning_collection_path(target_path: &str) -> Option<String> {
+    // 两种写法都要试，理由见 path_spelling_variants
+    let candidates = path_spelling_variants(target_path);
+
+    let collections = get_collections().lock().ok()?;
+    collections
+        .iter()
+        .filter(|collection| {
+            let root = normalize_path_string(&collection.folder_path);
+            if root.is_empty() {
+                return false;
+            }
+            // 必须按路径分隔符边界匹配，避免 /相册 命中 /相册备份
+            let prefix = if root.ends_with('/') {
+                root.clone()
+            } else {
+                format!("{}/", root)
+            };
+            candidates
+                .iter()
+                .any(|target| *target == root || target.starts_with(&prefix))
+        })
+        .max_by_key(|collection| collection.folder_path.len())
+        .map(|collection| collection.folder_path.clone())
+}
+
+/// 把已删除的物理文件从**所有包含它的集合**里摘掉（条目表 + 索引 + 内存缓存）。
+///
+/// 嵌套集合是常态（`/相册` 与 `/相册/2024` 都可能被导入），同一个文件因此
+/// 可能同时属于多个集合；重扫只修拥有它的那一个，其余集合里就留下幽灵条目
+/// （点开一片空白、条数却还算着）。
+///
+/// 刻意**不做整表扫描**：这条路径由 `#[frb(sync)]` 的删除接口同步调用，
+/// 整表几十万条记录扫一次就把 Dart UI isolate 卡死。候选集合由集合表现算
+/// （几百条），再按集合索引批量取条目，代价只与命中集合数成正比。
+fn purge_missing_paths_from_collections(paths: &[String]) {
+    if paths.is_empty() {
+        return;
+    }
+    let normalized_targets: Vec<String> = paths
+        .iter()
+        .flat_map(|path| path_spelling_variants(path))
+        .collect();
+
+    // 候选集合：根目录是其中某个路径的祖先（含自身）
+    let candidates: Vec<String> = {
+        let Ok(collections) = get_collections().lock() else {
+            return;
+        };
+        collections
+            .iter()
+            .filter(|collection| {
+                let root = normalize_path_string(&collection.folder_path);
+                if root.is_empty() {
+                    return false;
+                }
+                let prefix = if root.ends_with('/') {
+                    root.clone()
+                } else {
+                    format!("{}/", root)
+                };
+                normalized_targets
+                    .iter()
+                    .any(|target| *target == root || target.starts_with(&prefix))
+            })
+            .map(|collection| collection.id.clone())
+            .collect()
+    };
+    if candidates.is_empty() {
+        return;
+    }
+
+    let mut stale_ids: Vec<String> = Vec::new();
+    let mut index_updates: Vec<(String, Vec<String>)> = Vec::new();
+    for collection_id in &candidates {
+        let Some(ids) = load_collection_item_ids(collection_id) else {
+            continue;
+        };
+        let Ok(values) = db_module::db_get_many(item_table_name(), ids.clone()) else {
+            continue;
+        };
+        let mut kept: Vec<String> = Vec::with_capacity(ids.len());
+        for (id, value) in ids.iter().zip(values.into_iter()) {
+            let Some(value) = value else {
+                // 记录本身已不在表里，索引里的这一项同样是死的
+                continue;
+            };
+            let Ok(item) = serde_json::from_str::<MediaItem>(&value) else {
+                continue;
+            };
+            // 条目里存的写法可能与传入参数不同（软链/规范化差异），双向比一遍
+            let item_variants = path_spelling_variants(&item.file_path);
+            if item_variants
+                .iter()
+                .any(|variant| normalized_targets.iter().any(|target| target == variant))
+            {
+                stale_ids.push(id.clone());
+            } else {
+                kept.push(id.clone());
+            }
+        }
+        if kept.len() != ids.len() {
+            index_updates.push((collection_id.clone(), kept));
+        }
+    }
+    if stale_ids.is_empty() {
+        return;
+    }
+
+    delete_items_from_db(&stale_ids);
+    if let Err(error) = persist_collection_item_ids(&index_updates) {
+        sw_warn!("[media_scan] 清理幽灵条目的集合索引失败: {}", error);
+    }
+    // 内存缓存同步：索引已经干净了，但已加载的缓存里还留着这些死条目
+    let mut guard = lock_items();
+    if let Some(items) = guard.as_mut() {
+        items.retain(|item| !stale_ids.contains(&item.id));
+    }
+    drop(guard);
+    sw_info!("[media_scan] 清理 {} 条指向已删文件的幽灵条目", stale_ids.len());
+}
+
 /// 重新扫描已导入集合的物理目录：跳过"已导入"拦截，直接走 upsert 覆盖入库。
 /// 条目按集合整体删旧插新，磁盘新增文件被拾取、已删文件被清理，天然不产生重复。
 pub fn rescan_media_folder(folder_path: String) -> Result<MediaCollection, String> {
@@ -3280,7 +3570,10 @@ pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, S
 
 fn is_collection_path_imported(normalized_path: &str) -> bool {
     if let Ok(collections) = get_collections().lock() {
-        collections.iter().any(|c| c.folder_path == normalized_path)
+        // 同 upsert：路径等价即视为已导入，避免同一目录被两种写法重复导入
+        collections
+            .iter()
+            .any(|c| paths_equivalent(&c.folder_path, normalized_path))
     } else {
         false
     }
@@ -3332,11 +3625,9 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
             .map(|item| (item.id, item.file_path))
             .collect(),
         None => {
-            let mut guard = items_mutex().lock().map_err(|error| error.to_string())?;
-            ensure_items_loaded(&mut guard);
-            guard
-                .as_ref()
-                .unwrap()
+            let mut guard = lock_items();
+            ensure_items_ready(&mut guard)?;
+            items_or_err(&guard)?
                 .iter()
                 .filter(|item| item.collection_id == collection_id)
                 .map(|item| (item.id.clone(), item.file_path.clone()))
@@ -3346,10 +3637,8 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
 
     {
         // 内存缓存只在已加载时同步；未加载保持 None，不触发整表冷加载
-        if let Ok(mut guard) = items_mutex().lock() {
-            if let Some(items) = guard.as_mut() {
-                items.retain(|item| item.collection_id != collection_id);
-            }
+        if let Some(items) = lock_items().as_mut() {
+            items.retain(|item| item.collection_id != collection_id);
         }
         let removed_ids: Vec<String> = removed.iter().map(|(id, _)| id.clone()).collect();
         delete_items_from_db(&removed_ids);
@@ -3379,12 +3668,20 @@ pub fn delete_media_item_file(item_file_path: String) -> Result<bool, String> {
     };
     // 同步清理关联的缩略图任务记录，避免重启后被重新入队反复重试已不存在的文件
     delete_thumbnail_tasks_for_file_path(&item_file_path);
-    // 重新扫描父目录以同步数据库。这里必须走 rescan：`import_media_folder`
-    // 对已导入的路径直接报「该文件夹已导入」，条目永远留在库里，集合体积/条数
-    // 也就一直停在删除前的值。
-    if let Some(parent) = path.parent() {
-        let _ = rescan_media_folder(parent.to_string_lossy().into_owned());
+    // 重新扫描**拥有这条目的那个集合根目录**，而不是文件父目录：
+    // 文件位于集合内未单独导入的中间层时（如 /相册/2024/pages/），
+    // 重扫父目录会让 upsert 在中间层新建一个集合——用户看到的幽灵集合，
+    // 而真正拥有它的大集合仍挂着已删条目。
+    // 必须走 rescan：`import_media_folder` 对已导入路径直接报「该文件夹已导入」，
+    // 条目永远留在库里，集合体积/条数也就一直停在删除前的值。
+    match find_owning_collection_path(&item_file_path) {
+        Some(root) => {
+            let _ = rescan_media_folder(root);
+        }
+        None => sw_debug!("[media_scan] 删除的文件不属于任何已导入集合，跳过重扫: {}", item_file_path),
     }
+    // 兜底：文件已经删了，任何集合都不该再认它（含重扫没覆盖到的兄弟集合）
+    purge_missing_paths_from_collections(std::slice::from_ref(&item_file_path));
     Ok(deleted)
 }
 
@@ -3808,17 +4105,39 @@ fn cleanup_dir_contents(dir: &std::path::Path) -> u32 {
     count
 }
 
+/// 集合转移的结果统计。
+///
+/// 历史上只返回 success_count，且把它无条件 `+= 1`——「重新导入失败」的集合
+/// 也算成功，于是 Dart 侧提示「成功转移 N 个」时用户回到目录却看不到东西。
+/// 失败必须单列，让上层能如实提示。
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+pub struct TransferOutcome {
+    /// 真正完成转移（文件已挪走 + 数据库已重建）的集合数
+    pub success_count: u32,
+    /// 中途失败的集合数（创建目录/取条目/重新导入任一步失败）
+    pub fail_count: u32,
+}
+
 /// 将集合物理转移到目标目录，包括文件移动和数据库更新。
-/// 返回成功转移的集合数量。
+/// 返回成功转移的集合数量（保留旧签名给既有 FFI 绑定用）。
 pub fn transfer_collections(
     collection_ids: Vec<String>,
     target_dir: String,
 ) -> Result<usize, String> {
+    transfer_collections_with_stats(collection_ids, target_dir)
+        .map(|outcome| outcome.success_count as usize)
+}
+
+/// 同 [transfer_collections]，但同时上报失败数量。
+pub fn transfer_collections_with_stats(
+    collection_ids: Vec<String>,
+    target_dir: String,
+) -> Result<TransferOutcome, String> {
     let target = std::path::Path::new(&target_dir);
     if !target.exists() {
         std::fs::create_dir_all(target).map_err(|e| format!("创建目标目录失败: {}", e))?;
     }
-    let mut success_count = 0;
+    let mut outcome = TransferOutcome::default();
     let collections = get_collections().lock().map_err(|e| e.to_string())?.clone();
     for col_id in &collection_ids {
         let collection = match collections.iter().find(|c| &c.id == col_id) {
@@ -3832,12 +4151,14 @@ pub fn transfer_collections(
                 dest_dir.display(),
                 e
             );
+            outcome.fail_count += 1;
             continue;
         }
         let items = match get_media_collection_items(collection.id.clone()) {
             Ok(items) => items,
             Err(e) => {
                 sw_warn!("[transfer] 获取集合项失败: {} err={}", collection.id, e);
+                outcome.fail_count += 1;
                 continue;
             }
         };
@@ -3883,11 +4204,15 @@ pub fn transfer_collections(
             }
             Err(e) => {
                 sw_warn!("[transfer] 重新导入失败: {} err={}", dest_dir.display(), e);
+                // 文件已搬走但库里没有对应集合：这是明确的失败，绝不能算成功，
+                // 否则上层提示「成功转移 N 个」而用户看不到任何东西。
+                outcome.fail_count += 1;
+                continue;
             }
         }
-        success_count += 1;
+        outcome.success_count += 1;
     }
-    Ok(success_count)
+    Ok(outcome)
 }
 
 /// 打开文件所在目录（跨平台）
@@ -4360,6 +4685,304 @@ mod tests {
         let s = result.unwrap();
         // 应包含路径末段
         assert!(s.contains("slime_test_8675309"), "got: {s}");
+    }
+
+    // ── 条目锁毒化不再永久瘫痪（P0-4）──────────────────────────────────────
+
+    /// 回归：锁被 poison 后，读取必须照常工作（取回内层数据），而不是此后所有
+    /// 调用都返回 Err、媒体库全功能瘫痪到进程重启。
+    #[test]
+    fn poisoned_items_mutex_still_serves_reads() {
+        let _serial = lock_db_test_serial();
+        // 先在锁内 panic 一次，把 Mutex 打成 poison
+        let poisoned = std::panic::catch_unwind(|| {
+            let _guard = lock_items();
+            panic!("故意 panic 以毒化条目锁");
+        });
+        assert!(poisoned.is_err());
+        assert!(
+            items_mutex().is_poisoned(),
+            "前提：锁此时必须是 poison 状态，否则本用例没测到东西"
+        );
+
+        // 毒化之后：拿锁与加载条目都必须照常（修复前这里 map_err 一路 Err）
+        let mut guard = lock_items();
+        assert!(
+            ensure_items_ready(&mut guard).is_ok(),
+            "毒化后加载条目必须成功而不是 panic/Err"
+        );
+    }
+
+    /// ensure_items_ready 在缓存为 None 且数据库不可用时返回中文 Err（而不是
+    /// 让调用方 unwrap 出 panic）。这里用「未就绪的 Option + 无法加载」构造：
+    /// 直接验证 items_or_err 的兜底语义。
+    #[test]
+    fn items_or_err_reports_chinese_error_instead_of_panicking() {
+        let empty: Option<Vec<MediaItem>> = None;
+        let result = items_or_err(&empty);
+        assert!(result.is_err(), "缓存缺失时必须返回 Err");
+        let message = result.unwrap_err();
+        assert!(
+            message.contains("媒体条目"),
+            "错误信息应为中文可读文案，实际: {message}"
+        );
+        // 有值时正常给出引用
+        let filled: Option<Vec<MediaItem>> = Some(Vec::new());
+        assert!(items_or_err(&filled).is_ok());
+    }
+
+    // ── 路径规范化 / 幽灵集合（P2-9）──────────────────────────────────────
+
+    #[test]
+    fn normalize_path_string_collapses_trailing_slash_and_dot_segments() {
+        // 尾斜杠：DB 历史记录可能带，重扫时的路径不带
+        assert_eq!(normalize_path_string("/media/album/"), "/media/album");
+        assert_eq!(normalize_path_string("/media/album"), "/media/album");
+        // 分隔符混用（Windows 习惯）
+        assert_eq!(normalize_path_string(r"C:\Media\Album"), "C:/Media/Album");
+        // 盘符大小写统一
+        assert_eq!(normalize_path_string("c:/Media"), "C:/Media");
+        // . 与 .. 折叠
+        assert_eq!(normalize_path_string("/media/./album"), "/media/album");
+        assert_eq!(normalize_path_string("/media/x/../album"), "/media/album");
+        // 绝对路径上多余的 .. 不能越过根
+        assert_eq!(normalize_path_string("/../media"), "/media");
+        // 重复分隔符
+        assert_eq!(normalize_path_string("/media//album//"), "/media/album");
+        // 根目录保持为 "/"
+        assert_eq!(normalize_path_string("/"), "/");
+    }
+
+    #[test]
+    fn paths_equivalent_matches_different_spellings_of_same_dir() {
+        assert!(paths_equivalent("/media/album", "/media/album/"));
+        assert!(paths_equivalent("/media//album", "/media/album"));
+        assert!(paths_equivalent("/media/./album", "/media/album"));
+        assert!(paths_equivalent("/media/a/../album", "/media/album"));
+        // 前缀相似但不是同一目录，绝不能判等（否则会并错集合）
+        assert!(!paths_equivalent("/media/album", "/media/album2"));
+        assert!(!paths_equivalent("/media/album/sub", "/media/album"));
+    }
+
+    /// 嵌套目录删除后重扫父目录：不能再造一个「幽灵集合」。
+    /// upsert 的匹配必须按规范化路径命中已有集合。
+    #[test]
+    fn rescan_of_nested_folder_reuses_existing_collection() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("nested_rescan");
+        let sub = root.join("2024");
+        std::fs::create_dir_all(&sub).unwrap();
+        write_test_image(&root.join("a.bmp"));
+        write_test_image(&sub.join("b.bmp"));
+
+        let collection = import_media_folder(root.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(collection.item_count, 2);
+
+        // 删掉嵌套目录里的文件后重扫**根目录**（生产路径：find_owning_collection_path 的结果）
+        std::fs::remove_file(sub.join("b.bmp")).unwrap();
+        let rescanned = rescan_media_folder(root.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(rescanned.id, collection.id, "重扫必须复用同一个集合");
+        assert_eq!(rescanned.item_count, 1);
+
+        // 集合总数不变：没有新增幽灵集合
+        //（集合里存的是导入时 canonicalize 过的路径，macOS 上 /var 会变成
+        //  /private/var，所以断言用归属查询而不是逐字比较）
+        let all = get_collections().lock().unwrap().clone();
+        let mine = all
+            .iter()
+            .filter(|c| paths_equivalent(&c.folder_path, &normalize_folder_path(&root).unwrap()))
+            .count();
+        assert_eq!(mine, 1, "同一目录只能有一个集合");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 删除文件后必须重扫「拥有该条目的集合根」，而不是文件的父目录——
+    /// 否则中间层会被当成新集合导入（幽灵集合），大集合仍挂着已删条目。
+    #[test]
+    fn delete_media_item_file_rescans_owning_collection_not_parent() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("owning_rescan");
+        let deep = root.join("pages").join("deep");
+        std::fs::create_dir_all(&deep).unwrap();
+        write_test_image(&root.join("keep.bmp"));
+        write_test_image(&deep.join("gone.bmp"));
+
+        let collection = import_media_folder(root.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(collection.item_count, 2);
+
+        // 归属查询应命中集合根，而不是 deep 或 pages
+        let target = deep.join("gone.bmp").to_string_lossy().into_owned();
+        let owner = find_owning_collection_path(&target).expect("应能定位所属集合");
+        assert!(
+            paths_equivalent(&owner, &normalize_folder_path(&root).unwrap()),
+            "应重扫集合根 {root:?}，实际 {owner}"
+        );
+
+        assert!(delete_media_item_file(target.clone()).unwrap());
+        // 集合数不变（pages/deep 不得变成新集合），条目数减一
+        let all = get_collections().lock().unwrap().clone();
+        assert_eq!(all.len(), 1, "不得产生幽灵集合，实际: {:?}", all.iter().map(|c| &c.folder_path).collect::<Vec<_>>());
+        let items = get_media_collection_items(collection.id.clone()).unwrap();
+        assert_eq!(items.len(), 1);
+        assert!(items[0].file_path.ends_with("keep.bmp"));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 归属查询要按路径分隔符边界匹配：/相册 不能命中 /相册备份。
+    #[test]
+    fn find_owning_collection_requires_path_boundary() {
+        let _serial = lock_db_test_serial();
+        let base = fake_media_root("owning_boundary");
+        let album = base.join("album");
+        let backup = base.join("album_backup");
+        std::fs::create_dir_all(&album).unwrap();
+        std::fs::create_dir_all(&backup).unwrap();
+        write_test_image(&album.join("x.bmp"));
+        write_test_image(&backup.join("y.bmp"));
+        import_media_folder(album.to_string_lossy().into_owned()).unwrap();
+
+        // album_backup 里的文件不属于 album 集合
+        let target = backup.join("y.bmp").to_string_lossy().into_owned();
+        let owner = find_owning_collection_path(&target);
+        assert!(
+            owner.is_none(),
+            "album_backup 不该被当成 album 的子路径，实际: {owner:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// 嵌套集合（/相册 与 /相册/2024 都导入过）里删掉同一区域的物理文件后，
+    /// 所有包含该路径的集合都不该再认它（否则那些集合留着幽灵条目）。
+    #[test]
+    fn purge_removes_deleted_path_from_all_containing_collections() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("purge_multi");
+        let sub = root.join("2024");
+        std::fs::create_dir_all(&sub).unwrap();
+        write_test_image(&root.join("top.bmp"));
+        write_test_image(&sub.join("inner.bmp"));
+
+        // 两个集合：外层 /root 与内层 /root/2024
+        let outer = import_media_folder(root.to_string_lossy().into_owned()).unwrap();
+        let inner = import_media_folder(sub.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(outer.item_count, 2);
+        assert_eq!(inner.item_count, 1);
+
+        // 删掉内层文件后，两个集合的条目都应清掉它
+        let gone = sub.join("inner.bmp").to_string_lossy().into_owned();
+        std::fs::remove_file(&gone).unwrap();
+        purge_missing_paths_from_collections(std::slice::from_ref(&gone));
+
+        let outer_items = get_media_collection_items(outer.id.clone()).unwrap();
+        let inner_items = get_media_collection_items(inner.id.clone()).unwrap();
+        assert!(
+            outer_items.iter().all(|i| !i.file_path.ends_with("inner.bmp")),
+            "外层集合不得再认已删文件: {:?}",
+            outer_items.iter().map(|i| &i.file_path).collect::<Vec<_>>()
+        );
+        assert!(inner_items.is_empty(), "内层集合应被清空");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 节点缩略图磁盘缓存并发安全（P2-10）────────────────────────────────
+
+    #[test]
+    fn node_thumb_temp_path_is_unique_per_call() {
+        let base = std::path::Path::new("/tmp/slime_thumb_abc_w320.jpg");
+        let a = node_thumb_temp_path(base);
+        let b = node_thumb_temp_path(base);
+        assert_ne!(a, b, "并发写同一 key 必须用不同临时文件名");
+        // 临时文件与目标同目录，rename 才是原子的（不跨文件系统）
+        assert_eq!(a.parent(), base.parent());
+        assert!(a.to_string_lossy().ends_with(".part"));
+    }
+
+    /// 只有完整 JPEG 才允许进缓存：半截/垃圾字节写进去会让这张封面永久坏掉。
+    #[test]
+    fn node_thumb_disk_cache_rejects_non_jpeg_bytes() {
+        let root = fake_media_root("thumb_magic");
+        let target = root.join("cached.jpg");
+
+        // 垃圾字节：不写盘
+        node_thumb_disk_put(&target, b"not-a-jpeg-at-all");
+        assert!(!target.exists(), "非 JPEG 不得写入缓存");
+
+        // 有 SOI 没有 EOI（写到一半被杀）：同样不写盘
+        node_thumb_disk_put(&target, &[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]);
+        assert!(!target.exists(), "半截 JPEG 不得写入缓存");
+
+        // 合法 JPEG：写盘后可读回
+        let valid: Vec<u8> = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0xFF, 0xD9];
+        node_thumb_disk_put(&target, &valid);
+        assert!(target.exists(), "合法 JPEG 应写入缓存");
+        assert_eq!(node_thumb_disk_get(&target).unwrap(), valid);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 磁盘上已存在的坏缓存必须被识别并删除，让本次走重新生成——
+    /// 否则历史版本留下的拼凑图会让这张封面永远显示不出来。
+    #[test]
+    fn node_thumb_disk_get_deletes_corrupt_cached_file() {
+        let root = fake_media_root("thumb_corrupt");
+        let target = root.join("corrupt.jpg");
+        // 模拟旧版固定名 .part 并发写留下的拼凑文件
+        std::fs::write(&target, b"garbage-not-jpeg").unwrap();
+
+        assert!(node_thumb_disk_get(&target).is_none(), "坏缓存不得被当成命中");
+        assert!(!target.exists(), "坏缓存必须被删除");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 传输导入结果统计（P2-11）──────────────────────────────────────────
+
+    #[test]
+    fn transfer_outcome_separates_success_from_failure() {
+        // 默认值：什么都没转移
+        let outcome = TransferOutcome::default();
+        assert_eq!(outcome.success_count, 0);
+        assert_eq!(outcome.fail_count, 0);
+        // 序列化契约：Dart / 节点侧读的是 success_count / fail_count 两个字段
+        let json = serde_json::to_value(TransferOutcome {
+            success_count: 2,
+            fail_count: 1,
+        })
+        .unwrap();
+        assert_eq!(json["success_count"], 2);
+        assert_eq!(json["fail_count"], 1);
+    }
+
+    /// 重新导入失败的集合不能计入成功数（历史上无条件 +1，用户看到「成功转移 N 个」
+    /// 却找不到任何东西）。这里用一个不含媒体的空目录触发重新导入失败。
+    #[test]
+    fn transfer_counts_failure_when_reimport_has_no_media() {
+        let _serial = lock_db_test_serial();
+        let source_root = fake_media_root("transfer_src");
+        let album = source_root.join("album");
+        std::fs::create_dir_all(&album).unwrap();
+        write_test_image(&album.join("shot.bmp"));
+        let collection = import_media_folder(album.to_string_lossy().into_owned()).unwrap();
+
+        // 目标目录里预置一个同名目录且清空源文件：转移后目标目录无媒体 →
+        // import_media_folder 会报「No media found」，本次必须计失败
+        let target_root = fake_media_root("transfer_dst");
+        std::fs::remove_file(album.join("shot.bmp")).unwrap();
+
+        let outcome = transfer_collections_with_stats(
+            vec![collection.id.clone()],
+            target_root.to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        assert_eq!(outcome.success_count, 0, "没有媒体的集合不该算转移成功");
+        assert_eq!(outcome.fail_count, 1);
+
+        let _ = std::fs::remove_dir_all(&source_root);
+        let _ = std::fs::remove_dir_all(&target_root);
     }
 
     // ── cleanup_empty_collection_dir / collect_collection_config_dirs ──────

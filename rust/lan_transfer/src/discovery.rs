@@ -1,8 +1,5 @@
-use crate::types::{
-    DeviceInfo, EventType, HeartbeatPayload, MessageType, TransferEvent, TransferMessage,
-};
+use crate::types::{DeviceInfo, HeartbeatPayload, MessageType, TransferMessage};
 use anyhow::{anyhow, Result};
-use async_channel::{Receiver, Sender};
 use chrono::Utc;
 use if_addrs::get_if_addrs;
 use lazy_static::lazy_static;
@@ -66,9 +63,6 @@ fn get_device_type() -> String {
 pub struct DiscoveryService {
     mdns: Arc<ServiceDaemon>,
     discovered_devices: Arc<RwLock<HashMap<String, DeviceInfo>>>,
-    event_sender: Sender<TransferEvent>,
-    #[allow(dead_code)]
-    event_receiver: Receiver<TransferEvent>,
     service_port: u16,
     last_fallback_scan: Arc<RwLock<Option<Instant>>>,
 }
@@ -78,13 +72,10 @@ impl DiscoveryService {
     pub fn new(port: u16) -> Result<Self> {
         let mdns =
             ServiceDaemon::new().map_err(|e| anyhow!("Failed to create mDNS daemon: {}", e))?;
-        let (event_sender, event_receiver) = async_channel::unbounded();
 
         Ok(Self {
             mdns: Arc::new(mdns),
             discovered_devices: Arc::new(RwLock::new(HashMap::new())),
-            event_sender,
-            event_receiver,
             service_port: port,
             last_fallback_scan: Arc::new(RwLock::new(None)),
         })
@@ -175,7 +166,6 @@ impl DiscoveryService {
     pub fn start_browse(&self) -> Result<()> {
         let mdns = self.mdns.clone();
         let discovered_devices = self.discovered_devices.clone();
-        let event_sender = self.event_sender.clone();
 
         // 浏览服务
         let receiver = mdns
@@ -237,16 +227,6 @@ impl DiscoveryService {
                                 device.port
                             );
 
-                            // 发送事件
-                            let _ = event_sender
-                                .send(TransferEvent {
-                                    event_type: EventType::DeviceDiscovered,
-                                    device_info: Some(device),
-                                    transfer_item: None,
-                                    message: None,
-                                    timestamp: Utc::now().to_rfc3339(),
-                                })
-                                .await;
                         }
                     }
                     ServiceEvent::ServiceRemoved(_type_name, fullname) => {
@@ -264,16 +244,6 @@ impl DiscoveryService {
 
                             sw_info!("Device lost: {} ({})", device.device_name, device.device_id);
 
-                            // 发送事件
-                            let _ = event_sender
-                                .send(TransferEvent {
-                                    event_type: EventType::DeviceLost,
-                                    device_info: Some(device),
-                                    transfer_item: None,
-                                    message: None,
-                                    timestamp: Utc::now().to_rfc3339(),
-                                })
-                                .await;
                         }
                     }
                     _ => {}
@@ -402,12 +372,6 @@ impl DiscoveryService {
                 device.port
             );
         }
-    }
-
-    /// 接收事件
-    #[allow(dead_code)]
-    pub fn get_event_receiver(&self) -> Receiver<TransferEvent> {
-        self.event_receiver.clone()
     }
 
     /// 停止服务

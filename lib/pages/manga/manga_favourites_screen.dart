@@ -73,7 +73,7 @@ class _MangaFavouritesScreenState
         action: FilledButton.icon(
           icon: DrawIcon(StrokeIcons.refresh),
           label: const Text('重试'),
-          onPressed: viewModel.refresh,
+          onPressed: viewModel.reload,
         ),
       );
     }
@@ -129,7 +129,7 @@ class _MangaFavouritesScreenState
           return false;
         },
         child: RefreshIndicator(
-          onRefresh: viewModel.refresh,
+          onRefresh: viewModel.reload,
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [
@@ -154,7 +154,7 @@ class _MangaFavouritesScreenState
                                 label: const Text('新到旧'),
                                 selected: viewModel.sort == MangaSortOrder.dateDescending,
                                 onSelected: (_) =>
-                                    viewModel.refresh(sort: MangaSortOrder.dateDescending),
+                                    viewModel.reload(sort: MangaSortOrder.dateDescending),
                               ),
                             ),
                             Obx(
@@ -162,7 +162,7 @@ class _MangaFavouritesScreenState
                                 label: const Text('热门'),
                                 selected: viewModel.sort == MangaSortOrder.likeDescending,
                                 onSelected: (_) =>
-                                    viewModel.refresh(sort: MangaSortOrder.likeDescending),
+                                    viewModel.reload(sort: MangaSortOrder.likeDescending),
                               ),
                             ),
                           ],

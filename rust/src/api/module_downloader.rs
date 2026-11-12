@@ -1,11 +1,14 @@
-/// 模块下载器
-///
-/// 提供通用的模块下载和管理功能
-/// 支持 Windows 和 macOS 平台的可执行文件下载
+//! 模块下载器
+//!
+//! 提供通用的模块下载和管理功能
+//! 支持 Windows 和 macOS 平台的可执行文件下载
 use flutter_rust_bridge::frb;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
+
+/// 已安装体积门槛：这些模块（ffmpeg / ffprobe / capture_proxy）都是多 MB 的
+/// 二进制，小到 64KB 只可能是失败的残缺下载，不能当成「已安装」。
+const MIN_INSTALLED_BYTES: u64 = 64 * 1024;
 
 /// 模块下载配置
 #[frb(ignore)]
@@ -77,9 +80,16 @@ impl ModuleDownloader {
     }
 
     /// 检查模块是否已安装
+    ///
+    /// 除了存在性还要过一道体积门槛：历史上是本函数「存在即已安装」
+    /// 让半截下载（进程被杀/断网）永久短路，永远不重下。
+    /// 现在的写入路径已经是 tmp+rename，这里是历史残留文件的兜底。
     pub fn is_module_installed(&self, module_name: &str, executable_name: &str) -> bool {
         let exec_path = self.get_executable_path(module_name, executable_name);
-        exec_path.exists()
+        match fs::metadata(&exec_path) {
+            Ok(meta) => meta.is_file() && meta.len() >= MIN_INSTALLED_BYTES,
+            Err(_) => false,
+        }
     }
 
     /// 下载并安装模块
@@ -154,14 +164,36 @@ impl ModuleDownloader {
             .await
             .map_err(|e| format!("Failed to read response body: {}", e))?;
 
-        // 写入文件
-        let mut file =
-            fs::File::create(dest_path).map_err(|e| format!("Failed to create file: {}", e))?;
-
-        file.write_all(&bytes)
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+        // 先写临时文件再 rename：直接写最终路径的话，进程中途退出/断网会留下
+        // 半截可执行文件，而 is_module_installed 只看存在性 → 永久「已安装」。
+        let part_path = Self::part_path_of(dest_path);
+        if let Err(e) = fs::write(&part_path, &bytes) {
+            let _ = fs::remove_file(&part_path);
+            return Err(format!("Failed to write file: {}", e));
+        }
+        if (bytes.len() as u64) < MIN_INSTALLED_BYTES {
+            let _ = fs::remove_file(&part_path);
+            return Err(format!(
+                "Downloaded module is too small ({} bytes), likely a broken response",
+                bytes.len()
+            ));
+        }
+        if let Err(e) = fs::rename(&part_path, dest_path) {
+            let _ = fs::remove_file(&part_path);
+            return Err(format!("Failed to finalize file: {}", e));
+        }
 
         Ok(())
+    }
+
+    /// 下载中的临时文件：与最终文件同目录（rename 才能同卷原子落盘），
+    /// 隐藏前缀便于用户/清理脚本一眼认出是残留
+    fn part_path_of(dest_path: &Path) -> PathBuf {
+        let name = dest_path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "module".to_string());
+        dest_path.with_file_name(format!(".{}.part", name))
     }
 
     /// 删除模块
@@ -243,6 +275,42 @@ mod tests {
         assert_eq!(
             exec_path,
             PathBuf::from("/test/install/modules/ffmpeg/ffmpeg")
+        );
+    }
+
+    /// 半截下载（只有 .part、最终文件不存在）不能被当成已安装
+    #[test]
+    fn interrupted_download_is_not_considered_installed() {
+        let dir = std::env::temp_dir().join(format!("sw_mod_dl_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let downloader = ModuleDownloader::new(dir.clone());
+        let exec = downloader.get_executable_path("ffmpeg", "ffmpeg");
+        fs::create_dir_all(exec.parent().unwrap()).unwrap();
+
+        // 模拟写到一半中断：临时文件在，最终文件没有
+        let part = ModuleDownloader::part_path_of(&exec);
+        fs::write(&part, vec![0u8; 1024]).unwrap();
+        assert!(!downloader.is_module_installed("ffmpeg", "ffmpeg"), ".part 不该算已安装");
+
+        // 体积够大但仍是 1KB 的残缺文件：门槛挡住
+        fs::write(&exec, vec![0u8; 1024]).unwrap();
+        assert!(!downloader.is_module_installed("ffmpeg", "ffmpeg"), "1KB 残缺文件不该算已安装");
+
+        // 正常体积才认
+        fs::write(&exec, vec![0u8; MIN_INSTALLED_BYTES as usize]).unwrap();
+        assert!(downloader.is_module_installed("ffmpeg", "ffmpeg"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// 临时名必须是最终名的隐藏兄弟文件，绝不与最终名相等
+    #[test]
+    fn part_path_is_hidden_sibling() {
+        let dest = PathBuf::from("/test/install/modules/ffmpeg/ffmpeg");
+        assert_ne!(ModuleDownloader::part_path_of(&dest), dest);
+        assert_eq!(
+            ModuleDownloader::part_path_of(&dest),
+            PathBuf::from("/test/install/modules/ffmpeg/.ffmpeg.part")
         );
     }
 }

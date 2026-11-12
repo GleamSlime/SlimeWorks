@@ -1442,7 +1442,8 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   Future<void> loadRecentPlayed({int limit = 50}) async {
     try {
-      recentRecords.value = music_api.getRecentPlayed(limit: limit);
+      // 该绑定已从 sync 改为 async（读 DB 不该卡 UI isolate），必须 await
+      recentRecords.value = await music_api.getRecentPlayed(limit: limit);
     } catch (e) {
       _logger.info('[播放器] 加载最近播放失败: $e');
     }
@@ -1450,7 +1451,8 @@ class MusicPlayerViewModel extends BaseViewModel {
 
   Future<void> _recordPlay(String musicId) async {
     try {
-      music_api.recordPlay(musicId: musicId);
+      // 同上：async 绑定，写盘失败不应阻塞切歌后的 UI 流程
+      await music_api.recordPlay(musicId: musicId);
     } catch (_) {}
     // 递增当前文件夹的播放次数
     final folderId = currentFolderId.value;
@@ -1681,6 +1683,12 @@ class MusicPlayerViewModel extends BaseViewModel {
         isTranslatingLyrics.value = false;
         return;
       }
+
+      // 设置服务的 init 只在 Ollama 设置页/小说翻译面板里被调过（全仓就那三处
+      // 入口），音乐路径此前从不 init：新启动没打开过那些面板时 defaultModel
+      // 恒为空串，已持久化的模型配置读不到，翻译永远报「未设置默认翻译模型」。
+      // init 内部有 isInitialized 幂等守卫，重复调用只是一次布尔判断。
+      await settingsService.init();
 
       final model = settingsService.defaultModel.value;
       if (model.isEmpty) {

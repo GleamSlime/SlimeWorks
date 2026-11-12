@@ -234,9 +234,11 @@ class MediaCollectionDetailView extends StatelessWidget {
                   key: ValueKey(item.id),
                   item: item,
                   source: source,
+                  // 兜底 URL 带缩略图宽度，避免慢节点下把原图整张解码进内存
                   coverFallbackSource: viewModel.buildRemoteOriginalMediaSource(
                     item,
                     collectionId: collectionId,
+                    width: viewModel.mediaPrefs.effectiveRemoteCoverWidth,
                   ),
                   // 本地视频接上悬停帧处理器，避免把原始视频文件当图片解码抛「Invalid image data」，
                   // 同时与瀑布流一致，受「预生成视频悬停帧」开关控制。

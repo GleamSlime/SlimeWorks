@@ -103,83 +103,89 @@ impl AliyunDnsClient {
         Ok(())
     }
 
+    /// 按 RR 精确找一条解析记录。
+    ///
+    /// 阿里云 DescribeDomainRecords 默认每页只回 20 条：只查一页的话，
+    /// 记录数超过 20 的域名永远找不到排在后面的 RR，DDNS 就表现为
+    /// 「找不到记录」而完全不更新。这里显式带 PageSize 并翻页，
+    /// 一旦拿到精确命中就提前返回。
     pub async fn find_sub_domain_record(
         &self,
         domain_name: &str,
         rr: &str,
     ) -> Result<Option<DomainRecord>> {
-        let mut params = self.base_params();
-        params.insert("Action".to_string(), "DescribeDomainRecords".to_string());
-        params.insert("DomainName".to_string(), domain_name.to_string());
-        params.insert("RRKeyWord".to_string(), rr.to_string());
+        const PAGE_SIZE: u64 = 100;
+        // 上限防呆：真有一万个记录的域名也不该在这里无限翻页
+        const MAX_PAGES: u64 = 50;
 
-        sw_info!(
-            "[aliyun] 查询解析记录: DomainName={}, RRKeyWord={}",
-            domain_name,
-            rr
-        );
+        let mut page: u64 = 1;
+        loop {
+            let mut params = self.base_params();
+            params.insert("Action".to_string(), "DescribeDomainRecords".to_string());
+            params.insert("DomainName".to_string(), domain_name.to_string());
+            params.insert("RRKeyWord".to_string(), rr.to_string());
+            params.insert("PageNumber".to_string(), page.to_string());
+            params.insert("PageSize".to_string(), PAGE_SIZE.to_string());
 
-        let resp = self.call_api(&params).await?;
-
-        if let Some(code) = resp.get("Code").and_then(|c| c.as_str()) {
-            let message = resp
-                .get("Message")
-                .and_then(|m| m.as_str())
-                .unwrap_or("未知错误");
-            sw_error!(
-                "[aliyun] DescribeDomainRecords API返回错误: {} - {}",
-                code,
-                message
-            );
-            return Err(anyhow!("阿里云API错误: {} - {}", code, message));
-        }
-
-        let total_count = resp.get("TotalCount").and_then(|v| v.as_u64()).unwrap_or(0);
-        sw_info!(
-            "[aliyun] DescribeDomainRecords返回: TotalCount={}",
-            total_count
-        );
-
-        let records = resp
-            .get("DomainRecords")
-            .and_then(|d| d.get("Record"))
-            .and_then(|d| d.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                    .collect::<Vec<DomainRecord>>()
-            })
-            .unwrap_or_default();
-
-        sw_info!(
-            "[aliyun] 解析到{}条记录, 各记录RR: [{}]",
-            records.len(),
-            records
-                .iter()
-                .map(|r| format!("{}={}", r.rr, r.value))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-
-        let found = records.iter().find(|r| r.rr == rr);
-        if let Some(record) = &found {
             sw_info!(
-                "[aliyun] 精确匹配成功: RR={}, Value={}, RecordId={}, Type={}, Line={}",
-                record.rr,
-                record.value,
-                record.record_id,
-                record.record_type,
-                record.line
-            );
-        } else {
-            sw_warn!(
-                "[aliyun] 未找到RR='{}'的精确匹配 (共{}条记录)",
+                "[aliyun] 查询解析记录: DomainName={}, RRKeyWord={}, page={}",
+                domain_name,
                 rr,
-                records.len()
+                page
             );
-        }
 
-        Ok(found.cloned())
+            let resp = self.call_api(&params).await?;
+
+            if let Some(code) = resp.get("Code").and_then(|c| c.as_str()) {
+                let message = resp
+                    .get("Message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("未知错误");
+                sw_error!(
+                    "[aliyun] DescribeDomainRecords API返回错误: {} - {}",
+                    code,
+                    message
+                );
+                return Err(anyhow!("阿里云API错误: {} - {}", code, message));
+            }
+
+            let total_count = resp.get("TotalCount").and_then(|v| v.as_u64()).unwrap_or(0);
+            sw_info!(
+                "[aliyun] DescribeDomainRecords返回: TotalCount={}, page={}",
+                total_count,
+                page
+            );
+
+            let records = resp
+                .get("DomainRecords")
+                .and_then(|d| d.get("Record"))
+                .and_then(|d| d.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                        .collect::<Vec<DomainRecord>>()
+                })
+                .unwrap_or_default();
+
+            if let Some(record) = records.iter().find(|r| r.rr == rr) {
+                log_found(record);
+                return Ok(Some(record.clone()));
+            }
+
+            // 本页没有精确命中：按偏移量与 TotalCount 判断是否还有下一页。
+            // 空页必须当作结束，否则接口若忽略 PageNumber 会翻到 MAX_PAGES 才停。
+            let consumed = (page - 1) * PAGE_SIZE + records.len() as u64;
+            if records.is_empty() || consumed >= total_count || page >= MAX_PAGES {
+                sw_warn!(
+                    "[aliyun] 未找到RR='{}'的精确匹配 (已翻 {} 页, TotalCount={})",
+                    rr,
+                    page,
+                    total_count
+                );
+                return Ok(None);
+            }
+            page += 1;
+        }
     }
 
     fn base_params(&self) -> BTreeMap<String, String> {
@@ -281,6 +287,18 @@ impl AliyunDnsClient {
 
         Ok(base64::engine::general_purpose::STANDARD.encode(result))
     }
+}
+
+/// 命中后的日志：排查 DDNS 时这几行是唯一的现场证据
+fn log_found(record: &DomainRecord) {
+    sw_info!(
+        "[aliyun] 精确匹配成功: RR={}, Value={}, RecordId={}, Type={}, Line={}",
+        record.rr,
+        record.value,
+        record.record_id,
+        record.record_type,
+        record.line
+    );
 }
 
 fn percent_encode_rfc3986(input: &str) -> String {

@@ -26,7 +26,7 @@ pub fn extract_pcm_16k_mono(file_path: &str) -> Result<Vec<f32>, String> {
     let mut format = probed.format;
 
     // 找到第一个音频轨道
-    let track_id = format
+    let mut track_id = format
         .tracks()
         .iter()
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
@@ -39,15 +39,55 @@ pub fn extract_pcm_16k_mono(file_path: &str) -> Result<Vec<f32>, String> {
         .make(&track.codec_params, &decoder_opts)
         .map_err(|e| format!("创建解码器失败: {}", e))?;
 
-    let orig_sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
+    let mut orig_sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
 
     // 解码所有帧
     let mut pcm_data = Vec::new();
 
+    // ResetRequired 表示容器里出现了新的轨道/编码（如拼接流）。symphonia 的约定是
+    // 重新检查轨道并重建解码器；只 continue 的话 next_packet 会一直报同一个错，
+    // 循环空转到程序退出。这里重建一次，并加次数上限兜住坏文件。
+    let mut resets = 0u32;
+    const MAX_RESETS: u32 = 8;
+
     loop {
         let packet = match format.next_packet() {
             Ok(p) => p,
-            Err(SymphoniaError::ResetRequired) => continue,
+            Err(SymphoniaError::ResetRequired) => {
+                resets += 1;
+                if resets > MAX_RESETS {
+                    slime_logger::sw_warn!(
+                        "[whisper] 解码需要反复重置（已 {} 次），放弃剩余数据",
+                        MAX_RESETS
+                    );
+                    break;
+                }
+                // 轨道表可能已经变了，重取当前轨道与采样率；找不到就收工
+                let (new_track_id, new_rate) = match format
+                    .tracks()
+                    .iter()
+                    .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+                {
+                    Some(t) => (t.id, t.codec_params.sample_rate.unwrap_or(orig_sample_rate)),
+                    None => break,
+                };
+                let new_params = match format.tracks().iter().find(|t| t.id == new_track_id) {
+                    Some(t) => t.codec_params.clone(),
+                    None => break,
+                };
+                match symphonia::default::get_codecs().make(&new_params, &decoder_opts) {
+                    Ok(new_decoder) => {
+                        decoder = new_decoder;
+                        track_id = new_track_id;
+                        orig_sample_rate = new_rate;
+                    }
+                    Err(e) => {
+                        slime_logger::sw_warn!("[whisper] 重置解码器失败: {}", e);
+                        break;
+                    }
+                }
+                continue;
+            }
             Err(SymphoniaError::IoError(_)) => break,
             Err(e) => {
                 slime_logger::sw_warn!("[whisper] 解码包错误: {}", e);

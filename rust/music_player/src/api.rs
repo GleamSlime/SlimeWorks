@@ -259,6 +259,8 @@ pub fn create_playlist_in_folder(
         updated_at: Utc::now(),
         is_default: false,
         folder_id,
+        // 空列表：下一个 order 就是 0，直接写实而不是留 None
+        max_order: Some(-1),
     };
 
     let json = serde_json::to_string(&playlist).map_err(|e| e.to_string())?;
@@ -378,9 +380,11 @@ pub fn import_music_folder(
 
     // 检查同目录下的 .cue 文件并合并信息
     let cue_sheets = scan_cue_files(&folder_path);
+    let mut merged = 0usize;
     for item in items.iter_mut() {
         // 尝试匹配 CUE 文件
         if let Some(cue) = find_cue_for_item(&item.file_path, &cue_sheets) {
+            merged += 1;
             if let Some(track) = cue.tracks.first() {
                 if !track.title.is_empty() {
                     item.title = track.title.clone();
@@ -398,8 +402,9 @@ pub fn import_music_folder(
     let _ = db_module::db_register_table(item_table());
     persist_items_batch(&items).map_err(|e| e.to_string())?;
 
-    // 更新播放列表的 item_count
-    update_playlist_count(&playlist_id)?;
+    // 计数与最大 order 增量累加，不再整表重扫
+    let max_new_order = items.iter().map(|i| i.order).max().unwrap_or(-1);
+    playlist_append_meta(&playlist_id, items.len(), max_new_order)?;
 
     // 清空缓存
     {
@@ -407,10 +412,14 @@ pub fn import_music_folder(
         *guard = None;
     }
 
+    // 只有真正匹配到 CUE 轨的文件才会被改写标签，这里把「命中数」记下来：
+    // 命中数与文件数相等而 CUE 表非空，往往意味着匹配规则过宽，值得一眼看出来。
     sw_info!(
-        "[music_player] 导入 {} 首音乐到播放列表 {}",
+        "[music_player] 导入 {} 首音乐到播放列表 {}（CUE 命中 {} 首，解析到 {} 张 CUE）",
         items.len(),
-        playlist_id
+        playlist_id,
+        merged,
+        cue_sheets.len()
     );
     Ok(items)
 }
@@ -440,9 +449,8 @@ pub fn import_music_file(playlist_id: String, file_path: String) -> Result<Music
     // 提取音频元数据（时长、标签等）
     let audio_meta = scanner::extract_audio_metadata(path);
 
-    // 获取当前最大 order
-    let existing = get_playlist_items(playlist_id.clone()).unwrap_or_default();
-    let max_order = existing.iter().map(|i| i.order).max().unwrap_or(-1);
+    // 下一个 order 直接取播放列表上的元数据，不再把整张表读出来求最大值
+    let max_order = playlist_next_order(&playlist_id)? - 1;
 
     let item = MusicItem {
         id: uuid::Uuid::new_v4().to_string(),
@@ -468,7 +476,7 @@ pub fn import_music_file(playlist_id: String, file_path: String) -> Result<Music
     let json = serde_json::to_string(&item).map_err(|e| e.to_string())?;
     db_module::db_set(item_table(), item.id.clone(), json).map_err(|e| e.to_string())?;
 
-    update_playlist_count(&playlist_id)?;
+    playlist_append_meta(&playlist_id, 1, item.order)?;
 
     // 清空缓存
     {
@@ -506,8 +514,7 @@ pub fn add_remote_music_items(
     remote_items: Vec<RemoteMusicItem>,
 ) -> Result<Vec<MusicItem>, String> {
     ensure_db();
-    let existing = get_playlist_items(playlist_id.clone()).unwrap_or_default();
-    let mut max_order = existing.iter().map(|i| i.order).max().unwrap_or(-1);
+    let mut max_order = playlist_next_order(&playlist_id)? - 1;
 
     let _ = db_module::db_register_table(item_table());
     let mut items = Vec::new();
@@ -537,7 +544,8 @@ pub fn add_remote_music_items(
     persist_items_batch(&items).map_err(|e| e.to_string())?;
 
     if !items.is_empty() {
-        update_playlist_count(&playlist_id)?;
+        let max_new_order = items.iter().map(|i| i.order).max().unwrap_or(-1);
+        playlist_append_meta(&playlist_id, items.len(), max_new_order)?;
         // 清空缓存
         let mut guard = music_items_cache().lock().unwrap();
         *guard = None;
@@ -548,7 +556,14 @@ pub fn add_remote_music_items(
 
 pub fn delete_music_item(item_id: String) -> Result<bool, String> {
     ensure_db();
-    db_module::db_delete(item_table(), item_id).map_err(|e| e.to_string())?;
+    // 先取出所属列表：条目行删掉之后就只能整表扫才能知道它属于谁了
+    let owner = read_item_playlist_id(&item_id)?;
+    let deleted = db_module::db_delete(item_table(), item_id).map_err(|e| e.to_string())?;
+    if deleted {
+        if let Some(playlist_id) = owner {
+            playlist_remove_meta(&playlist_id, 1)?;
+        }
+    }
 
     // 清空缓存
     {
@@ -565,7 +580,7 @@ pub fn clear_playlist_items(playlist_id: String) -> Result<u32, String> {
     for item in items {
         let _ = db_module::db_delete(item_table(), item.id);
     }
-    update_playlist_count(&playlist_id)?;
+    playlist_reset_meta(&playlist_id)?;
 
     // 清空缓存
     {
@@ -615,7 +630,7 @@ pub fn update_music_item(
 }
 
 /// 保存播放列表排序
-pub fn save_playlist_order(_playlist_id: String, item_ids: Vec<String>) -> Result<(), String> {
+pub fn save_playlist_order(playlist_id: String, item_ids: Vec<String>) -> Result<(), String> {
     ensure_db();
     let _ = db_module::db_register_table(item_table());
 
@@ -629,6 +644,17 @@ pub fn save_playlist_order(_playlist_id: String, item_ids: Vec<String>) -> Resul
         }
     }
     persist_items_batch(&reordered).map_err(|e| e.to_string())?;
+
+    // 重排后最大 order 可能变小（原先有空洞），但列表级元数据只增不减是刻意
+    // 设计：保留较大的 max_order 才能保证下次追加不会与历史序号撞号。
+    // 这里只补齐「元数据落后于实际」的一种边界：旧记录尚未回填时 order 被
+    // 排到更大值，max_order 必须跟上。
+    let new_max = reordered.iter().map(|item| item.order).max().unwrap_or(-1);
+    if let Some(playlist) = load_playlist_meta(&playlist_id)? {
+        if playlist.max_order.unwrap_or(-1) < new_max {
+            write_playlist_meta(&playlist_id, playlist.item_count, new_max)?;
+        }
+    }
 
     // 清空缓存
     {
@@ -672,24 +698,103 @@ fn find_cue_for_item(file_path: &str, cue_sheets: &[CueSheet]) -> Option<CueShee
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("");
+    if file_name.is_empty() {
+        return None;
+    }
+    // 空 audio_file 必须排除：`file_name.ends_with("")` 恒真，一张解析不出
+    // 文件名（或 CUE 的 FILE 段被写成空串）的 CUE 会匹配上目录里所有歌，
+    // 把它们的标签全刷成这张 CUE 的首轨。
+    let matches = |sheet: &CueSheet| {
+        if sheet.audio_file.is_empty() {
+            return false;
+        }
+        file_name.ends_with(&sheet.audio_file) || sheet.audio_file.ends_with(file_name)
+    };
+    // 先找逐字同名的（CUE 与音频同目录时最常见、也最精确），再退回后缀匹配
+    // （FILE 行里可能写了带子目录的相对路径）。顺序反了会让「album.flac」
+    // 抢走「disc2_album.flac」的 CUE。
     cue_sheets
         .iter()
-        .find(|s| file_name.ends_with(&s.audio_file) || s.audio_file.ends_with(file_name))
+        .find(|s| s.audio_file == file_name)
+        .or_else(|| cue_sheets.iter().find(|s| matches(s)))
         .cloned()
 }
 
 // ── 播放记录 ──────────────────────────────────────────────────────────────────
-pub fn get_recent_played(limit: u32) -> Result<Vec<PlayRecord>, String> {
-    ensure_db();
-    let _ = db_module::db_register_table(record_table());
+/// 播放记录表的保留上限。表以音乐条目为单位累积（一首一条，只累加计数），
+/// 长期使用会无限增长；而读路径只取「最近 N 条」，更老的记录永远不会被显示。
+pub const RECENT_PLAYED_LIMIT: usize = 500;
 
-    let raw = db_list_values(record_table())?;
-    let mut records: Vec<PlayRecord> = raw
+/// 最近播放索引在 meta 表里的键：JSON 字符串数组（record id，按播放时间倒序）。
+const RECENT_PLAYED_INDEX_KEY: &str = "recent_played_index_v1";
+
+fn load_recent_played_index() -> Option<Vec<String>> {
+    let _ = db_module::db_register_table(meta_table());
+    let raw = db_module::db_get(meta_table(), RECENT_PLAYED_INDEX_KEY.to_string())
+        .ok()
+        .flatten()?;
+    serde_json::from_str::<Vec<String>>(&raw).ok()
+}
+
+fn persist_recent_played_index(ids: &[String]) -> Result<(), String> {
+    let _ = db_module::db_register_table(meta_table());
+    let value = serde_json::to_string(ids).map_err(|e| e.to_string())?;
+    db_module::db_set(meta_table(), RECENT_PLAYED_INDEX_KEY.to_string(), value)
+        .map_err(|e| e.to_string())
+}
+
+/// 旧库（或索引丢失）时整表重建一次索引并落库，把超出上限的老记录一并裁掉。
+/// 只有真缺索引时才付这一次整表代价，之后永远走索引。
+fn rebuild_recent_played_index() -> Result<Vec<String>, String> {
+    let _ = db_module::db_register_table(record_table());
+    let mut records: Vec<PlayRecord> = db_list_values(record_table())?
         .into_iter()
         .filter_map(|v| serde_json::from_str::<PlayRecord>(&v).ok())
         .collect();
     records.sort_by(|a, b| b.played_at.cmp(&a.played_at));
-    records.truncate(limit as usize);
+
+    let kept: Vec<String> = records
+        .iter()
+        .take(RECENT_PLAYED_LIMIT)
+        .map(|r| r.id.clone())
+        .collect();
+    // 超出上限的记录从此不会再被显示，物理删掉——否则表只增不减
+    let evicted: Vec<String> = records
+        .iter()
+        .skip(RECENT_PLAYED_LIMIT)
+        .map(|r| r.id.clone())
+        .collect();
+    if !evicted.is_empty() {
+        let _ = db_module::db_batch_write(record_table(), Vec::new(), evicted.clone());
+        sw_info!("[music_player] 播放记录裁剪 {} 条（保留最近 {} 条）", evicted.len(), RECENT_PLAYED_LIMIT);
+    }
+    persist_recent_played_index(&kept)?;
+    Ok(kept)
+}
+
+pub fn get_recent_played(limit: u32) -> Result<Vec<PlayRecord>, String> {
+    ensure_db();
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+    let index = match load_recent_played_index() {
+        Some(ids) => ids,
+        None => rebuild_recent_played_index()?,
+    };
+    // 只读最近 N 条：命中索引后按 key 单事务批量取值，不再整表反序列化
+    let wanted: Vec<String> = index.into_iter().take(limit as usize).collect();
+    if wanted.is_empty() {
+        return Ok(Vec::new());
+    }
+    let _ = db_module::db_register_table(record_table());
+    let values = db_module::db_get_many(record_table(), wanted).map_err(|e| e.to_string())?;
+    let mut records: Vec<PlayRecord> = values
+        .into_iter()
+        .flatten()
+        .filter_map(|v| serde_json::from_str::<PlayRecord>(&v).ok())
+        .collect();
+    // 索引理论上已按时间倒序；仍排一次，防手工改库导致顺序漂移
+    records.sort_by(|a, b| b.played_at.cmp(&a.played_at));
     Ok(records)
 }
 
@@ -719,6 +824,27 @@ pub fn record_play(music_id: String) -> Result<PlayRecord, String> {
 
     let json = serde_json::to_string(&record).map_err(|e| e.to_string())?;
     db_module::db_set(record_table(), record.id.clone(), json).map_err(|e| e.to_string())?;
+
+    // 写入即裁剪：把这条挪到索引最前，超出上限的尾巴连同 DB 记录一起清掉。
+    // 索引缺失（旧库首写）时先整表重建一次——绝不能只把本条写进去：那样等于
+    // 把库里已有的历史记录从读路径上抹掉。重建只发生这一次，之后永远走增量。
+    {
+        let mut index = match load_recent_played_index() {
+            Some(ids) => ids,
+            None => rebuild_recent_played_index()?,
+        };
+        index.retain(|id| id != &record.id);
+        index.insert(0, record.id.clone());
+        let evicted: Vec<String> = if index.len() > RECENT_PLAYED_LIMIT {
+            index.split_off(RECENT_PLAYED_LIMIT)
+        } else {
+            Vec::new()
+        };
+        persist_recent_played_index(&index)?;
+        if !evicted.is_empty() {
+            let _ = db_module::db_batch_write(record_table(), Vec::new(), evicted);
+        }
+    }
 
     let mut guard = play_records_cache().lock().unwrap();
     if let Some(r) = guard.iter_mut().find(|r| r.music_id == record.music_id) {
@@ -831,37 +957,157 @@ pub fn delete_eq_preset(preset_id: String) -> Result<bool, String> {
     Ok(true)
 }
 
-// ── 内部辅助 ──────────────────────────────────────────────────────────────────
-/// 重算播放列表条目数并落库。
-/// 注意：必须绕过 get_playlist_items 的内存缓存直读 DB——各导入/删除写路径
-/// 都是「先写库 → update_playlist_count → 再清缓存」的顺序，此刻缓存还是
-/// 旧数据；若走缓存会把旧条目数写回（导入后列表计数不涨的回归）。
-fn update_playlist_count(playlist_id: &str) -> Result<(), String> {
-    let _ = db_module::db_register_table(item_table());
-    let count = db_list_values(item_table())?
-        .into_iter()
-        .filter_map(|v| serde_json::from_str::<MusicItem>(&v).ok())
-        .filter(|i| i.playlist_id == playlist_id)
-        .count();
+// ── 播放列表级元数据（条目数 / 最大 order）────────────────────────────────────
+//
+// 历史上每加一首歌都要把整张 music_items 反序列化一遍求 max_order，每次删除
+// 又要把整表重扫一遍算 count（1 万首 ≈ 10MB 全量 JSON 解析）。两者都是
+// 「播放列表自己的属性」，因此改成挂在 Playlist 记录上、随增删增量维护：
+// 每次操作只多一次 KV 读 + 一次 KV 写。
+//
+// 仍然保留「绕过 get_playlist_items 内存缓存、直读 KV」的既有约定——各写路径
+// 都是「先写条目 → 再改计数 → 最后清缓存」的顺序，此刻缓存还是旧数据，走缓存
+// 会把旧计数写回（导入后列表计数不涨的回归）。
 
+/// 取某条目所属的播放列表 ID（条目不存在返回 None）。
+fn read_item_playlist_id(item_id: &str) -> Result<Option<String>, String> {
+    let _ = db_module::db_register_table(item_table());
+    let raw = db_module::db_get(item_table(), item_id.to_string()).map_err(|e| e.to_string())?;
+    match raw {
+        Some(value) => serde_json::from_str::<MusicItem>(&value)
+            .map(|item| Some(item.playlist_id))
+            .map_err(|e| e.to_string()),
+        None => Ok(None),
+    }
+}
+
+/// 直读播放列表原始记录（绕过列表缓存）。
+fn read_playlist_raw(playlist_id: &str) -> Result<Option<Playlist>, String> {
     let _ = db_module::db_register_table(playlist_table());
     let raw =
         db_module::db_get(playlist_table(), playlist_id.to_string()).map_err(|e| e.to_string())?;
-    if let Some(value) = raw {
-        let mut playlist: Playlist = serde_json::from_str(&value).map_err(|e| e.to_string())?;
+    match raw {
+        Some(value) => serde_json::from_str::<Playlist>(&value)
+            .map(Some)
+            .map_err(|e| e.to_string()),
+        None => Ok(None),
+    }
+}
+
+/// 整表重算某个播放列表的条目数与列表内最大 order。
+/// 只用于两处：旧记录首次补齐列表级元数据、以及清空列表后的收尾。
+/// 正常增删路径一律走增量，不再扫整表。
+fn recount_playlist_from_items(playlist_id: &str) -> Result<(usize, i32), String> {
+    let _ = db_module::db_register_table(item_table());
+    let mut count = 0usize;
+    let mut max_order = -1i32;
+    for raw in db_list_values(item_table())? {
+        let Ok(item) = serde_json::from_str::<MusicItem>(&raw) else {
+            continue;
+        };
+        if item.playlist_id != playlist_id {
+            continue;
+        }
+        count += 1;
+        if item.order > max_order {
+            max_order = item.order;
+        }
+    }
+    Ok((count, max_order))
+}
+
+/// 把条目数 / 最大 order 写回记录与内存缓存。
+fn write_playlist_meta(
+    playlist_id: &str,
+    item_count: usize,
+    max_order: i32,
+) -> Result<(), String> {
+    let Some(mut playlist) = read_playlist_raw(playlist_id)? else {
+        return Ok(());
+    };
+    playlist.item_count = item_count;
+    playlist.max_order = Some(max_order);
+    playlist.updated_at = Utc::now();
+    let json = serde_json::to_string(&playlist).map_err(|e| e.to_string())?;
+    db_module::db_set(playlist_table(), playlist_id.to_string(), json)
+        .map_err(|e| e.to_string())?;
+
+    let mut guard = playlists_cache().lock().unwrap();
+    if let Some(p) = guard.iter_mut().find(|p| p.id == playlist_id) {
+        p.item_count = item_count;
+        p.max_order = Some(max_order);
+        p.updated_at = playlist.updated_at;
+    }
+    Ok(())
+}
+
+/// 取出播放列表，必要时先补齐列表级元数据。
+/// `max_order` 为 None 只可能出现在旧版本落库的记录上：此时整表回填一次
+/// 并立刻写回，之后这条记录永远走增量。
+fn load_playlist_meta(playlist_id: &str) -> Result<Option<Playlist>, String> {
+    let Some(mut playlist) = read_playlist_raw(playlist_id)? else {
+        return Ok(None);
+    };
+    if playlist.max_order.is_none() {
+        let (count, max_order) = recount_playlist_from_items(playlist_id)?;
         playlist.item_count = count;
-        playlist.updated_at = Utc::now();
+        playlist.max_order = Some(max_order);
         let json = serde_json::to_string(&playlist).map_err(|e| e.to_string())?;
         db_module::db_set(playlist_table(), playlist_id.to_string(), json)
             .map_err(|e| e.to_string())?;
-
         let mut guard = playlists_cache().lock().unwrap();
         if let Some(p) = guard.iter_mut().find(|p| p.id == playlist_id) {
-            p.item_count = count;
-            p.updated_at = playlist.updated_at;
+            *p = playlist.clone();
         }
     }
-    Ok(())
+    Ok(Some(playlist))
+}
+
+/// 该播放列表下一个可用的 order（空列表为 0）。
+fn playlist_next_order(playlist_id: &str) -> Result<i32, String> {
+    let max_order = load_playlist_meta(playlist_id)?
+        .and_then(|p| p.max_order)
+        .unwrap_or(-1);
+    Ok(max_order.saturating_add(1))
+}
+
+/// 新增条目后增量维护计数与最大 order（order 只增不减，避免后续追加撞号）。
+fn playlist_append_meta(
+    playlist_id: &str,
+    added: usize,
+    max_new_order: i32,
+) -> Result<(), String> {
+    if added == 0 {
+        return Ok(());
+    }
+    let Some(playlist) = load_playlist_meta(playlist_id)? else {
+        return Ok(());
+    };
+    let max_order = playlist.max_order.unwrap_or(-1).max(max_new_order);
+    write_playlist_meta(
+        playlist_id,
+        playlist.item_count.saturating_add(added),
+        max_order,
+    )
+}
+
+/// 删除条目后增量维护计数。
+fn playlist_remove_meta(playlist_id: &str, removed: usize) -> Result<(), String> {
+    if removed == 0 {
+        return Ok(());
+    }
+    let Some(playlist) = load_playlist_meta(playlist_id)? else {
+        return Ok(());
+    };
+    write_playlist_meta(
+        playlist_id,
+        playlist.item_count.saturating_sub(removed),
+        playlist.max_order.unwrap_or(-1),
+    )
+}
+
+/// 列表被清空：计数归零。最大 order 刻意不保留，让复用这个列表时从 0 重新排号。
+fn playlist_reset_meta(playlist_id: &str) -> Result<(), String> {
+    write_playlist_meta(playlist_id, 0, -1)
 }
 
 fn create_builtin_eq_presets() -> Vec<EqualizerPreset> {
@@ -903,6 +1149,29 @@ fn create_builtin_eq_presets() -> Vec<EqualizerPreset> {
             is_builtin: true,
         },
     ]
+}
+
+/// 「这个音频抽不出内嵌封面」的进程内负缓存（绝对路径为 key）。
+///
+/// 关键点：只在**起点进程真的跑起来**、且三个候选时刻都失败后才记账。
+/// ffmpeg 缺失/无权执行这类环境问题如果也记进来，等于把整库封面永久判死，
+/// 装好 ffmpeg 也不会再重试——所以起进程本身失败时不落负缓存。
+fn music_cover_absent_cache() -> &'static Mutex<std::collections::HashSet<String>> {
+    static ABSENT: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    ABSENT.get_or_init(|| Mutex::new(std::collections::HashSet::new()))
+}
+
+fn music_cover_absent(file_path: &str) -> bool {
+    music_cover_absent_cache()
+        .lock()
+        .map(|guard| guard.contains(file_path))
+        .unwrap_or(false)
+}
+
+fn record_music_cover_absent(file_path: &str) {
+    if let Ok(mut guard) = music_cover_absent_cache().lock() {
+        guard.insert(file_path.to_string());
+    }
 }
 
 /// 封面缩略图缓存目录
@@ -953,10 +1222,23 @@ pub fn ensure_music_cover_thumbnail(file_path: String, width: u32) -> Option<Str
         }
         let _ = std::fs::remove_file(&cache_path);
     }
-    // 生成缩略图
-    for _seek in &["00:00:00.000", "00:00:03.000", "00:00:00.000"] {
-        let mut cmd = std::process::Command::new("ffmpeg");
+    // 同一路径已经判定过「抽不出封面」就不再起进程：批量导入整库时这条链路
+    // 每首歌要跑三次 ffmpeg，失败结论又是文件自身的属性（换宽度也不会变）。
+    if music_cover_absent(&file_path) {
+        return None;
+    }
+    // 生成缩略图。`-ss` 放在 `-i` 之前是输入 seek，只跳到目标点而不用从文件头
+    // 解码丢弃；放后面会让大文件每次重试都全量读一遍。三个候选时刻依次后退，
+    // 短音频/封面只在前几秒出现的文件都能命中。
+    // 另记「ffmpeg 进程是否真的跑起来过」：只有跑得起来时的失败才是可信的
+    // 「这个文件没有封面」，否则装好 ffmpeg 也不会再重试。
+    let mut executed = false;
+    for seek in &["00:00:00.000", "00:00:03.000", "00:00:10.000"] {
+        let mut cmd = std::process::Command::new(db_module::ffmpeg::ffmpeg_cmd());
         cmd.args([
+            "-nostdin",
+            "-ss",
+            seek,
             "-i",
             &file_path,
             "-map",
@@ -970,13 +1252,24 @@ pub fn ensure_music_cover_thumbnail(file_path: String, width: u32) -> Option<Str
             "-y",
             &cache_path.to_string_lossy(),
         ])
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
         suppress_console(&mut cmd);
-        let ok = cmd.status().map(|s| s.success()).unwrap_or(false);
-        if ok && cache_path.exists() {
-            return Some(cache_path.to_string_lossy().into_owned());
+        match cmd.status() {
+            Ok(status) => {
+                executed = true;
+                if status.success() && cache_path.exists() {
+                    return Some(cache_path.to_string_lossy().into_owned());
+                }
+            }
+            Err(error) => {
+                sw_warn!("[music_player] 启动 ffmpeg 失败（不记负缓存）: {}", error);
+            }
         }
+    }
+    if executed {
+        record_music_cover_absent(&file_path);
     }
     None
 }
@@ -1740,6 +2033,395 @@ mod tests {
         assert!(scan_cue_files(&format!("/nonexistent/{tag}")).is_empty());
         // parse_cue 非法路径报错
         assert!(parse_cue(format!("/nonexistent/{tag}.cue")).is_err());
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    // ── CUE + FLAC 不得污染整目录标签（P0-1 回归）───────────────────────────
+
+    #[test]
+    fn cue_with_flac_file_line_does_not_overwrite_sibling_tags() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("cue_flac_{tag}"));
+        // 只有 album.flac 被 CUE 描述；另一首歌必须保留自身文件名作为标题
+        write_audio(dir.path(), "album.flac");
+        write_audio(dir.path(), "other.flac");
+        fs::write(
+            dir.path().join("album.cue"),
+            "TITLE \"整轨专辑\"\nPERFORMER \"整轨艺术家\"\nFILE \"album.flac\" FLAC\n  TRACK 01 AUDIO\n    TITLE \"第一首\"\n    PERFORMER \"歌手A\"\n    INDEX 01 00:00:00\n  TRACK 02 AUDIO\n    TITLE \"第二首\"\n    INDEX 01 03:30:00\n",
+        )
+        .unwrap();
+
+        let pl = create_playlist(format!("CUE+FLAC {tag}")).unwrap();
+        let items =
+            import_music_folder(pl.id.clone(), dir.path().to_string_lossy().into_owned()).unwrap();
+        assert_eq!(items.len(), 2);
+
+        let album = items.iter().find(|i| i.file_path.ends_with("album.flac")).unwrap();
+        let other = items.iter().find(|i| i.file_path.ends_with("other.flac")).unwrap();
+        // 命中 CUE 的文件按首轨合并
+        assert_eq!(album.title, "第一首");
+        assert_eq!(album.album.as_deref(), Some("整轨专辑"));
+        // 未命中的文件必须原样保留自己的文件名标题
+        assert_eq!(other.title, "other", "CUE 不得波及未匹配的文件");
+        assert!(other.album.is_none());
+
+        // 落库的值同样不能被污染
+        let stored_other: MusicItem =
+            serde_json::from_str(&db_row(item_table(), &other.id).unwrap()).unwrap();
+        assert_eq!(stored_other.title, "other");
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    /// 解析不出 FILE 的 CUE 必须被整张丢弃：它既不该参与标签合并，
+    /// 也不该通过空 audio_file 把目录里所有歌都「匹配」上。
+    #[test]
+    fn cue_without_file_line_is_skipped_by_folder_import() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("cue_nofile_{tag}"));
+        write_audio(dir.path(), "a.mp3");
+        write_audio(dir.path(), "b.mp3");
+        fs::write(
+            dir.path().join("broken.cue"),
+            "TITLE \"无 FILE 的坏 CUE\"\n  TRACK 01 AUDIO\n    TITLE \"不该出现\"\n    INDEX 01 00:00:00\n",
+        )
+        .unwrap();
+
+        // 目录级扫描直接跳过该 CUE
+        assert!(scan_cue_files(dir.path().to_string_lossy().as_ref()).is_empty());
+
+        let pl = create_playlist(format!("坏 CUE {tag}")).unwrap();
+        let items =
+            import_music_folder(pl.id.clone(), dir.path().to_string_lossy().into_owned()).unwrap();
+        assert_eq!(items.len(), 2);
+        for item in &items {
+            assert_ne!(item.title, "不该出现", "坏 CUE 不得参与任何标签合并");
+            assert!(item.album.is_none());
+        }
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    /// find_cue_for_item 的同名优先 + 空串排除：
+    /// 早先的后缀匹配会让 album.flac 抢走 disc2_album.flac 的 CUE。
+    #[test]
+    fn find_cue_for_item_prefers_exact_name_and_ignores_empty_audio_file() {
+        let sheet = |audio_file: &str, title: &str| CueSheet {
+            title: Some(title.to_string()),
+            performer: None,
+            audio_file: audio_file.to_string(),
+            tracks: Vec::new(),
+        };
+        let sheets = vec![sheet("disc2_album.flac", "外圈"), sheet("album.flac", "内圈")];
+        let hit = find_cue_for_item("/music/album.flac", &sheets).unwrap();
+        assert_eq!(hit.title.as_deref(), Some("内圈"), "同名 CUE 必须优先");
+
+        // 空 audio_file 的 CUE 不能匹配任何文件（否则 ends_with 恒真）
+        let empty = vec![sheet("", "空文件名的坏 CUE")];
+        assert!(find_cue_for_item("/music/any.mp3", &empty).is_none());
+        // 空文件名入参同样不能命中
+        let normal = vec![sheet("any.mp3", "正常")];
+        assert!(find_cue_for_item("", &normal).is_none());
+    }
+
+    // ── 音乐封面提取（P2-12 回归）─────────────────────────────────────────
+
+    /// 用假 ffmpeg 观察真实命令行：必须用**已注册的路径**、必须真的带 -ss。
+    /// 历史实现写死 "ffmpeg"（无视注册路径）+ `for _seek` 变量未用（三次重试
+    /// 完全同一条命令，短音频抽不出封面时白跑三趟）。
+    #[cfg(unix)]
+    #[test]
+    fn cover_extraction_uses_registered_ffmpeg_path_and_real_seek() {
+        use std::os::unix::fs::PermissionsExt;
+        let _serial = lock_db_test_serial();
+        // 全局 ffmpeg 路径是本进程共享的，用完必须还原
+        let original = db_module::ffmpeg::ffmpeg_cmd();
+        let root = std::env::temp_dir().join(format!("music_cover_{}", unique_tag()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let song = root.join("track.mp3");
+        fs::write(&song, b"fake mp3 without embedded art").unwrap();
+        let sentinel = root.join("ffmpeg_calls");
+        let stub = root.join("fake_ffmpeg.sh");
+        // 记录完整参数后失败：既能看到 `-ss` 与路径，也走完三次重试
+        fs::write(
+            &stub,
+            format!(
+                "#!/bin/sh\necho \"$@\" >> '{}'\necho \"Stream map '' matches no streams.\" >&2\nexit 1\n",
+                sentinel.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        db_module::ffmpeg::register_ffmpeg_path(stub.to_string_lossy().into_owned());
+
+        // 源文件路径即负缓存 key，先保证干净
+        assert!(!music_cover_absent(song.to_string_lossy().as_ref()));
+
+        assert!(ensure_music_cover_thumbnail(song.to_string_lossy().into_owned(), 300).is_none());
+
+        let calls = std::fs::read_to_string(&sentinel).unwrap_or_default();
+        let lines: Vec<&str> = calls.lines().collect();
+        assert_eq!(lines.len(), 3, "三个候选时刻各试一次，实际调用: {lines:?}");
+        // 每一次都必须带 -ss，且三个时刻互不相同（修复前全是同一条命令）
+        for line in &lines {
+            assert!(line.contains("-ss"), "命令必须带 -ss: {line}");
+        }
+        assert!(
+            lines.iter().any(|l| l.contains("00:00:00.000"))
+                && lines.iter().any(|l| l.contains("00:00:03.000"))
+                && lines.iter().any(|l| l.contains("00:00:10.000")),
+            "三次重试必须用不同的 seek 时刻: {lines:?}"
+        );
+
+        // 失败后落负缓存：再次调用完全不起进程
+        assert!(music_cover_absent(song.to_string_lossy().as_ref()));
+        assert!(ensure_music_cover_thumbnail(song.to_string_lossy().into_owned(), 300).is_none());
+        let after = std::fs::read_to_string(&sentinel).unwrap_or_default();
+        assert_eq!(
+            after.lines().count(),
+            3,
+            "命中负缓存后不得再起 ffmpeg"
+        );
+
+        db_module::ffmpeg::register_ffmpeg_path(original);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 负缓存只在「ffmpeg 真的跑起来过」时才记：路径不存在这类环境问题
+    /// 若也记进去，用户装好 ffmpeg 后整库封面会被永久判死。
+    #[cfg(unix)]
+    #[test]
+    fn missing_ffmpeg_binary_does_not_poison_cover_negative_cache() {
+        let _serial = lock_db_test_serial();
+        let original = db_module::ffmpeg::ffmpeg_cmd();
+        let root = std::env::temp_dir().join(format!("music_cover_env_{}", unique_tag()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let song = root.join("env.mp3");
+        fs::write(&song, b"fake mp3").unwrap();
+
+        // 指向一个不存在的可执行文件：spawn 必然失败
+        db_module::ffmpeg::register_ffmpeg_path(
+            root.join("no-such-ffmpeg").to_string_lossy().into_owned(),
+        );
+        assert!(ensure_music_cover_thumbnail(song.to_string_lossy().into_owned(), 300).is_none());
+        assert!(
+            !music_cover_absent(song.to_string_lossy().as_ref()),
+            "环境问题不得写进负缓存，否则装好 ffmpeg 也不会再重试"
+        );
+
+        db_module::ffmpeg::register_ffmpeg_path(original);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 播放列表级元数据一致性（P2-7 回归）─────────────────────────────────
+
+    /// 计数与 max_order 必须与真实条目一致，覆盖：批量导入 / 单曲追加 /
+    /// 远程批量追加 / 单条删除 / 清空 五种写路径。
+    #[test]
+    fn playlist_meta_stays_consistent_across_add_and_delete_paths() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("meta_{tag}"));
+        let pl = create_playlist(format!("元数据 {tag}")).unwrap();
+        // 新建列表：空 → max_order 是 -1（下一个 order 从 0 开始）
+        let fresh = load_playlist_meta(&pl.id).unwrap().unwrap();
+        assert_eq!(fresh.item_count, 0);
+        assert_eq!(fresh.max_order, Some(-1));
+
+        // 1) 目录批量导入 2 首
+        write_audio(dir.path(), "a.mp3");
+        write_audio(dir.path(), "b.mp3");
+        import_music_folder(pl.id.clone(), dir.path().to_string_lossy().into_owned()).unwrap();
+        let meta = load_playlist_meta(&pl.id).unwrap().unwrap();
+        assert_eq!(meta.item_count, 2);
+        assert_eq!(meta.max_order, Some(1));
+
+        // 2) 单曲追加：order 接着最大值 +1
+        let single = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "c.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        assert_eq!(single.order, 2, "order 必须接在已有最大值之后");
+        let meta = load_playlist_meta(&pl.id).unwrap().unwrap();
+        assert_eq!(meta.item_count, 3);
+        assert_eq!(meta.max_order, Some(2));
+
+        // 3) 远程批量追加
+        let remote = add_remote_music_items(
+            pl.id.clone(),
+            vec![RemoteMusicItem {
+                title: "流".into(),
+                url: "https://example.com/s.mp3".into(),
+                duration_ms: None,
+                track_number: None,
+            }],
+        )
+        .unwrap();
+        assert_eq!(remote[0].order, 3);
+        let meta = load_playlist_meta(&pl.id).unwrap().unwrap();
+        assert_eq!(meta.item_count, 4);
+        assert_eq!(meta.max_order, Some(3));
+
+        // 4) 删除一条：计数 -1，max_order 保持不变（后续追加不会撞号）
+        assert!(delete_music_item(single.id.clone()).unwrap());
+        let meta = load_playlist_meta(&pl.id).unwrap().unwrap();
+        assert_eq!(meta.item_count, 3);
+        assert_eq!(meta.max_order, Some(3), "删除不该让 order 回退");
+        // 计数必须与真实条数一致
+        assert_eq!(
+            get_playlist_items(pl.id.clone()).unwrap().len(),
+            meta.item_count
+        );
+
+        // 5) 清空：计数归零、order 复位，复用列表时重新从 0 排号
+        let cleared = clear_playlist_items(pl.id.clone()).unwrap();
+        assert_eq!(cleared, 3);
+        let meta = load_playlist_meta(&pl.id).unwrap().unwrap();
+        assert_eq!(meta.item_count, 0);
+        assert_eq!(meta.max_order, Some(-1));
+        let after = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "d.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        assert_eq!(after.order, 0, "清空后重新排号应从 0 开始");
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    /// 旧记录（没有 max_order 字段）首次访问要能自愈：整表回填一次后写回。
+    #[test]
+    fn legacy_playlist_without_max_order_is_backfilled_once() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("legacy_{tag}"));
+        let pl = create_playlist(format!("旧记录 {tag}")).unwrap();
+        write_audio(dir.path(), "a.mp3");
+        write_audio(dir.path(), "b.mp3");
+        import_music_folder(pl.id.clone(), dir.path().to_string_lossy().into_owned()).unwrap();
+
+        // 模拟旧版本落库：把 max_order 字段从 JSON 里抹掉
+        let raw = db_row(playlist_table(), &pl.id).unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        value.as_object_mut().unwrap().remove("max_order");
+        db_module::db_set(
+            playlist_table(),
+            pl.id.clone(),
+            serde_json::to_string(&value).unwrap(),
+        )
+        .unwrap();
+        assert!(!db_row(playlist_table(), &pl.id).unwrap().contains("max_order"));
+
+        // 首次读取即回填
+        let meta = load_playlist_meta(&pl.id).unwrap().unwrap();
+        assert_eq!(meta.item_count, 2);
+        assert_eq!(meta.max_order, Some(1));
+        // 已写回库（下次不再付整表代价）
+        let healed = db_row(playlist_table(), &pl.id).unwrap();
+        assert!(healed.contains("max_order"), "回填结果必须落库: {healed}");
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    // ── 最近播放裁剪（P2-8 回归）───────────────────────────────────────────
+
+    /// 写入即裁剪：索引只保留最近 RECENT_PLAYED_LIMIT 条，DB 里被挤出的记录同步删除。
+    #[test]
+    fn recent_played_index_is_trimmed_on_write_and_reads_only_tail() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        // 索引是进程级共享的，别的用例可能已经建过；删掉强制走重建路径，
+        // 让本用例与执行顺序无关。
+        let _ = db_module::db_register_table(meta_table());
+        let _ = db_module::db_delete(meta_table(), RECENT_PLAYED_INDEX_KEY.to_string());
+        assert!(load_recent_played_index().is_none());
+        // 造 N 首歌（不真的播 N 次：那要 N 次 DB 写）
+        let total = RECENT_PLAYED_LIMIT + 5;
+        let mut ids = Vec::with_capacity(total);
+        for i in 0..total {
+            let record = PlayRecord {
+                id: format!("rec_{tag}_{i}"),
+                music_id: format!("music_{tag}_{i}"),
+                played_at: Utc::now() + chrono::Duration::milliseconds(i as i64),
+                play_count: 1,
+            };
+            db_module::db_set(
+                record_table(),
+                record.id.clone(),
+                serde_json::to_string(&record).unwrap(),
+            )
+            .unwrap();
+            ids.push(record.id);
+        }
+
+        // 索引缺失 → 首次读重建并裁剪
+        let recent = get_recent_played(total as u32).unwrap();
+        assert_eq!(
+            recent.len(),
+            RECENT_PLAYED_LIMIT,
+            "读路径必须只返回最近 {} 条",
+            RECENT_PLAYED_LIMIT
+        );
+        // 按时间倒序
+        assert!(recent.windows(2).all(|w| w[0].played_at >= w[1].played_at));
+        // 索引已落库
+        let index = load_recent_played_index().expect("索引应已落库");
+        assert_eq!(index.len(), RECENT_PLAYED_LIMIT);
+        // 被挤出的老记录已从表里删掉（表不会只增不减）
+        let oldest_first = &ids[0];
+        assert!(
+            db_module::db_get(record_table(), oldest_first.clone())
+                .unwrap()
+                .is_none(),
+            "超出上限的最老记录应从表里删除"
+        );
+
+        // limit 小于上限时只读那么多
+        assert_eq!(get_recent_played(3).unwrap().len(), 3);
+        assert!(get_recent_played(0).unwrap().is_empty());
+
+        let _ = delete_playlist(tag);
+    }
+
+    /// 单条写入后索引把该条挪到最前，且重复播放不会在索引里出现两次。
+    #[test]
+    fn record_play_moves_entry_to_front_without_duplicating() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("recent_{tag}"));
+        let pl = create_playlist(format!("最近 {tag}")).unwrap();
+        let a = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "a.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        let b = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "b.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+
+        let ra = record_play(a.id.clone()).unwrap();
+        let rb = record_play(b.id.clone()).unwrap();
+        let index = load_recent_played_index().unwrap();
+        assert_eq!(index.first(), Some(&rb.id), "最新播放排最前");
+
+        // 再播 a：a 挪到最前，且索引里 a 只出现一次
+        record_play(a.id.clone()).unwrap();
+        let index = load_recent_played_index().unwrap();
+        assert_eq!(index.first(), Some(&ra.id));
+        assert_eq!(
+            index.iter().filter(|id| **id == ra.id).count(),
+            1,
+            "同一首不得在索引里出现两次"
+        );
 
         let _ = delete_playlist(pl.id);
     }

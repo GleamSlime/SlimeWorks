@@ -141,6 +141,9 @@ pub fn base64_bytes(text: &str) -> Vec<u8> {
 }
 
 /// quoted-printable：软换行、=XX 转义；正文里的裸 '=' 后不跟两位十六进制时原样保留
+///
+/// 全程按字节走，绝不切 &str：裸 '=' 后面跟多字节字符（"金额=人民币"）时，
+/// 按字符边界切 i+1..i+3 会落在 UTF-8 字符中间，panic 直接带走收信线程。
 pub fn quoted_printable_bytes(text: &str) -> Vec<u8> {
     let unfolded = QP_SOFT.replace_all(text, "");
     let bytes = unfolded.as_bytes();
@@ -148,9 +151,12 @@ pub fn quoted_printable_bytes(text: &str) -> Vec<u8> {
     let mut i = 0usize;
     while i < bytes.len() {
         if bytes[i] == b'=' && i + 2 < bytes.len() {
-            let hex = &unfolded[i + 1..i + 3];
-            if let Ok(v) = u8::from_str_radix(hex, 16) {
-                out.push(v);
+            let hex = &bytes[i + 1..i + 3];
+            if hex.iter().all(|b| b.is_ascii_hexdigit()) {
+                // 两位都是十六进制才可能是 =XX；非 ASCII 字节 is_ascii_hexdigit 为 false
+                let high = (hex[0] as char).to_digit(16).unwrap_or(0) as u8;
+                let low = (hex[1] as char).to_digit(16).unwrap_or(0) as u8;
+                out.push(high << 4 | low);
                 i += 3;
                 continue;
             }

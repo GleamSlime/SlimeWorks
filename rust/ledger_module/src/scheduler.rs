@@ -82,7 +82,10 @@ pub fn start() -> Result<(), String> {
             sw_info!("[ledger] 自动记账线程已退出");
             break;
         }
-        run_due_rules();
+        // 一封畸形邮件足以让解析里某个非预期切片 panic；没有这层兜底，
+        // 收信线程当场死掉，自动记账静默停摆到用户重启 App。
+        // catch_unwind 的代价是一次节拍而已，线程必须活着。
+        run_due_rules_guarded();
         // 分片睡眠，停止请求最坏 1 秒内生效
         for _ in 0..TICK_SECS {
             if stop_signal.load(Ordering::SeqCst) {
@@ -127,6 +130,36 @@ pub fn stop() -> Result<(), String> {
 
 pub fn set_enabled(enabled: bool) {
     update_status(|s| s.enabled = enabled);
+}
+
+/// 带 panic 兜底的节拍：解析/落库里的任何 panic 都降级成一条错误日志
+fn run_due_rules_guarded() {
+    guard_step(run_due_rules);
+}
+
+/// panic 兜底的通用形态（抽出来是为了让测试能注入一个必 panic 的节拍）。
+/// 返回 true 表示这一轮正常跑完。
+fn guard_step<F: FnOnce()>(step: F) -> bool {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(step)) {
+        Ok(()) => true,
+        Err(payload) => {
+            let reason = panic_message(&payload);
+            sw_error!("[ledger] 自动记账本轮发生 panic，已跳过本轮继续下一节拍: {}", reason);
+            update_status(|s| s.last_summary = format!("本轮异常已跳过: {}", reason));
+            false
+        }
+    }
+}
+
+/// panic payload 多半是 &str / String，其他类型只能给个占位
+fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        return (*s).to_string();
+    }
+    if let Some(s) = payload.downcast_ref::<String>() {
+        return s.clone();
+    }
+    "未知 panic".to_string()
 }
 
 /// 跑一遍所有到点的规则
@@ -421,5 +454,41 @@ mod tests {
         // 空串按"删除"处理：调度器据此报"缺少密码"而不是拿空口令去登录
         set_secret(id, "");
         assert_eq!(secret_of(id), "");
+    }
+
+    // ── panic 兜底（P0-3 纵深防御）──────────────────────────
+
+    /// 回归 P0-3：一封畸形邮件引发的 panic 不能让自动记账线程死掉。
+    /// 这里证明兜底层能吃掉 panic 并允许继续下一节拍。
+    #[test]
+    fn guard_step_survives_panic_and_keeps_ticking() {
+        // 模拟连着两个节拍：第一节拍 panic，第二节拍照常跑
+        let first = guard_step(|| panic!("畸形邮件触发的切片 panic"));
+        assert!(!first, "panic 的那一轮应当被标记为异常");
+        // 线程本身还活着：下一节拍能正常执行
+        let ran = std::cell::Cell::new(false);
+        let second = guard_step(|| ran.set(true));
+        assert!(second);
+        assert!(ran.get(), "panic 之后必须还能继续跑下一节拍");
+    }
+
+    /// panic 原因要进可展示摘要，否则用户只会看到「跳过一轮」而无从排查
+    #[test]
+    fn guard_step_records_the_panic_reason_in_status() {
+        let _ = guard_step(|| panic!("字段切片越界"));
+        let summary = status().last_summary;
+        assert!(summary.contains("字段切片越界"), "summary = {summary}");
+        assert!(summary.contains("本轮异常已跳过"), "summary = {summary}");
+    }
+
+    /// payload 是 &str 与 String 两种形态都要能取出文案
+    #[test]
+    fn panic_message_handles_str_and_string_payloads() {
+        let boxed: Box<dyn std::any::Any + Send> = Box::new("静态串");
+        assert_eq!(panic_message(&boxed), "静态串");
+        let boxed: Box<dyn std::any::Any + Send> = Box::new(String::from("堆串"));
+        assert_eq!(panic_message(&boxed), "堆串");
+        let boxed: Box<dyn std::any::Any + Send> = Box::new(42u32);
+        assert_eq!(panic_message(&boxed), "未知 panic");
     }
 }

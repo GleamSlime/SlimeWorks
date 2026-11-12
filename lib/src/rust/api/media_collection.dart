@@ -229,10 +229,21 @@ int deleteCollectionLocalFiles({required String collectionId}) =>
     );
 
 /// 将集合物理转移到目标目录。
+/// 返回成功转移的集合数（保留旧签名；需要失败数请用
+/// [transfer_collections_with_stats]）。
 Future<int> transferCollections({
   required List<String> collectionIds,
   required String targetDir,
 }) => RustLib.instance.api.crateApiMediaCollectionTransferCollections(
+  collectionIds: collectionIds,
+  targetDir: targetDir,
+);
+
+/// 将集合物理转移到目标目录，同时上报成功与失败数量。
+Future<TransferOutcome> transferCollectionsWithStats({
+  required List<String> collectionIds,
+  required String targetDir,
+}) => RustLib.instance.api.crateApiMediaCollectionTransferCollectionsWithStats(
   collectionIds: collectionIds,
   targetDir: targetDir,
 );
@@ -310,7 +321,8 @@ SmartFolderInfo updateSmartFolder({
 bool deleteSmartFolder({required String id}) =>
     RustLib.instance.api.crateApiMediaCollectionDeleteSmartFolder(id: id);
 
-/// 只查不生成：读取已缓存的波形。没有缓存 / 源文件已变 / bins 不符 → 返回 None。
+/// 只查不生成：读取已缓存的波形。没有缓存 / 源文件已变 / bins 不符 /
+/// 算法版本过期 → 返回 None。
 ///
 /// 纯读盘，不解码、不起子进程，可安全高频调用（预览打开时先走这条）。
 Future<Float64List?> readVideoWaveform({
@@ -712,4 +724,26 @@ class ThumbnailTaskInfo {
           status == other.status &&
           retries == other.retries &&
           updatedAt == other.updatedAt;
+}
+
+/// 集合转移的结果：成功数与失败数分开上报。
+///
+/// 旧接口只返回成功数，且历史上把「重新导入失败」也计入成功——用户看到
+/// 「成功转移 N 个」却找不到任何东西。上层据此区分「全部成功 / 部分失败」。
+class TransferOutcome {
+  final int successCount;
+  final int failCount;
+
+  const TransferOutcome({required this.successCount, required this.failCount});
+
+  @override
+  int get hashCode => successCount.hashCode ^ failCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TransferOutcome &&
+          runtimeType == other.runtimeType &&
+          successCount == other.successCount &&
+          failCount == other.failCount;
 }

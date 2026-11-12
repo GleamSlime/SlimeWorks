@@ -412,7 +412,8 @@ pub fn parse_cue_file(cue_path: String) -> anyhow::Result<CueSheetInfo> {
 }
 
 /// 获取最近播放记录
-#[frb(sync)]
+/// 异步：路径上要读 DB（索引 + 一批记录），标 sync 会把整个 Dart UI isolate
+/// 卡住——首次调用还可能要重建索引（整表读一次）。
 pub fn get_recent_played(limit: u32) -> anyhow::Result<Vec<PlayRecordInfo>> {
     music_player::get_recent_played(limit)
         .map(|records| records.into_iter().map(convert_record).collect())
@@ -420,7 +421,7 @@ pub fn get_recent_played(limit: u32) -> anyhow::Result<Vec<PlayRecordInfo>> {
 }
 
 /// 记录播放
-#[frb(sync)]
+/// 异步：每次都走一次 DB 读 + 写（还可能要裁剪播放记录表），不该占用 UI 线程。
 pub fn record_play(music_id: String) -> anyhow::Result<PlayRecordInfo> {
     music_player::record_play(music_id)
         .map(convert_record)

@@ -6,6 +6,7 @@ use regex::Regex;
 use slime_logger::{sw_debug, sw_info, sw_warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::types::{CueSheet, CueTrack, MusicItem, PathMappingNode, PathMappingNodeType};
@@ -274,6 +275,22 @@ pub fn parse_cue_file(cue_path: &str) -> Result<CueSheet> {
     parse_cue_content(&content)
 }
 
+/// CUE 解析用的正则：全部静态化。
+/// 原先每次 parse_cue_content 都现编 5 个 Regex（每个 CUE 文件一次，导入大目录
+/// 等于成百上千次编译），而正则与输入无关，编译一次即可复用。
+static CUE_TITLE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^TITLE\s+"(.*)""#).expect("TITLE 正则必须合法"));
+static CUE_PERFORMER_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^PERFORMER\s+"(.*)""#).expect("PERFORMER 正则必须合法"));
+/// 类型标记（WAVE/FLAC/AIFF/MP3/BINARY…）不参与匹配：CUE+FLAC 是合法组合，
+/// 只认 WAVE 会让整张 CUE 解析不出 audio_file，进而毁掉整个音乐库的标签。
+static CUE_FILE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^FILE\s+"(.+)"\s+(\S+)"#).expect("FILE 正则必须合法"));
+static CUE_TRACK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^TRACK\s+(\d+)\s+AUDIO"#).expect("TRACK 正则必须合法"));
+static CUE_INDEX_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^INDEX\s+01\s+(\d+):(\d+):(\d+)"#).expect("INDEX 正则必须合法"));
+
 /// 解析 CUE 文件内容
 pub fn parse_cue_content(content: &str) -> Result<CueSheet> {
     let mut title: Option<String> = None;
@@ -287,16 +304,19 @@ pub fn parse_cue_content(content: &str) -> Result<CueSheet> {
     let mut cur_number: u32 = 0;
     let mut cur_start_ms: u64 = 0;
 
-    let title_re = Regex::new(r#"^TITLE\s+"(.*)""#)?;
-    let performer_re = Regex::new(r#"^PERFORMER\s+"(.*)""#)?;
-    let file_re = Regex::new(r#"^FILE\s+"(.*)"\s+WAVE"#)?;
-    let track_re = Regex::new(r#"^TRACK\s+(\d+)\s+AUDIO"#)?;
-    let index_re = Regex::new(r#"^INDEX\s+01\s+(\d+):(\d+):(\d+)"#)?;
-
     for line in content.lines() {
         let line = line.trim();
 
-        if let Some(caps) = track_re.captures(line) {
+        // FILE 行必须独立于当前是否已进入 TRACK 处理，否则多 FILE 的 CUE
+        // （每轨一个文件）会把后续 FILE 当成无关键丢弃。
+        if let Some(caps) = CUE_FILE_RE.captures(line) {
+            if audio_file.is_none() {
+                audio_file = Some(caps[1].to_string());
+            }
+            continue;
+        }
+
+        if let Some(caps) = CUE_TRACK_RE.captures(line) {
             // 保存前一个音轨
             if cur_number > 0 {
                 tracks.push(CueTrack {
@@ -313,20 +333,18 @@ pub fn parse_cue_content(content: &str) -> Result<CueSheet> {
             cur_start_ms = 0;
         } else if cur_number == 0 {
             // 全局字段
-            if let Some(caps) = title_re.captures(line) {
+            if let Some(caps) = CUE_TITLE_RE.captures(line) {
                 title = Some(caps[1].to_string());
-            } else if let Some(caps) = performer_re.captures(line) {
+            } else if let Some(caps) = CUE_PERFORMER_RE.captures(line) {
                 performer = Some(caps[1].to_string());
-            } else if let Some(caps) = file_re.captures(line) {
-                audio_file = Some(caps[1].to_string());
             }
         } else {
             // 音轨内字段
-            if let Some(caps) = title_re.captures(line) {
+            if let Some(caps) = CUE_TITLE_RE.captures(line) {
                 cur_title = Some(caps[1].to_string());
-            } else if let Some(caps) = performer_re.captures(line) {
+            } else if let Some(caps) = CUE_PERFORMER_RE.captures(line) {
                 cur_performer = Some(caps[1].to_string());
-            } else if let Some(caps) = index_re.captures(line) {
+            } else if let Some(caps) = CUE_INDEX_RE.captures(line) {
                 let min: u64 = caps[1].parse().unwrap_or(0);
                 let sec: u64 = caps[2].parse().unwrap_or(0);
                 let frames: u64 = caps[3].parse().unwrap_or(0);
@@ -357,10 +375,18 @@ pub fn parse_cue_content(content: &str) -> Result<CueSheet> {
         audio_file
     );
 
+    // 没有 FILE 行的 CUE 无法定位它描述的是哪个音频文件。历史上这里回填空串，
+    // 而调用方的 ends_with 匹配遇到空串恒真，会把整个目录所有歌曲的标签
+    // 覆盖成这张 CUE 的首轨并持久化——宁可不认这张 CUE。
+    let Some(audio_file) = audio_file else {
+        sw_warn!("[cue_parser] CUE 中没有可解析的 FILE 行，跳过该 CUE（避免误匹配整个目录）");
+        return Err(anyhow::anyhow!("CUE 缺少 FILE 行，无法定位对应的音频文件"));
+    };
+
     Ok(CueSheet {
         title,
         performer,
-        audio_file: audio_file.unwrap_or_default(),
+        audio_file,
         tracks,
     })
 }
@@ -483,6 +509,35 @@ fn path_mapping_has_audio(children: &[PathMappingNode]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// CUE+FLAC 是合法且常见的组合。旧正则只认 WAVE 标记，FLAC 的 CUE 会解析
+    /// 出空 audio_file，进而让 ends_with 匹配恒真、覆盖整个目录的标签。
+    #[test]
+    fn test_parse_cue_content_accepts_flac_file_line() {
+        let cue = "TITLE \"FLAC 专辑\"\nFILE \"album.flac\" FLAC\n  TRACK 01 AUDIO\n    TITLE \"曲一\"\n    INDEX 01 00:00:00\n";
+        let sheet = parse_cue_content(cue).expect("FLAC 类型标记的 CUE 必须可解析");
+        assert_eq!(sheet.audio_file, "album.flac");
+        assert_eq!(sheet.tracks.len(), 1);
+    }
+
+    /// 类型标记是任意的（AIFF/MP3/BINARY/MOTOROLA…），只要引号里的文件名存在。
+    #[test]
+    fn test_parse_cue_content_accepts_any_file_type_token() {
+        for token in ["WAVE", "FLAC", "AIFF", "MP3", "BINARY", "MOTOROLA"] {
+            let cue = format!("FILE \"disc.img\" {token}\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n");
+            let sheet = parse_cue_content(&cue).expect("任意类型标记都应可解析");
+            assert_eq!(sheet.audio_file, "disc.img", "token={token}");
+        }
+    }
+
+    /// 没有 FILE 行的 CUE 无法定位音频文件，必须报错而不是回填空串——
+    /// 空串会让调用方的后缀匹配恒真，把整个目录的标签刷成这张 CUE 的首轨。
+    #[test]
+    fn test_parse_cue_content_rejects_missing_file_line() {
+        let cue = "TITLE \"无 FILE\"\n  TRACK 01 AUDIO\n    TITLE \"曲一\"\n    INDEX 01 00:00:00\n";
+        let result = parse_cue_content(cue);
+        assert!(result.is_err(), "缺 FILE 行的 CUE 必须被拒绝");
+    }
 
     #[test]
     fn test_parse_cue_content() {

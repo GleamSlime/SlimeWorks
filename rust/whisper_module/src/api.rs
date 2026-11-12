@@ -133,7 +133,9 @@ pub fn get_all_model_statuses() -> Result<Vec<ModelStatus>, String> {
     for preset_name in presets {
         let preset = WhisperModelPreset::from_str_name(&preset_name);
         let path = model::get_model_path(preset);
-        let exists = path.exists();
+        // 必须与 is_model_downloaded 同口径：半截文件（历史残留）不该在设置页显示「已安装」，
+        // 否则用户以为能转写，实际一跑就加载失败
+        let exists = model::is_model_downloaded(preset);
         let size = if exists {
             std::fs::metadata(&path).ok().map(|m| m.len())
         } else {
@@ -192,10 +194,10 @@ pub fn delete_model(preset_name: String) -> Result<bool, String> {
 /// 初始化 whisper 配置表
 pub fn initialize_whisper_db() -> Result<(), String> {
     // 确保数据库实例已初始化（与 music_player 共用同一数据库文件）
+    // 平台分支统一走 db_module：macOS 上没有 APPDATA，早期实现会落到相对路径 "."，
+    // Finder 启动时 CWD=/ 不可写 → 建库失败，配置永远读不到。
     let db_path = {
-        let app_data = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
-        let dir = std::path::Path::new(&app_data).join("SlimeWorks");
-        let _ = std::fs::create_dir_all(&dir);
+        let dir = db_module::paths::app_data_dir("SlimeWorks");
         dir.join("music_player.db").to_string_lossy().into_owned()
     };
     let _ = db_module::db_init(db_path.clone());

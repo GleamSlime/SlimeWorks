@@ -31,12 +31,14 @@ class MangaFavouritesViewModel extends BaseViewModel {
   @override
   Future<void> onInitAsync() async {
     await super.onInitAsync();
-    await refresh();
+    await reload();
   }
 
   /// 刷新收藏列表（可更换排序方式）
-  @override
-  Future<void> refresh({MangaSortOrder? sort}) async {
+  ///
+  /// 刻意不叫 refresh：GetxController.update() 内部就是调 refresh() 通知监听者，
+  /// 覆写同名方法会让 update() 走成"重新联网拉一遍"，界面永远收不到错误态/加载态。
+  Future<void> reload({MangaSortOrder? sort}) async {
     if (_isRefreshing) return;
     _isRefreshing = true;
     _sort.value = sort ?? _sort.value;

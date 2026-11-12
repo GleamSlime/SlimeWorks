@@ -11,6 +11,21 @@ struct DdnsManager {
     status: RwLock<DdnsStatus>,
 }
 
+/// 日志保留条数：DDNS 每轮都会写一条，长期运行下 Vec 只增不减。
+/// 与 power_stats 的口径保持一致，只留最近 200 条。
+const DDNS_LOG_CAP: usize = 200;
+
+/// 追加日志并在写锁内截断：整个操作一次持锁，避免截断与追加交错
+fn push_log(manager: &DdnsManager, log: DdnsLogEntry) -> Result<(), String> {
+    let mut logs = manager.logs.write().map_err(|e| format!("{}", e))?;
+    logs.push(log);
+    if logs.len() > DDNS_LOG_CAP {
+        let drop_count = logs.len() - DDNS_LOG_CAP;
+        logs.drain(..drop_count);
+    }
+    Ok(())
+}
+
 fn get_manager() -> Result<Arc<DdnsManager>, String> {
     DDNS_INSTANCE
         .read()
@@ -193,11 +208,7 @@ pub async fn aliyun_ddns_check_and_update() -> Result<String, String> {
                             message: "更新成功".to_string(),
                         };
                         let log_ts = log.timestamp.clone();
-                        manager
-                            .logs
-                            .write()
-                            .map_err(|e| format!("{}", e))?
-                            .push(log);
+                        push_log(&manager, log)?;
 
                         domain_statuses.push(DomainStatus {
                             domain_name: watch.domain_name.clone(),
@@ -234,11 +245,7 @@ pub async fn aliyun_ddns_check_and_update() -> Result<String, String> {
                         };
                         let log_ts = log.timestamp.clone();
                         let log_msg = log.message.clone();
-                        manager
-                            .logs
-                            .write()
-                            .map_err(|e| format!("{}", e))?
-                            .push(log);
+                        push_log(&manager, log)?;
 
                         domain_statuses.push(DomainStatus {
                             domain_name: watch.domain_name.clone(),
@@ -279,11 +286,7 @@ pub async fn aliyun_ddns_check_and_update() -> Result<String, String> {
                     success: false,
                     message: format!("未找到子域名 {}.{} 的解析记录", watch.rr, watch.domain_name),
                 };
-                manager
-                    .logs
-                    .write()
-                    .map_err(|e| format!("{}", e))?
-                    .push(log);
+                push_log(&manager, log)?;
 
                 domain_statuses.push(DomainStatus {
                     domain_name: watch.domain_name.clone(),
@@ -372,4 +375,74 @@ pub async fn aliyun_ddns_describe_domain_records(
         .await
         .map_err(|e| format!("获取解析记录失败: {}", e))?;
     serde_json::to_string(&records).map_err(|e| format!("序列化解析记录失败: {}", e))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manager_with(config: DdnsConfig) -> DdnsManager {
+        DdnsManager {
+            config: RwLock::new(config),
+            logs: RwLock::new(Vec::new()),
+            status: RwLock::new(DdnsStatus {
+                enabled: false,
+                current_ip: String::new(),
+                interval_secs: 300,
+                last_update: String::new(),
+                last_result: String::new(),
+                domain_statuses: Vec::new(),
+            }),
+        }
+    }
+
+    fn entry(i: usize) -> DdnsLogEntry {
+        DdnsLogEntry {
+            timestamp: format!("2026-09-01 00:00:{:02}", i % 60),
+            domain: "example.com".to_string(),
+            rr: format!("host{}", i),
+            old_ip: "1.1.1.1".to_string(),
+            new_ip: "2.2.2.2".to_string(),
+            success: true,
+            message: String::new(),
+        }
+    }
+
+    /// P3-12：日志只增不减会吃内存（DDNS 每轮都写一条，跑几个月就是上万条）。
+    /// 截断后必须保留**最近**的 200 条，而不是最早的。
+    #[test]
+    fn logs_are_capped_and_keep_the_newest_entries() {
+        let manager = manager_with(DdnsConfig::default());
+        for i in 0..250 {
+            push_log(&manager, entry(i)).unwrap();
+        }
+        let logs = manager.logs.read().unwrap();
+        assert_eq!(logs.len(), DDNS_LOG_CAP, "必须截断到上限");
+        // 最后一条是 i=249，第一条留下的应是 i=50
+        assert_eq!(logs.last().unwrap().rr, "host249");
+        assert_eq!(logs.first().unwrap().rr, "host50");
+    }
+
+    /// 未到上限时不截断（否则会无端丢日志）
+    #[test]
+    fn logs_below_cap_are_kept_whole() {
+        let manager = manager_with(DdnsConfig::default());
+        for i in 0..10 {
+            push_log(&manager, entry(i)).unwrap();
+        }
+        assert_eq!(manager.logs.read().unwrap().len(), 10);
+    }
+
+    /// 配置往返：确认 DdnsManager 的锁结构在初始化后可用
+    #[test]
+    fn config_round_trip_through_manager() {
+        let manager = manager_with(DdnsConfig::default());
+        {
+            let mut cfg = manager.config.write().unwrap();
+            cfg.enabled = true;
+            cfg.interval_secs = 600;
+        }
+        let cfg = manager.config.read().unwrap();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.interval_secs, 600);
+    }
 }

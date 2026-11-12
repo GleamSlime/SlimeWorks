@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/mock/seams/media_api_seam.dart' as media_api;
@@ -20,10 +21,34 @@ const Loggers _logger = Loggers(name: '视频波形');
 ///
 /// 归一化与 gamma 抬升在 Rust 侧统一做（`normalize_waveform`），这里只负责
 /// 选链路、去重与进程内缓存。
+/// 「本次没有真正解码」的信号：同 key 已在解码中，或等待超时后放弃了。
+///
+/// 与真正的失败（解码报错/无音轨）区分开：那些该进负缓存，这类**不该**——
+/// 后台那份解码还在跑，落盘后下次就该能命中，不能被进程内负缓存挡死。
+class _DecodeSkipped implements Exception {
+  const _DecodeSkipped();
+}
+
 class VideoWaveformService {
-  VideoWaveformService({required this.nodeService});
+  VideoWaveformService({
+    required this.nodeService,
+    this.decodeTimeout = _timeout,
+    this.ensureDecodeOverride,
+  });
 
   final NodeSettingsService nodeService;
+
+  /// 单次本地解码的耐心上限（默认 [_timeout]）。抽成字段是为了让单测用毫秒级
+  /// 超时验证「超时后闸门不跟着释放」这条语义，不必真等 5 分钟。
+  @visibleForTesting
+  final Duration decodeTimeout;
+
+  /// 单测注入的解码实现（默认走 FRB 的 ensureVideoWaveform）。
+  @visibleForTesting
+  final Future<List<double>> Function({
+    required String filePath,
+    required int bins,
+  })? ensureDecodeOverride;
 
   /// 默认 bins 数（波形颗粒度）。
   ///
@@ -36,10 +61,25 @@ class VideoWaveformService {
   static const Duration _timeout = Duration(minutes: 5);
 
   /// 进程级缓存（key → 结果；空列表占位表示"试过且失败"，不再反复重试）。
+  ///
+  /// 按 LRU 截断到 [maxMemoryEntries]：一条 1200 bins 的波形约 9.6KB（double
+  /// 数组 + 列表头），无上限时整库扫一遍就会把上万个文件的波形全驻留内存。
+  /// Map 是插入序，命中时先删后插挪到队尾，队首即最久未用。
   final Map<String, List<double>?> _memory = {};
+
+  /// 内存缓存条数上限（200 × ~9.6KB ≈ 2MB）。
+  static const int maxMemoryEntries = 200;
 
   /// 在飞请求去重：邻页预热与当前页同时打开同一文件时只跑一份。
   final Map<String, Future<List<double>?>> _inFlight = {};
+
+  /// 正在解码的 key 集合：同一文件（同 bins）已经在解码时不再重复发起。
+  ///
+  /// 与 [_inFlight] 的区别：_inFlight 反映的是「有人正 await 这个 future」，
+  /// 而 .timeout 之后调用方已经放弃、await 结束，但 Rust 侧的整段解码还在跑。
+  /// 这段时间再点一次同一文件（关掉预览再打开），旧实现会立刻又排一份新解码，
+  /// 两路同时读同一个几 GB 文件——是超时钳制失效后的连带浪费。
+  final Set<String> _decodingKeys = {};
 
   /// 本地解码并发闸门：最多 2 路同时跑。
   ///
@@ -109,8 +149,11 @@ class VideoWaveformService {
   }) async {
     if (!supports(source)) return null;
     final key = '$source|$bins';
-    final mem = _memory[key];
-    if (mem != null) return mem.isEmpty ? null : mem;
+    if (_memory.containsKey(key)) {
+      final cached = _memory.remove(key);
+      _memory[key] = cached; // 命中即挪到队尾（LRU）
+      return cached == null || cached.isEmpty ? null : cached;
+    }
     final pending = _inFlight[key];
     if (pending != null) return pending;
 
@@ -118,10 +161,22 @@ class VideoWaveformService {
     _inFlight[key] = future;
     try {
       final result = await future;
-      _memory[key] = result ?? const <double>[];
+      _remember(key, result ?? const <double>[]);
       return result;
+    } on _DecodeSkipped {
+      // 本次根本没解码（被跳过或超时后放弃）：绝不能记成负缓存，
+      // 否则后台那份解码落盘后，本进程会一直以为"这文件没波形"直到重启
+      return null;
     } finally {
       _inFlight.remove(key);
+    }
+  }
+
+  void _remember(String key, List<double>? value) {
+    _memory.remove(key);
+    _memory[key] = value;
+    while (_memory.length > maxMemoryEntries) {
+      _memory.remove(_memory.keys.first);
     }
   }
 
@@ -154,20 +209,71 @@ class VideoWaveformService {
       }
       // 解码是重活（超大视频几分钟），过并发闸门再进 FRB 池，
       // 别把池占满让封面生成排队（详见 _maxLocalDecodes 注释）
+      final decodeKey = '$source|$bins';
+      if (_decodingKeys.contains(decodeKey)) {
+        // 上一次（超时后被放弃的）解码还在跑：不再起第二份，本次直接放弃。
+        // 等它落盘后，下次打开会命中磁盘缓存。
+        _logger.info('[VideoWaveform] 同一文件已在解码中，跳过重复发起: $source');
+        throw const _DecodeSkipped();
+      }
       await _acquireDecodeSlot();
-      try {
-        final data = await media_api
-            .ensureVideoWaveform(filePath: source, bins: bins)
-            .timeout(_timeout);
-        return data.isEmpty ? null : data;
-      } finally {
+      if (_decodingKeys.contains(decodeKey)) {
+        // 排队等名额期间，前一个同名解码可能已经起了（并发调用同一文件）
+        _releaseDecodeSlot();
+        throw const _DecodeSkipped();
+      }
+      _decodingKeys.add(decodeKey);
+      // 闸门必须在**真正的解码结束**时放，不能跟着 .timeout 放。
+      // 旧实现把 release 写在 finally 里：5 分钟超时后调用方拿到 null 走了，
+      // Rust 侧那条解码线程还在跑几分钟，而闸门名额已经还回去了——后续 2 路
+      // 立刻占上新名额，进程里同时跑的解码数就会超过 _maxLocalDecodes，
+      // 把共享的 FRB 池越占越满（封面生成被饿死的原始症状又回来了）。
+      // 于是把「解析/回报结果」与「释放名额」拆开挂在被放弃的那个 future 上：
+      // 只有当它自己真正完成（成功、失败或被后续忽略）才 whenComplete 释放。
+      final decode = (ensureDecodeOverride ?? media_api.ensureVideoWaveform)(
+        filePath: source,
+        bins: bins,
+      );
+      var released = false;
+      void releaseOnce() {
+        if (released) return;
+        released = true;
+        _decodingKeys.remove(decodeKey);
         _releaseDecodeSlot();
       }
+
+      unawaited(
+        decode
+            .then<void>((_) {}, onError: (Object _) {})
+            .whenComplete(releaseOnce),
+      );
+      try {
+        final data = await decode.timeout(decodeTimeout);
+        return data.isEmpty ? null : data;
+      } on TimeoutException {
+        // 超时只是"本次调用方不等了"，解码在后台继续跑、名额由 whenComplete 负责还
+        _logger.info('[VideoWaveform] 解码超时（后台继续）: $source');
+        throw const _DecodeSkipped();
+      }
+    } on _DecodeSkipped {
+      rethrow;
     } catch (e) {
       _logger.error('[VideoWaveform] 取振幅失败: $source err=$e');
       return null;
     }
   }
+
+  /// 当前内存缓存条数（单测断言 LRU 上限用）。
+  @visibleForTesting
+  int get memoryEntryCount => _memory.length;
+
+  /// 当前占用本地解码名额的数量（单测断言闸门用）。
+  @visibleForTesting
+  int get localDecodingCount => _localDecoding;
+
+  /// 当前被标记为「解码中」的 key 数量（单测断言去重用）。
+  @visibleForTesting
+  int get decodingKeyCount => _decodingKeys.length;
 
   /// 清掉某个源的进程内缓存（源文件被替换/重新生成后调用）。
   void invalidate(String source) {

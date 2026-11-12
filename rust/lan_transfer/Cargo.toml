@@ -23,8 +23,6 @@ anyhow = "1.0"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 # mDNS 服务发现
 mdns-sd = "0.11"
-# 异步通道
-async-channel = "2.3"
 # 文件哈希
 sha2 = "0.10"
 # 跨平台设备信息

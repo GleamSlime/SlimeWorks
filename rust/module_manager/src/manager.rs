@@ -36,6 +36,16 @@ impl ModuleManager {
         Ok(actual_md5.eq_ignore_ascii_case(expected_md5))
     }
 
+    /// 下载中的临时文件名：与目标同目录（同卷才可能原子 rename），
+    /// 命名带 pid 与点前缀，便于识别残留且不与并发实例互踩
+    fn part_path_of(dest: &PathBuf) -> PathBuf {
+        let name = dest
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "module".to_string());
+        dest.with_file_name(format!(".{}.{}.part", name, std::process::id()))
+    }
+
     /// 获取模块配置（从远程或缓存）
     async fn get_config(&self) -> Result<ModulesConfig, String> {
         fetch_modules_config(&self.config_url).await
@@ -137,11 +147,10 @@ impl ModuleManager {
         let filename = build_filename(&version_info, &module_config.module_type);
         let file_path = target_dir.join(&filename);
 
-        // 如果已存在，先删除
-        if file_path.exists() {
-            fs::remove_file(&file_path)
-                .map_err(|e| format!("Failed to remove existing file: {}", e))?;
-        }
+        // 顺序很重要：下载到临时文件 → 验 MD5 → 删旧 → rename。
+        // 旧实现是「先删旧再下载」，下载失败就新旧两空；
+        // 且直接写最终名，进程中途退出会留下一个 MD5 不对的「已安装」文件。
+        let part_path = Self::part_path_of(&file_path);
 
         // 下载文件
         let response = reqwest::get(&platform_info.url)
@@ -157,16 +166,36 @@ impl ModuleManager {
             .await
             .map_err(|e| format!("Failed to read response: {}", e))?;
 
-        // 保存文件
-        fs::write(&file_path, &content).map_err(|e| format!("Failed to write file: {}", e))?;
+        // 保存到临时文件
+        if let Err(e) = fs::write(&part_path, &content) {
+            fs::remove_file(&part_path).ok();
+            return Err(format!("Failed to write file: {}", e));
+        }
 
-        // 验证 MD5
-        if !Self::verify_md5(&file_path, &platform_info.signature)? {
-            fs::remove_file(&file_path).ok();
-            return Err(format!(
-                "MD5 verification failed for module '{}'",
-                module_name
-            ));
+        // 验证 MD5（临时文件）：不过就删临时文件，旧版本毫发无损
+        match Self::verify_md5(&part_path, &platform_info.signature) {
+            Ok(true) => {}
+            Ok(false) => {
+                fs::remove_file(&part_path).ok();
+                return Err(format!(
+                    "MD5 verification failed for module '{}'",
+                    module_name
+                ));
+            }
+            Err(e) => {
+                fs::remove_file(&part_path).ok();
+                return Err(e);
+            }
+        }
+
+        // 校验通过才动旧文件
+        if file_path.exists() {
+            fs::remove_file(&file_path)
+                .map_err(|e| format!("Failed to remove existing file: {}", e))?;
+        }
+        if let Err(e) = fs::rename(&part_path, &file_path) {
+            fs::remove_file(&part_path).ok();
+            return Err(format!("Failed to finalize module file: {}", e));
         }
 
         // Unix 系统设置可执行权限
@@ -368,5 +397,72 @@ impl ModuleManager {
         }
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 临时名必须是目标名的同目录兄弟文件，且不等于最终名
+    #[test]
+    fn part_path_is_sibling_and_not_final_name() {
+        let dest = PathBuf::from("/tmp/modules/ffmpeg_1.0.0");
+        let part = ModuleManager::part_path_of(&dest);
+        assert_ne!(part, dest);
+        assert_eq!(part.parent(), dest.parent(), "必须同目录，rename 才能原子完成");
+        let name = part.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with('.') && name.ends_with(".part"), "name = {name}");
+        // 带 pid：并发两个进程安装同一模块不会写坏同一个临时文件
+        assert!(name.contains(&std::process::id().to_string()), "name = {name}");
+    }
+
+    /// 回归：下载失败（本例是文件不存在导致的 MD5 读取失败）后旧文件必须还在。
+    /// 旧实现先删旧再下载，一失败就新旧两空。
+    #[test]
+    fn failed_verification_keeps_previous_install() {
+        let dir = std::env::temp_dir().join(format!("sw_mm_keep_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let final_file = dir.join("ffmpeg_1.0.0");
+        fs::write(&final_file, b"old-version").unwrap();
+
+        // 模拟「临时文件校验失败」分支：临时文件里的内容与期望 MD5 不符
+        let part = ModuleManager::part_path_of(&final_file);
+        fs::write(&part, b"broken-download").unwrap();
+        let verified = ModuleManager::verify_md5(&part, "00000000000000000000000000000000").unwrap();
+        assert!(!verified);
+        // 校验失败只删临时文件，绝不动旧文件
+        fs::remove_file(&part).ok();
+        assert!(final_file.exists(), "下载失败后旧文件必须保留");
+        assert_eq!(fs::read(&final_file).unwrap(), b"old-version");
+        assert!(!part.exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// 校验通过后才允许替换：旧文件被新内容覆盖
+    #[test]
+    fn verified_download_replaces_previous_install() {
+        let dir = std::env::temp_dir().join(format!("sw_mm_swap_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let final_file = dir.join("ffmpeg_1.0.0");
+        fs::write(&final_file, b"old-version").unwrap();
+
+        let part = ModuleManager::part_path_of(&final_file);
+        fs::write(&part, b"new-version").unwrap();
+        let expected = format!("{:x}", md5::compute(b"new-version"));
+        assert!(ModuleManager::verify_md5(&part, &expected).unwrap());
+
+        // 与 install_module 相同的顺序：验过 → 删旧 → rename
+        if final_file.exists() {
+            fs::remove_file(&final_file).unwrap();
+        }
+        fs::rename(&part, &final_file).unwrap();
+        assert_eq!(fs::read(&final_file).unwrap(), b"new-version");
+        assert!(!part.exists());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

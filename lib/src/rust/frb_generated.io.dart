@@ -552,6 +552,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TranscriptionSegmentInfo dco_decode_transcription_segment_info(dynamic raw);
 
   @protected
+  TransferOutcome dco_decode_transfer_outcome(dynamic raw);
+
+  @protected
   int dco_decode_u_16(dynamic raw);
 
   @protected
@@ -1144,6 +1147,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TranscriptionSegmentInfo sse_decode_transcription_segment_info(
     SseDeserializer deserializer,
   );
+
+  @protected
+  TransferOutcome sse_decode_transfer_outcome(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
@@ -1879,6 +1885,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_transcription_segment_info(
     TranscriptionSegmentInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_transfer_outcome(
+    TransferOutcome self,
     SseSerializer serializer,
   );
 

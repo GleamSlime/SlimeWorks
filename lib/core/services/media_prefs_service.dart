@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,7 +51,11 @@ enum FileCheckDepth {
   };
 }
 
-class MediaPrefsService {
+/// 为什么实现 [WidgetsBindingObserver]：续播进度是节流落盘的（见
+/// [flushVideoResumePositions]），用户直接关窗口/切后台退出时最后那 10 秒的
+/// 进度还在内存里。这里自己订阅生命周期，在离开前台时强制补一次写盘——
+/// 不用等调用方（预览页）记得调 flush，退出路径本来就不一定走到 dispose。
+class MediaPrefsService with WidgetsBindingObserver {
   static const _keyQuality = 'media_thumb_quality';
   static const _keyConcurrency = 'media_thumb_concurrency';
   static const _keyRemoteCoverWidth = 'media_remote_cover_width';
@@ -131,7 +137,12 @@ class MediaPrefsService {
   ///
   /// 远程节点视频也用同一份（key 就是它的 http 直链），
   /// 本地与远程续播体验一致。片头/片尾附近的进度不恢复，由调用方判断。
+  /// 表本身按 LRU 截断到 [resumeMaxEntries] 条（Map 是插入序，队首即最久未碰）。
   final videoResumePositions = <String, int>{}.obs;
+
+  /// 续播表最多记多少条：一部片一条，500 条足够覆盖真实观看史，
+  /// 无上限时这个 map 会跟着看过的每一集一路长下去、每次落盘也整体 jsonEncode。
+  static const int resumeMaxEntries = 500;
 
   /// 伪封面的出厂默认图：只是开发机上的一张壁纸，换台机器读不到时封面退成实色底，
   /// 在媒体设置里换成任意本地图片即可。
@@ -195,7 +206,10 @@ class MediaPrefsService {
 
   ThumbQualityLevel get currentLevel => levels[(quality.value - 1).clamp(0, levels.length - 1)];
 
+  bool _lifecycleHooked = false;
+
   Future<void> init() async {
+    _hookLifecycle();
     final prefs = await SharedPreferences.getInstance();
     quality.value = (prefs.getInt(_keyQuality) ?? 3).clamp(1, 5);
     concurrency.value = (prefs.getInt(_keyConcurrency) ?? 8).clamp(1, 20);
@@ -224,6 +238,8 @@ class MediaPrefsService {
             }
           });
           videoResumePositions.assignAll(restored);
+          // 旧版本无上限，存量表可能远超上限：载入后立刻按 LRU 截断
+          _trimResumePositions();
         }
       } catch (e) {
         debugPrint('[MediaPrefs] 续播位置解析失败: $e');
@@ -234,6 +250,38 @@ class MediaPrefsService {
       (e) => e.name == depthStr,
       orElse: () => FileCheckDepth.coverOnly,
     );
+  }
+
+  void _hookLifecycle() {
+    if (_lifecycleHooked) return;
+    try {
+      WidgetsBinding.instance.addObserver(this);
+      _lifecycleHooked = true;
+    } catch (e) {
+      // 没有 binding（纯 Dart 环境/单测未初始化）时只是少了退出兜底，不影响功能
+      debugPrint('[MediaPrefs] 生命周期钩子注册失败: $e');
+    }
+  }
+
+  /// 离开前台（含退出、切后台、窗口被关到托盘）时把续播表补写一次。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state != AppLifecycleState.resumed) {
+      unawaited(flushVideoResumePositions());
+    }
+  }
+
+  /// 服务销毁时摘掉观察者，避免重复注册。
+  void dispose() {
+    if (_lifecycleHooked) {
+      try {
+        WidgetsBinding.instance.removeObserver(this);
+      } catch (_) {}
+      _lifecycleHooked = false;
+    }
+    _resumeFlushTimer?.cancel();
+    _resumeFlushTimer = null;
   }
 
   Future<void> setQuality(int v) async {
@@ -339,22 +387,82 @@ class MediaPrefsService {
   /// 记录/覆盖某个视频的续播位置（毫秒）。
   ///
   /// 片头 5 秒内不记录（等于没看），这样用户从头看完再打开仍是开头。
+  ///
+  /// 落盘策略：播放器每秒 tick 一次，每次都整体 jsonEncode + 写盘纯属浪费
+  /// （表越大越贵）。**结构变化**（新增/删除条目）立刻写，**值更新**（同一条
+  /// 路径的进度前进）按 ≥[resumePersistInterval] 节流，最坏丢 10 秒进度；
+  /// 暂停/退出/页面销毁时调 [flushVideoResumePositions] 立刻补齐。
   Future<void> setVideoResumePosition(String source, int positionMs) async {
     if (source.isEmpty) return;
     const headGuard = 5000;
     if (positionMs <= headGuard) {
       // 回到片头就把记录清掉，别留一个"续播到第 1 秒"的假记忆
       if (videoResumePositions.remove(source) == null) return;
-    } else {
-      videoResumePositions[source] = positionMs;
+      await _persistResumePositions();
+      return;
     }
-    await _persistResumePositions();
+    final isNewEntry = !videoResumePositions.containsKey(source);
+    // 先删后插：Map 保持插入序，重插一次才把这条挪到队尾，LRU 淘汰的
+    // 就永远是真正最久没碰过的那条，而不是当前正在播的这一条
+    videoResumePositions.remove(source);
+    videoResumePositions[source] = positionMs;
+    _trimResumePositions();
+    if (isNewEntry) {
+      await _persistResumePositions();
+    } else {
+      _scheduleResumePersist();
+    }
   }
 
   /// 视频的续播位置（毫秒）；没有记录返回 null。
   int? videoResumePosition(String source) => videoResumePositions[source];
 
+  /// 续播表节流落盘间隔。
+  static const Duration resumePersistInterval = Duration(seconds: 10);
+
+  DateTime? _lastResumePersistAt;
+  bool _resumeDirty = false;
+  Timer? _resumeFlushTimer;
+
+  /// 实际写盘次数，仅供单测断言节流是否真的生效。
+  @visibleForTesting
+  int resumePersistCount = 0;
+
+  /// LRU 截断：超出上限时从队首（最久未碰）逐条丢弃。
+  void _trimResumePositions() {
+    while (videoResumePositions.length > resumeMaxEntries) {
+      videoResumePositions.remove(videoResumePositions.keys.first);
+    }
+  }
+
+  void _scheduleResumePersist() {
+    _resumeDirty = true;
+    final last = _lastResumePersistAt;
+    final elapsed = last == null ? resumePersistInterval : DateTime.now().difference(last);
+    if (elapsed >= resumePersistInterval) {
+      unawaited(flushVideoResumePositions());
+      return;
+    }
+    // 尾部补一次：只靠"下一次 tick 跨过 10s 边界"的话，用户暂停在中间时段
+    // 就可能永远等不到那次落盘，最后一段进度白丢
+    _resumeFlushTimer ??= Timer(resumePersistInterval - elapsed, () {
+      _resumeFlushTimer = null;
+      unawaited(flushVideoResumePositions());
+    });
+  }
+
+  /// 立刻把续播表写盘（视频暂停/关闭、页面销毁、应用退出时调用）。
+  Future<void> flushVideoResumePositions() async {
+    _resumeFlushTimer?.cancel();
+    _resumeFlushTimer = null;
+    if (!_resumeDirty) return;
+    _resumeDirty = false;
+    await _persistResumePositions();
+  }
+
   Future<void> _persistResumePositions() async {
+    _lastResumePersistAt = DateTime.now();
+    resumePersistCount++;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyVideoResumePosition, jsonEncode(videoResumePositions));
   }

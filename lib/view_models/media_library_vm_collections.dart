@@ -59,14 +59,20 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       final collectionIds = toTransfer.map((c) => c.id).toList();
 
       scanStatusText.value = '转移中...';
-      final count = await media_api.transferCollections(
+      // 用带统计的版本：失败数要能让用户看见，只报成功数会把失败吞掉
+      final outcome = await media_api.transferCollectionsWithStats(
         collectionIds: collectionIds,
         targetDir: targetDir,
       );
 
       await refreshAll();
-      if (count > 0) {
-        showSnack('成功', '成功转移 $count 个集合到: $targetRoot');
+      if (outcome.failCount > 0) {
+        showSnack(
+          '警告',
+          '转移完成：成功 ${outcome.successCount} 个，失败 ${outcome.failCount} 个',
+        );
+      } else if (outcome.successCount > 0) {
+        showSnack('成功', '成功转移 ${outcome.successCount} 个集合到: $targetRoot');
       } else {
         showSnack('提示', '未成功转移任何集合');
       }

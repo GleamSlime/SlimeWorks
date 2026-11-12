@@ -288,7 +288,6 @@ class LanTransferService {
 
   bool _isRunning = false;
   Timer? _deviceRefreshTimer;
-  bool _isRefreshing = false; // 防止定时器回调堆积
   Future<void>? _pendingStart;
   Future<void>? _pendingStop;
   Future<void>? _rustInitFuture;
@@ -744,20 +743,12 @@ class LanTransferService {
     }
   }
 
-  /// 启动设备刷新定时�?
-  void _startDeviceRefresh() {
-    _deviceRefreshTimer?.cancel();
-    _deviceRefreshTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      // 上次刷新仍在进行中则跳过本次，防止慢网络下请求无限堆积
-      if (_isRefreshing) return;
-      _isRefreshing = true;
-      getDevices().whenComplete(() {
-        _isRefreshing = false;
-      });
-    });
-  }
+  // 服务侧的 3s 设备轮询已删除：这里的 getDevices() 返回值从来没被任何人用过，
+  // 真正的设备列表轮询在 LanTransferViewModel（每 3s refreshDevices → getDevices
+  // 并写 UI）。两套并存等于每个周期白跑一次 FFI + 日志，纯浪费（审计 P3-8）。
+  // 保留空方法只为不动 start/stop 里的调用点。
+  void _startDeviceRefresh() {}
 
-  /// 停止设备刷新定时�?
   void _stopDeviceRefresh() {
     _deviceRefreshTimer?.cancel();
     _deviceRefreshTimer = null;

@@ -406,6 +406,12 @@ pub fn encode_mutf7(input: &str) -> String {
             // '&' 的转义是 '&-'，且不进 base64 段
             flush_base64(&mut chunk, &mut out);
             out.push_str("&-");
+        } else if code > 0xFFFF {
+            // 非 BMP 字符按 modified UTF-7 规范拆成 UTF-16 代理对：
+            // 直接 `as u16` 会截断低 16 位，emoji 目录名变成另一个汉字码点
+            let v = code - 0x1_0000;
+            chunk.push(0xD800 + (v >> 10) as u16);
+            chunk.push(0xDC00 + (v & 0x3FF) as u16);
         } else {
             chunk.push(code as u16);
         }
@@ -447,7 +453,9 @@ pub fn decode_mutf7(input: &str) -> String {
                 .filter(|c| c.len() == 2)
                 .map(|c| u16::from_be_bytes([c[0], c[1]]))
                 .collect();
-            out.extend(units.iter().filter_map(|u| char::from_u32(*u as u32)));
+            // 非 BMP 字符（emoji）编码时是代理对，逐个 u16 单独转 char 会双双丢失，
+            // 必须走 UTF-16 整体解码把两半拼回一个码点
+            out.extend(char::decode_utf16(units.iter().copied()).filter_map(|r| r.ok()));
         }
     }
     out
@@ -617,4 +625,43 @@ mod tests {
             Some("INBOX")
         );
     }
+
+/// 回归 P3-14：非 BMP 字符（emoji）编码时必须是 UTF-16 代理对，
+/// 旧实现 `code as u16` 直接截断低 16 位，emoji 目录名变成另一个汉字。
+#[test]
+fn mutf7_roundtrips_non_bmp_characters() {
+    for mailbox in [
+        "😀收件箱",
+        "账单🎉2026",
+        "🚀",
+        "已发送😀&存档",
+        // 混合：BMP + 非 BMP + '&' 转义
+        "a&b😀中",
+    ] {
+        let encoded = encode_mutf7(mailbox);
+        let decoded = decode_mutf7(&encoded);
+        assert_eq!(decoded, mailbox, "encode = {encoded}");
+    }
+}
+
+/// 代理对必须真的被拆成两个 u16 入 base64 段：编码结果长度要够容纳两个码元
+#[test]
+fn mutf7_encodes_emoji_as_surrogate_pair() {
+    // 😀 = U+1F600 → 代理对 D83D DE00，8 字节（4 个 u16）以外的数据不该出现
+    let encoded = encode_mutf7("😀");
+    assert!(encoded.starts_with('&') && encoded.ends_with('-'), "encoded = {encoded}");
+    // 截断版（旧实现）会解回一个完全不同的 BMP 字符
+    let decoded = decode_mutf7(&encoded);
+    assert_eq!(decoded, "😀");
+    assert_ne!(decoded, char::from_u32(0x1F600u32 & 0xFFFF).unwrap().to_string());
+}
+
+/// emoji 目录名走 LIST 解析也要完整回来（服务端会回 modified UTF-7）
+#[test]
+fn list_name_decodes_emoji_folder() {
+    for mailbox in ["😀收件箱", "账单🎉2026"] {
+        let line = format!(r#"LIST (\HasNoChildren) "/" "{}""#, encode_mutf7(mailbox));
+        assert_eq!(name(&line).as_deref(), Some(mailbox), "line = {line}");
+    }
+}
 }

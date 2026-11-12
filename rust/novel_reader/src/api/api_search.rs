@@ -79,9 +79,9 @@ pub fn search_in_novel(file_path: String, keyword: String) -> Result<Vec<SearchM
             );
 
             for chapter in &content.chapters {
-                // 按需加载章节内容
+                // 搜索只要文本：走 raw 路径，完全不碰图片 base64
                 let text =
-                    match crate::parser::EpubParser::get_chapter_content(&path, chapter.index) {
+                    match crate::parser::EpubParser::get_chapter_raw_html(&path, chapter.index) {
                         Ok(content) => content,
                         Err(e) => {
                             println!("[Search] Failed to load chapter {}: {}", chapter.index, e);
@@ -239,9 +239,11 @@ pub fn search_in_all_novels_batched(
                     if is_epub {
                         // EPUB: 按需加载每一章
                         for chapter in &content.chapters {
-                            if let Ok(text) =
-                                crate::parser::EpubParser::get_chapter_content(&path, chapter.index)
-                            {
+                            // 搜索只要文本：走 raw 路径，完全不碰图片 base64
+                            if let Ok(text) = crate::parser::EpubParser::get_chapter_raw_html(
+                                &path,
+                                chapter.index,
+                            ) {
                                 let clean_text = strip_all_html_tags(&text);
                                 let text_lower_chars: Vec<char> =
                                     clean_text.to_lowercase().chars().collect();
@@ -349,9 +351,11 @@ pub fn search_in_all_novels(keyword: String) -> Result<Vec<NovelSearchResult>, S
                     if is_epub {
                         // EPUB: 按需加载每一章
                         for chapter in &content.chapters {
-                            if let Ok(text) =
-                                crate::parser::EpubParser::get_chapter_content(&path, chapter.index)
-                            {
+                            // 搜索只要文本：走 raw 路径，完全不碰图片 base64
+                            if let Ok(text) = crate::parser::EpubParser::get_chapter_raw_html(
+                                &path,
+                                chapter.index,
+                            ) {
                                 let clean_text = strip_all_html_tags(&text);
                                 let text_lower_chars: Vec<char> =
                                     clean_text.to_lowercase().chars().collect();

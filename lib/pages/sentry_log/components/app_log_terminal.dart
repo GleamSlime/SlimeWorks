@@ -542,44 +542,65 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
     return spans;
   }
 
+  // 六条语法高亮正则原先在每行每次 build 里现编译一遍。
+  // 预编译成 static final 后，滚一屏几百行省下的就是几百次正则编译。
+  static final RegExp _errorPattern = RegExp(
+    r'(?:error|Error|ERROR|exception|Exception|fail|Fail|FAIL|crash|Crash|timeout|Timeout|disconnect|Disconnect|abort|Abort|refused|Refused)',
+  );
+  static final RegExp _pathPattern = RegExp(r'[/\\][\w./\\-]+');
+  static final RegExp _numPattern = RegExp(r'\b\d+\.?\d*\b');
+  static final RegExp _statusPattern = RegExp(
+    r'\b(?:success|Success|ok|OK|complete|Complete|start|Start|stop|Stop|connected|Connected|ready|Ready|init|Init)\b',
+  );
+  static final RegExp _urlPattern = RegExp(r'https?://\S+');
+  static final RegExp _classPattern = RegExp(r'\b[A-Z][a-zA-Z]+\b');
+
+  /// 解析结果的按行缓存。entries 每轮询都会变，但同一批历史行反复重建
+  /// （滚动、筛选项切换、字号滑杆）时不该重新扫一遍正则。
+  /// 用 LinkedHashMap 的插入序做 LRU：超上限就从最久未用的那端淘汰，
+  /// 不会随日志持续增长。
+  static final Map<String, Set<String>> _keywordCache =
+      <String, Set<String>>{};
+  static const int _keywordCacheCap = 1024;
+
   Set<String> _extractKeywords(String message) {
+    final cached = _keywordCache.remove(message);
+    if (cached != null) {
+      // 重新插入 = 提到 LRU 尾部
+      _keywordCache[message] = cached;
+      return cached;
+    }
+
     final keywords = <String>{};
 
-    final errorPattern = RegExp(
-      r'(?:error|Error|ERROR|exception|Exception|fail|Fail|FAIL|crash|Crash|timeout|Timeout|disconnect|Disconnect|abort|Abort|refused|Refused)',
-    );
-    for (final m in errorPattern.allMatches(message)) {
+    for (final m in _errorPattern.allMatches(message)) {
       keywords.add(m.group(0)!);
     }
-
-    final pathPattern = RegExp(r'[/\\][\w./\\-]+');
-    for (final m in pathPattern.allMatches(message)) {
+    for (final m in _pathPattern.allMatches(message)) {
       keywords.add(m.group(0)!);
     }
-
-    final numPattern = RegExp(r'\b\d+\.?\d*\b');
-    for (final m in numPattern.allMatches(message)) {
+    for (final m in _numPattern.allMatches(message)) {
       keywords.add(m.group(0)!);
     }
-
-    final statusPattern = RegExp(
-      r'\b(?:success|Success|ok|OK|complete|Complete|start|Start|stop|Stop|connected|Connected|ready|Ready|init|Init)\b',
-    );
-    for (final m in statusPattern.allMatches(message)) {
+    for (final m in _statusPattern.allMatches(message)) {
       keywords.add(m.group(0)!);
     }
-
-    final urlPattern = RegExp(r'https?://\S+');
-    for (final m in urlPattern.allMatches(message)) {
+    for (final m in _urlPattern.allMatches(message)) {
       keywords.add(m.group(0)!);
     }
-
-    final classPattern = RegExp(r'\b[A-Z][a-zA-Z]+\b');
-    for (final m in classPattern.allMatches(message)) {
+    for (final m in _classPattern.allMatches(message)) {
       final word = m.group(0)!;
       if (word.length > 3) keywords.add(word);
     }
 
+    _keywordCache[message] = keywords;
+    if (_keywordCache.length > _keywordCacheCap) {
+      // 逐出最久未用的一批；一次清太多会让命中率抖动，按 1/4 逐出即可
+      final drop = _keywordCache.keys.take(_keywordCacheCap ~/ 4).toList();
+      for (final k in drop) {
+        _keywordCache.remove(k);
+      }
+    }
     return keywords;
   }
 

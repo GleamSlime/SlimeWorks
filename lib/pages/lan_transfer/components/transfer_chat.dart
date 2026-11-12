@@ -511,7 +511,17 @@ class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderState
                       _ImagePreviewPage(filePath: file.path, title: item.fileName ?? '图片'),
                 ),
               ),
-              child: Image.file(file, fit: BoxFit.cover, width: scaleW(220), height: scaleW(160)),
+              // 气泡里只画 220×160，原图动辄几千万像素：不给 cacheWidth
+              // 就是把整张照片解码进内存再缩回去，聊天记录越长内存越大。
+              child: Image.file(
+                file,
+                fit: BoxFit.cover,
+                width: scaleW(220),
+                height: scaleW(160),
+                cacheWidth: (scaleW(220) *
+                        (MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0))
+                    .round(),
+              ),
             ),
           );
         }

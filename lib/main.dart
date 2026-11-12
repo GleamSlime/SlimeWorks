@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HardwareKeyboard;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
@@ -29,6 +30,7 @@ import 'package:slime_works/core/services/initialize/ffmpeg.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/mock/mock_mode.dart';
@@ -253,19 +255,88 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver, WindowListener {
   DesktopScreenProvider get desktopScreen => getIt<DesktopScreenProvider>();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 桌面端自动更新要靠「窗口是否聚焦」判断人是否在旁边（lifecycle 恒 resumed）
+    if (_autoUpdateOnDesktop) {
+      windowManager.addListener(this);
+      HardwareKeyboard.instance.addHandler(_onKeyEvent);
+      // 启动时补探一次焦点：window_manager 只在焦点**变化**时发事件，
+      // 应用一启动就没聚焦（用户切去别的窗口）的话状态会停在默认的 true，
+      // 自动更新会被误判成"人就在旁边"而永远不检查。
+      unawaited(_syncInitialWindowFocus());
+    }
+  }
+
+  /// 把系统真实焦点同步给 AppUpdateService（失败保持默认）。
+  Future<void> _syncInitialWindowFocus() async {
+    try {
+      final focused = await windowManager.isFocused();
+      _updater?.onWindowFocusChanged(focused);
+    } catch (_) {
+      // 拿不到焦点状态时按"聚焦"处理（更保守：宁可不自动装也不打断用户）
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (_autoUpdateOnDesktop) {
+      HardwareKeyboard.instance.removeHandler(_onKeyEvent);
+      windowManager.removeListener(this);
+    }
     super.dispose();
+  }
+
+  /// 本机是否走桌面端自动更新的闲置判定（macOS / Windows）。
+  bool get _autoUpdateOnDesktop => Platform.isMacOS || Platform.isWindows;
+
+  /// 缓存一份服务引用：指针事件是高频路径（拖动时每帧一次），
+  /// 不该每次都走一遍 GetIt 查找。
+  AppUpdateService? _updateService;
+
+  AppUpdateService? get _updater {
+    if (!_autoUpdateOnDesktop) return null;
+    final cached = _updateService;
+    if (cached != null) return cached;
+    try {
+      // 注册在 main() 里先于 runApp，正常不会走到异常分支；
+      // 但这是高频回调路径，抛出去会污染手势/焦点事件分发，一律吞掉
+      return _updateService = getIt<AppUpdateService>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 用户是否有任何交互动作。
+  ///
+  /// 指针事件由 build 里的根 Listener 推动；键盘另走 HardwareKeyboard 的
+  /// 全局按键钩子——纯键盘操作（列表里按方向键、填空格）不产生指针事件，
+  /// 漏了它就会出现「明明在敲键盘，却被判成闲置」。
+  /// 只做「重置闲置时间戳」这一件事，不改变任何既有交互行为。
+  void _onUserActivity() {
+    _updater?.markUserActive();
+  }
+
+  /// 返回 false 表示不拦截：只是旁听，按键照常交给 Focus 树处理。
+  bool _onKeyEvent(KeyEvent event) {
+    _onUserActivity();
+    return false;
+  }
+
+  @override
+  void onWindowFocus() {
+    _updater?.onWindowFocusChanged(true);
+  }
+
+  @override
+  void onWindowBlur() {
+    _updater?.onWindowFocusChanged(false);
   }
 
   @override
@@ -347,6 +418,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
             builder: (context, child) {
               if (child == null) return const SizedBox.shrink();
+              // 全局用户活动信号：桌面端生命周期恒为 resumed，自动更新的
+              // 「闲置」判定只能靠真实输入事件推动，否则用户正在操作时也会
+              // 被判成闲置、静默装更新并重启（见 AppUpdateService.markUserActive）。
+              // 只挂监听不拦截事件（Listener 自身不消费指针），且不参与布局。
+              child = Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (_) => _onUserActivity(),
+                onPointerMove: (_) => _onUserActivity(),
+                onPointerSignal: (_) => _onUserActivity(),
+                child: child,
+              );
               if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
                 // EasyLoading 的包装层在 ExcludeSemantics 之外：它的加载弹层
                 // 也会挂语义节点（开关、进度），漏在包裹外面就仍有一条会重建的

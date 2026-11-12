@@ -32,16 +32,30 @@ class _MangaProgressRingState extends State<MangaProgressRing> {
   double _progress = 0;
   Timer? _timer;
 
+  /// 进度上限：真加载完成靠 widget 消失，99% 就是这条时间线的终点
+  static const double _kMaxProgress = 99;
+
   @override
   void initState() {
     super.initState();
     // 每 80ms 以指数衰减方式递增，约 4s 抵近 99%
-    _timer = Timer.periodic(const Duration(milliseconds: 80), (_) {
-      if (!mounted) return;
+    _timer = Timer.periodic(const Duration(milliseconds: 80), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
       setState(() {
-        _progress = _progress + (99 - _progress) * 0.025;
-        if (_progress > 99) _progress = 99;
+        _progress = _progress + (_kMaxProgress - _progress) * 0.025;
+        // 指数衰减永远只是趋近上限，不夹到顶就永远差一口气，
+        // 既不显示 99%、也永远走不到下面的停表分支
+        if (_progress > _kMaxProgress - 0.5) _progress = _kMaxProgress;
       });
+      // 到顶就停：图片可能一直不回来（节点挂起/解码卡住），
+      // 而这条模拟进度是纯动画，没有理由在 99% 之后继续每秒 12 次重建。
+      if (_progress >= _kMaxProgress) {
+        t.cancel();
+        if (identical(_timer, t)) _timer = null;
+      }
     });
   }
 

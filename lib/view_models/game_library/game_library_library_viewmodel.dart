@@ -62,12 +62,61 @@ class GameLibraryViewModel extends BaseViewModel {
   Future<void> refresh() async {
     final List<GameItem> all = await _service.getGames();
     games.assignAll(all);
+    _invalidateFilteredCache();
     // 批量加载收藏状态（审计 #7：一次 FFI 取集合，替代逐游戏 N+1 串行查询）
     final Set<String> favs = await _service.getFavoriteIds();
     favoriteIds.assignAll(favs);
   }
 
+  // ── filteredGames 缓存 ────────────────────────────────────────────────
+  // 旧实现是纯 getter：网格每一帧都整表复制 + 过滤 + 排序。框选拖拽时
+  // 每次指针移动都 setState，等于每帧给几十上百条游戏重排一遍。
+  // 现在按「库内容 + 关键词 + 状态 + 标签 + 排序键」做失效；选择变化不进指纹
+  // （选择不改变列表内容）——这正是拖拽期不再重排的关键。
+  List<GameItem>? _filteredCache;
+  String? _filteredCacheKey;
+
+  /// 过滤+排序真正重算的次数（测试据此断言选择变化不触发重算）
+  int filteredGamesComputeCount = 0;
+
+  /// 缓存指纹：任一过滤/排序条件变化就重算。
+  /// 库内容用长度 + 首尾 id 认，避免为比较整个列表再花一遍 O(n)；
+  /// 「原地改一条、条数不变」由 [_invalidateFilteredCache] 兜底。
+  String _filterFingerprint() {
+    final int n = games.length;
+    final String head = n > 0 ? games.first.id : '';
+    final String tail = n > 0 ? games.last.id : '';
+    final String status = selectedStatus.value?.name ?? '';
+    return <String>[
+      n.toString(),
+      head,
+      tail,
+      searchQuery.value,
+      status,
+      selectedTag.value,
+      selectedSort.value,
+    ].join('|');
+  }
+
   List<GameItem> get filteredGames {
+    final String key = _filterFingerprint();
+    final List<GameItem>? cached = _filteredCache;
+    if (cached != null && _filteredCacheKey == key) return cached;
+    final List<GameItem> computed = _computeFilteredGames();
+    _filteredCache = computed;
+    _filteredCacheKey = key;
+    filteredGamesComputeCount++;
+    return computed;
+  }
+
+  /// 库内容变了（增删改/刷新）时手动失效：
+  /// 指纹里的长度与首尾 id 对「原地改一条」不敏感，靠这里兜底。
+  void _invalidateFilteredCache() {
+    _filteredCache = null;
+    _filteredCacheKey = null;
+  }
+
+  List<GameItem> _computeFilteredGames() {
     List<GameItem> result = List<GameItem>.from(games);
 
     final String keyword = searchQuery.value.trim().toLowerCase();
@@ -449,7 +498,21 @@ class GameLibraryViewModel extends BaseViewModel {
         next.add(sourceList[i].id);
       }
     }
+    applyBoxSelection(next);
+  }
+
+  /// 框选落的最终落点：**只有成员真的变了**才写进响应式集合。
+  ///
+  /// 框选拖拽每帧都会算一遍覆盖到的 id，但指针在同一个格子里挪动时结果是一样的；
+  /// 旧实现无条件 assignAll → refresh()，导致每一帧都让整屏卡片的 Obx 重建
+  /// （而它们每个都要读 isRunning / selectedIds / favoriteIds）。
+  /// 返回 true 表示这次确实改动了选择。
+  bool applyBoxSelection(Set<String> next) {
+    if (next.length == selectedIds.length && next.every(selectedIds.contains)) {
+      return false;
+    }
     selectedIds.assignAll(next);
+    return true;
   }
 
   /// 批量删除已选中游戏

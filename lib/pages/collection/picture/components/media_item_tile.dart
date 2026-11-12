@@ -105,6 +105,13 @@ class _MediaItemTileState extends State<MediaItemTile> {
   bool _coverPrecacheFailed = false;
   Timer? _coverFallbackTimer;
 
+  /// 兜底原图的退避策略（进程级共享）。
+  ///
+  /// 慢节点上同一屏会反复超时，而兜底打的是原图（解码最吃内存）。
+  /// 记连续超时就能把重复兜底逐次推远，直到彻底放弃兜底只剩占位；
+  /// 缩略图后台预取一直没停，真生成好了照样切回缩略图。
+  static final CoverFallbackBackoff _fallbackBackoff = CoverFallbackBackoff();
+
   @override
   void initState() {
     super.initState();
@@ -178,11 +185,12 @@ class _MediaItemTileState extends State<MediaItemTile> {
       NetworkImage(src),
       context,
       onError: (_, _) {
-        // 缩略图生成失败：直接改用原图兜底
+        // 缩略图生成失败（节点忙回 503 等）：与超时走同一条退避闸门。
+        // 旧实现在这里直接切原图，于是每次重建/滚动都立刻再打一次原图，
+        // 慢节点下同一屏能连着打十几张 4K。
         _coverPrecacheFailed = true;
-        _coverFallbackTimer?.cancel();
         if (!mounted) return;
-        setState(() => _coverFallbackActive = true);
+        _scheduleFallback(src);
       },
     ).then((_) {
       if (_coverPrecacheFailed) return;
@@ -193,10 +201,19 @@ class _MediaItemTileState extends State<MediaItemTile> {
         _coverFallbackActive = false;
       });
     });
-    // 2s 未就绪则临时采用原图
+    // 2s 未就绪则临时采用原图；同一 URL 反复超时按 2s/4s/8s 退避，
+    // 超过上限干脆不兜底——否则每次重建都会再打一次原图，慢节点下内存越滚越大
+    _scheduleFallback(src);
+  }
+
+  /// 起兜底计时器；退避到上限后不再起（保持占位，等缩略图预取回来）。
+  void _scheduleFallback(String src) {
     _coverFallbackTimer?.cancel();
-    _coverFallbackTimer = Timer(const Duration(seconds: 2), () {
+    final delay = _fallbackBackoff.delayFor(src);
+    if (delay == null) return;
+    _coverFallbackTimer = Timer(delay, () {
       if (!mounted || _coverThumbReady) return;
+      _fallbackBackoff.recordAttempt(src);
       setState(() => _coverFallbackActive = true);
     });
   }
@@ -523,4 +540,69 @@ class _MediaItemTileState extends State<MediaItemTile> {
     }
     return '$m:${s.toString().padLeft(2, '0')}';
   }
+}
+
+/// 兜底原图的退避策略：同一 URL 连续超时/失败就把下一次兜底推远，到上限后放弃。
+///
+/// 抽成独立类是为了可测：Widget 里的退避要靠 FakeAsync 数秒，
+/// 而策略本身（等多久、几时放弃）是纯逻辑，值得单独钉住。
+class CoverFallbackBackoff {
+  CoverFallbackBackoff({this.window = const Duration(minutes: 5), this.maxAttempts = 3});
+
+  /// 窗口内继续失败视为「同一批慢请求」，次数才累计；
+  /// 超过窗口就当作新一轮，从最保守的首档重新数。
+  final Duration window;
+
+  /// 连续失败到这一次就不再兜底原图（只留加载占位）。
+  final int maxAttempts;
+
+  /// 首档等待：也是旧实现的固定值，保证第一轮行为不变。
+  static const Duration firstDelay = Duration(seconds: 2);
+
+  final Map<String, _CoverFallbackStat> _stats = <String, _CoverFallbackStat>{};
+
+  /// 本次兜底前要等多久；null = 已连续失败太多次，本次直接放弃兜底。
+  Duration? delayFor(String url, {DateTime? now}) {
+    final DateTime at = now ?? DateTime.now();
+    final _CoverFallbackStat? stat = _stats[url];
+    if (stat == null) return firstDelay;
+    if (at.difference(stat.lastAt) > window) {
+      _stats.remove(url);
+      return firstDelay;
+    }
+    if (stat.count >= maxAttempts) return null;
+    return Duration(seconds: firstDelay.inSeconds * (1 << stat.count));
+  }
+
+  /// 记一次真正发生的兜底（只有计时器到点才该调）。
+  void recordAttempt(String url, {DateTime? now}) {
+    final DateTime at = now ?? DateTime.now();
+    final _CoverFallbackStat? stat = _stats[url];
+    if (stat == null || at.difference(stat.lastAt) > window) {
+      _stats[url] = _CoverFallbackStat(count: 1, lastAt: at);
+    } else {
+      _stats[url] = _CoverFallbackStat(count: stat.count + 1, lastAt: at);
+    }
+    // 条目会随浏览过的图片持续累积：先按窗口清过期，兜底再整体清空
+    if (_stats.length > 256) {
+      final stale = _stats.keys
+          .where((String k) => at.difference(_stats[k]!.lastAt) > window)
+          .toList();
+      for (final String k in stale) {
+        _stats.remove(k);
+      }
+      if (_stats.length > 512) _stats.clear();
+    }
+  }
+
+  /// 测试用：当前记录的失败次数
+  int attemptsOf(String url) => _stats[url]?.count ?? 0;
+}
+
+/// 兜底原图的退避状态：连续失败次数与最近一次时间。
+class _CoverFallbackStat {
+  const _CoverFallbackStat({required this.count, required this.lastAt});
+
+  final int count;
+  final DateTime lastAt;
 }

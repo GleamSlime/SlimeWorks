@@ -279,7 +279,14 @@ class _GameLibraryScreenState extends BasePageState<GameLibraryViewModel, GameLi
                         itemCount: items.length,
                         scrollOffset: scrollOffset,
                       );
-                      viewModel.setSelectedFromIndices(selected, items);
+                      // 累积到**非响应式**的局部集合里：拖拽每帧都算一遍覆盖范围，
+                      // 但指针在同一格内挪动时结果没变。直接写 RxSet 会让整屏卡片
+                      // 每帧重建一次；这里只在成员真变了才落进 VM。
+                      final Set<String> next = <String>{
+                        for (final int i in selected)
+                          if (i >= 0 && i < items.length) items[i].id,
+                      };
+                      viewModel.applyBoxSelection(next);
                     }
                   },
                   onPanEnd: (_) => setState(() {

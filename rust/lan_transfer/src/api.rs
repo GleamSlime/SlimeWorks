@@ -15,7 +15,7 @@ lazy_static! {
 
 // 重新导出类型（FRB 需要）
 pub use crate::types::{
-    DeviceInfo, EventType, TransferEvent, TransferItem, TransferStatus, TransferType, TrustedDevice,
+    DeviceInfo, TransferItem, TransferStatus, TransferType, TrustedDevice,
 };
 
 /// 初始化局域网传输服务
@@ -119,12 +119,20 @@ async fn load_or_create_device_id(save_dir: &str) -> String {
 }
 
 /// 停止传输管理器
+///
+/// **无论 stop 成败都要把 MANAGER 置 None**：历史上这里用 `manager.stop().await?`，
+/// stop 内部（停监听/停 mDNS）任一步报错就直接 return，MANAGER 留在 Some。
+/// 而 lan_transfer_start 见到 Some 就幂等早退 —— 于是「停止失败一次」等于
+/// 本次运行内再也起不来局域网传输，只能重启 App。停止失败本身只值得记日志，
+/// 残留的半死 manager 反而更有害。
 pub async fn lan_transfer_stop() -> Result<()> {
     let mut manager_guard = MANAGER.write().await;
     sw_info!("lan_transfer_stop begin");
 
     if let Some(manager) = manager_guard.as_ref() {
-        manager.stop().await?;
+        if let Err(e) = manager.stop().await {
+            sw_warn!("lan_transfer_stop 停止流程报错（仍会清理管理器）: {}", e);
+        }
     }
 
     *manager_guard = None;

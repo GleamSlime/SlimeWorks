@@ -148,29 +148,10 @@ pub struct HeartbeatPayload {
     pub port: u16,
 }
 
-/// 事件类型
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum EventType {
-    DeviceDiscovered,
-    DeviceLost,
-    TransferRequestReceived,
-    TransferAccepted,
-    TransferRejected,
-    TransferProgress,
-    TransferCompleted,
-    TransferFailed,
-    TransferCancelled,
-}
-
-/// 传输事件
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TransferEvent {
-    pub event_type: EventType,
-    pub device_info: Option<DeviceInfo>,
-    pub transfer_item: Option<TransferItem>,
-    pub message: Option<String>,
-    pub timestamp: String,
-}
+// 事件类型（EventType / TransferEvent）已一并移除：它们唯一的消费者是
+// manager.rs 里那两个「返回全新空 channel」的 getter，而那套事件从未被生产、
+// 也从未被 Dart 消费（客户端靠轮询 get_transfers 取状态）。
+// 留着这两个类型只会让人误以为存在事件推送机制。
 
 #[cfg(test)]
 mod tests {

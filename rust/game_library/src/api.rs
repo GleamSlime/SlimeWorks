@@ -1608,12 +1608,99 @@ fn strip_problematic_tags(html: &str) -> String {
 
 /// 删除 table/thead/tbody/tfoot/tr/td/th/caption/colgroup/col 等结构标签，
 /// 但保留这些标签内部的文字内容（只摘掉标签包装，不抹内容）。
+///
+/// 单趟扫描：旧实现对 10 个标签各做一次全文开标签扫描 + 两次全文 replace，
+/// 一页百科正文要过 30 趟字符串。这里从左往右走一遍，每个尖括号位置查一次表就决定去留。
+/// 判定规则逐条照抄旧实现：
+///  - 开标签只认「全小写」与「全大写」两种形态，混合大小写（如 Table 首字母大写）不动；
+///  - 名字后面必须是非字母数字/-/_ 的边界（table / table x 命中，tableX 不命中，
+///    边界判定与旧实现一样用 Unicode alphanumeric，所以 table文本 也不算标签）；
+///  - 闭标签只按字面量删除（全小写与全大写两种拼法）；
+///  - 命中目标开标签但整段没有闭合尖括号时，旧实现的循环在此 break，尾部整段丢弃。
+/// 结论：对良构 HTML 与全部单标签边角，产出与旧实现逐字节一致（见等价性回归测试）。
 fn strip_table_structure_tags(html: &str) -> String {
+    let mut result = String::with_capacity(html.len());
+    let mut rest = html;
+    loop {
+        let Some(lt) = rest.find('<') else {
+            result.push_str(rest);
+            break;
+        };
+        result.push_str(&rest[..lt]);
+        let tail = &rest[lt..];
+        let close_len = table_close_tag_len(tail);
+        if close_len > 0 {
+            // 闭标签：按字面量长度跳过
+            rest = &tail[close_len..];
+            continue;
+        }
+        if !is_table_open_tag(tail) {
+            // 不是目标标签：按普通文本吃一个字符，下一个尖括号可能紧跟着
+            result.push('<');
+            rest = &tail[1..];
+            continue;
+        }
+        // 目标开标签（含属性）：跳到首个闭合尖括号；没有则整段丢弃，与旧实现 break 一致
+        let Some(gt) = tail.find('>') else {
+            return result;
+        };
+        rest = &tail[gt + 1..];
+    }
+    result
+}
+
+fn table_tags() -> &'static [&'static str] {
     const TABLE_TAGS: &[&str] = &[
         "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption", "colgroup", "col",
     ];
+    TABLE_TAGS
+}
+
+/// tail（以尖括号开头）是否是目标开标签，判定规则与旧实现逐条一致。
+fn is_table_open_tag(tail: &str) -> bool {
+    let Some(inner) = tail.strip_prefix('<') else {
+        return false;
+    };
+    // 闭标签走另一条分支，这里排除掉，避免把闭合标签当成开标签名
+    if inner.starts_with('/') {
+        return false;
+    }
+    table_tags().iter().any(|tag| {
+        let lower = format!("<{}", tag);
+        let upper = lower.to_uppercase();
+        [lower, upper].iter().any(|lit| {
+            tail.strip_prefix(lit.as_str()).is_some_and(|after| {
+                // 边界：下一个字符不是字母数字/-/_（Unicode 口径，与旧实现一致）
+                after
+                    .chars()
+                    .next()
+                    .map_or(true, |c| !c.is_alphanumeric() && c != '-' && c != '_')
+            })
+        })
+    })
+}
+
+/// 命中的目标闭标签字面量长度；未命中返回 0。
+fn table_close_tag_len(tail: &str) -> usize {
+    for tag in table_tags() {
+        let lower = format!("</{}>", tag);
+        let upper = lower.to_uppercase();
+        if tail.starts_with(&lower) {
+            return lower.len();
+        }
+        if tail.starts_with(&upper) {
+            return upper.len();
+        }
+    }
+    0
+}
+
+/// 旧的逐标签多趟实现，仅作等价性回归基准保留：
+/// 单趟扫描器的输出必须与它逐字节一致，任何行为差异都算回归。
+#[cfg(test)]
+fn strip_table_structure_tags_legacy(html: &str) -> String {
     let mut result = html.to_string();
-    for tag in TABLE_TAGS {
+    for tag in table_tags() {
         result = strip_open_tag_keep_content(&result, tag);
         let close_l = format!("</{}>", tag);
         let close_u = close_l.to_uppercase();
@@ -1623,6 +1710,7 @@ fn strip_table_structure_tags(html: &str) -> String {
 }
 
 /// 删除所有 `<TAG ...>` 开标签（含属性），但不删标签内的内容。
+#[cfg(test)]
 fn strip_open_tag_keep_content(html: &str, tag: &str) -> String {
     let open_l = format!("<{}", tag);
     let open_u = open_l.to_uppercase();
@@ -2883,6 +2971,104 @@ mod tests {
         assert_eq!(
             game_library_derive_game_name("  /apps/Trim.app  ".to_string()),
             "Trim"
+        );
+    }
+
+    // ── HTML 清洗：单趟扫描与旧多趟实现逐字节等价（P3-9）─────────────────
+
+    /// 覆盖开/闭标签、属性、嵌套、大小写混合、无闭合、非目标标签与文本里的尖括号。
+    fn table_strip_cases() -> Vec<&'static str> {
+        vec![
+            "",
+            "纯文本，没有标签",
+            "<table><tr><td>单元格</td></tr></table>",
+            "<TABLE><TR><TD>全大写</TD></TR></TABLE>",
+            "<table class=\"wikitable\" style=\"border:1px\"><tr><td>带属性</td></tr></table>",
+            "<table><table>嵌套</table>内层结束</table>",
+            "<tableX>不是表格标签</tableX>",
+            "<table>未闭合表格",
+            "<table class=\"x\">未闭合且带属性",
+            "<div>普通 div 保留</div><p>段落</p>",
+            "比 < 3 且 5 > 4 的裸尖括号",
+            "<thead><tbody><tfoot><caption>标题</caption></thead></tbody></tfoot>",
+            "<colgroup><col span=\"2\"></colgroup>",
+            "<tr><th>表头</th><td>数据</td></tr>",
+            "<table><tr><td>中文内容 &amp; 实体</td></tr></table>",
+            "<Table>混合大小写</Table>",
+            "<table><tr><td>a</td></tr><tr><td>b</td></tr></table><p>后文</p>",
+            "<td>孤立单元格",
+            "<img src=\"a.png\">保留图片",
+            "<table><tr><td><img src=\"x.png\"></td></tr></table>",
+        ]
+    }
+
+    #[test]
+    fn single_pass_table_strip_matches_legacy_byte_for_byte() {
+        for (idx, case) in table_strip_cases().iter().enumerate() {
+            let new_out = strip_table_structure_tags(case);
+            let old_out = strip_table_structure_tags_legacy(case);
+            assert_eq!(
+                new_out, old_out,
+                "第 {idx} 个用例与旧实现不一致，输入: {case:?}"
+            );
+        }
+    }
+
+    /// 穷举小片段拼接：比手写用例更可能撞出边界差异（大小写、属性、未闭合、嵌套）。
+    #[test]
+    fn single_pass_table_strip_matches_legacy_on_combinations() {
+        const PIECES: &[&str] = &[
+            "<table>",
+            "</table>",
+            "<TABLE>",
+            "</TABLE>",
+            "<table class=\"k\">",
+            "<tr>",
+            "</tr>",
+            "<td>",
+            "</td>",
+            "<Table>",
+            "<table",
+            ">",
+            "<",
+            "文本",
+            "a",
+            "<div>",
+            "</div>",
+            "<colgroup>",
+            "</colgroup>",
+            " ",
+        ];
+        // 长度 1~3 的全组合（20 + 400 + 8000 条），确定性遍历，不依赖随机数种子
+        for len in 1..=3usize {
+            let total = PIECES.len().pow(len as u32);
+            for n in 0..total {
+                let mut idx = n;
+                let mut input = String::new();
+                for _ in 0..len {
+                    input.push_str(PIECES[idx % PIECES.len()]);
+                    idx /= PIECES.len();
+                }
+                assert_eq!(
+                    strip_table_structure_tags(&input),
+                    strip_table_structure_tags_legacy(&input),
+                    "组合不一致，输入: {input:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn table_strip_keeps_text_and_drops_only_structure() {
+        let html = "<table class=\"wikitable\"><tr><td>作品名</td><td>发售日</td></tr></table>";
+        let out = strip_table_structure_tags(html);
+        assert_eq!(out, "作品名发售日", "只摘标签包装，文字必须保留");
+        // 未闭合的目标标签：与旧实现一致地丢弃这段尾巴（旧循环在此 break）
+        assert_eq!(strip_table_structure_tags("<p>正文</p><table 未闭合"), "<p>正文</p>");
+        // 非目标标签原样保留
+        assert_eq!(
+            strip_table_structure_tags("<div>保留</div>"),
+            "<div>保留</div>"
         );
     }
 

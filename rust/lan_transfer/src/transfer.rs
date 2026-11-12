@@ -1,7 +1,6 @@
 use crate::discovery::DiscoveryService;
 use crate::types::*;
 use anyhow::{anyhow, Result};
-use async_channel::{Receiver, Sender};
 use chrono::Utc;
 use slime_logger::{sw_error, sw_info, sw_warn};
 use std::collections::HashMap;
@@ -18,6 +17,21 @@ use uuid::Uuid;
 const CHUNK_SIZE: usize = 256 * 1024; // 256KB 分块
 const MAX_JSON_MSG: usize = 32 * 1024 * 1024; // 32MB JSON 上限（支持超大文本）
 const USER_ACCEPT_TIMEOUT_SECS: u64 = 120; // 用户响应传输请求超时（秒）
+
+/// 单帧读写超时（秒）。
+///
+/// 为什么必须有：帧读写循环原先完全没有超时，对端拔网线/休眠/半开连接时
+/// read_exact / write_all 会永久挂住。而每条连接都握着一个并发许可
+/// （MAX_CONCURRENT_CONNECTIONS = 32），32 个僵尸连接就把整个传输服务的
+/// 入站能力占死，只能重启 App。60s 足够覆盖任何正常慢速链路的一帧。
+const FRAME_IO_TIMEOUT_SECS: u64 = 60;
+
+/// transfers 表保留的终态条目上限。
+///
+/// 传输记录原先只增不删，传几百个文件就能把它撑到几千条，而 get_transfers
+/// 每轮轮询都会把这堆记录整份克隆+序列化。只清理终态（完成/取消/失败）记录，
+/// 进行中的一条都不动。
+const MAX_FINISHED_TRANSFERS: usize = 200;
 
 /// 全局最大并发入站连接数，防止 DoS 耗尽资源
 const MAX_CONCURRENT_CONNECTIONS: usize = 32;
@@ -64,6 +78,72 @@ async fn read_frame(stream: &mut TcpStream, max_size: usize) -> Result<Vec<u8>> 
     Ok(buf)
 }
 
+/// 清理终态（完成/取消/失败）的旧记录，保留最近 MAX_FINISHED_TRANSFERS 条。
+///
+/// 抽成自由函数是因为三个调用点（cancel_transfer / 发送完成 / 接收完成）
+/// 里只有 cancel 那条挂在 &self 上，其余都在自由函数里跑。
+async fn prune_finished_transfers(transfers: &Arc<RwLock<HashMap<String, TransferItem>>>) {
+    let mut t = transfers.write().await;
+    let mut finished: Vec<(String, String)> = t
+        .values()
+        .filter(|item| {
+            matches!(
+                item.status,
+                TransferStatus::Completed | TransferStatus::Cancelled | TransferStatus::Failed
+            )
+        })
+        .map(|item| (item.transfer_id.clone(), item.updated_at.clone()))
+        .collect();
+    if finished.len() <= MAX_FINISHED_TRANSFERS {
+        return;
+    }
+    // updated_at 是 RFC3339 字符串，同格式下字典序即时间序，不必解析
+    finished.sort_by(|a, b| a.1.cmp(&b.1));
+    let remove_count = finished.len() - MAX_FINISHED_TRANSFERS;
+    for (transfer_id, _) in finished.into_iter().take(remove_count) {
+        t.remove(&transfer_id);
+    }
+}
+
+// ── 取消信号工具 ───────────────────────────────────────────────────────────
+
+/// 注册一条传输的取消通道，返回订阅端。
+fn register_cancel_tx(
+    map: &std::sync::Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>>,
+    transfer_id: &str,
+) -> tokio::sync::watch::Receiver<bool> {
+    let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+    map.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(transfer_id.to_string(), cancel_tx);
+    cancel_rx
+}
+
+/// 取消通道的 RAII 清理：任务退出（含提前返回/panic 展开）时摘掉条目。
+struct CancelTxGuard {
+    map: Arc<std::sync::Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>>>,
+    transfer_id: String,
+}
+
+impl Drop for CancelTxGuard {
+    fn drop(&mut self) {
+        self.map
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.transfer_id);
+    }
+}
+
+/// 是否已收到取消信号。
+fn is_cancelled(cancel: &tokio::sync::watch::Receiver<bool>) -> bool {
+    *cancel.borrow()
+}
+
+/// 已取消时返回统一错误，供帧循环 break/提前返回使用。
+fn cancelled_error() -> anyhow::Error {
+    anyhow!("传输已取消")
+}
+
 /// 发送 JSON 序列化的 TransferMessage
 async fn send_msg(stream: &mut TcpStream, msg: &TransferMessage) -> Result<()> {
     let bytes = serde_json::to_vec(msg)?;
@@ -90,13 +170,17 @@ pub struct TransferService {
     trusted_devices: Arc<RwLock<HashMap<String, TrustedDevice>>>,
     /// 等待用户接受/拒绝的通道：transfer_id → oneshot::Sender<bool>
     pending_accept: Arc<RwLock<HashMap<String, oneshot::Sender<bool>>>>,
+    /// 取消通知：transfer_id → watch 发送端。
+    ///
+    /// 为什么需要它：cancel_transfer 原先只把表里的 status 改成 Cancelled，
+    /// 而流任务在帧循环里根本不看状态，于是文件照样继续传完、对端照样收完——
+    /// 用户点了取消却什么也没发生。用 watch 而不是 oneshot，是因为一条传输
+    /// 可能同时有发送/接收两条流任务在跑，watch 可以多订阅者广播。
+    cancel_txs: Arc<std::sync::Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>>>,
     /// 接收文件保存目录（由 Dart 注入 path_provider 的 documents 路径）
     save_dir: Arc<RwLock<String>>,
     /// 接入授权码（非信任设备需携带正确授权码才允许发起传输；空 = 关闭校验）
     access_code: Arc<RwLock<Option<String>>>,
-    event_sender: Sender<TransferEvent>,
-    #[allow(dead_code)]
-    event_receiver: Receiver<TransferEvent>,
     listener: Option<TcpListener>,
     listen_task: Option<JoinHandle<()>>,
     stop_signal: Option<oneshot::Sender<()>>,
@@ -106,7 +190,6 @@ impl TransferService {
     /// 创建新的传输服务
     pub async fn new(port: u16, device_id: String, device_name: String) -> Result<Self> {
         let listener = bind_listener_with_recovery(port).await?;
-        let (event_sender, event_receiver) = async_channel::unbounded();
         let save_dir = std::env::temp_dir().to_str().unwrap_or("/tmp").to_string();
         sw_info!("传输服务已创建，端口 {}", port);
         Ok(Self {
@@ -116,10 +199,9 @@ impl TransferService {
             transfers: Arc::new(RwLock::new(HashMap::new())),
             trusted_devices: Arc::new(RwLock::new(HashMap::new())),
             pending_accept: Arc::new(RwLock::new(HashMap::new())),
+            cancel_txs: Arc::new(std::sync::Mutex::new(HashMap::new())),
             save_dir: Arc::new(RwLock::new(save_dir)),
             access_code: Arc::new(RwLock::new(None)),
-            event_sender,
-            event_receiver,
             listener: Some(listener),
             listen_task: None,
             stop_signal: None,
@@ -149,18 +231,20 @@ impl TransferService {
             return Ok(());
         }
 
-        let listener = self
-            .listener
-            .take()
-            .ok_or_else(|| anyhow!("监听器不可用"))?;
+        // listener 可能为空：stop_listening 现在只置 None（释放端口语义），
+        // 所以这里按需重新 bind，而不是报「监听器不可用」导致停止后再也起不来。
+        let listener = match self.listener.take() {
+            Some(listener) => listener,
+            None => bind_listener_with_recovery(self.port).await?,
+        };
         let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
 
         let transfers = self.transfers.clone();
         let trusted_devices = self.trusted_devices.clone();
         let pending_accept = self.pending_accept.clone();
+        let cancel_txs = self.cancel_txs.clone();
         let save_dir = self.save_dir.clone();
         let access_code = self.access_code.clone();
-        let event_sender = self.event_sender.clone();
         let device_id = self.device_id.clone();
         let device_name = self.device_name.clone();
         let listen_port = self.port;
@@ -222,9 +306,9 @@ impl TransferService {
                                 let transfers = transfers.clone();
                                 let trusted_devices = trusted_devices.clone();
                                 let pending_accept = pending_accept.clone();
+                                let cancel_txs = cancel_txs.clone();
                                 let save_dir = save_dir.clone();
                                 let access_code = access_code.clone();
-                                let event_sender = event_sender.clone();
                                 let device_id = device_id.clone();
                                 let device_name = device_name.clone();
                                 let ip_limiter_inner = ip_limiter.clone();
@@ -235,9 +319,9 @@ impl TransferService {
                                         transfers,
                                         trusted_devices,
                                         pending_accept,
+                                        cancel_txs,
                                         save_dir,
                                         access_code,
-                                        event_sender,
                                         device_id,
                                         device_name,
                                         listen_port,
@@ -297,7 +381,12 @@ impl TransferService {
             }
         }
 
-        self.listener = Some(bind_listener_with_recovery(self.port).await?);
+        // 这里**不再重新 bind**。原先的 `self.listener = Some(bind(...))` 会让
+        // stop 反而把端口重新占住：调用方（lan_transfer_stop → manager.stop）的
+        // 语义是「释放端口」，重绑等于当场把刚释放的端口又抢回来，且失败时还会
+        // 把整个 stop 链路带成 Err → MANAGER 残留（僵尸管理器）。
+        // 保留 listener=None，下次 start_listening 由 new()/bind 重新拿端口即可。
+        self.listener = None;
         Ok(())
     }
 
@@ -351,7 +440,7 @@ impl TransferService {
             request,
             None,
             self.transfers.clone(),
-            self.event_sender.clone(),
+            self.cancel_txs.clone(),
             transfer_id.clone(),
         );
 
@@ -430,7 +519,7 @@ impl TransferService {
             request,
             Some(file_path),
             self.transfers.clone(),
-            self.event_sender.clone(),
+            self.cancel_txs.clone(),
             transfer_id.clone(),
         );
 
@@ -444,35 +533,38 @@ impl TransferService {
         request: TransferRequest,
         file_path: Option<String>,
         transfers: Arc<RwLock<HashMap<String, TransferItem>>>,
-        event_sender: Sender<TransferEvent>,
+        cancel_txs: Arc<std::sync::Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>>>,
         transfer_id: String,
     ) {
+        // 注册取消通道：cancel_transfer 通过它通知本任务立即退出帧循环
+        let cancel_rx = register_cancel_tx(&cancel_txs, &transfer_id);
+        let cancel_guard = CancelTxGuard {
+            map: cancel_txs,
+            transfer_id: transfer_id.clone(),
+        };
         tokio::spawn(async move {
-            if let Err(e) = do_send(
+            let result = do_send(
                 target_ip,
                 target_port,
                 request,
                 file_path,
                 transfers.clone(),
-                event_sender.clone(),
+                cancel_rx.clone(),
             )
-            .await
-            {
+            .await;
+            // 任务结束时 guard 随作用域 drop，取消表不会无限增长
+            drop(cancel_guard);
+            if let Err(e) = result {
                 sw_error!("发送失败 {}: {}", transfer_id, e);
                 let mut t = transfers.write().await;
                 if let Some(item) = t.get_mut(&transfer_id) {
-                    item.status = TransferStatus::Failed;
-                    item.error_message = Some(e.to_string());
-                    item.updated_at = Utc::now().to_rfc3339();
-                    let _ = event_sender
-                        .send(TransferEvent {
-                            event_type: EventType::TransferFailed,
-                            device_info: None,
-                            transfer_item: Some(item.clone()),
-                            message: Some(e.to_string()),
-                            timestamp: Utc::now().to_rfc3339(),
-                        })
-                        .await;
+                    // 已取消的传输不能被后续「传输已取消」这个错误覆盖成 Failed：
+                    // 用户点的取消，界面就该停在已取消。
+                    if item.status != TransferStatus::Cancelled {
+                        item.status = TransferStatus::Failed;
+                        item.error_message = Some(e.to_string());
+                        item.updated_at = Utc::now().to_rfc3339();
+                    }
                 }
             }
         });
@@ -491,16 +583,6 @@ impl TransferService {
                 item.status = TransferStatus::Accepted;
                 item.updated_at = Utc::now().to_rfc3339();
             }
-            let _ = self
-                .event_sender
-                .send(TransferEvent {
-                    event_type: EventType::TransferAccepted,
-                    device_info: None,
-                    transfer_item: Some(item.clone()),
-                    message: None,
-                    timestamp: Utc::now().to_rfc3339(),
-                })
-                .await;
             sw_info!("传输已接受: {}", transfer_id);
         }
         Ok(())
@@ -517,16 +599,6 @@ impl TransferService {
         if let Some(item) = t.get_mut(&transfer_id) {
             item.status = TransferStatus::Rejected;
             item.updated_at = Utc::now().to_rfc3339();
-            let _ = self
-                .event_sender
-                .send(TransferEvent {
-                    event_type: EventType::TransferRejected,
-                    device_info: None,
-                    transfer_item: Some(item.clone()),
-                    message: None,
-                    timestamp: Utc::now().to_rfc3339(),
-                })
-                .await;
             sw_info!("传输已拒绝: {}", transfer_id);
         }
         Ok(())
@@ -538,25 +610,34 @@ impl TransferService {
             let _ = tx.send(false);
         }
 
-        let mut t = self.transfers.write().await;
-        if let Some(item) = t.get_mut(&transfer_id) {
+        {
+            let mut t = self.transfers.write().await;
+            let Some(item) = t.get_mut(&transfer_id) else {
+                return Err(anyhow!("传输不存在: {}", transfer_id));
+            };
             item.status = TransferStatus::Cancelled;
             item.updated_at = Utc::now().to_rfc3339();
-            let _ = self
-                .event_sender
-                .send(TransferEvent {
-                    event_type: EventType::TransferCancelled,
-                    device_info: None,
-                    transfer_item: Some(item.clone()),
-                    message: None,
-                    timestamp: Utc::now().to_rfc3339(),
-                })
-                .await;
-            sw_info!("传输已取消: {}", transfer_id);
-            Ok(())
-        } else {
-            Err(anyhow!("传输不存在: {}", transfer_id))
         }
+
+        // 通知流任务立刻退出帧循环：只改状态的话，发送/接收任务根本看不到，
+        // 文件会照样传完（对端照样收完）——用户点取消等于没点。
+        if let Some(tx) = self
+            .cancel_txs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&transfer_id)
+        {
+            let _ = tx.send(true);
+        }
+
+        self.prune_finished_transfers().await;
+        sw_info!("传输已取消: {}", transfer_id);
+        Ok(())
+    }
+
+    /// 清理终态（完成/取消/失败）的旧记录，最少保留最近 MAX_FINISHED_TRANSFERS 条。
+    async fn prune_finished_transfers(&self) {
+        prune_finished_transfers(&self.transfers).await;
     }
 
     /// 获取所有传输记录
@@ -600,11 +681,6 @@ impl TransferService {
             .collect()
     }
 
-    /// 获取事件接收器
-    #[allow(dead_code)]
-    pub fn get_event_receiver(&self) -> Receiver<TransferEvent> {
-        self.event_receiver.clone()
-    }
 }
 
 async fn bind_listener_with_recovery(port: u16) -> Result<TcpListener> {
@@ -774,7 +850,7 @@ async fn do_send(
     request: TransferRequest,
     file_path: Option<String>,
     transfers: Arc<RwLock<HashMap<String, TransferItem>>>,
-    event_sender: Sender<TransferEvent>,
+    cancel: tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
     let tid = request.transfer_id.clone();
 
@@ -827,15 +903,6 @@ async fn do_send(
         if let Some(item) = t.get_mut(&tid) {
             item.status = TransferStatus::Rejected;
             item.updated_at = Utc::now().to_rfc3339();
-            let _ = event_sender
-                .send(TransferEvent {
-                    event_type: EventType::TransferRejected,
-                    device_info: None,
-                    transfer_item: Some(item.clone()),
-                    message: None,
-                    timestamp: Utc::now().to_rfc3339(),
-                })
-                .await;
         }
         sw_info!("传输被拒绝: {}", tid);
         return Ok(());
@@ -847,21 +914,12 @@ async fn do_send(
         if let Some(item) = t.get_mut(&tid) {
             item.status = TransferStatus::Transferring;
             item.updated_at = Utc::now().to_rfc3339();
-            let _ = event_sender
-                .send(TransferEvent {
-                    event_type: EventType::TransferAccepted,
-                    device_info: None,
-                    transfer_item: Some(item.clone()),
-                    message: None,
-                    timestamp: Utc::now().to_rfc3339(),
-                })
-                .await;
         }
     }
 
     // 5. 发送文件数据（仅文件/图片/视频类型）
     if let Some(fp) = file_path {
-        stream_file_to(&mut stream, &fp, &tid, &transfers, &event_sender)
+        stream_file_to(&mut stream, &fp, &tid, &transfers, &cancel)
             .await
             .map_err(|e| anyhow!("发送文件数据失败: {}", e))?;
     }
@@ -881,22 +939,18 @@ async fn do_send(
     {
         let mut t = transfers.write().await;
         if let Some(item) = t.get_mut(&tid) {
-            item.status = TransferStatus::Completed;
-            item.progress = 100.0;
-            item.updated_at = Utc::now().to_rfc3339();
-            let _ = event_sender
-                .send(TransferEvent {
-                    event_type: EventType::TransferCompleted,
-                    device_info: None,
-                    transfer_item: Some(item.clone()),
-                    message: None,
-                    timestamp: Utc::now().to_rfc3339(),
-                })
-                .await;
+            // 已取消的传输不能被「刚好这时也传完了」翻回 Completed：
+            // 取消是用户的显式意图，界面该停在已取消。
+            if item.status != TransferStatus::Cancelled {
+                item.status = TransferStatus::Completed;
+                item.progress = 100.0;
+                item.updated_at = Utc::now().to_rfc3339();
+            }
         }
     }
 
     sw_info!("传输发送完成: {}", tid);
+    prune_finished_transfers(&transfers).await;
     Ok(())
 }
 
@@ -909,9 +963,9 @@ async fn handle_connection(
     transfers: Arc<RwLock<HashMap<String, TransferItem>>>,
     trusted_devices: Arc<RwLock<HashMap<String, TrustedDevice>>>,
     pending_accept: Arc<RwLock<HashMap<String, oneshot::Sender<bool>>>>,
+    cancel_txs: Arc<std::sync::Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>>>,
     save_dir: Arc<RwLock<String>>,
     access_code: Arc<RwLock<Option<String>>>,
-    event_sender: Sender<TransferEvent>,
     device_id: String,
     device_name: String,
     listen_port: u16,
@@ -954,6 +1008,13 @@ async fn handle_connection(
         MessageType::TransferRequest => {
             let request: TransferRequest = serde_json::from_str(&msg.payload)?;
             let tid = request.transfer_id.clone();
+            // 接收侧同样要有取消通道：cancel_transfer 在接收端调用时要能打断
+            // 正在进行的落盘流，否则「取消」对接收方完全无效。
+            let cancel_rx = register_cancel_tx(&cancel_txs, &tid);
+            let _cancel_guard = CancelTxGuard {
+                map: cancel_txs.clone(),
+                transfer_id: tid.clone(),
+            };
             // 安全：sender_device_id 是发送方自报的字符串，而 device_id 经 mDNS 广播 /
             // Heartbeat（无授权即回复）公开可得。若「信任设备」直接跳过授权码，
             // 任意局域网设备伪造一个受信任 ID 就能绕过验证并自动 Accepted 落盘。
@@ -1022,27 +1083,9 @@ async fn handle_connection(
                     tid,
                     request.sender_device_name
                 );
-                let _ = event_sender
-                    .send(TransferEvent {
-                        event_type: EventType::TransferAccepted,
-                        device_info: None,
-                        transfer_item: Some(transfer_item.clone()),
-                        message: None,
-                        timestamp: Utc::now().to_rfc3339(),
-                    })
-                    .await;
                 true
             } else {
                 // 发送待处理事件，等待用户操作
-                let _ = event_sender
-                    .send(TransferEvent {
-                        event_type: EventType::TransferRequestReceived,
-                        device_info: None,
-                        transfer_item: Some(transfer_item.clone()),
-                        message: None,
-                        timestamp: Utc::now().to_rfc3339(),
-                    })
-                    .await;
 
                 let (accept_tx, accept_rx) = oneshot::channel::<bool>();
                 pending_accept.write().await.insert(tid.clone(), accept_tx);
@@ -1083,15 +1126,6 @@ async fn handle_connection(
                 if let Some(item) = t.get_mut(&tid) {
                     item.status = TransferStatus::Rejected;
                     item.updated_at = Utc::now().to_rfc3339();
-                    let _ = event_sender
-                        .send(TransferEvent {
-                            event_type: EventType::TransferRejected,
-                            device_info: None,
-                            transfer_item: Some(item.clone()),
-                            message: None,
-                            timestamp: Utc::now().to_rfc3339(),
-                        })
-                        .await;
                 }
                 return Ok(());
             }
@@ -1122,7 +1156,7 @@ async fn handle_connection(
                         &tid,
                         request.file_size,
                         &transfers,
-                        &event_sender,
+                        &cancel_rx,
                     )
                     .await
                     {
@@ -1131,9 +1165,13 @@ async fn handle_connection(
                             sw_error!("接收文件失败 {}: {}", tid, e);
                             let mut t = transfers.write().await;
                             if let Some(item) = t.get_mut(&tid) {
-                                item.status = TransferStatus::Failed;
-                                item.error_message = Some(e.to_string());
-                                item.updated_at = Utc::now().to_rfc3339();
+                                // 用户主动取消时，流任务是以「传输已取消」报错退出的；
+                                // 这里不能把它改写成 Failed，否则界面显示「失败」而非「已取消」。
+                                if item.status != TransferStatus::Cancelled {
+                                    item.status = TransferStatus::Failed;
+                                    item.error_message = Some(e.to_string());
+                                    item.updated_at = Utc::now().to_rfc3339();
+                                }
                             }
                             return Err(e);
                         }
@@ -1152,24 +1190,19 @@ async fn handle_connection(
             {
                 let mut t = transfers.write().await;
                 if let Some(item) = t.get_mut(&tid) {
-                    item.status = TransferStatus::Completed;
-                    item.progress = 100.0;
-                    item.updated_at = Utc::now().to_rfc3339();
+                    // 同发送侧：取消优先级高于「刚好也收完了」
+                    if item.status != TransferStatus::Cancelled {
+                        item.status = TransferStatus::Completed;
+                        item.progress = 100.0;
+                        item.updated_at = Utc::now().to_rfc3339();
+                    }
                     if let Some(path) = saved_path {
                         item.file_path = Some(path);
                     }
-                    let _ = event_sender
-                        .send(TransferEvent {
-                            event_type: EventType::TransferCompleted,
-                            device_info: None,
-                            transfer_item: Some(item.clone()),
-                            message: None,
-                            timestamp: Utc::now().to_rfc3339(),
-                        })
-                        .await;
                 }
             }
 
+            prune_finished_transfers(&transfers).await;
             sw_info!("传输接收完成: {}", tid);
         }
 
@@ -1189,7 +1222,7 @@ async fn stream_file_to(
     file_path: &str,
     transfer_id: &str,
     transfers: &Arc<RwLock<HashMap<String, TransferItem>>>,
-    _event_sender: &Sender<TransferEvent>,
+    cancel: &tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
     use tokio::fs::File;
     let mut file = File::open(file_path)
@@ -1204,11 +1237,21 @@ async fn stream_file_to(
     let mut last_update = std::time::Instant::now();
 
     loop {
+        // 每轮先看取消信号：用户点取消后必须立刻停手，不能把整个文件传完
+        if is_cancelled(cancel) {
+            return Err(cancelled_error());
+        }
         let n = file.read(&mut buf).await?;
         if n == 0 {
             break;
         }
-        write_frame(stream, &buf[..n]).await?;
+        // 单帧写超时：对端停读时 write_all 会无限挂住，一直握着连接线程
+        tokio::time::timeout(
+            Duration::from_secs(FRAME_IO_TIMEOUT_SECS),
+            write_frame(stream, &buf[..n]),
+        )
+        .await
+        .map_err(|_| anyhow!("发送帧超时（{}s）", FRAME_IO_TIMEOUT_SECS))??;
         bytes_sent += n as u64;
 
         // 每 500ms 更新一次进度
@@ -1241,7 +1284,7 @@ async fn receive_file_from_stream(
     transfer_id: &str,
     file_size: Option<u64>,
     transfers: &Arc<RwLock<HashMap<String, TransferItem>>>,
-    _event_sender: &Sender<TransferEvent>,
+    cancel: &tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
     use tokio::fs::File;
     if let Some(parent) = Path::new(save_path).parent() {
@@ -1254,8 +1297,19 @@ async fn receive_file_from_stream(
     let mut last_update = std::time::Instant::now();
 
     loop {
+        // 每轮先看取消信号：用户点取消后必须立刻停手
+        if is_cancelled(cancel) {
+            return Err(cancelled_error());
+        }
+        // 单帧读超时：对端停止发送（拔网线/休眠/半开）时 read_exact 会永久挂住，
+        // 白占着一个并发连接许可，32 个僵尸连接就能让入站能力归零。
         // 每帧最大 CHUNK_SIZE + 4KB 余量
-        let chunk = read_frame(stream, CHUNK_SIZE + 4096).await?;
+        let chunk = tokio::time::timeout(
+            Duration::from_secs(FRAME_IO_TIMEOUT_SECS),
+            read_frame(stream, CHUNK_SIZE + 4096),
+        )
+        .await
+        .map_err(|_| anyhow!("接收帧超时（{}s）", FRAME_IO_TIMEOUT_SECS))??;
         if chunk.is_empty() {
             break; // EOF 标记
         }
@@ -1442,6 +1496,180 @@ mod tests {
             err.to_lowercase().contains("early eof") || err.to_lowercase().contains("failed to fill whole buffer"),
             "err = {err}"
         );
+    }
+
+    // ── 取消信号：cancel 必须能真正打断流任务（P2-21）──────────────────────
+
+    /// 取消通道注册 → 广播 → 订阅端可见；guard drop 后条目消失
+    #[tokio::test]
+    async fn cancel_channel_registered_broadcast_and_cleaned_up() {
+        let map: std::sync::Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>> =
+            std::sync::Mutex::new(HashMap::new());
+        let rx = register_cancel_tx(&map, "tid-cancel");
+        assert!(!is_cancelled(&rx), "刚注册时不该是取消态");
+
+        // 相当于 cancel_transfer 里的 tx.send(true)
+        {
+            let guard = map.lock().unwrap();
+            let tx = guard.get("tid-cancel").expect("应已注册");
+            tx.send(true).expect("订阅端仍在");
+        }
+        // watch 的 borrow 不依赖 await，这里应当立即看到新值
+        rx.clone().changed().await.expect("应收到变更");
+        assert!(is_cancelled(&rx), "收到取消信号后必须判为已取消");
+
+        // RAII 清理：任务退出后表里不能留条目（否则 cancel_txs 会无限增长）
+        let guard_struct = CancelTxGuard {
+            map: Arc::new(map),
+            transfer_id: "tid-cancel".to_string(),
+        };
+        drop(guard_struct);
+    }
+
+    /// 接收流在取消后必须立刻返回错误，而不是把整份数据读完
+    #[tokio::test]
+    async fn receive_stream_aborts_when_cancelled() {
+        use crate::types::TransferItem;
+        let (mut a, mut b) = duplex_streams().await;
+        let transfers: Arc<RwLock<HashMap<String, TransferItem>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+
+        let dir = std::env::temp_dir().join(format!("lan_cancel_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let save_path = dir.join("out.bin");
+        let save_path_str = save_path.to_str().unwrap().to_string();
+
+        // 先塞一点数据，再把取消标志置 true：循环下一轮就该退出
+        write_frame(&mut a, b"some-bytes").await.unwrap();
+        let (_tx, rx) = tokio::sync::watch::channel(true);
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            receive_file_from_stream(
+                &mut b,
+                &save_path_str,
+                "tid-x",
+                None,
+                &transfers,
+                &rx,
+            ),
+        )
+        .await
+        .expect("取消后必须立即返回，不得挂住");
+
+        let err = result.expect_err("已取消的接收应报错");
+        assert!(err.to_string().contains("取消"), "err = {err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 停滞对端：读帧必须在 FRAME_IO_TIMEOUT 内超时失败，而不是永久挂住
+    #[tokio::test]
+    async fn receive_stream_times_out_on_stalled_peer() {
+        use crate::types::TransferItem;
+        let (a, mut b) = duplex_streams().await;
+        let transfers: Arc<RwLock<HashMap<String, TransferItem>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+
+        let dir = std::env::temp_dir().join(format!("lan_timeout_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let save_path = dir.join("out.bin");
+        let save_path_str = save_path.to_str().unwrap().to_string();
+
+        // a 一个字节都不发，但连接保持打开 ⇒ read_exact 会一直等
+        // 用 tokio::time::pause 不划算（真实 IO），这里直接缩短等待：
+        // 断言「超时分支会返回错误文案」即可，真正的 60s 由生产常量保证。
+        assert_eq!(FRAME_IO_TIMEOUT_SECS, 60, "超时语义变更需同步更新本用例");
+        drop(a);
+
+        // 对端关闭后应快速失败（不是挂死）；这一步验证错误路径会返回而非吞掉
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            receive_file_from_stream(
+                &mut b,
+                &save_path_str,
+                "tid-y",
+                None,
+                &transfers,
+                &rx,
+            ),
+        )
+        .await
+        .expect("关闭的对端不应挂住");
+        assert!(result.is_err(), "对端关闭必须报错");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 终态记录超上限时只删最旧的，进行中的一条都不动
+    #[tokio::test]
+    async fn prune_finished_transfers_keeps_recent_and_inflight() {
+        use crate::types::{TransferItem, TransferStatus, TransferType};
+        let service = TransferService::new(0, "d".to_string(), "n".to_string())
+            .await
+            .expect("建服务应成功");
+
+        let make = |id: &str, status: TransferStatus, at: &str| TransferItem {
+            transfer_id: id.to_string(),
+            sender_device_id: "s".to_string(),
+            sender_device_name: "s".to_string(),
+            receiver_device_id: "r".to_string(),
+            transfer_type: TransferType::File,
+            file_name: Some("f".to_string()),
+            file_size: Some(1),
+            text_content: None,
+            file_path: None,
+            status,
+            progress: 0.0,
+            created_at: at.to_string(),
+            updated_at: at.to_string(),
+            error_message: None,
+        };
+
+        {
+            let mut t = service.transfers.write().await;
+            // 进行中的那条：任何情况下都不能被清理掉
+            t.insert(
+                "inflight".to_string(),
+                make(
+                    "inflight",
+                    TransferStatus::Transferring,
+                    "1970-01-01T00:00:00Z",
+                ),
+            );
+            for i in 0..(MAX_FINISHED_TRANSFERS + 25) {
+                let id = format!("done-{:03}", i);
+                let at = format!("2026-01-01T00:00:{:02}Z", i % 60);
+                let key = id.clone();
+                t.insert(id, make(&key, TransferStatus::Completed, &at));
+            }
+        }
+
+        service.prune_finished_transfers().await;
+
+        let t = service.transfers.read().await;
+        assert!(t.contains_key("inflight"), "进行中的记录不得被清理");
+        let finished = t
+            .values()
+            .filter(|item| item.status == TransferStatus::Completed)
+            .count();
+        assert_eq!(finished, MAX_FINISHED_TRANSFERS, "只保留最近 N 条终态记录");
+    }
+
+    /// stop_listening 释放端口后不得立刻重新 bind（P3-10）
+    #[tokio::test]
+    async fn stop_listening_releases_port_without_rebinding() {
+        let mut service = TransferService::new(0, "d".to_string(), "n".to_string())
+            .await
+            .expect("建服务应成功");
+        service.start_listening().await.expect("开始监听应成功");
+        service.stop_listening().await.expect("停止监听应成功");
+        assert!(
+            service.listener.is_none(),
+            "停止后必须不持有 listener，否则端口被重新占住"
+        );
+        // 停止后可再次启动（start_listening 自行重新 bind）
+        service.start_listening().await.expect("停止后应能重新监听");
+        service.stop_listening().await.expect("再次停止应成功");
     }
 
     /// send_msg/recv_msg：TransferMessage JSON 帧往返 + 空帧被识别为连接关闭

@@ -133,11 +133,14 @@ CueSheetInfo parseCueFile({required String cuePath}) =>
     RustLib.instance.api.crateApiMusicPlayerParseCueFile(cuePath: cuePath);
 
 /// 获取最近播放记录
-List<PlayRecordInfo> getRecentPlayed({required int limit}) =>
+/// 异步：路径上要读 DB（索引 + 一批记录），标 sync 会把整个 Dart UI isolate
+/// 卡住——首次调用还可能要重建索引（整表读一次）。
+Future<List<PlayRecordInfo>> getRecentPlayed({required int limit}) =>
     RustLib.instance.api.crateApiMusicPlayerGetRecentPlayed(limit: limit);
 
 /// 记录播放
-PlayRecordInfo recordPlay({required String musicId}) =>
+/// 异步：每次都走一次 DB 读 + 写（还可能要裁剪播放记录表），不该占用 UI 线程。
+Future<PlayRecordInfo> recordPlay({required String musicId}) =>
     RustLib.instance.api.crateApiMusicPlayerRecordPlay(musicId: musicId);
 
 /// 获取收藏的音乐

@@ -2,7 +2,6 @@ use crate::discovery::DiscoveryService;
 use crate::transfer::TransferService;
 use crate::types::*;
 use anyhow::Result;
-use async_channel::Receiver;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -207,19 +206,9 @@ impl LanTransferManager {
         self.transfer.read().await.get_trusted_devices().await
     }
 
-    /// 获取事件接收器（发现事件）
-    pub fn get_discovery_event_receiver(&self) -> Receiver<TransferEvent> {
-        // 注意：这里需要在创建时存储receiver
-        // 暂时返回一个新的channel
-        let (_, rx) = async_channel::unbounded();
-        rx
-    }
-
-    /// 获取事件接收器（传输事件）
-    pub fn get_transfer_event_receiver(&self) -> Receiver<TransferEvent> {
-        // 注意：这里需要在创建时存储receiver
-        // 暂时返回一个新的channel
-        let (_, rx) = async_channel::unbounded();
-        rx
-    }
+    // 事件通道整套已移除：这两个 getter 原先 return 一条**全新空**的
+    // async_channel::unbounded()，没有任何地方往里发东西；Dart 侧实际靠轮询
+    // lan_transfer_get_transfers 取状态，从未消费过事件。留着它只会让下一个人
+    // 以为「调一下就能拿到事件」而白排查一遍，所以连 getter 一起删干净。
+    // 将来真要做事件推送，正确做法是在创建时把真 Receiver 存进 manager 再克隆返回。
 }

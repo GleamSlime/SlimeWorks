@@ -11,6 +11,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/src/rust/api/music_player.dart' as music_api;
 import 'package:slime_works/view_models/music_player_viewmodel.dart';
 import 'package:slime_works/pages/music_player/components/music_list_item.dart';
 import 'package:slime_works/pages/music_player/components/playlist_sidebar.dart';
@@ -26,6 +27,16 @@ import 'package:slime_works/core/widgets/app_text_field.dart';
 ///
 /// 用 getter 而不是 const：scaleW 按当前窗口宽度折算，写死 220 的话窗口缩小侧边栏也不会跟着收。
 double get _kSidebarWidth => scaleW(220);
+
+/// 播放队列里「当前曲目」的 id；下标越界或无选中返回 null。
+///
+/// 抽成顶层纯函数是因为这是列表高亮的唯一判据，而 [MusicPlayerViewModel]
+/// 的字段初始化会构造 media_kit 的 Player（测试环境里必抛），VM 实例没法在
+/// 单测里造出来——判据本身必须可独立验证。
+String? currentMusicItemId(int index, List<music_api.MusicItem> items) {
+  if (index < 0 || index >= items.length) return null;
+  return items[index].id;
+}
 
 class MusicPlayerScreen extends BasePage<MusicPlayerViewModel> {
   const MusicPlayerScreen({super.key});
@@ -274,24 +285,49 @@ class _MusicPlayerScreenState extends BasePageState<MusicPlayerViewModel, MusicP
                   itemCount: items.length,
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    final isCurrent =
-                        viewModel.currentIndex.value == viewModel.currentItems.indexOf(item);
-                    return MusicListItem(
-                      item: item,
-                      isCurrent: isCurrent,
-                      isPlaying: isCurrent && viewModel.isPlaying.value,
-                      onTap: () => viewModel.playItem(viewModel.currentItems.indexOf(item)),
-                      onFavoriteTap: () => viewModel.toggleFavorite(item.id),
-                      onDeleteTap: () => viewModel.deleteMusicItem(item.id),
-                      onTranscribeTap: () => viewModel.transcribeItem(item),
-                      onRevealTap: () => viewModel.revealInFileManager(item.filePath),
-                    );
+                    // 每行自带订阅窗口：ObxState.build 只是在 builder 调用前后
+                    // 临时设/还原 RxInterface.proxy，而 itemBuilder 是布局阶段
+                    // 被 sliver 回调的，那时 proxy 早就还原了 —— 在这里直接读 Rx
+                    // 不会注册依赖，切歌后行的样式就永远停在上一次构建的结果。
+                    return Obx(() {
+                      // 「当前曲目」按 **id** 比，不按 indexOf 的下标比：
+                      // 列表渲染的是 filteredItems（搜索过滤后的子集），
+                      // 播放队列是 currentItems，两者长度/顺序都不同。
+                      // 旧写法 `currentIndex == currentItems.indexOf(item)` 在
+                      // 找不到条目（列表刚被替换、条目已删）时左边也是 -1，
+                      // -1 == -1 就把整屏每一行都点亮了。
+                      final currentId = _currentItemId(viewModel);
+                      final isCurrent = currentId != null && currentId == item.id;
+                      return MusicListItem(
+                        item: item,
+                        isCurrent: isCurrent,
+                        isPlaying: isCurrent && viewModel.isPlaying.value,
+                        // 播放要拿 currentItems 里的下标（playItem 按队列下标取歌），
+                        // 不能用列表行号：搜索态下行号与队列下标对不上。
+                        // 放在闭包里跑，只在真点时查一次，不进每帧路径。
+                        onTap: () {
+                          final idx = viewModel.currentItems.indexWhere(
+                            (i) => i.id == item.id,
+                          );
+                          if (idx >= 0) viewModel.playItem(idx);
+                        },
+                        onFavoriteTap: () => viewModel.toggleFavorite(item.id),
+                        onDeleteTap: () => viewModel.deleteMusicItem(item.id),
+                        onTranscribeTap: () => viewModel.transcribeItem(item),
+                        onRevealTap: () => viewModel.revealInFileManager(item.filePath),
+                      );
+                    });
                   },
                 ),
         ),
       ],
     );
   }
+
+  /// 当前播放曲目的 id（无选中返回 null）。
+  /// 读 currentIndex/currentItems 会登记 Obx 依赖，所以调用方必须处在订阅窗口内。
+  String? _currentItemId(MusicPlayerViewModel vm) =>
+      currentMusicItemId(vm.currentIndex.value, vm.currentItems);
 
   Widget _buildEmptySongs(BuildContext context) {
     final m = AppTheme.metrics;

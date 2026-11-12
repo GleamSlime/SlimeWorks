@@ -151,3 +151,51 @@ Content-Type: text/html; charset=utf-8\r\n\
     assert_eq!(msg.size_bytes, raw.len() as u64);
     assert_eq!(msg.body_text, "");
 }
+/// 回归 P0-3：裸 '=' 后面跟着多字节字符时，旧实现按字符边界切 i+1..i+3
+/// 会切在 UTF-8 字符中间 panic。收信线程没有 catch_unwind，一封畸形邮件就能
+/// 让自动记账永久停摆（只能重启 App）。
+#[test]
+fn quoted_printable_keeps_bare_equals_before_multibyte_chars() {
+    // 当初真实触发崩溃的形态：金额=人民币
+    let bytes = quoted_printable_bytes("金额=人民币");
+    assert_eq!(bytes, "金额=人民币".as_bytes().to_vec(), "非 =XX 的裸 = 必须原样保留");
+
+    // 边界：= 在末尾、= 后只有一个字节
+    assert_eq!(quoted_printable_bytes("abc="), b"abc=".to_vec());
+    assert_eq!(quoted_printable_bytes("abc=中"), "abc=中".as_bytes().to_vec());
+    // 一位十六进制 + 多字节字符：两位不全是 hexdigit 就不解码
+    assert_eq!(quoted_printable_bytes("=4中"), "=4中".as_bytes().to_vec());
+    // 合法转义不被这次改动破坏（含小写十六进制）
+    assert_eq!(quoted_printable_bytes("=E9=87=91"), "金".as_bytes().to_vec());
+    assert_eq!(quoted_printable_bytes("=e9=87=91"), "金".as_bytes().to_vec());
+    assert_eq!(quoted_printable_bytes("a=3Db"), b"a=b".to_vec());
+}
+
+/// 回归 P0-3：畸形 Q 编码词不能让 decode_rfc2047 panic（主题路径走同一条解码）
+#[test]
+fn decode_rfc2047_survives_malformed_q_encoding() {
+    for bad in [
+        "=?utf-8?Q?金额=人民币?=",
+        "=?utf-8?Q?abc=?=",
+        "=?utf-8?Q?=zz?=",
+        "=?utf-8?Q??=",
+        "=?GBK?Q?=D5=DB?= 与 =?utf-8?Q?=中?=",
+        "=?utf-8?Q?=?=   =?utf-8?Q?=x?=",
+    ] {
+        // 不 panic 即可；具体输出交给解码器容错，不做逐字断言
+        let _ = decode_rfc2047(bad);
+    }
+    // 正常 Q 编码词仍然解得对
+    assert_eq!(decode_rfc2047("=?utf-8?Q?=E9=87=91=E9=A2=9D?="), "金额");
+}
+
+/// 正文路径（walk 的 quoted-printable 分支）面对裸 '=' 混排中文也要活下来
+#[test]
+fn quoted_printable_body_with_cjk_equals_does_not_panic() {
+    let raw = "Content-Type: text/html; charset=utf-8\r\n\
+Content-Transfer-Encoding: quoted-printable\r\n\
+\r\n\
+<div>金额=人民币 100 元</div>\r\n";
+    let mail = parse(raw.as_bytes());
+    assert!(mail.html.contains("金额=人民币"), "html = {}", mail.html);
+}

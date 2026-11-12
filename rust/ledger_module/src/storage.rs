@@ -2,6 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use chrono::Local;
 use lazy_static::lazy_static;
 use rusqlite::{params, params_from_iter, Connection, Row};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -57,9 +58,14 @@ pub fn init_db(db_path: &str) -> Result<()> {
         std::fs::create_dir_all(parent).context("创建账本数据库目录失败")?;
     }
     let conn = Connection::open(path).context("打开账本数据库失败")?;
+    // WAL 下 NORMAL 是安全的：事务提交时不 fsync WAL，只在 checkpoint 时落盘，
+    // 断电最坏情况是丢掉最后一个已提交事务，不会损坏数据库本身；
+    // 对比默认 FULL，逐笔提交的 fsync 开销因此消失。账本是逐笔交互场景，
+    // 宁可极端断电丢最后一笔，也不要每次点击都卡一下磁盘。
     conn.execute_batch(
         r#"
         PRAGMA journal_mode = WAL;
+        PRAGMA synchronous = NORMAL;
 
         CREATE TABLE IF NOT EXISTS accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,6 +184,9 @@ pub fn init_db(db_path: &str) -> Result<()> {
             hits INTEGER NOT NULL DEFAULT 1,
             updated_at TEXT NOT NULL
         );
+        -- 商户记忆的包含匹配要按 hits 取前 50（TxLookup::load_with），
+        -- 没有索引就是全表扫再排序；建在表之后、且 IF NOT EXISTS，老库升级时自动补上。
+        CREATE INDEX IF NOT EXISTS idx_merchant_hits ON merchant_memory(hits DESC);
         "#,
     )
     .context("初始化账本表结构失败")?;
@@ -265,7 +274,9 @@ pub fn db_dir() -> Option<PathBuf> {
 }
 
 /// 取连接引用；未初始化返回错误而不是 panic
-fn with_db<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+///
+/// 对 crate 内可见：测试要读连接级 PRAGMA（synchronous 是每连接设置，新开连接读不到）
+pub(crate) fn with_db<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
     let guard = DB_CONN.lock().unwrap();
     let conn = guard.as_ref().context("账本数据库未初始化")?;
     f(conn)
@@ -603,6 +614,156 @@ pub fn dedup_key_of(bill_date: &str, amount: f64, merchant: &str, note: &str) ->
 /// 插入一笔流水。返回新行 id；0 表示被去重键挡下（没有写入）。
 pub fn insert_transaction(tx: &Transaction) -> Result<i64> {
     with_db(|conn| {
+        let lookup = TxLookup::load_with(conn)?;
+        insert_one(conn, tx, &lookup, &now_str())
+    })
+}
+
+/// 批量插入前的内存索引：账户尾号 / 类别名 / 商户习惯 各查一次，写入时不再回表。
+///
+/// 导入一封账单动辄十几笔，逐笔 `SELECT` 账户与类别、再逐笔 commit，
+/// 在 WAL 上是十几趟 fsync。这里一次性载入 + 单事务写入。
+pub struct TxLookup {
+    accounts_by_last4: HashMap<String, i64>,
+    first_account: i64,
+    categories_by_name: HashMap<String, i64>,
+    default_expense_category: i64,
+    default_income_category: i64,
+    merchant_exact: HashMap<String, i64>,
+    merchant_fuzzy: Vec<(String, i64)>,
+}
+
+impl TxLookup {
+    /// 供调用方在批前载入（导出给 api 层用的是 [insert_transactions] 内部版本）
+    pub fn load() -> Result<TxLookup> {
+        with_db(TxLookup::load_with)
+    }
+
+    fn load_with(conn: &Connection) -> Result<TxLookup> {
+        let mut accounts_by_last4: HashMap<String, i64> = HashMap::new();
+        let mut first_account = 0i64;
+        {
+            let mut stmt = conn.prepare(
+                "SELECT id, last4 FROM accounts WHERE enabled = 1 ORDER BY sort_order ASC, id ASC",
+            )?;
+            let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?;
+            for row in rows {
+                let (id, last4) = row?;
+                if first_account == 0 {
+                    first_account = id;
+                }
+                if !last4.is_empty() {
+                    // 尾号重复时先建的优先，与 find_account_by_last4 的 LIMIT 1 口径一致
+                    accounts_by_last4.entry(last4).or_insert(id);
+                }
+            }
+        }
+
+        let mut categories_by_name: HashMap<String, i64> = HashMap::new();
+        {
+            let mut stmt = conn.prepare(
+                "SELECT id, name, direction FROM categories ORDER BY sort_order ASC, id ASC",
+            )?;
+            let rows = stmt.query_map([], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            })?;
+            for row in rows {
+                let (id, name, _direction) = row?;
+                categories_by_name.entry(name).or_insert(id);
+            }
+        }
+
+        let default_expense_category = categories_by_name
+            .get("其他支出")
+            .copied()
+            .unwrap_or(0);
+        let default_income_category = categories_by_name
+            .get("退款退货")
+            .copied()
+            .unwrap_or(default_expense_category);
+
+        let mut merchant_exact: HashMap<String, i64> = HashMap::new();
+        let mut merchant_fuzzy: Vec<(String, i64)> = Vec::new();
+        {
+            let mut stmt = conn.prepare(
+                "SELECT merchant_key, category_id, hits FROM merchant_memory ORDER BY hits DESC LIMIT 200",
+            )?;
+            let rows = stmt.query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            })?;
+            for row in rows {
+                let (key, cid, _hits) = row?;
+                merchant_exact.insert(key.clone(), cid);
+                // 包含匹配只认长度 >= 4 的键，与旧实现一致（太短的键会命中一切）
+                if key.chars().count() >= 4 && merchant_fuzzy.len() < 50 {
+                    merchant_fuzzy.push((key, cid));
+                }
+            }
+        }
+
+        Ok(TxLookup {
+            accounts_by_last4,
+            first_account,
+            categories_by_name,
+            default_expense_category,
+            default_income_category,
+            merchant_exact,
+            merchant_fuzzy,
+        })
+    }
+
+    /// 卡片尾号 → 账户；对不上用规则默认账户；再没有就用第一个账户
+    pub fn account_for(&self, card_tail: &str, rule_default: i64) -> Result<i64, String> {
+        if let Some(id) = self.accounts_by_last4.get(card_tail) {
+            return Ok(*id);
+        }
+        if rule_default > 0 {
+            return Ok(rule_default);
+        }
+        if self.first_account > 0 {
+            return Ok(self.first_account);
+        }
+        Err("还没有任何账户，请先新建一个账户".to_string())
+    }
+
+    /// 方向对应的默认类别（收入退款退货 / 支出其他支出）
+    pub fn default_category_for(&self, direction: &str) -> i64 {
+        if direction == DIRECTION_INCOME {
+            self.default_income_category
+        } else {
+            self.default_expense_category
+        }
+    }
+
+    /// 历史习惯：先精确、再按包含（与旧的逐笔回表实现同口径）
+    pub fn guess_category(&self, merchant: &str) -> Option<i64> {
+        if let Some(cid) = self.merchant_exact.get(merchant) {
+            return Some(*cid);
+        }
+        for (key, cid) in &self.merchant_fuzzy {
+            if merchant.contains(key.as_str()) || key.contains(merchant) {
+                return Some(*cid);
+            }
+        }
+        None
+    }
+
+    /// 名称 → 类别 id（导出给 api 层做默认类别解析）
+    pub fn category_id_of(&self, name: &str) -> i64 {
+        self.categories_by_name.get(name).copied().unwrap_or(0)
+    }
+}
+
+/// 单笔写入（索引已载入）：补全缺失字段 → 猜类别 → INSERT OR IGNORE
+fn insert_one(conn: &Connection, tx: &Transaction, lookup: &TxLookup, stamp: &str) -> Result<i64> {
         let mut tx = tx.clone();
         if tx.dedup_key.is_empty() {
             tx.dedup_key = dedup_key_of(&tx.bill_date, tx.amount, &tx.merchant, &tx.note);
@@ -615,14 +776,13 @@ pub fn insert_transaction(tx: &Transaction) -> Result<i64> {
         }
         if tx.category_id == 0 && !tx.merchant.is_empty() {
             // 没指定类别时按历史习惯猜一次，猜不中就落"其他支出"
-            let guessed = lookup_merchant_category(conn, &tx.merchant)?.unwrap_or_default();
+            let guessed = lookup.guess_category(&tx.merchant).unwrap_or(0);
             tx.category_id = if guessed > 0 {
                 guessed
             } else {
-                resolve_category_id(conn, "其他支出")
+                lookup.default_expense_category
             };
         }
-        let stamp = now_str();
         let affected = conn.execute(
             "INSERT OR IGNORE INTO transactions \
              (occurred_at, bill_date, direction, amount, currency, account_id, category_id, merchant, note, \
@@ -652,33 +812,35 @@ pub fn insert_transaction(tx: &Transaction) -> Result<i64> {
         } else {
             Ok(0)
         }
+}
+
+/// 批量写入：一次载入索引 + 单事务提交。
+///
+/// 返回 (新增条数, 被去重挡下的条数)。任一笔 SQL 出错整个事务回滚——
+/// 一封账单的十几笔要么全进要么全不进，半截入账比不入账更难收拾。
+pub fn insert_transactions(txs: &[Transaction]) -> Result<(i64, i64)> {
+    if txs.is_empty() {
+        return Ok((0, 0));
+    }
+    with_db(|conn| {
+        let lookup = TxLookup::load_with(conn)?;
+        let stamp = now_str();
+        let tx = conn.unchecked_transaction()?;
+        let mut inserted = 0i64;
+        let mut skipped = 0i64;
+        for item in txs {
+            let id = insert_one(conn, item, &lookup, &stamp)?;
+            if id > 0 {
+                inserted += 1;
+            } else {
+                skipped += 1;
+            }
+        }
+        tx.commit()?;
+        Ok((inserted, skipped))
     })
 }
 
-/// 记账习惯记忆：按商户名取类别（先精确后包含）
-fn lookup_merchant_category(conn: &Connection, merchant: &str) -> Result<Option<i64>> {
-    let exact: Option<i64> = conn
-        .query_row(
-            "SELECT category_id FROM merchant_memory WHERE merchant_key = ?1",
-            params![merchant],
-            |r| r.get(0),
-        )
-        .ok();
-    if exact.is_some() {
-        return Ok(exact);
-    }
-    let mut stmt = conn.prepare(
-        "SELECT merchant_key, category_id FROM merchant_memory WHERE length(merchant_key) >= 4 ORDER BY hits DESC LIMIT 50",
-    )?;
-    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
-    for row in rows {
-        let (key, cid) = row?;
-        if merchant.contains(&key) || key.contains(merchant) {
-            return Ok(Some(cid));
-        }
-    }
-    Ok(None)
-}
 
 /// 用户在待确认队列里改了类别，就记住这个商户的归类
 pub fn remember_merchant(merchant: &str, category_id: i64) -> Result<()> {

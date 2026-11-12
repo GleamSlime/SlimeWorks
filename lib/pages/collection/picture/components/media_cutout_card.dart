@@ -680,6 +680,17 @@ class _MediaCardCoverState extends State<MediaCardCover> {
     super.dispose();
   }
 
+  /// 远程封面解码上限：布局宽 × dpr；布局还没量出来（首帧）时退回配置档位。
+  int? _remoteDecodeWidth(MediaPrefsService? prefs, double layoutWidth, double dpr) {
+    if (layoutWidth.isFinite && layoutWidth > 0) {
+      final px = (layoutWidth * dpr).round();
+      // 夹一个下限：超窄格子算出来只有几十像素，封面会糊成一片色块
+      return px < 96 ? 96 : px;
+    }
+    final fallback = prefs?.effectiveRemoteCoverWidth ?? 0;
+    return fallback > 0 ? fallback : null;
+  }
+
   /// 远程封面加载失败后按 0.6s、1.2s、2.4s 退避重试，并清掉失败的图片缓存。
   void _scheduleRetry(ImageProvider provider) {
     if (_retryCount >= _kMaxRetries) return;
@@ -731,13 +742,57 @@ class _MediaCardCoverState extends State<MediaCardCover> {
     // 伪封面：整张换成设置里指定的那张无害图片，不糊也不加锁角标，优先于隐私模糊
     if (fakeCover) return const FakeCover();
 
+    // 远程源也要给解码上限：节点 URL 没带 width 时（兜底原图、或清晰度设成原图档）
+    // 会返回原尺寸字节，不设 cacheWidth 就是整张 4K 解码进内存。
+    // 拿布局宽度 × devicePixelRatio 作上限——比屏幕上真有多少像素多一点，
+    // 既不会糊也不会为看不见的像素付内存。
     final isHttp = src.startsWith('http');
-    final cacheWidth = isHttp
-        ? null
-        : () {
-            final w = prefs?.localPreviewWidth.value ?? 480;
-            return w > 0 ? w : null;
-          }();
+    final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
+    // 远程源的解码上限要按格子实际宽度算，而宽度只有在布局阶段才知道：
+    // 用 LayoutBuilder 把子节点建在布局约束里，坏处是多一层，好处是首帧就是准的。
+    if (isHttp) {
+      return LayoutBuilder(
+        builder: (layoutContext, constraints) {
+          final w = constraints.hasBoundedWidth ? constraints.maxWidth : 0.0;
+          return _buildImage(
+            context,
+            s,
+            prefs,
+            src,
+            isHttp: true,
+            cacheWidth: _remoteDecodeWidth(prefs, w, dpr),
+            privacyOn: privacyOn,
+            loading: loading,
+            broken: broken,
+          );
+        },
+      );
+    }
+    final localWidth = prefs?.localPreviewWidth.value ?? 480;
+    return _buildImage(
+      context,
+      s,
+      prefs,
+      src,
+      isHttp: false,
+      cacheWidth: localWidth > 0 ? localWidth : null,
+      privacyOn: privacyOn,
+      loading: loading,
+      broken: broken,
+    );
+  }
+
+  Widget _buildImage(
+    BuildContext context,
+    AppSemantic s,
+    MediaPrefsService? prefs,
+    String src, {
+    required bool isHttp,
+    required int? cacheWidth,
+    required bool privacyOn,
+    required Widget loading,
+    required Widget broken,
+  }) {
     // 封面与 debug 徽标共用同一个 provider，徽标才不会触发第二次下载/解码
     final provider = ResizeImage.resizeIfNeeded(
       cacheWidth,

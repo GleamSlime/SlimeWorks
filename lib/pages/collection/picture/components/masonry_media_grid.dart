@@ -262,9 +262,12 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
       key: tileKey,
       item: item,
       source: source,
+      // 兜底 URL 也带缩略图宽度：不带 width 时节点直传原图，
+      // 4K 原图整张解码进缓存，慢节点下同一屏反复兜底就会把内存吃穿。
       coverFallbackSource: widget.viewModel.buildRemoteOriginalMediaSource(
         item,
         collectionId: widget.viewModel.currentCollectionId.value,
+        width: widget.viewModel.mediaPrefs.effectiveRemoteCoverWidth,
       ),
       fixedHeight: tileHeight,
       showOverlay: widget.viewModel.showMediaOverlay.value,

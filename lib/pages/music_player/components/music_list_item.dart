@@ -123,7 +123,9 @@ class MusicListItem extends StatelessWidget {
                   icon: StrokeIcons.graphicEq,
                 ),
               ];
-              // 仅本地文件可「在资源管理器打开」
+              // 仅本地文件可「在资源管理器打开」。
+              // 这里在弹菜单时才跑，一次 existsSync 可以接受；
+              // 但列表行的封面上不能这么干（每帧一次磁盘查询），见 [_buildCover]。
               final isLocal = !item.filePath.startsWith('http') && File(item.filePath).existsSync();
               if (isLocal) {
                 items.add(
@@ -155,19 +157,28 @@ class MusicListItem extends StatelessWidget {
   Widget _buildCover(BuildContext context) {
     final size = scaleW(40);
     final radius = AppTheme.metrics.radius4;
-    if (item.coverPath != null && File(item.coverPath!).existsSync()) {
-      return ClipRRect(
-        borderRadius: radius,
-        child: Image.file(
-          File(item.coverPath!),
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => _buildDefaultCover(context, size),
-        ),
-      );
+    final coverPath = item.coverPath;
+    if (coverPath == null || coverPath.isEmpty) {
+      return _buildDefaultCover(context, size);
     }
-    return _buildDefaultCover(context, size);
+    // 两处浪费一起修：
+    // 1) 不在 build 里 existsSync —— 行高密，滚动一次就是几十趟磁盘查询；
+    //    文件不在或解码失败都交给 errorBuilder 兜底，效果等价且零同步 IO。
+    // 2) 40px 的封面绝不能按原图解码——专辑封面动辄 1000px，
+    //    一屏几十行就是几十 MB 的位图，cacheWidth 钉到显示宽度即可。
+    final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
+    final decodeWidth = (size * dpr).round().clamp(1, 4096);
+    return ClipRRect(
+      borderRadius: radius,
+      child: Image.file(
+        File(coverPath),
+        width: size,
+        height: size,
+        cacheWidth: decodeWidth,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _buildDefaultCover(context, size),
+      ),
+    );
   }
 
   Widget _buildDefaultCover(BuildContext context, double size) {

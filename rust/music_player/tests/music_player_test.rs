@@ -98,6 +98,7 @@ fn test_playlist_serialization() {
         updated_at: chrono::Utc::now(),
         is_default: false,
         folder_id: None,
+        max_order: Some(41),
     };
 
     let json = serde_json::to_string(&playlist).expect("序列化失败");

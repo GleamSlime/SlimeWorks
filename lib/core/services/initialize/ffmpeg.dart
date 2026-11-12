@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:slime_works/src/rust/api/ffmpeg.dart';
@@ -251,7 +252,7 @@ class RustFFmpeg {
       final result = await Process.run(
         Platform.isWindows ? 'powershell' : 'curl',
         Platform.isWindows
-            ? ['-Command', 'Invoke-WebRequest -Uri "$url" -OutFile "$targetPath"-UseBasicParsing']
+            ? ['-Command', buildProbePowershellCommand(url: url, targetPath: targetPath)]
             : ['-L', '-o', targetPath, url],
       );
       if (result.exitCode == 0 && File(targetPath).existsSync()) {
@@ -265,5 +266,19 @@ class RustFFmpeg {
     } catch (e) {
       _logger.error('[FFmpeg] ❌ ffprobe 下载异常: $e');
     }
+  }
+
+  /// 组装 Windows 下下载 ffprobe 的 PowerShell 命令串。
+  ///
+  /// 参数之间必须有空格：旧实现是 `-OutFile "$targetPath"-UseBasicParsing`，
+  /// PowerShell 会把 `-UseBasicParsing` 当成路径的一部分拼进去，命令必然失败，
+  /// 于是 ffprobe 永远下不下来（Windows 上视频元数据/缩略图整条链路不可用）。
+  /// 抽成独立方法是为了让单测能直接断言命令串，不必真的起 PowerShell。
+  @visibleForTesting
+  static String buildProbePowershellCommand({
+    required String url,
+    required String targetPath,
+  }) {
+    return 'Invoke-WebRequest -Uri "$url" -OutFile "$targetPath" -UseBasicParsing';
   }
 }

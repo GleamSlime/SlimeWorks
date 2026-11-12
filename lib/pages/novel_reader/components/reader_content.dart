@@ -29,6 +29,12 @@ extension StringOccurrences on String {
   }
 }
 
+/// 是否把嵌入 HTML 的标签统计写进日志（默认关）。
+///
+/// 这类统计要在 build 里扫整章 HTML，release 版也没法省；平时零开销，
+/// 只有正文换行/段落看着不对时临时改成 true 排查。
+const bool _kLogHtmlDebugStats = false;
+
 /// 阅读内容区域组件
 class ReaderContent extends StatefulWidget {
   final NovelReaderViewModel controller;
@@ -734,32 +740,11 @@ class _ReaderContentState extends State<ReaderContent> {
                         return _buildHighlightedText(plain, context);
                       }
 
-                      // Debug: 统计嵌入 HTML 中的段落/换行标签数量，帮助定位为何没有换行
-                      try {
-                        final pOpen = RegExp(
-                          r'<p\b',
-                          caseSensitive: false,
-                        ).allMatches(embeddedHtml).length;
-                        final pClose = RegExp(
-                          r'</p>',
-                          caseSensitive: false,
-                        ).allMatches(embeddedHtml).length;
-                        final brs = RegExp(
-                          r'<br\b',
-                          caseSensitive: false,
-                        ).allMatches(embeddedHtml).length;
-                        final divs = RegExp(
-                          r'<div\b',
-                          caseSensitive: false,
-                        ).allMatches(embeddedHtml).length;
-                        _logger.info(
-                          '[Reader][HTMLDebug] tags: pOpen=$pOpen pClose=$pClose brs=$brs divs=$divs',
-                        );
-                        _logger.info(
-                          '[Reader][HTMLDebug] sample=${embeddedHtml.substring(0, embeddedHtml.length.clamp(0, 800))}',
-                        );
-                      } catch (e) {
-                        _logger.error('[Reader][HTMLDebug] failed to analyze embeddedHtml: $e');
+                      // 段落/换行标签统计原先在 build 里无条件跑：4 条正则每条都要扫
+                      // 整章 HTML，release 版本同样付费。改成默认关闭的调试开关，
+                      // 只有排查「为什么没有换行」时才打开，日常渲染零开销。
+                      if (kDebugMode && _kLogHtmlDebugStats) {
+                        _logHtmlDebugStats(embeddedHtml);
                       }
 
                       return SelectionArea(
@@ -1369,6 +1354,25 @@ class _ReaderContentState extends State<ReaderContent> {
     plain = plain.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
 
     return plain;
+  }
+
+  /// 嵌入 HTML 的段落/换行标签统计（仅在 [_kLogHtmlDebugStats] 打开时调用）。
+  /// 四条正则各自整章扫描，所以必须由调用方先过开关，不能自己判断。
+  void _logHtmlDebugStats(String html) {
+    try {
+      final pOpen = RegExp(r'<p\b', caseSensitive: false).allMatches(html).length;
+      final pClose = RegExp(r'</p>', caseSensitive: false).allMatches(html).length;
+      final brs = RegExp(r'<br\b', caseSensitive: false).allMatches(html).length;
+      final divs = RegExp(r'<div\b', caseSensitive: false).allMatches(html).length;
+      _logger.info(
+        '[Reader][HTMLDebug] tags: pOpen=$pOpen pClose=$pClose brs=$brs divs=$divs',
+      );
+      _logger.info(
+        '[Reader][HTMLDebug] sample=${html.substring(0, html.length.clamp(0, 800))}',
+      );
+    } catch (e) {
+      _logger.error('[Reader][HTMLDebug] failed to analyze embeddedHtml: $e');
+    }
   }
 
   // 构建带高亮的文本

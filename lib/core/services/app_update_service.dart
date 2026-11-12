@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -73,6 +73,28 @@ class AppUpdateService {
   DateTime _lastActiveTime = DateTime.now();
   Timer? _idleCheckTimer;
 
+  /// 时钟注入口（默认 DateTime.now），单测用来快进闲置判定与退避。
+  @visibleForTesting
+  DateTime Function() nowProvider = DateTime.now;
+
+  /// 窗口是否处于聚焦状态。
+  ///
+  /// 桌面端 lifecycle 恒为 resumed（窗口一直在前台），光看 [AppLifecycleState]
+  /// 永远判不出"人是不是在操作"，必须叠加系统的实际焦点状态：窗口失焦
+  /// （切到别的 App、锁屏、最小化到托盘）才算真的闲下来。
+  /// 非桌面端没有这个信号，保持 true（交给 lifecycle 判断）。
+  bool windowFocused = true;
+
+  /// 上一次失败后的等待时长（指数退避：1min → 2 → 4 …，上限 1h）。
+  Duration _checkBackoff = Duration.zero;
+
+  /// 退避到什么时候之前不允许再自动检查。
+  DateTime? _backoffUntil;
+
+  /// 静态退避参数（单测断言用）。
+  static const Duration initialBackoff = Duration(minutes: 1);
+  static const Duration maxBackoff = Duration(hours: 1);
+
   /// 当前平台是否参与应用内更新检查（全平台弹窗；macOS/Windows 额外支持全自动安装）
   static bool get supportsUpdateCheck =>
       Platform.isMacOS || Platform.isWindows || Platform.isAndroid || Platform.isIOS;
@@ -120,7 +142,9 @@ class AppUpdateService {
   void startAutoCheck() {
     if (!supportsUpdateCheck) return;
     _idleCheckTimer?.cancel();
-    _lastActiveTime = DateTime.now();
+    _lastActiveTime = nowProvider();
+    _backoffUntil = null;
+    _checkBackoff = Duration.zero;
     _idleCheckTimer = Timer.periodic(_idlePollInterval, (_) => _maybeIdleCheck());
     _logger.info(
       '[应用更新] 已启动自动检查（闲置阈值 ${_idleThreshold.inMinutes} 分钟）',
@@ -137,23 +161,79 @@ class AppUpdateService {
   /// 由 main.dart 在 AppLifecycleState 变化时调用
   void onLifecycleStateChanged(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _lastActiveTime = DateTime.now();
+      _lastActiveTime = nowProvider();
     }
   }
 
-  /// 用户最近交互时间更新（如鼠标活动检测可调用）
+  /// 用户最近交互时间更新（鼠标/键盘/滚轮都会调，见 main.dart 的根 Listener）。
+  ///
+  /// 这个方法是「人还在用」的唯一信号：桌面端 lifecycle 恒为 resumed，
+  /// 没有它的话 _maybeIdleCheck 的五分钟闲置判定必然成立，用户正在操作时
+  /// 也会被静默装更新并重启。
   void markUserActive() {
-    _lastActiveTime = DateTime.now();
+    _lastActiveTime = nowProvider();
   }
 
-  /// 闲置检查：达到阈值且开关开启时触发一次自动检查
+  /// 窗口焦点变化（桌面端 window_manager 的 onWindowFocus/onWindowBlur 转发）。
+  ///
+  /// 失焦 = 人去看别的东西了，才算「可以静默安装」；重新聚焦按活跃处理，
+  /// 把闲置计时重置掉。
+  void onWindowFocusChanged(bool focused) {
+    windowFocused = focused;
+    if (focused) {
+      _lastActiveTime = nowProvider();
+    }
+  }
+
+  /// 当前是否满足「可以静默自动安装」：开关打开 + 闲置够久 + 窗口失焦。
+  @visibleForTesting
+  bool canAutoInstallQuietly() {
+    if (!autoUpdateEnabled.value) return false;
+    if (windowFocused) return false;
+    return nowProvider().difference(_lastActiveTime) >= _idleThreshold;
+  }
+
+  /// 下一次允许自动检查的时间点（无退避时为 null），单测断言用。
+  @visibleForTesting
+  DateTime? get backoffUntil => _backoffUntil;
+
+  /// 当前退避时长，单测断言用。
+  @visibleForTesting
+  Duration get currentBackoff => _checkBackoff;
+
+  /// 记录一次检查失败并推进指数退避：1min → 2 → 4 → … → 上限 1h。
+  @visibleForTesting
+  void registerCheckFailure() {
+    final next = _checkBackoff == Duration.zero
+        ? initialBackoff
+        : Duration(
+            milliseconds: (_checkBackoff.inMilliseconds * 2).clamp(
+              initialBackoff.inMilliseconds,
+              maxBackoff.inMilliseconds,
+            ),
+          );
+    _checkBackoff = next > maxBackoff ? maxBackoff : next;
+    _backoffUntil = nowProvider().add(_checkBackoff);
+    _logger.info('[应用更新] 检查失败，${_checkBackoff.inMinutes} 分钟后重试');
+  }
+
+  /// 闲置检查：达到阈值、开关开启、窗口失焦且不在退避期内时触发一次自动检查
   Future<void> _maybeIdleCheck() async {
     if (!autoUpdateEnabled.value || isChecking.value) return;
-    final idleDuration = DateTime.now().difference(_lastActiveTime);
+    final now = nowProvider();
+    final idleDuration = now.difference(_lastActiveTime);
     if (idleDuration < _idleThreshold) return;
+    // 失败退避：连续失败时按 1min→2→4…→1h 递增，别每分钟打一次 GitHub
+    final backoffUntil = _backoffUntil;
+    if (backoffUntil != null && now.isBefore(backoffUntil)) return;
+    // 窗口还聚焦着说明人就在旁边看着，静默重启会直接打断他——等失焦再说
+    if (windowFocused) {
+      _logger.info('[应用更新] 已闲置但窗口仍聚焦，暂不自动检查');
+      return;
+    }
 
     _logger.info(
-      '[应用更新] 检测到闲置 ${idleDuration.inMinutes} 分钟，开始自动检查',
+      '[应用更新] 检测到闲置 ${idleDuration.inMinutes} 分钟且窗口未聚焦，开始自动检查',
     );
     await _performCheck(showDialog: true, autoInstall: true);
   }
@@ -181,8 +261,13 @@ class AppUpdateService {
       final info = await _fetchLatestRelease();
       if (info == null) {
         _logger.info('[应用更新] 检查：无法获取 Release 信息（网络不可达或解析失败）');
+        // 自动检查失败要退避：否则每分钟一次的闲置轮询会把失败请求反复打到 GitHub
+        if (autoInstall) registerCheckFailure();
         return;
       }
+      // 拿到应答就清掉退避：失败计数只用于连续失败
+      _checkBackoff = Duration.zero;
+      _backoffUntil = null;
 
       if (!_isNewer(info)) {
         _logger.info('[应用更新] 检查：已是最新版本（远端 build=${info.remoteBuildCode ?? info.buildNumber}）');
@@ -195,7 +280,7 @@ class AppUpdateService {
       // 自动模式（macOS/Windows）：不打扰用户，下载校验后自动安装并重启
       if (autoInstall && supportsAutoInstall) {
         _logger.info('[应用更新] 自动模式：开始静默下载安装 v${info.version}');
-        await _startAutoInstall(info);
+        await _startAutoInstall(info, autoTriggered: true);
         return;
       }
 
@@ -206,6 +291,7 @@ class AppUpdateService {
       }
     } catch (e) {
       _logger.error('[应用更新] 检查更新失败: $e');
+      if (autoInstall) registerCheckFailure();
     } finally {
       isChecking.value = false;
     }
@@ -358,7 +444,10 @@ class AppUpdateService {
   // ───────────────────────── macOS / Windows 全自动安装 ─────────────────────────
 
   /// 下载安装包 → sha256 校验 → 替换/静默安装 → 自动重启，全程无人值守。
-  Future<void> _startAutoInstall(AppUpdateInfo info) async {
+  /// [autoTriggered] 为 true 表示由闲置自动检查发起（可能是用户不在电脑前）。
+  /// 这种情况在真正安装重启前还要再确认一次「人确实不在」：下载可能要几分钟，
+  /// 期间用户完全可能回来继续用，此时静默重启会直接打断他。
+  Future<void> _startAutoInstall(AppUpdateInfo info, {bool autoTriggered = false}) async {
     // 重入闸：连点按钮/自动检查与手动点击撞在一起时，只允许一份下载在跑。
     // 不拦的话两份下载会同时写 downloadProgress，进度表在两个值之间跳。
     if (autoInstallBusy.value) {
@@ -391,6 +480,19 @@ class AppUpdateService {
           downloadProgress.value = total > 0 ? received / total : null;
         },
       );
+      // 下载期间用户可能回来了：自动触发的那一路必须再确认一次，
+      // 人在就转成确认弹窗（用户主动点按钮的路径本来就已是确认后的，无需再问）
+      if (autoTriggered && !canAutoInstallQuietly()) {
+        _logger.info('[应用更新] 下载完成但用户已回来，改为弹窗确认');
+        installPhase.value = '更新已就绪，等待确认…';
+        downloadProgress.value = null;
+        autoInstallBusy.value = false;
+        final ctx = navigatorKey.currentContext;
+        if (ctx != null && ctx.mounted) {
+          _showUpdateDialog(ctx, info);
+        }
+        return;
+      }
       installPhase.value = '正在安装并重启…';
       await _installAndRelaunch(pkgPath);
       // 接力脚本已接管：等主进程退出即可，正常情况下不会走到这里

@@ -96,10 +96,41 @@ class ExtractService extends GetxService {
 
   Timer? _pollTimer;
 
+  /// 幂等初始化守卫。
+  ///
+  /// 注册方式是 GetIt.registerLazySingleton，它**不会**触发 GetxService 的 onInit，
+  /// 于是 `extractInitPasswordTable` 在生产环境从来没被调用过：密码表没绑定，
+  /// 列表恒空、addPassword 写进未初始化的库后读不回来（假成功）。
+  /// 因此不能只靠 onInit，所有公开方法入口都得先过这里；onInit 保留并复用同一入口。
+  Completer<void>? _initCompleter;
+  bool _initDone = false;
+
   @override
   void onInit() {
     super.onInit();
-    _initPasswordTable();
+    // 兼容 Get.put/Get.putAsync 这类会触发 onInit 的用法，与 _ensureInit 同一入口
+    unawaited(_ensureInit());
+  }
+
+  /// 幂等初始化：并发调用共用同一份 Completer，只真正初始化一次。
+  ///
+  /// 失败时放开守卫（_initDone 保持 false），下次调用重试——否则一次路径不可用
+  /// （如移动端拿不到沙盒目录）就会把密码表永久钉死在未初始化状态。
+  Future<void> _ensureInit() {
+    if (_initDone) return Future<void>.value();
+    final pending = _initCompleter;
+    if (pending != null) return pending.future;
+    final completer = Completer<void>();
+    _initCompleter = completer;
+    _initPasswordTable()
+        .then((ok) => _initDone = ok)
+        .whenComplete(() {
+          if (identical(_initCompleter, completer)) {
+            _initCompleter = null;
+          }
+          if (!completer.isCompleted) completer.complete();
+        });
+    return completer.future;
   }
 
   @override
@@ -108,14 +139,18 @@ class ExtractService extends GetxService {
     super.onClose();
   }
 
-  Future<void> _initPasswordTable() async {
+  /// 返回是否初始化成功：失败要能被 _ensureInit 看到，否则一次瞬时失败
+  /// （沙盒目录未就绪等）会被当成"已初始化"，密码表永远空着。
+  Future<bool> _initPasswordTable() async {
     try {
       final appDocDir = await getApplicationDocumentsDirectory();
       final dbPath = '${appDocDir.path}/slime_extract.redb';
       rust_api.extractInitPasswordTable(dbPath: dbPath);
       await _loadPasswords();
+      return true;
     } catch (e) {
       _logger.error('初始化解压密码表失败: $e');
+      return false;
     }
   }
 
@@ -139,6 +174,7 @@ class ExtractService extends GetxService {
   }
 
   Future<void> addPassword(String password, {String? remark}) async {
+    await _ensureInit();
     try {
       final json = rust_api.extractAddPassword(password: password, remark: remark);
       final map = jsonDecode(json) as Map<String, dynamic>;
@@ -156,6 +192,7 @@ class ExtractService extends GetxService {
   }
 
   Future<void> removePassword(String id) async {
+    await _ensureInit();
     try {
       rust_api.extractRemovePassword(id: id);
       passwords.removeWhere((e) => e.id == id);
@@ -165,6 +202,7 @@ class ExtractService extends GetxService {
   }
 
   Future<void> updatePasswordRemark(String id, String? remark) async {
+    await _ensureInit();
     try {
       rust_api.extractUpdatePasswordRemark(id: id, remark: remark);
       final index = passwords.indexWhere((e) => e.id == id);
@@ -183,6 +221,8 @@ class ExtractService extends GetxService {
   }
 
   Future<bool> ensurePasswordExists(String password) async {
+    // 先初始化再比对：未初始化时 passwords 恒空，会把已存在的密码重复写一遍
+    await _ensureInit();
     final exists = passwords.any((e) => e.password == password);
     if (!exists) {
       await addPassword(password);
@@ -192,6 +232,7 @@ class ExtractService extends GetxService {
   }
 
   Future<List<ArchiveInfo>> scanArchives(String dir) async {
+    await _ensureInit();
     try {
       // async FFI：扫描在 Rust 后台线程执行，不再冻结 UI isolate（审计 #9）
       final json = await rust_api.extractScanArchivesJson(dir: dir);
@@ -221,6 +262,7 @@ class ExtractService extends GetxService {
     bool deleteAfterExtract = false,
   }) async {
     if (isExtracting.value) return;
+    await _ensureInit();
 
     isExtracting.value = true;
     progress.value = const ExtractProgressInfo(status: ExtractStatus.scanning);

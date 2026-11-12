@@ -155,6 +155,9 @@ class MangaSearchViewModel extends BaseViewModel {
   Future<void> loadMore() async {
     final p = pagination.value;
     if (p == null || _currentPage >= p.pages) return;
+    // 滚动监听在一帧里会连着打好几次：没有在飞保护就会并发 _currentPage++
+    // 连发多页请求，返回顺序不定时结果集重复且乱序。
+    if (isLoadingMore.value) return;
     isLoadingMore.value = true;
     try {
       _currentPage++;

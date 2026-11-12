@@ -322,54 +322,70 @@ String highlightHtml(String html, String keyword, {int? selectedOccurrence}) {
 }
 
 /// 将本地 file:// 图片路径内联为 base64 data URL
+///
+/// 旧实现每嵌一张图都要把整个 HTML 小写化一次、再整串拼一次：N 张图就是
+/// N 次全文扫描 + N 次 O(len) 拷贝，整体 O(n²)。图片多的书里这一步要几秒。
+/// 现在改成：一趟正向扫描收集全部 `<img … src=…>` 的替换区间 → 单次
+/// StringBuffer 重建；整串只小写化一次；缺图时的目录兜底按目录惰性建一次
+/// 文件名索引复用（旧实现每张缺图都 listSync 整棵目录树）。
+///
+/// 结果与旧实现逐字节一致（tests/pages_reader_embed_images_test.dart 守着）。
 String embedLocalImages(String html) {
   final embedStart = DateTime.now();
   int embeddedCount = 0;
   int totalBytes = 0;
 
   try {
-    String out = html;
+    if (html.isEmpty) return html;
+    // 只小写化一次。注意别拿它当切片来源——索引都对应原串。
+    final lower = html.toLowerCase();
+    final repls = <_ImgSrcReplacement>[];
+    // 缺图兜底用的目录文件名索引：目录路径 → {文件名: 绝对路径}。
+    // 一层 listSync 覆盖整本书的图片，不再每张缺图各扫一遍。
+    final dirIndex = <String, Map<String, String>?>{};
     int idx = 0;
     while (true) {
-      final imgIdx = out.toLowerCase().indexOf('<img', idx);
+      final imgIdx = lower.indexOf('<img', idx);
       if (imgIdx == -1) break;
 
       const srcKey = 'src=';
-      final srcPos = out.toLowerCase().indexOf(srcKey, imgIdx);
+      final srcPos = lower.indexOf(srcKey, imgIdx);
       if (srcPos == -1) {
         idx = imgIdx + 4;
         continue;
       }
 
       int q = srcPos + srcKey.length;
-      while (q < out.length &&
-          (out[q] == ' ' || out[q] == '\t' || out[q] == '\n' || out[q] == '\r')) {
+      while (q < html.length &&
+          (html[q] == ' ' || html[q] == '\t' || html[q] == '\n' || html[q] == '\r')) {
         q++;
       }
-      if (q >= out.length) break;
-      final quote = out[q];
+      if (q >= html.length) break;
+      final quote = html[q];
       if (quote != '"' && quote != "'") {
         idx = srcPos + srcKey.length;
         continue;
       }
-      final endQuote = out.indexOf(quote, q + 1);
+      final endQuote = html.indexOf(quote, q + 1);
       if (endQuote == -1) break;
 
-      final src = out.substring(q + 1, endQuote);
+      final src = html.substring(q + 1, endQuote);
       if (src.isEmpty) {
         idx = endQuote + 1;
         continue;
       }
 
       try {
-        final lower = src.toLowerCase();
-        if (lower.startsWith('data:') || lower.startsWith('http:') || lower.startsWith('https:')) {
+        final srcLower = src.toLowerCase();
+        if (srcLower.startsWith('data:') ||
+            srcLower.startsWith('http:') ||
+            srcLower.startsWith('https:')) {
           idx = endQuote + 1;
           continue;
         }
 
         String path = '';
-        if (lower.startsWith('file:')) {
+        if (srcLower.startsWith('file:')) {
           try {
             final uri = Uri.parse(src);
             path = uri.toFilePath(windows: Platform.isWindows);
@@ -388,29 +404,27 @@ String embedLocalImages(String html) {
         File file = File(path);
         if (!file.existsSync()) {
           final baseLower = path.toLowerCase();
-          final marker = '${Platform.pathSeparator}epub_images${Platform.pathSeparator}';
+          final marker =
+              '${Platform.pathSeparator}epub_images${Platform.pathSeparator}';
           final markerIdx = baseLower.indexOf(marker);
           if (markerIdx >= 0) {
             final after = path.substring(markerIdx + marker.length);
             final parts = after.split(Platform.pathSeparator);
             if (parts.isNotEmpty) {
               final novelId = parts[0];
-              final baseDir = Directory('${path.substring(0, markerIdx + marker.length)}$novelId');
-              if (baseDir.existsSync()) {
+              final baseDirPath =
+                  '${path.substring(0, markerIdx + marker.length)}$novelId';
+              if (Directory(baseDirPath).existsSync()) {
                 final basename = path.split(Platform.pathSeparator).last;
-                try {
-                  final found = baseDir
-                      .listSync(recursive: true)
-                      .whereType<File>()
-                      .firstWhere(
-                        (f) => f.path.split(Platform.pathSeparator).last == basename,
-                        orElse: () => File(''),
-                      );
-                  if (found.path.isNotEmpty && found.existsSync()) {
-                    file = found;
-                    path = file.path;
-                  }
-                } catch (_) {}
+                final index = dirIndex.putIfAbsent(
+                  baseDirPath,
+                  () => _indexDirByBasename(Directory(baseDirPath)),
+                );
+                final found = index?[basename];
+                if (found != null && found.isNotEmpty) {
+                  file = File(found);
+                  path = found;
+                }
               }
             }
           }
@@ -425,26 +439,32 @@ String embedLocalImages(String html) {
         totalBytes += bytes.length;
         final b64 = base64Encode(bytes);
         final ext = path.contains('.') ? path.split('.').last.toLowerCase() : '';
-        final mime =
-            {
-              'png': 'image/png',
-              'jpg': 'image/jpeg',
-              'jpeg': 'image/jpeg',
-              'gif': 'image/gif',
-              'webp': 'image/webp',
-              'svg': 'image/svg+xml',
-            }[ext] ??
-            'application/octet-stream';
+        final mime = _kImageMimeByExt[ext] ?? 'application/octet-stream';
         final dataUrl = 'data:$mime;base64,$b64';
 
-        out = out.substring(0, q + 1) + dataUrl + out.substring(endQuote);
-        idx = q + 1 + dataUrl.length;
+        // 只记区间，不动字符串：这里连一次 substring 拷贝都不产生
+        repls.add(_ImgSrcReplacement(start: q + 1, end: endQuote, value: dataUrl));
         embeddedCount++;
+        // 与旧实现同样的推进：跳到本图 src 值的末尾（原文坐标里的收尾引号）
+        idx = endQuote + 1;
       } catch (e) {
         _logger.error('[Reader] Failed to embed image src="$src": $e');
         idx = endQuote + 1;
         continue;
       }
+    }
+
+    String out = html;
+    if (repls.isNotEmpty) {
+      final sb = StringBuffer();
+      int pos = 0;
+      for (final r in repls) {
+        if (r.start > pos) sb.write(html.substring(pos, r.start));
+        sb.write(r.value);
+        pos = r.end;
+      }
+      if (pos < html.length) sb.write(html.substring(pos));
+      out = sb.toString();
     }
 
     final embedMs = DateTime.now().difference(embedStart).inMilliseconds;
@@ -460,6 +480,45 @@ String embedLocalImages(String html) {
     final embedMs = DateTime.now().difference(embedStart).inMilliseconds;
     _logger.error('[Reader] embedLocalImages error after ${embedMs}ms: $e');
     return html;
+  }
+}
+
+/// <img src="…"> 里 src 值在原文中的区间（不含两侧引号）
+class _ImgSrcReplacement {
+  const _ImgSrcReplacement({
+    required this.start,
+    required this.end,
+    required this.value,
+  });
+
+  final int start;
+  final int end;
+  final String value;
+}
+
+const Map<String, String> _kImageMimeByExt = <String, String>{
+  'png': 'image/png',
+  'jpg': 'image/jpeg',
+  'jpeg': 'image/jpeg',
+  'gif': 'image/gif',
+  'webp': 'image/webp',
+  'svg': 'image/svg+xml',
+};
+
+/// 递归列一次目录，建「文件名 → 路径」索引；目录不可读时返回 null（本次不再重试）。
+///
+/// 同名文件取旧实现 firstWhere 的第一个命中，保证与旧结果一致。
+Map<String, String>? _indexDirByBasename(Directory dir) {
+  try {
+    final index = <String, String>{};
+    for (final entity in dir.listSync(recursive: true)) {
+      if (entity is! File) continue;
+      final name = entity.path.split(Platform.pathSeparator).last;
+      index.putIfAbsent(name, () => entity.path);
+    }
+    return index;
+  } catch (_) {
+    return null;
   }
 }
 

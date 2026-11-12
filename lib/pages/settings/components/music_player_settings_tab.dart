@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'package:slime_works/core/services/whisper_model_paths.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/src/rust/api/whisper.dart' as whisper_api;
@@ -27,7 +27,7 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
   double _downloadProgress = 0;
 
   /// 下载进度轮询定时器
-  _DownloadProgressTracker? _progressTracker;
+  WhisperModelDownloadTracker? _progressTracker;
 
   @override
   void initState() {
@@ -95,10 +95,12 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
     } catch (_) {}
 
     // 启动进度追踪（轮询文件大小）
-    _progressTracker = _DownloadProgressTracker(
-      presetName,
-      actualSizeBytes,
-      (progress) {
+    // Rust 侧下载改成「先写 .ggml-{preset}.bin.part，成功后 rename」：
+    // 下载期间最终名不存在，tracker 会优先读 .part，rename 完成后再按最终名判 1.0
+    _progressTracker = WhisperModelDownloadTracker(
+      presetName: presetName,
+      totalBytes: actualSizeBytes,
+      onProgress: (progress) {
         if (mounted) {
           setState(() => _downloadProgress = progress);
         }
@@ -384,48 +386,6 @@ class _MusicPlayerSettingsTabState extends State<MusicPlayerSettingsTab> {
     if (bytes == null) return '';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)}KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
-  }
-}
-
-/// 下载进度追踪器
-///
-/// 通过轮询文件大小估算下载进度
-class _DownloadProgressTracker {
-  final String presetName;
-  final int totalBytes;
-  final void Function(double progress) onProgress;
-  Timer? _timer;
-
-  _DownloadProgressTracker(this.presetName, this.totalBytes, this.onProgress);
-
-  /// 获取模型文件路径
-  String get _modelFilePath {
-    // macOS: ~/Library/Application Support/SlimeWorks/whisper_models/ggml-{preset}.bin
-    final appData = Platform.environment['APPDATA'] ??
-        '${Platform.environment['HOME']}/Library/Application Support';
-    return '$appData/SlimeWorks/whisper_models/ggml-$presetName.bin';
-  }
-
-  void start() {
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      _checkProgress();
-    });
-  }
-
-  void cancel() {
-    _timer?.cancel();
-    _timer = null;
-  }
-
-  void _checkProgress() {
-    try {
-      final file = File(_modelFilePath);
-      if (file.existsSync()) {
-        final fileSize = file.lengthSync();
-        final progress = (fileSize / totalBytes).clamp(0.0, 0.99);
-        onProgress(progress);
-      }
-    } catch (_) {}
   }
 }
 

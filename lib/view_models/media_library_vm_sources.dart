@@ -55,11 +55,15 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
     );
   }
 
-  /// 远程图片兜底原图 URL：不带缩放参数，节点直接传输原始文件。
-  /// 供缩略图 2s 超时临时充当封面使用。
+  /// 远程图片兜底 URL：缩略图 2s 超时后临时充当封面使用。
+  ///
+  /// [width] 给了就带上节点缩放参数——网格场景必须传缩略图宽度：
+  /// 不带 width 时节点直传原图，4K 原图会被整张解码进 ImageCache，
+  /// 节点越慢回退越多，内存随之爆炸。
   String? buildRemoteOriginalMediaSource(
     media_api.MediaItem item, {
     String? collectionId,
+    int? width,
   }) {
     final targetCollectionId = collectionId ?? currentCollectionId.value;
     if (targetCollectionId == null || !isRemoteCollection(targetCollectionId)) {
@@ -75,6 +79,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
     return nodeSettingsService.buildNodeMediaUrl(
       nodeId: nodeId,
       filePath: item.filePath,
+      thumbnailWidth: (width != null && width > 0) ? width : null,
     );
   }
 

@@ -11,7 +11,8 @@ import 'package:slime_works/src/rust/api/media_collection.dart'
         MediaFolder,
         MediaItem,
         SmartFolderInfo,
-        ThumbnailTaskInfo;
+        ThumbnailTaskInfo,
+        TransferOutcome;
 import 'package:slime_works/src/rust/api/media_collection.dart' as rust;
 
 export 'package:slime_works/src/rust/api/media_collection.dart'
@@ -330,6 +331,23 @@ int deleteCollectionLocalFiles({required String collectionId}) {
     return 1;
   }
   return rust.deleteCollectionLocalFiles(collectionId: collectionId);
+}
+
+/// 转移集合，同时带回成功与失败数量。
+///
+/// 旧实现只回成功数：中途失败的集合在 UI 上和"没转移"完全一样，
+/// 用户看到"成功转移 3 个"却少了一个，也无从知道有失败。
+Future<TransferOutcome> transferCollectionsWithStats({
+  required List<String> collectionIds,
+  required String targetDir,
+}) async {
+  if (MockMode.enabled) {
+    return TransferOutcome(successCount: collectionIds.length, failCount: 0);
+  }
+  return rust.transferCollectionsWithStats(
+    collectionIds: collectionIds,
+    targetDir: targetDir,
+  );
 }
 
 Future<int> transferCollections({

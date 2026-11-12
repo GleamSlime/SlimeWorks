@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart' show IOHttpClientAdapter;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:get/get.dart' hide FormData, MultipartFile;
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
@@ -1601,12 +1602,15 @@ class NodeSettingsService extends GetxService {
         // 有 HTTP 应答就说明这一路是通的（业务失败也一样），后续调用不必再试别的地址。
         _nodeAnsweredBase[node.id] = _baseUrlFromNodeCallUrl(url);
         final body = response.data ?? <String, dynamic>{};
-        _recordAppTraffic(txBytes: txBytes, rxBytes: _estimatePayloadBytes(body));
+        // 同一份响应体只估一次：这条链原来对 body 调了两次 _estimatePayloadBytes
+        // （一次给流量统计、一次给埋点），每次都深拷贝 + jsonEncode（见方法注释）
+        final rxBytes = _estimatePayloadBytes(body);
+        _recordAppTraffic(txBytes: txBytes, rxBytes: rxBytes);
         if (body['success'] == true) {
           nodeConnectivity[node.id] = true;
           nodeConnectivityError[node.id] = '';
           await _persistResolvedNodeBaseUrl(node, _baseUrlFromNodeCallUrl(url));
-          trace.end(note: 'bytes=${_estimatePayloadBytes(body)}');
+          trace.end(note: 'bytes=$rxBytes');
           return body;
         }
         throw Exception((body['error'] ?? '节点返回失败').toString());
@@ -1842,13 +1846,74 @@ class NodeSettingsService extends GetxService {
     return value.toString();
   }
 
+  /// 估算一份 JSON payload 的字节数（流量统计口径）。
+  ///
+  /// 口径已改廉价：**不再 sanitize 深拷贝、不再 jsonEncode、不再 utf8.encode**，
+  /// 直接遍历原始结构按「字符串 UTF-16 码元数 × 平均字节系数」累加。
+  /// 旧实现每调一次都要深拷贝整棵参数树（Map/List 全新建、BigInt/DateTime/
+  /// Uint8List 逐个转换）再序列化两遍，节点调用一频繁就是主 isolate 上的
+  /// 纯浪费——而这个数字本来就只是给仪表盘看的速度近似值。
+  ///
+  /// 误差说明：ASCII 平均 1.0 字节/码元、中文按 UTF-8 三字节估 2.4（含少量
+  /// ASCII 混排折中）。整数按十进制位数、布尔按 4/5 字节、容器按每项 2 字节
+  /// 开销（引号/冒号/逗号）计入。整份估算只与 payload 规模成正比，不做任何分配。
   int _estimatePayloadBytes(dynamic payload) {
     try {
-      final encoded = jsonEncode(_sanitizeJsonValue(payload));
-      return utf8.encode(encoded).length;
+      return _estimateValueBytes(payload);
     } catch (_) {
       return 0;
     }
+  }
+
+  /// 单测入口：直接量估算口径（生产方法是私有的）。
+  @visibleForTesting
+  int estimatePayloadBytesForTest(dynamic payload) => _estimatePayloadBytes(payload);
+
+  int _estimateValueBytes(dynamic value) {
+    if (value == null) return 4; // null
+    if (value is String) return _estimateStringBytes(value) + 2; // + 两侧引号
+    if (value is bool) return value ? 4 : 5;
+    if (value is num) return value.toString().length;
+    if (value is BigInt) return value.toString().length;
+    if (value is DateTime) return 26; // ISO8601 定长（含微秒与 Z）
+    if (value is Uint8List) {
+      // 二进制会被 sanitize 成 base64 上送：3 字节 → 4 个 ASCII 字符。
+      // 只认 Uint8List：普通 List<int> 是 JSON 数字数组，按数字位数算才对
+      return (value.length + 2) ~/ 3 * 4 + 2;
+    }
+    if (value is Map) {
+      var total = 2; // {} 或 []
+      value.forEach((key, inner) {
+        total += _estimateStringBytes(key.toString()) + 2 + 1; // key + 引号 + 冒号
+        total += _estimateValueBytes(inner) + 1; // 值 + 逗号
+      });
+      return total;
+    }
+    if (value is Iterable) {
+      var total = 2;
+      for (final inner in value) {
+        total += _estimateValueBytes(inner) + 1;
+      }
+      return total;
+    }
+    // Duration / 自定义对象等：上游请求体里不存在，按 toString 估
+    return _estimateStringBytes(value.toString()) + 2;
+  }
+
+  /// 字符串字节估算：非 ASCII 码元按 UTF-8 三字节算（中文 CJK 正是 3 字节）。
+  int _estimateStringBytes(String text) {
+    var ascii = 0;
+    var wide = 0;
+    for (var i = 0; i < text.length; i++) {
+      if (text.codeUnitAt(i) < 0x80) {
+        ascii++;
+      } else {
+        wide++;
+      }
+    }
+    // 宽字符按 2.4 字节/码元折中：UTF-8 下 BMP 汉字是 3 字节，但混合标点/数字
+    // 平均下来落在 2.4 附近；用整数运算避免浮点（×12/5）
+    return ascii + wide * 12 ~/ 5;
   }
 
   void _recordAppTraffic({required int txBytes, required int rxBytes}) {

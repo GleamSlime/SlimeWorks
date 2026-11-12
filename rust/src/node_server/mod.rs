@@ -294,6 +294,12 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(10)))
         .ok();
+    // 写超时同样必需：只设读超时时，对端把窗口降到 0（断网、设备休眠、
+    // 客户端不读）会让 write_all 永久阻塞在这条连接上。连接线程是每连接一条，
+    // 128 个这样的连接就把 CONNECTION 上限占满，节点等于静默停摆。
+    stream
+        .set_write_timeout(Some(std::time::Duration::from_secs(30)))
+        .ok();
 
     let peer = stream.peer_addr().ok();
     // try_clone 失败通常意味着 FD 已耗尽，安全返回即可
@@ -1114,9 +1120,16 @@ pub fn start_node_server(
         std::thread::Builder::new()
             .name("node-server-accept".into())
             .spawn(move || {
+                // accept 瞬态失败（EMFILE / ECONNABORTED / 半开连接）连续计数：
+                // 历史上这里直接 break 而 running 仍为 true，accept 线程死掉后
+                // 上层看「节点在运行」、实际没人再接受连接，只能重启 App。
+                const MAX_CONSECUTIVE_ACCEPT_ERRORS: u32 = 10;
+                let mut consecutive_errors: u32 = 0;
                 while running.load(Ordering::SeqCst) {
                     match listener.accept() {
                         Ok((mut stream, _addr)) => {
+                            // 成功一次即清零：瞬态错误必须是「连续」才算致命
+                            consecutive_errors = 0;
                             if !running.load(Ordering::SeqCst) {
                                 break;
                             }
@@ -1138,10 +1151,31 @@ pub fn start_node_server(
                                 ACTIVE_CONNECTIONS.fetch_sub(1, Ordering::Relaxed);
                             }
                         }
-                        Err(_) => {
-                            if running.load(Ordering::SeqCst) {
+                        Err(e) => {
+                            if !running.load(Ordering::SeqCst) {
+                                // 主动停止时 accept 会因 dummy 连接/关闭而报错，属正常路径
                                 break;
                             }
+                            consecutive_errors += 1;
+                            // 瞬态错误（EMFILE 句柄耗尽、ECONNABORTED 半开连接、
+                            // 对端复位）不该让节点停止服务：sleep 后重试即可。
+                            // 只有连续失败到阈值才判定为真故障，避免死循环刷日志。
+                            if consecutive_errors < MAX_CONSECUTIVE_ACCEPT_ERRORS {
+                                crate::api::logger::log_warn(&format!(
+                                    "[node-server] accept 失败(第 {} 次)，100ms 后重试: {}",
+                                    consecutive_errors, e
+                                ));
+                                std::thread::sleep(std::time::Duration::from_millis(100));
+                                continue;
+                            }
+                            // 连续失败到阈值：这条线程彻底退出，running 必须同步置 false，
+                            // 否则 is_node_server_running() 会一直报 true 而实际无人 accept。
+                            crate::api::logger::log_error(&format!(
+                                "[node-server] accept 连续失败 {} 次，停止监听: {}",
+                                consecutive_errors, e
+                            ));
+                            running.store(false, Ordering::SeqCst);
+                            break;
                         }
                     }
                 }

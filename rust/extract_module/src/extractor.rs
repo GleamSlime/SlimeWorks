@@ -87,7 +87,30 @@ fn extract_7z(archive_path: &str, output_dir: &str, password: Option<&str>) -> R
 /// 没有这个上限，一个压缩包就能写满节点磁盘。
 const MAX_EXTRACTED_BYTES: u64 = 64 * 1024 * 1024 * 1024; // 64 GiB
 
-fn extract_zip(archive_path: &str, output_dir: &str, _password: Option<&str>) -> Result<()> {
+/// 把 zip crate 的错误翻译成中文，并且把「密码错/缺密码」与「文件损坏」区分开。
+///
+/// AES 条目的密码校验分两处：打开条目时校验 2 字节验证值（→ InvalidPassword），
+/// 以及读完数据时校验 HMAC（→ Io(InvalidData)）。只映射前者会让密码错误的 AES 包
+/// 被报成「文件损坏」，用户会误以为压缩包本身坏了而反复重下。
+fn describe_zip_error(err: &zip::result::ZipError, password_given: bool) -> String {
+    match err {
+        zip::result::ZipError::InvalidPassword => "密码错误或未提供".to_string(),
+        zip::result::ZipError::UnsupportedArchive(msg)
+            if *msg == zip::result::ZipError::PASSWORD_REQUIRED =>
+        {
+            "该压缩包已加密，需要提供密码".to_string()
+        }
+        zip::result::ZipError::Io(io_err)
+            if password_given && io_err.kind() == std::io::ErrorKind::InvalidData =>
+        {
+            // HMAC 校验失败：密码错或数据被篡改，两者都按密码问题提示
+            "密码错误或未提供".to_string()
+        }
+        other => format!("压缩包读取失败: {}", other),
+    }
+}
+
+fn extract_zip(archive_path: &str, output_dir: &str, password: Option<&str>) -> Result<()> {
     let output = Path::new(output_dir);
     fs::create_dir_all(output)?;
 
@@ -96,14 +119,24 @@ fn extract_zip(archive_path: &str, output_dir: &str, _password: Option<&str>) ->
     let mut archive = zip::ZipArchive::new(BufReader::new(file))
         .with_context(|| format!("无法读取 zip 文件: {}", archive_path))?;
 
+    // 空串按「未提供密码」处理：UI 上密码框留空与不填语义相同
+    let password = password.filter(|p| !p.is_empty());
+    let password_given = password.is_some();
+
     let mut written_total: u64 = 0;
     for i in 0..archive.len() {
         if is_cancelled() {
             anyhow::bail!("用户取消");
         }
-        let mut entry = archive
-            .by_index(i)
-            .with_context(|| format!("无法读取 zip 条目 #{}", i))?;
+        // 加密条目必须走 decrypt 分支：by_index 对加密条目会返回 PASSWORD_REQUIRED
+        let opened = match password {
+            Some(pwd) => archive.by_index_decrypt(i, pwd.as_bytes()),
+            None => archive.by_index(i),
+        };
+        let mut entry = match opened {
+            Ok(entry) => entry,
+            Err(e) => return Err(anyhow::anyhow!(describe_zip_error(&e, password_given))),
+        };
         let outpath = match entry.enclosed_name() {
             Some(path) => output.join(path),
             None => continue,
@@ -118,10 +151,24 @@ fn extract_zip(archive_path: &str, output_dir: &str, _password: Option<&str>) ->
             let mut outfile = File::create(&outpath)
                 .with_context(|| format!("无法创建文件: {}", outpath.display()))?;
             // 防 zip bomb：累计写出量超限立即中止（已解出的部分由调用方清理）
-            copy_with_limit(&mut entry, &mut outfile, &mut written_total)?;
+            match copy_with_limit(&mut entry, &mut outfile, &mut written_total) {
+                Ok(_) => {}
+                // 读取期错误（AES HMAC、坏块）同样要区分密码问题与损坏
+                Err(e) => return Err(anyhow::anyhow!(describe_zip_error_anyhow(&e, password_given))),
+            }
         }
     }
     Ok(())
+}
+
+/// copy_with_limit 返回的是 anyhow 错误，这里只在能判定「密码相关」时才改写文案。
+fn describe_zip_error_anyhow(err: &anyhow::Error, password_given: bool) -> String {
+    for cause in err.chain() {
+        if let Some(zip_err) = cause.downcast_ref::<zip::result::ZipError>() {
+            return describe_zip_error(zip_err, password_given);
+        }
+    }
+    format!("{}", err)
 }
 
 
@@ -470,6 +517,8 @@ pub fn run_extract(
     let total_size: u64 = archives.iter().map(|a| a.file_size).sum();
     let mut extracted_size: u64 = 0;
     let mut failed_archives: Vec<String> = Vec::new();
+    // 首个失败原因：加密包密码错时，调用方需要看到「密码错误或未提供」而不是只有文件名
+    let mut first_failure_reason: Option<String> = None;
     let mut completed_count: u32 = 0;
 
     sw_info!(
@@ -559,6 +608,10 @@ pub fn run_extract(
             Err(e) => {
                 sw_error!("解压失败: {} - {}", archive.file_name, e);
                 failed_archives.push(archive.file_name.clone());
+                // 只留第一条原因：UI 只展示一句汇总，逐条堆叠反而看不清
+                if first_failure_reason.is_none() {
+                    first_failure_reason = Some(e.to_string());
+                }
             }
         }
 
@@ -615,11 +668,57 @@ pub fn run_extract(
         elapsed_seconds: elapsed,
         failed_archives,
         error_message: if has_failures {
-            Some(format!("{} 个压缩包解压失败", failed_count))
+            match first_failure_reason {
+                Some(reason) => Some(format!("{} 个压缩包解压失败：{}", failed_count, reason)),
+                None => Some(format!("{} 个压缩包解压失败", failed_count)),
+            }
         } else {
             None
         },
     }
+}
+
+/// 校验打包用的顶层目录名，返回去掉首尾空白的可写入版本。
+///
+/// 允许嵌套根（漫画推送恒传 `漫画名/话名` 两级），但必须**逐段**校验：
+/// 旧实现一律拒掉含 `/` 的值，导致每一章推送都在打包阶段失败。
+/// 逐段规则与 zip-slip 防护同口径——某一段是空串、`.`、`..`、带盘符冒号或反斜杠时，
+/// 拼出的条目名就可能落到目标目录之外，或根本不是合法 zip 条目名。
+fn validate_entry_root(entry_root: &str) -> Result<&str> {
+    // 末尾斜杠只是目录层级收尾，对条目名无影响，先剥掉；
+    // 前导斜杠代表绝对路径，必须原样保留下来被下面的空段规则拒掉。
+    let trimmed = entry_root.trim().trim_end_matches('/');
+    anyhow::ensure!(!trimmed.is_empty(), "压缩包顶层目录名不合法: {}", entry_root);
+    for seg in trimmed.split('/') {
+        anyhow::ensure!(
+            !seg.is_empty(),
+            "压缩包顶层目录名含空路径段: {}",
+            entry_root
+        );
+        anyhow::ensure!(
+            seg != "." && seg != "..",
+            "压缩包顶层目录名不得包含 . 或 ..: {}",
+            entry_root
+        );
+        // 反斜杠在 zip 条目名里不是分隔符，出现即说明调用方传了 Windows 路径
+        anyhow::ensure!(
+            !seg.contains('\\'),
+            "压缩包顶层目录名不得包含反斜杠: {}",
+            entry_root
+        );
+        // 盘符（C:）与 NTFS 备用流都带冒号，嵌套根里不应出现
+        anyhow::ensure!(
+            !seg.contains(':'),
+            "压缩包顶层目录名不得包含盘符或冒号: {}",
+            entry_root
+        );
+        anyhow::ensure!(
+            !seg.chars().any(|c| c.is_control()),
+            "压缩包顶层目录名不得包含控制字符: {}",
+            entry_root
+        );
+    }
+    Ok(trimmed)
 }
 
 /// 把 `src_dir` 整棵目录树打包成 zip 写入系统临时目录，返回 zip 的绝对路径。
@@ -630,12 +729,7 @@ pub fn run_extract(
 pub fn zip_directory_to_tmp(src_dir: &str, entry_root: &str) -> Result<String> {
     let root = Path::new(src_dir);
     anyhow::ensure!(root.is_dir(), "源目录不存在或不是目录: {}", src_dir);
-    let entry_root = entry_root.trim().trim_matches('/');
-    anyhow::ensure!(
-        !entry_root.is_empty() && !entry_root.contains('/') && entry_root != "..",
-        "压缩包顶层目录名不合法: {}",
-        entry_root
-    );
+    let entry_root = validate_entry_root(entry_root)?;
 
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -915,6 +1009,7 @@ mod tests {
 #[cfg(test)]
 mod zip_tests {
     use super::*;
+    use std::io::Write;
 
     /// zip_directory_to_tmp 的落盘名只带毫秒时间戳，同毫秒并发执行的两个打包
     /// 测试会互相覆盖同一个 /tmp/sw_upload_*.zip，因此所有调用点必须串行。
@@ -988,11 +1083,207 @@ mod zip_tests {
 
     #[test]
     fn zip_directory_rejects_unsafe_arguments() {
-        // 顶层名带斜杠或 .. 会把条目写到目标目录之外，必须在打包前就拒掉
+        // `..` 段、空段、盘符会分别把条目写到目标目录之外或写出不合法条目名
         assert!(zip_directory_to_tmp("/tmp", "../escape").is_err());
-        assert!(zip_directory_to_tmp("/tmp", "a/b").is_err());
+        assert!(zip_directory_to_tmp("/tmp", "a/../b").is_err());
+        assert!(zip_directory_to_tmp("/tmp", "a//b").is_err());
         assert!(zip_directory_to_tmp("/tmp", "  ").is_err());
         assert!(zip_directory_to_tmp("/nonexistent_sw_dir_xyz", "ok").is_err());
+    }
+
+    // ── entry_root 逐段校验（P1-1）────────────────────────────────────────
+
+    #[test]
+    fn entry_root_accepts_nested_root() {
+        // 漫画推送恒传「漫画名/话名」两级路径，旧实现一律拒掉 → 每章必失败
+        assert_eq!(validate_entry_root("漫画/第1话").unwrap(), "漫画/第1话");
+        // 单段仍照常可用（其他调用方兼容）
+        assert_eq!(validate_entry_root("vol01").unwrap(), "vol01");
+        // 末尾斜杠只是目录收尾，剥掉后仍合法
+        assert_eq!(validate_entry_root("漫画/第1话/").unwrap(), "漫画/第1话");
+        assert_eq!(validate_entry_root("  漫画/第1话  ").unwrap(), "漫画/第1话");
+    }
+
+    #[test]
+    fn entry_root_rejects_path_traversal_and_absolute() {
+        assert!(validate_entry_root("../evil").is_err());
+        assert!(validate_entry_root("漫画/../../evil").is_err());
+        assert!(validate_entry_root("漫画/./第1话").is_err());
+        // 前导斜杠 = 绝对路径，拆分出的首段为空，必须拒
+        assert!(validate_entry_root("/abs").is_err());
+        assert!(validate_entry_root("a//b").is_err());
+        assert_eq!(validate_entry_root("a/").unwrap(), "a", "末尾斜杠剥掉后合法");
+        // Windows 路径形态：反斜杠与盘符都不得出现在嵌套根系里
+        assert!(validate_entry_root("C:\\x").is_err());
+        assert!(validate_entry_root("a\\b").is_err());
+        assert!(validate_entry_root("C:/x").is_err());
+        assert!(validate_entry_root("").is_err());
+        assert!(validate_entry_root("   ").is_err());
+    }
+
+    // ── 加密 zip（P1-2）───────────────────────────────────────────────────
+
+    /// 造一个 AES-256 加密的 zip：extract_module 已启用 aes-crypto，
+    /// 与用户实际拿到的压缩包走同一条解密路径。
+    fn write_aes_zip(path: &Path, password: &str, entries: &[(&str, &str)]) {
+        let file = File::create(path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        for (name, content) in entries {
+            let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated)
+                .with_aes_encryption(zip::AesMode::Aes256, password);
+            writer.start_file(*name, options).unwrap();
+            writer.write_all(content.as_bytes()).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+
+    fn write_plain_zip(path: &Path, entries: &[(&str, &str)]) {
+        let file = File::create(path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        for (name, content) in entries {
+            let options: zip::write::FileOptions<'_, ()> =
+                zip::write::FileOptions::default()
+                    .compression_method(zip::CompressionMethod::Deflated);
+            writer.start_file(*name, options).unwrap();
+            writer.write_all(content.as_bytes()).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+
+    /// 密码错误经 run_extract 汇总后，UI 拿到的 error_message 必须包含「密码」，
+    /// 否则用户只会看到「1 个压缩包解压失败」而不知道要补/改密码。
+    #[test]
+    fn run_extract_surfaces_password_error_in_message() {
+        let base = tmp_base("sw_run_pw");
+        let src = base.join("src");
+        fs::create_dir_all(&src).unwrap();
+        let archive = src.join("secret.zip");
+        write_aes_zip(&archive, "正确密码", &[("a.txt", "x")]);
+
+        let config = ExtractConfig {
+            source_dir: src.to_string_lossy().into_owned(),
+            output_dir: base.join("out").to_string_lossy().into_owned(),
+            output_mode: ExtractOutputMode::FlatToOutput,
+            password: Some("错误密码".to_string()),
+            parallel_count: 1,
+            delete_after_extract: false,
+        };
+        let result = run_extract(&config, &|_| {});
+        assert!(!result.success, "密码错必须整体失败");
+        assert_eq!(result.failed_archives, vec!["secret.zip".to_string()]);
+        let msg = result.error_message.unwrap_or_default();
+        assert!(msg.contains("密码"), "汇总信息应带出密码问题, got: {msg}");
+    }
+
+    #[test]
+    fn encrypted_zip_extracts_with_correct_password() {
+        let base = tmp_base("sw_zip_pw_ok");
+        let archive = base.join("secret.zip");
+        write_aes_zip(&archive, "正确密码", &[("a.txt", "机密内容"), ("sub/b.txt", "第二层")]);
+
+        let out = base.join("out");
+        extract_archive(
+            archive.to_str().unwrap(),
+            out.to_str().unwrap(),
+            Some("正确密码"),
+            &|_| {},
+        )
+        .expect("正确密码应能解开加密 zip");
+
+        assert_eq!(
+            fs::read_to_string(out.join("a.txt")).unwrap(),
+            "机密内容"
+        );
+        assert_eq!(
+            fs::read_to_string(out.join("sub/b.txt")).unwrap(),
+            "第二层"
+        );
+    }
+
+    #[test]
+    fn encrypted_zip_reports_password_error_for_wrong_password() {
+        let base = tmp_base("sw_zip_pw_bad");
+        let archive = base.join("secret.zip");
+        write_aes_zip(&archive, "正确密码", &[("a.txt", "机密内容")]);
+
+        let out = base.join("out_bad");
+        let err = extract_archive(
+            archive.to_str().unwrap(),
+            out.to_str().unwrap(),
+            Some("错误密码"),
+            &|_| {},
+        )
+        .unwrap_err()
+        .to_string();
+        // 必须明确指向密码问题，不能报成「文件损坏」让用户反复重下
+        assert!(err.contains("密码"), "错误密码应报密码问题, got: {err}");
+        assert!(!err.contains("损坏"), "密码错不得报成损坏, got: {err}");
+    }
+
+    #[test]
+    fn encrypted_zip_without_password_reports_need_password() {
+        let base = tmp_base("sw_zip_pw_none");
+        let archive = base.join("secret.zip");
+        write_aes_zip(&archive, "正确密码", &[("a.txt", "机密内容")]);
+
+        let out = base.join("out_none");
+        let err = extract_archive(
+            archive.to_str().unwrap(),
+            out.to_str().unwrap(),
+            None,
+            &|_| {},
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("密码"), "缺密码应提示需要密码, got: {err}");
+    }
+
+    #[test]
+    fn plain_zip_still_extracts_with_password_supplied() {
+        // 用户给密码库留了密码、但压缩包其实没加密：不能因此失败
+        let base = tmp_base("sw_zip_pw_unneeded");
+        let archive = base.join("plain.zip");
+        write_plain_zip(&archive, &[("c.txt", "明文")]);
+
+        let out = base.join("out_plain");
+        extract_archive(
+            archive.to_str().unwrap(),
+            out.to_str().unwrap(),
+            Some("多余密码"),
+            &|_| {},
+        )
+        .expect("未加密包不应因多给密码而失败");
+        assert_eq!(fs::read_to_string(out.join("c.txt")).unwrap(), "明文");
+    }
+
+    /// P1-1 端到端：漫画章节推送恒传「漫画名/话名」两级根，
+    /// 打包 → 节点端解压后必须还原成 目标目录/漫画名/话名/页图。
+    #[test]
+    fn zip_directory_accepts_nested_entry_root_end_to_end() {
+        let base = tmp_base("sw_zip_nested");
+        let src = base.join("src");
+        write_file(&src.join("001.jpg"), "page-one");
+        write_file(&src.join("002.jpg"), "page-two");
+
+        let _guard = lock_zip_tmp();
+        let zip_path =
+            zip_directory_to_tmp(src.to_str().unwrap(), "漫画/第1话").expect("两级根必须允许");
+        let names = zip_entry_names(&zip_path);
+        assert!(
+            names.contains(&"漫画/第1话/001.jpg".to_string()),
+            "条目应带完整两级前缀, got: {names:?}"
+        );
+
+        // 节点端走同一条解压路径
+        let out = base.join("out");
+        extract_archive(&zip_path, out.to_str().unwrap(), None, &|_| {}).expect("解压失败");
+        assert_eq!(
+            fs::read_to_string(out.join("漫画/第1话/002.jpg")).unwrap(),
+            "page-two"
+        );
+
+        let _ = fs::remove_file(&zip_path);
     }
 
     /// 端到端字节级往返：多文件目录 → 打包 → 解压 → 逐文件内容比对。
