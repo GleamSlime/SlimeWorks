@@ -16,6 +16,14 @@ import 'package:slime_works/core/services/app_update_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  // 平台无关性：CI 的 test 任务跑在 ubuntu-latest，本机是 macOS。
+  // 这个文件曾因此只在本地绿、CI 红——两组断言各自踩了一个平台分支：
+  //  1) 注入时钟时 _lastActiveTime 的字段初值必须是 nowProvider() 而不是真实
+  //     的 DateTime.now()，否则在慢一拍的 runner 上算出差值为负、恒判不闲置；
+  //  2) startAutoCheck 的状态重置必须在 supportsUpdateCheck 平台门之前，否则
+  //     Linux 上早退、退避永远清不掉（它在这个平台上本就是空操作）。
+  // 两条都已在下面对应用例里锁定，改动前请确保在 Linux 语义下同样成立。
+
   late AppUpdateService service;
   late DateTime fakeNow;
 
@@ -85,6 +93,24 @@ void main() {
 
       service.onLifecycleStateChanged(AppLifecycleState.resumed);
       expect(service.canAutoInstallQuietly(), isFalse);
+    });
+
+    test('闲置计时初值取自注入时钟，而不是真实时钟', () {
+      // 刻意绕开 setAutoUpdateEnabled/startAutoCheck：那两条路径都会显式写
+      // _lastActiveTime，掩盖掉「字段初值」这一层。
+      // 这里的时序是关键：先在 fakeNow 时刻读一次把初值定下来（模拟"刚启动，
+      // 人就在旁边"），再快进 10 分钟。初值若走 DateTime.now()（真实时钟），
+      // 后面算出来的差值是负的，本用例必红；走 nowProvider() 才对。
+      service.autoUpdateEnabled.value = true;
+      service.onWindowFocusChanged(false);
+      expect(service.canAutoInstallQuietly(), isFalse, reason: '刚起算，不该算闲置');
+
+      advance(const Duration(minutes: 10));
+      expect(
+        service.canAutoInstallQuietly(),
+        isTrue,
+        reason: '闲置时长必须从注入时钟起算，不能混入真实时钟',
+      );
     });
 
     test('自动更新开关关闭时永不允许静默安装', () async {

@@ -70,8 +70,13 @@ class AppUpdateService {
   /// 就在两个值之间来回跳。这里在进入下载前同步置位，彻底堵住这个窗口。
   final RxBool autoInstallBusy = false.obs;
 
-  DateTime _lastActiveTime = DateTime.now();
+  /// 最近一次「人还在用」的时刻（惰性初始化：必须走 [nowProvider]，
+  /// 否则字段初值会用真实时钟，注入时钟的单测在 Linux 上算出负的闲置时长）。
+  DateTime? _lastActiveTimeValue;
   Timer? _idleCheckTimer;
+
+  DateTime get _lastActiveTime => _lastActiveTimeValue ??= nowProvider();
+  set _lastActiveTime(DateTime value) => _lastActiveTimeValue = value;
 
   /// 时钟注入口（默认 DateTime.now），单测用来快进闲置判定与退避。
   @visibleForTesting
@@ -140,11 +145,14 @@ class AppUpdateService {
 
   /// 启动自动检查：闲置达到阈值后触发一次检查
   void startAutoCheck() {
-    if (!supportsUpdateCheck) return;
+    // 状态重置放在平台门之前：这些字段描述的是「重新开始算」的语义，与当前
+    // 平台支不支持自动检查无关。放门后的话，不支持平台的 startAutoCheck 会
+    // 变成什么都不做的空操作，调用方以为已经重置、实际留着上一次的退避。
     _idleCheckTimer?.cancel();
     _lastActiveTime = nowProvider();
     _backoffUntil = null;
     _checkBackoff = Duration.zero;
+    if (!supportsUpdateCheck) return;
     _idleCheckTimer = Timer.periodic(_idlePollInterval, (_) => _maybeIdleCheck());
     _logger.info(
       '[应用更新] 已启动自动检查（闲置阈值 ${_idleThreshold.inMinutes} 分钟）',
