@@ -424,6 +424,13 @@ class MediaLibraryViewModel extends BaseViewModel {
   final remoteFolderNodeName = <String, String>{}.obs;
   final remoteFolderRawId = <String, String>{}.obs;
 
+  /// 最近一次 [refreshRemoteLibrary] 里「集合那一路失败」的节点 ID 集合。
+  ///
+  /// 该路失败时 [refreshRemoteLibrary] 沿用旧快照（不是清空），但旧快照里
+  /// 可能还留着某些集合——调用方不能把「这条集合不在列表里了」直接当成
+  /// 「节点上已经没有了」。删除节点本地文件后的判空逻辑必须查这里。
+  final remoteCollectionsStaleNodes = <String>{};
+
   /// 集合内资源列表的排序方式。
   final itemSortOrder = MediaItemSortOrder.nameAsc.obs;
 

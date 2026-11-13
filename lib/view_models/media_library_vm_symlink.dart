@@ -61,6 +61,23 @@ extension MediaLinkImportExt on MediaLibraryViewModel {
   /// 该文件夹是否是软链导入的**根**文件夹（右键菜单据此决定是否出现「重新扫描」）。
   bool isMediaLinkFolder(String folderId) => _mediaLinkRoots.containsKey(folderId);
 
+  /// 直接把 [folderId] 登记成软链根（仅供单测构造场景）。
+  ///
+  /// 生产路径一律经 [_importFolderSoftLinkSync] / [_syncMediaLinkFromDisk] 登记，
+  /// 那里要连带镜像整棵目录树；单测只关心「这个文件夹是否属于软链树」的判定，
+  /// 不该为此去造一棵真实目录。
+  @visibleForTesting
+  void debugRegisterMediaLinkRoot({
+    required String folderId,
+    required String sourcePath,
+    String? name,
+  }) {
+    _mediaLinkRoots[folderId] = {
+      'path': sourcePath,
+      'name': name ?? _linkBaseName(sourcePath),
+    };
+  }
+
   /// 软链根对应的源目录路径（非根返回 null）。
   String? mediaLinkSourcePath(String folderId) => _mediaLinkRoots[folderId]?['path'];
 

@@ -159,7 +159,19 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
   }
 
+  /// 删除文件夹。
+  ///
+  /// 三种语义按数据来源分流：
+  /// - 远程文件夹：走节点接口，节点侧默认把子文件夹提升到上一级；
+  /// - **软链树内的文件夹**：整枝删除（只删库记录，绝不删磁盘文件）。软链镜像树
+  ///   的层级是磁盘目录的映射，把子文件夹提升到上一级等于把镜像树拆成一堆散落的
+  ///   空壳，重扫时又会全部重新建出来——所以这里直接删整棵子树；
+  /// - 普通本地文件夹：保持原有语义（子文件夹提升到上一级，集合保留）。
   Future<void> deleteFolder(String folderId) async {
+    if (!isRemoteFolder(folderId) && resolveMediaLinkRoot(folderId) != null) {
+      await deleteLocalFolderSubtree(folderId);
+      return;
+    }
     final parentId = mergedFolders.firstWhereOrNull((folder) => folder.id == folderId)?.parentId;
     try {
       if (isRemoteFolder(folderId)) {
@@ -186,9 +198,17 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   }
 
   /// 删除文件夹及其内全部集合（仅删除库记录，不删除原始文件）。
-  /// 子文件夹仍按 Rust 默认行为提升到上一级。
+  /// 普通本地文件夹保持原语义：子文件夹由 Rust 默认提升到上一级。
+  ///
+  /// 软链树内的文件夹不走这里——见 [deleteFolder] / [deleteLocalFolderSubtree]：
+  /// 软链是磁盘目录的镜像树，提升子级会把镜像拆成一堆散落空壳。
   Future<void> deleteFolderWithCollections(String folderId) async {
-    final parentId = mergedFolders.firstWhereOrNull((folder) => folder.id == folderId)?.parentId;
+    if (resolveMediaLinkRoot(folderId) != null) {
+      await deleteLocalFolderSubtree(folderId);
+      return;
+    }
+    final parentId =
+        mergedFolders.firstWhereOrNull((folder) => folder.id == folderId)?.parentId;
     try {
       final collectionIds = mergedCollections
           .where((collection) => collection.folderId == folderId)
@@ -206,6 +226,51 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         currentFolderId.value = parentId;
       }
       showSnack('完成', '已删除文件夹及 ${collectionIds.length} 个集合（未删除原文件）');
+    } catch (error) {
+      showSnack('错误', '删除文件夹及集合失败: $error');
+    }
+  }
+
+  /// 删除本地文件夹整棵子树（含子孙文件夹与其中全部集合记录）。
+  ///
+  /// 只删库记录：磁盘上的原始文件一个都不动。软链本就不拷贝文件，
+  /// 「删除文件夹」在语义上就是「不再把这个目录纳入库」。
+  Future<void> deleteLocalFolderSubtree(String folderId) async {
+    final parentId =
+        mergedFolders.firstWhereOrNull((folder) => folder.id == folderId)?.parentId;
+    try {
+      // 子树要在删除前一次算清：删的过程中 mergedFolders 会被改写
+      final subtreeIds = _folderSubtreeIds(folderId);
+      final collectionIds = mergedCollections
+          .where(
+            (collection) =>
+                collection.folderId != null &&
+                subtreeIds.contains(collection.folderId),
+          )
+          .map((collection) => collection.id)
+          .toList(growable: false);
+      for (final collectionId in collectionIds) {
+        media_api.deleteMediaCollection(collectionId: collectionId);
+      }
+      // 自深到浅删文件夹：叶子先走，才不会触发「子级提升到父级」
+      final orderedFolderIds = subtreeIds.toList()
+        ..sort((a, b) => _folderDepth(b).compareTo(_folderDepth(a)));
+      for (final id in orderedFolderIds) {
+        media_api.deleteMediaFolder(folderId: id);
+      }
+      await loadFolders();
+      await loadCollections();
+      // 被删的可能是软链根：同步清掉登记表里的失效条目
+      await pruneMissingMediaLinkRoots();
+      // 当前浏览层可能正落在被删的子树里（比如在子文件夹里删了祖先）
+      final cur = currentFolderId.value;
+      if (cur != null && subtreeIds.contains(cur)) {
+        currentFolderId.value = parentId;
+      }
+      showSnack(
+        '完成',
+        '已删除文件夹及其 ${subtreeIds.length} 个子文件夹、${collectionIds.length} 个集合（未删除原文件）',
+      );
     } catch (error) {
       showSnack('错误', '删除文件夹及集合失败: $error');
     }
@@ -1695,6 +1760,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       // （两者本就可能不一致，比不上的话会被误判成「部分删除」，于是整条刷新链都不走，
       //  上一级文件夹的体积看着一动不动——这就是这个 bug 的成因）。
       await refreshRemoteLibrary();
+      // ★ 取数本身失败时，这份列表是沿用的旧快照，不能作为「删空了」的证据：
+      // 删除瞬间节点正忙于删文件，list_media_collections 超时几乎必现，
+      // 据此删除集合记录会把一个还有内容的集合连记录一起抹掉。
+      final listingStale = remoteCollectionsStaleNodes.contains(nodeId);
       final stillListed = mergedCollections.firstWhereOrNull(
         (c) => c.id == collectionId,
       );
@@ -1702,7 +1771,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
       // 旧版节点删完不改聚合表，回报的仍是删除前的条数，只能沿用删除数比对兜底
       final cleanedByCount = deleted > 0 && deleted >= knownItemCount;
 
-      if (remaining == 0 || cleanedByCount) {
+      if (!listingStale && (remaining == 0 || cleanedByCount)) {
         // 全部文件已删，清理图片缓存
         _invalidateCollectionMediaCache(collectionId);
         // 节点列表已不再回报该集合时（集合记录早没了）只清本地视图，
@@ -1724,6 +1793,13 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         } else {
           showSnack('完成', '已删除全部文件，集合已从库中移除');
         }
+      } else if (listingStale) {
+        // 文件确实删了（deleted 个），但这轮拿不到节点的最新集合列表，
+        // 因此不敢判定「删空了」：只报告删除数，集合记录保留，下次刷新自然收敛。
+        showSnack(
+          '完成',
+          '已删除节点上 $deleted 个文件；节点列表暂时取不到，暂不清理集合记录',
+        );
       } else {
         showSnack('完成', '已删除节点上 $deleted 个文件，集合还剩 $remaining 项');
       }
@@ -1862,6 +1938,23 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
 
       // 一次重取覆盖整批删除：现存体积/条数由节点改写，这里只负责把新值拉回来
       await refreshRemoteLibrary();
+      // 集合列表这轮没取到（删除期间节点忙于删文件，超时很常见）：此时列表是
+      // 沿用的旧快照，既不能据它删集合记录，也不能据它判文件夹已空。
+      final listingStale = remoteCollectionsStaleNodes.contains(nodeId);
+      if (listingStale) {
+        final totalDeleted = deletedByCollection.values.fold(
+          0,
+          (sum, count) => sum + count,
+        );
+        _logger.info(
+          '[删除节点文件] 集合列表取数失败，本轮跳过集合/文件夹清理: node=$nodeId',
+        );
+        showSnack(
+          '完成',
+          '已从节点删除 $totalDeleted 个文件；节点列表暂时取不到，暂不清理集合记录',
+        );
+        return;
+      }
       for (final collection in folderCollections) {
         final stillListed = mergedCollections.firstWhereOrNull(
           (c) => c.id == collection.id,

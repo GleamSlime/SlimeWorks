@@ -368,9 +368,11 @@ class NodeSettingsService extends GetxService {
       throw results.firstWhere((r) => r is! List) as Object;
     }
     final failed = <String>[];
+    final ok = <int>{};
     List<Map<String, dynamic>> pick(int index, String name) {
       final r = results[index];
       if (r is List) {
+        ok.add(index);
         return r.map((e) => Map<String, dynamic>.from(e as Map)).toList(growable: false);
       }
       failed.add('$name: $r');
@@ -382,7 +384,9 @@ class NodeSettingsService extends GetxService {
       collections: pick(1, '集合'),
       smartFolders: pick(2, '智能文件夹'),
       takenAt: DateTime.now(),
-      complete: failed.isEmpty,
+      foldersOk: ok.contains(0),
+      collectionsOk: ok.contains(1),
+      smartFoldersOk: ok.contains(2),
     );
     trace.end(
       note: '文件夹=${meta.folders.length} 集合=${meta.collections.length}'

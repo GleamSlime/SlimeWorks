@@ -1014,6 +1014,42 @@ mixin PictureScreenDialogs
       return;
     }
 
+    // 软链树内的文件夹：整枝删除（含全部子孙文件夹与集合记录），绝不触磁盘文件。
+    // 与普通本地文件夹分开确认文案：这里的语义不是「集合移到上一级」，
+    // 而是「整个镜像子树一起从库里消失」，用户点之前必须知道差别。
+    if (viewModel.resolveMediaLinkRoot(folderId) != null) {
+      final isRoot = viewModel.isMediaLinkFolder(folderId);
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('删除软链文件夹'),
+            content: Text(
+              '确定删除“$title”吗？\n\n'
+              '将把该文件夹及其全部子文件夹、其中所有集合一起从媒体库移除'
+              '（整棵子树，不会把子文件夹提升到上一级）。\n'
+              '源目录里的原始文件不会被删除'
+              '${isRoot ? '，但「重新扫描」的源路径登记会一并清除' : ''}。',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppSemantic.of(context).danger.color,
+                ),
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await viewModel.deleteLocalFolderSubtree(folderId);
+                },
+                child: const Text('删除整棵子树'),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
     // 文件夹内没有任何集合：不弹窗直接删除
     if (viewModel.collectionCountInFolder(folderId) == 0) {
       await viewModel.deleteFolder(folderId);

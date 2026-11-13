@@ -66,6 +66,16 @@ class _StubNodeSettingsService extends NodeSettingsService {
   final List<String> deletedCollectionRawIds = <String>[];
   final List<String> deletedFolderRawIds = <String>[];
 
+  /// 让「集合」那一路取数抛错（模拟删除期间节点忙于删文件、list_media_collections 超时）。
+  ///
+  /// 这是「删除节点本地文件后列表整片清空、要重启才恢复」的现场：
+  /// 失败的那一路在 NodeMediaMetadata 里只是一份空列表，旧代码照单 assignAll，
+  /// 该节点的远程集合就被清成 0 条。
+  bool failCollectionsFetch = false;
+
+  /// 让三路全部取数抛错（模拟整个节点不可达）。
+  bool failAllMetadataFetch = false;
+
   // ── 缩略图进度轮询的桩数据 ────────────────────────────────────────────────
 
   /// callNodeAction 的调用轨迹（nodeId:action），断言死节点不被打接口。
@@ -146,6 +156,7 @@ class _StubNodeSettingsService extends NodeSettingsService {
   Future<List<Map<String, dynamic>>> fetchNodeMediaFolders(
     NodeEndpoint node,
   ) async {
+    if (failAllMetadataFetch) throw StateError('节点文件夹取数超时');
     return mediaFoldersPayload;
   }
 
@@ -153,6 +164,9 @@ class _StubNodeSettingsService extends NodeSettingsService {
   Future<List<Map<String, dynamic>>> fetchNodeMediaCollections(
     NodeEndpoint node,
   ) async {
+    if (failAllMetadataFetch || failCollectionsFetch) {
+      throw StateError('节点集合取数超时');
+    }
     // 删过文件之后，节点上报的就是删除后的元数据（聚合表已被改写）
     return deletedLocalFileRawIds.isEmpty
         ? mediaCollectionsPayload
@@ -163,6 +177,7 @@ class _StubNodeSettingsService extends NodeSettingsService {
   Future<List<Map<String, dynamic>>> fetchNodeSmartFolders(
     NodeEndpoint node,
   ) async {
+    if (failAllMetadataFetch) throw StateError('节点智能文件夹取数超时');
     return smartFoldersPayload;
   }
 }
@@ -1794,6 +1809,193 @@ void main() {
       expect(nodeService.deletedLocalFileRawIds.toSet(), {'nc', 'nc2'});
       expect(nodeService.deletedCollectionRawIds.toSet(), {'nc', 'nc2'});
       expect(vm.folderSummary(remoteFolderId).size, BigInt.zero);
+    });
+  });
+
+  // ── 节点取数失败时不得把远程列表清空 ──────────────────────────────────────
+  //
+  // 现场：进远程节点文件夹选「删除节点本地文件」，删完回到上一级，整个列表变成空的，
+  // 必须重启 App 才恢复。
+  //
+  // 成因链：删除时节点正忙于逐个删物理文件，随后刷新元数据的那趟
+  // list_media_collections 超时；而「三路并发、各自吞错」的取数实现把失败的一路
+  // 降级成**空列表**，旧代码据此 assignAll([])，该节点的全部远程集合就此消失。
+  // 更糟的是删除流程把「列表里没有这条集合」当成「节点上已经没有了」，
+  // 顺手调 delete_media_collection 把节点侧的集合记录也真删了。
+  group('节点取数失败不清空远程列表', () {
+    const nodeFolder = {'id': 'nf', 'name': '节点文件夹'};
+    const nodeCollection = {
+      'id': 'nc',
+      'title': '节点集合',
+      'folder_id': 'nf',
+      'item_count': '3',
+      'total_size': '3000',
+    };
+    const otherCollection = {
+      'id': 'nc2',
+      'title': '另一个集合',
+      'folder_id': 'nf',
+      'item_count': '2',
+      'total_size': '2000',
+    };
+    const remoteFolderId = 'remote-media-folder:node-a:nf';
+    const remoteCollectionId = 'remote-media:node-a:nc';
+
+    test('集合那一路超时：沿用上一次快照，不清空列表', () async {
+      await mountNodeAndRefresh(
+        folders: [nodeFolder],
+        collections: [nodeCollection, otherCollection],
+      );
+      expect(vm.remoteCollections.length, 2);
+
+      // 下一次刷新时集合那一路超时（文件夹/智能文件夹两路照常）
+      nodeService.failCollectionsFetch = true;
+      await vm.refreshRemoteLibrary();
+
+      expect(
+        vm.remoteCollections.length,
+        2,
+        reason: '取数失败不等于节点空了，必须沿用旧快照',
+      );
+      expect(vm.remoteCollectionsStaleNodes, contains('node-a'));
+      // 映射表也要一并留住，否则这些卡会被当成"本地集合"渲染
+      expect(vm.isRemoteCollection(remoteCollectionId), isTrue);
+      expect(vm.getRemoteRawCollectionId(remoteCollectionId), 'nc');
+      expect(vm.folderSummary(remoteFolderId).size, BigInt.from(5000));
+    });
+
+    test('整节点不可达：沿用上一次快照，不清空列表', () async {
+      await mountNodeAndRefresh(
+        folders: [nodeFolder],
+        collections: [nodeCollection],
+      );
+
+      nodeService.failAllMetadataFetch = true;
+      await vm.refreshRemoteLibrary();
+
+      expect(vm.remoteCollections.length, 1);
+      expect(vm.remoteFolders.length, 1);
+      expect(vm.isRemoteCollection(remoteCollectionId), isTrue);
+      expect(vm.folderSummary(remoteFolderId).resources, 3);
+    });
+
+    test('节点恢复取数后旧快照被真实结果替换（不会永久冻结）', () async {
+      await mountNodeAndRefresh(
+        folders: [nodeFolder],
+        collections: [nodeCollection, otherCollection],
+      );
+
+      nodeService.failCollectionsFetch = true;
+      await vm.refreshRemoteLibrary();
+      expect(vm.remoteCollections.length, 2);
+
+      // 节点恢复：这次只剩一条集合（另一条确实被外部删掉了）
+      nodeService
+        ..failCollectionsFetch = false
+        ..mediaCollectionsPayload = const [nodeCollection];
+      await vm.refreshRemoteLibrary();
+
+      expect(vm.remoteCollections.length, 1);
+      expect(vm.remoteCollectionsStaleNodes, isEmpty);
+    });
+
+    test('删除文件后集合列表取数失败：不删集合记录、不清空列表', () async {
+      await mountNodeAndRefresh(
+        folders: [nodeFolder],
+        collections: [nodeCollection, otherCollection],
+      );
+
+      // 删除动作本身成功（删了 3 个文件），但随后的元数据刷新里集合那一路超时
+      nodeService
+        ..deleteLocalFilesResult = 3
+        ..failCollectionsFetch = true;
+
+      await vm.deleteNodeLocalFilesForCollection(remoteCollectionId);
+
+      expect(
+        nodeService.deletedCollectionRawIds,
+        isEmpty,
+        reason: '列表是旧快照，不能据此判定节点上的集合已经没了',
+      );
+      expect(vm.remoteCollections.length, 2, reason: '列表不该变空');
+      expect(vm.isRemoteCollection(remoteCollectionId), isTrue);
+    });
+
+    test('文件夹级删除后集合列表取数失败：同样不删集合记录、不删文件夹', () async {
+      await mountNodeAndRefresh(
+        folders: [nodeFolder],
+        collections: [nodeCollection, otherCollection],
+      );
+
+      nodeService
+        ..deleteLocalFilesResult = 3
+        ..failCollectionsFetch = true;
+
+      await vm.deleteNodeLocalFilesForFolder(remoteFolderId);
+
+      expect(nodeService.deletedCollectionRawIds, isEmpty);
+      expect(nodeService.deletedFolderRawIds, isEmpty, reason: '判空不可信，不能删文件夹');
+      expect(vm.remoteCollections.length, 2);
+    });
+  });
+
+  // ── 软链文件夹：删除整棵子树而不是提升子级 ────────────────────────────────
+  //
+  // 现场：删掉一个「原路径软链」导入的文件夹后，它下面那几十个镜像子文件夹
+  // 全部跑到上一级原地留着——因为 Rust delete_media_folder 的默认语义是
+  // 「子文件夹提升到父级」。软链树是磁盘目录的镜像，删它就该整枝消失。
+  group('软链文件夹整枝删除', () {
+    test('resolveMediaLinkRoot 能沿父链认出软链树内的任意层级', () {
+      vm.folders.assignAll([
+        folder('link-root', name: '画集源目录'),
+        folder('link-child', name: '2024', parentId: 'link-root'),
+        folder('link-grand', name: '春季', parentId: 'link-child'),
+        folder('plain', name: '普通文件夹'),
+      ]);
+      vm.debugRegisterMediaLinkRoot(
+        folderId: 'link-root',
+        sourcePath: '/Volumes/T22/SW/画集',
+      );
+
+      expect(vm.resolveMediaLinkRoot('link-root'), 'link-root');
+      expect(vm.resolveMediaLinkRoot('link-child'), 'link-root');
+      expect(vm.resolveMediaLinkRoot('link-grand'), 'link-root');
+      expect(vm.resolveMediaLinkRoot('plain'), isNull);
+      expect(vm.resolveMediaLinkRoot(null), isNull);
+      expect(vm.isMediaLinkFolder('link-root'), isTrue);
+      expect(vm.isMediaLinkFolder('link-child'), isFalse);
+    });
+
+    test('删除软链树内任意一层都以「整枝」语义走，不提升子级', () async {
+      // FFI 不可用时 deleteLocalFolderSubtree 内部会兜住异常；
+      // 这里只断言分流判断本身：软链树内的文件夹不该走 Rust 的默认提升语义。
+      vm.folders.assignAll([
+        folder('link-root', name: '画集源目录'),
+        folder('link-child', name: '2024', parentId: 'link-root'),
+      ]);
+      vm.debugRegisterMediaLinkRoot(
+        folderId: 'link-root',
+        sourcePath: '/Volumes/T22/SW/画集',
+      );
+
+      expect(vm.resolveMediaLinkRoot('link-child'), 'link-root');
+      // 普通文件夹不受影响
+      vm.folders.add(folder('plain', name: '普通文件夹'));
+      expect(vm.resolveMediaLinkRoot('plain'), isNull);
+    });
+
+    test('软链登记清理与识别：删掉根后识别失效', () async {
+      vm.folders.assignAll([folder('link-root', name: '画集源目录')]);
+      vm.debugRegisterMediaLinkRoot(
+        folderId: 'link-root',
+        sourcePath: '/Volumes/T22/SW/画集',
+      );
+      expect(vm.isMediaLinkFolder('link-root'), isTrue);
+
+      vm.folders.clear();
+      await vm.pruneMissingMediaLinkRoots();
+      expect(vm.isMediaLinkFolder('link-root'), isFalse);
+      expect(vm.resolveMediaLinkRoot('link-root'), isNull);
     });
   });
 
