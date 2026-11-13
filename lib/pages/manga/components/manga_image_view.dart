@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/manga_service.dart';
 import 'package:slime_works/pages/manga/models/manga_models.dart';

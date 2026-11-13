@@ -1,6 +1,6 @@
 import 'package:flutter/scheduler.dart' show Ticker;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../kit.dart';
 

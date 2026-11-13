@@ -4,7 +4,7 @@ import 'dart:ui' show ImageFilter, TileMode;
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path_drawing/path_drawing.dart';
 
 import '../kit.dart';

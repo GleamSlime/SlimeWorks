@@ -33,6 +33,10 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  # 3.50 起 SDK 内置 material/cupertino 弃用，迁移到独立演进的设计包
+  material_ui: ^1.11.0
+  cupertino_ui: ^1.1.6
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   # cupertino_icons: ^1.0.8
@@ -133,6 +137,10 @@ dev_dependencies:
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
+  flutter_secure_storage_platform_interface: any
+  path_provider_platform_interface: any
+  fake_async: any
+  connectivity_plus_platform_interface: any
 flutter:
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' show MouseRegion, Offset, SystemMouseCursors;
+import 'package:material_ui/material_ui.dart' show MouseRegion, Offset, SystemMouseCursors;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:slime_works/pages/motion_lab/cases/motion_lab_cases.dart';

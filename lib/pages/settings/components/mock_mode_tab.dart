@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/mock/mock_mode.dart';
 

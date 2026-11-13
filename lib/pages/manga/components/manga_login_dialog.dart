@@ -1,6 +1,6 @@
 // Manga 登录对话框组件
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/manga_error_text.dart';
 import 'package:slime_works/core/services/manga_service.dart';

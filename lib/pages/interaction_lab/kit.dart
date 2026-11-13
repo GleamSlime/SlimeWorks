@@ -18,7 +18,7 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:path_drawing/path_drawing.dart';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 参考稿的浅色盘（`:root` 的 `--*` 原值，`[data-theme=light]` 生效档）
 abstract final class IlColor {

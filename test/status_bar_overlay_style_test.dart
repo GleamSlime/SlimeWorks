@@ -7,7 +7,7 @@
 // 修复：把状态栏配色钉进 AppBarTheme，随主题明暗切换。这条约束由本文件守住。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

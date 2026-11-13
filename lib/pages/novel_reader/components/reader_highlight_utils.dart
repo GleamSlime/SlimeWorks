@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:slime_works/core/utils/logger.dart';
 

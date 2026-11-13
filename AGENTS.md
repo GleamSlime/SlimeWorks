@@ -1,6 +1,8 @@
-# SlimeWorks Code Wiki（精简版）
+# SlimeWorks Agent 指南
 
-> 跨平台数字内容管理工坊 | Flutter 3.41 + Rust 1.92 | 桌面端 + 移动端
+> 跨平台数字内容管理工坊 | Flutter（UI）+ Rust（逻辑）| 桌面端 + 移动端
+> 本文件只放**不随环境/版本变化的稳定约定**，保持精简以减少上下文缓存失效。
+> 环境与构建细节见 [docs/dev-environment.md](docs/dev-environment.md)；模块导航与架构速查见 [docs/README.md](docs/README.md)。
 
 ---
 
@@ -12,211 +14,51 @@
 - 动态加载模块（capture_proxy 等）**仅桌面端可用**
 - 移动端兼容：Rust 功能无法在移动端实现时，通过 HTTP 请求节点服务器中转
 
----
+## 技术栈
 
-## 技术栈速查
+UI：Flutter/Dart、GetX、GoRouter、ScreenUtil ｜ FFI：flutter_rust_bridge ｜ Rust：tokio、hyper、redb、rusqlite、serde、reqwest、libloading ｜ 存储：redb(KV)、SQLite、SharedPreferences
 
-| 层 | 技术 |
-|----|------|
-| UI | Flutter/Dart, GetX, GoRouter, ScreenUtil |
-| FFI | flutter_rust_bridge 2.11.1 |
-| Rust | tokio, hyper, redb, rusqlite, serde, reqwest, libloading |
-| 存储 | redb(KV), SQLite, SharedPreferences |
+具体版本号以 `pubspec.yaml` 与 CI 的 `FLUTTER_VERSION` 为准，不在本文件硬编码。
 
----
+## 目录速览
 
-## 目录结构（核心）
-
-```
-lib/
-├── main.dart                 # 入口（初始化链：AppInfo→GetIt→FRB→Services→Theme→runApp）
-├── core/
-│   ├── routes/               # GoRouter 路由（模块化 part 文件 + RoleManager 权限守卫）
-│   ├── services/             # 业务 Service 层（GetIt 单例）
-│   │   ├── node/             # 节点服务（本地/远程节点、熔断、流量统计）
-│   │   └── ollama/           # AI 翻译服务
-│   ├── theme/                # AppTheme.metrics / DarkColors / LightColors / AppTextStyles
-│   ├── utils/                # size_utils(scaleW/isDesktop/isMobile), Loggers
-│   ├── viewmodels/           # BaseViewModel + BasePage 基类
-│   └── widgets/              # 通用 Widget
-├── components/               # window/buttons/dialogs/dropdown/animations
-├── pages/                    # 页面模块（_screen.dart 结尾，继承 BasePage）
-├── view_models/              # ViewModel 层（继承 BaseViewModel）
-└── src/rust/                 # FRB 自动生成（勿改）
-
-rust/
-├── src/                      # 主库（api/ 转发各子模块 + node_server/）
-│   ├── api/                  # FRB 绑定入口
-│   └── node_server/          # HTTP 服务器（mod.rs/router.rs/handlers.rs/media_handler.rs）
-├── db_module/                # redb KV 数据库（基础层，无依赖）
-├── media_collection/         # 媒体集合 → 依赖 db_module
-├── novel_reader/             # 小说阅读器 → 依赖 db_module + http_bridge
-├── game_library/             # 游戏库（自建 SQLite，无内部依赖）
-├── manga_module/            # Manga 漫画 API（无内部依赖）
-├── lan_transfer/             # 局域网传输 mDNS+TCP（无内部依赖）
-├── extract_module/           # 解压工具 → 依赖 db_module
-├── sentry_log/               # Sentry 日志（自建 redb，无内部依赖）
-├── http_bridge/              # HTTP 桥接（移动端中转，无内部依赖）
-├── ws_module/                # WebSocket（条件编译，无内部依赖）
-├── module_manager/           # 模块管理/动态加载（无内部依赖）
-├── email_module/             # 邮件协议层 IMAP/POP3/SMTP+MIME，TLS 强制（无内部依赖）
-├── ledger_module/            # 流水账（自建 SQLite + 账单模板解析 + 收信调度）→ 依赖 email_module
-└── capture_proxy/            # 抓包代理（cdylib 动态库，仅桌面端）
-```
+- `lib/`：`pages/`（页面模块）、`view_models/`、`core/`（routes/services/theme/utils/viewmodels/widgets）、`components/`、`src/rust/`（FRB 自动生成，**勿改**）
+- `rust/`：`src/`（主库 api/ + node_server/）+ 各业务子模块 crate
+- 完整目录树、Rust 模块依赖图、服务层/ViewModel 速查、Node Server 路由：见 [docs/README.md](docs/README.md)
 
 ---
 
-## Rust 模块依赖图
+## 开发规范
 
-```
-基础层（无内部依赖）: db_module, http_bridge, lan_transfer, ws_module,
-                      manga_module, sentry_log, game_library, module_manager, capture_proxy,
-                      email_module
-
-业务层:  media_collection → db_module
-         novel_reader → db_module + http_bridge
-         extract_module → db_module
-         ledger_module → email_module
-
-聚合层:  rust_lib_slime_works → 所有子模块
-```
-
----
-
-## 服务层速查
-
-| 服务 | 职责 | 依赖 |
-|------|------|------|
-| `MangaService` | 漫画认证/浏览/搜索/收藏/7种分流 | Rust FFI |
-| `MangaDownloadService` | 下载队列/进度/离线路径 | MangaService |
-| `GameLibraryService` | 游戏 CRUD/分类/统计 | MetadataApi → Rust FFI |
-| `GameProcessTracker` | 进程追踪/时长记录 | GameLibraryService |
-| `GameLibraryMetadataApi` | Steam/VNDB/Bangumi 元数据聚合 | HTTP |
-| `LanTransferService` | 设备发现/文件传输/信任管理 | Rust FFI |
-| `NodeSettingsService` | 节点管理/熔断/流量统计 | Rust FFI |
-| `ExtractService` | 解压/密码库/进度轮询 | Rust FFI |
-| `OllamaService` | AI 翻译/多服务器轮询/流式生成 | HTTP |
-| `SentrySettingsService` | Sentry 配置/远程日志查询 | Rust FFI / HTTP |
-| `MediaPrefsService` | 缩略图质量/并发/缓存管理 | SharedPreferences |
-| `SystemTrayService` | 系统托盘（桌面端） | tray_manager |
-| `WindowPositionService` | 窗口位置持久化 | SharedPreferences |
-| `WebSocketManager` | WS 服务器(桌面)/客户端(移动) | Rust FFI |
-| `LedgerService` | 流水账 FFI 包装/邮箱口令安全存储/移动端节点中转 | Rust FFI / NodeSettingsService |
-| `LedgerStubStore` | 记账增强桩仓库（标签/分组/模板/定时/附件/备份/CSV，进程级单例，后端未接入） | SharedPreferences |
-
----
-
-## ViewModel 速查
-
-| 模块 | ViewModel | 核心职责 |
-|------|-----------|----------|
-| 媒体 | MediaLibraryViewModel + VmCollections + VmRemote + VmSmartFolders | 浏览/集合/远程/智能文件夹 |
-| 小说 | NovelLibraryViewModel(+Actions+Novel) / NovelReaderViewModel | 列表/操作/数据/阅读 |
-| 游戏 | Home / Library / Detail / Categories / Stats / Settings | 首页/CRUD/详情/分类/统计/设置 |
-| Manga | Home / ComicDetail / Search / Reader / Downloads / Favourites / History | 完整漫画业务 |
-| 传输 | LanTransferViewModel | 设备发现/传输管理 |
-| 抓包 | CaptureScreenViewModel | 代理控制/流量展示 |
-| 日志 | SentryLogViewModel | 日志查询/过滤 |
-| 流水账 | Home / Records / Stats / Pending / Settings / Accounts / Organize / Templates / Data | 概览/明细/统计/待确认入账/邮箱规则/账户/分类与标签/模板与定时/导入导出 |
-
----
-
-## Node Server 路由
-
-| 路由 | 功能 |
-|------|------|
-| `POST /node/call` | action 分发（media_collection/novel_reader 等） |
-| `GET /node/media` | 媒体文件流（缩放/Range） |
-| `POST /node/upload` | 文件上传 |
-| `POST /manga/api` | Manga API 中转 |
-| `GET /manga/img` | Manga 图片中转 |
-| `POST /api/{id}/store\|envelope` | Sentry 兼容端点 |
-
-`POST /node/call` 的 `action` 用扁平命名（`list_media_collections` / `get_novel_content` / …）；流水账统一带 `ledger_` 前缀，分发前先 `ensure_ledger_ready` 让节点自己建库。`init/is_ready/version/set_rule_password/rule_detail` 五个不转发（本机专属）。详见 [docs/ledger.md](docs/ledger.md)。
-
----
-
-## 开发规范速查
-
-| 规范 | 规则 |
+| 项 | 规则 |
 |------|------|
 | 页面命名 | `_screen.dart` 结尾，class `Screen` 结尾，继承 `BasePage` |
 | 响应式 | 桌面端窗口≤600 强制移动端模式，用 `SizeUtils.isMobile/isDesktop` |
 | 尺寸 | 参考 `AppTheme.metrics`，禁止直接数字或 `int.w`，未定义用 `scaleW()` |
-| 日志 | Dart: `Loggers` class，Rust: `logger::{log_error, log_info}`，关键流程中文。文件日志由 `slime_logger` 按天滚动并保留 30 天：macOS `~/Library/Logs/史莱姆工坊/logs/slime_works_<日期>.log`，Windows `%APPDATA%\SlimeWorks\logs\` |
-| 注释 | 必须中文, 不要删除已有注释 |
+| 日志 | Dart: `Loggers` class，Rust: `logger::{log_error, log_info}`，关键流程中文；文件日志由 `slime_logger` 按天滚动保留 30 天 |
+| 注释 | 必须中文，不要删除已有注释 |
 | 弹窗 | `showDialog` 而非 `Get.dialog` |
-| 校验 | Flutter → `flutter analyze`，Rust → `cargo build`，测试 → **全量** `flutter test` |
-| 提交 | 改完代码通过下列**三道**校验后，直接 `git commit` 并 `git push`，无需再询问 |
 | 新模块 | 静态链接参考 `ws_module/`，动态载入参考 `capture_proxy/` |
 
-### 提交前必须满足（硬性限制）
+---
+
+## 校验与提交（硬性门槛）
 
 任何一次 `git commit` 之前，三道校验缺一不可：
 
 1. **`flutter analyze` 干净** —— 不许有 error，warning/info 也尽量清零。
-2. **全量 `flutter test` 跑过** —— 必须是**全量**，不是只跑改动相关的测试文件。
-   基线约定：本机存在约 389 个 golden 用例因 Flutter 版本/字体差异而失败，属既有环境问题。
-   判定标准是**对比基线失败集合**（用 `git worktree add /tmp/sw_baseline <基线commit>`
-   起一份基线跑一遍，两边失败集合必须一致），**head 侧不得新增任何失败**。
-   只跑单个测试文件会漏掉跨模块回归（曾漏掉 `media_prefs_persistence_test` 的目录数量断言）。
-3. **打包能过** —— 见下节「打包校验」。
+2. **全量 `flutter test`** —— 必须是全量，不是只跑改动相关的文件。golden 基线失败属既有环境问题，判定标准是**对比基线失败集合**：用 `git worktree` 起基线 commit，两边用同一 SDK 跑全量，head 侧不得新增任何失败。
+3. **打包能过** —— `fastforge`，命令与本机姿势见 [docs/dev-environment.md](docs/dev-environment.md)。
 
-### 打包校验（不可省略）
-
-CI 用 `fastforge` 打包，本地等价命令：
-
-```bash
-export PATH="$PATH:$HOME/.pub-cache/bin"
-fastforge package --platform macos --target dmg     # macOS
-fastforge package --platform windows --target exe    # Windows
-```
-
-`fastforge` 未安装时先 `dart pub global activate fastforge`。
-
-**本机限制（务必先确认，别把环境问题误判成代码问题）**：
-
-- 本机 `xcode-select -p` 指向 `/Library/Developer/CommandLineTools`，且**未安装
-  Xcode.app**，`xcodebuild` 不可用 → `flutter build macos` / `fastforge ... macos`
-  必然失败于 `XcodeProjectInterpreter.getInfo`。这是环境缺失，不是代码问题。
-  在没装完整 Xcode 的机器上，macOS 打包无法验证，应改为：
-  - Rust 侧：`cargo build`（需带 `LIBCLANG_PATH` 与 SDK 头路径，见「构建命令」）
-  - Dart 侧：`flutter analyze` + 全量 `flutter test`
-  - 若改动触及 macOS 原生层（`macos/` 下 Swift/entitlements/podfile），
-    **必须**在装了 Xcode 的机器或 CI 上验证后再合入。
-- Windows 打包只能在 Windows 上做；Linux/Android/iOS 同理。
-
-### macOS 签名身份（决定更新后要不要重授权限）
-
-**必须**给仓库配置 `MAC_SIGN_IDENTITY_P12` / `MAC_SIGN_IDENTITY_PASSWORD` /
-`MAC_SIGN_IDENTITY_NAME` 三项 Secrets，否则 CI 回退 ad-hoc 签名：
-
-- ad-hoc 签名的 CDHash 每次构建都不同 → macOS 的 TCC（完全磁盘访问、外置卷等）
-  把每次更新后的 App 当成**另一个程序**，权限全部清零，用户每次自动更新后都要
-  重新手动授权。这是已经被用户反馈过的真实问题。
-- 自签证书的身份跨版本不变，用户**授权一次之后**后续更新不再掉权限。
-
-生成与配置步骤（一次性）：
-
-```bash
-bash scripts/make_mac_signing_cert.sh      # 产出 mac_signing_cert/ 下的 p12
-# 把 p12 的 base64 单行、导出时设的口令、证书通用名分别填进
-# Settings → Secrets and variables → Actions 的上述三项
-```
-
-注意：证书一旦投入使用就**不要重新生成**——换证书等于换身份，用户机器上的
-TCC 授权会全部重来。CI 里该步骤未配置 Secrets 时以 `::error` 报出，便于发现。
+三道校验通过后，直接 `git commit` 并 `git push`，无需再询问。
 
 ---
 
-## 构建命令
+## 开工前必读
 
-```bash
-flutter_rust_bridge_codegen generate          # 生成 FRB 绑定
-flutter pub run build_runner build             # 生成资源引用/JSON序列化
-dart run tool/stroke_icons/generate.dart       # 生成描边图标常量（*.g.dart 不入库，CI 同样先跑这步）
-flutter run -d macos                           # 开发运行
-flutter build macos --release                  # 发布构建
-cd rust && cargo test --workspace              # Rust 测试
-flutter test                                   # Flutter 测试
-```
+- 跑 flutter/cargo/打包命令前，先读 [docs/dev-environment.md](docs/dev-environment.md)：SDK 选择（现读 `.dart_tool/version`）、镜像 env、Xcode/签名、打包门。
+- 定位模块代码前，先读 [docs/README.md](docs/README.md)：导航索引，减少盲目搜索。
+
+## AI 开发工具
+
+仓库提供 `.mcp.json`（Dart/Flutter 官方 MCP Server，`dart mcp-server` 统一入口，含分析/测试/hot reload 等工具）。本地 `dart` 命令必须解析到与 `.dart_tool/version` 一致的 SDK，详见 [docs/dev-environment.md](docs/dev-environment.md)。

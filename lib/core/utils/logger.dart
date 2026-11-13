@@ -5,7 +5,7 @@ import 'dart:math';
 import 'package:path_provider/path_provider.dart';
 import 'package:flustars/flustars.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';

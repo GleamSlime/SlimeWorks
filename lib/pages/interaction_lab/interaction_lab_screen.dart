@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'cases/interaction_lab_cases.dart';
 import 'kit.dart';

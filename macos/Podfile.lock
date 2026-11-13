@@ -162,7 +162,7 @@ SPEC CHECKSUMS:
   device_info_plus: 4fb280989f669696856f8b129e4a5e3cd6c48f76
   file_picker: 7584aae6fa07a041af2b36a2655122d42f578c1a
   flutter_secure_storage_darwin: acdb3f316ed05a3e68f856e0353b133eec373a23
-  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
   gal: baecd024ebfd13c441269ca7404792a7152fde89
   just_audio: 4e391f57b79cad2b0674030a00453ca5ce817eed
   media_kit_libs_macos_video: 85a23e549b5f480e72cae3e5634b5514bc692f65
@@ -178,11 +178,11 @@ SPEC CHECKSUMS:
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
   tray_manager: 19c369010e59c073f13b82354d78a35f7972d609
   url_launcher_macos: f87a979182d112f911de6820aefddaf56ee9fbfd
-  video_player_avfoundation: 3453f792138786248960ca029747fcd9f318ef52
+  video_player_avfoundation: bc5f800d1e1c4f389bc5d51778a4f89dd1bf4a77
   wakelock_plus: 917609be14d812ddd9e9528876538b2263aaa03b
   webview_flutter_wkwebview: 8ebf4fded22593026f7dbff1fbff31ea98573c8d
   window_manager: b729e31d38fb04905235df9ea896128991cad99e
 
-PODFILE CHECKSUM: c2e79b5bb03249dfc0ce9f17532be48b0ca167be
+PODFILE CHECKSUM: f33dc2dceaea1215f30fb7e5bf78ecb476b74ce8
 
 COCOAPODS: 1.16.2

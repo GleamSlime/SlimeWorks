@@ -7,7 +7,7 @@
 //
 // 数据全是编的（仓库公开，真实账单不许进仓库）。标签/模板走 LedgerStubStore，
 // 账户与类别由测试直接喂给表单——这条链不碰 FFI，也就无需 RustLib.initMock。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

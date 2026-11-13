@@ -5,7 +5,7 @@ library;
 /// 展示用户的漫画阅读历史，支持删除单条或清空全部
 /// 点击记录可直接跳转到对应章节继续阅读
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';

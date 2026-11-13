@@ -5,10 +5,10 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
   flutter_secure_storage_linux
-  media_kit_video
   screen_retriever_linux
   tray_manager
   url_launcher_linux
+  media_kit_video
   window_manager
 )
 

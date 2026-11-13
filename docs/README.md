@@ -8,8 +8,8 @@
 
 | 技术 | 用途 |
 |------|------|
-| Flutter 3.41 + Dart 3.11 | UI、路由、基础业务逻辑 |
-| Rust 1.92（flutter_rust_bridge） | 复杂逻辑、数据库、HTTP 服务、媒体处理 |
+| Flutter/Dart（版本以 CI `FLUTTER_VERSION` 与 `.dart_tool/version` 为准） | UI、路由、基础业务逻辑 |
+| Rust（flutter_rust_bridge） | 复杂逻辑、数据库、HTTP 服务、媒体处理 |
 | GetX | UI 状态管理（`RxBool`, `RxList`…）|
 | GetIt | 业务服务（Service/Repository）的依赖注入 |
 | GoRouter + TypedGoRoute | 路由跳转 |
@@ -140,3 +140,123 @@ cd rust && cargo build
 # 运行 iOS 模拟器
 flutter run -d <simulator_id>
 ```
+
+---
+
+## 目录结构（核心）
+
+```
+lib/
+├── main.dart                 # 入口（初始化链：AppInfo→GetIt→FRB→Services→Theme→runApp）
+├── core/
+│   ├── routes/               # GoRouter 路由（模块化 part 文件 + RoleManager 权限守卫）
+│   ├── services/             # 业务 Service 层（GetIt 单例）
+│   │   ├── node/             # 节点服务（本地/远程节点、熔断、流量统计）
+│   │   └── ollama/           # AI 翻译服务
+│   ├── theme/                # AppTheme.metrics / DarkColors / LightColors / AppTextStyles
+│   ├── utils/                # size_utils(scaleW/isDesktop/isMobile), Loggers
+│   ├── viewmodels/           # BaseViewModel + BasePage 基类
+│   └── widgets/              # 通用 Widget
+├── components/               # window/buttons/dialogs/dropdown/animations
+├── pages/                    # 页面模块（_screen.dart 结尾，继承 BasePage）
+├── view_models/              # ViewModel 层（继承 BaseViewModel）
+└── src/rust/                 # FRB 自动生成（勿改）
+
+rust/
+├── src/                      # 主 crate（api/ 转发各子模块 + node_server/）
+├── slime_logger/             # 文件日志（按天滚动保留 30 天，多数 crate 依赖）
+├── db_module/                # redb KV 数据库（基础层）
+├── http_bridge/              # HTTP 桥接（移动端中转）
+├── email_module/             # 邮件协议层 IMAP/POP3/SMTP+MIME，TLS 强制
+├── media_collection/         # 媒体集合 → db_module
+├── novel_reader/             # 小说阅读器 → db_module + http_bridge
+├── game_library/             # 游戏库（自建 SQLite）
+├── manga_module/             # Manga 漫画 API
+├── lan_transfer/             # 局域网传输 mDNS+TCP
+├── extract_module/           # 解压工具 → db_module
+├── music_player/             # 音乐播放器 → db_module
+├── ncm_decrypt/              # NCM 格式解密
+├── power_stats/              # 电量统计
+├── aliyun_module/            # 阿里云 DDNS
+├── asr_module/               # 语音识别
+├── whisper_module/           # Whisper 本地识别 → db_module
+├── sentry_log/               # Sentry 日志（自建 redb）
+├── ws_module/                # WebSocket（条件编译）
+├── module_manager/           # 模块管理/动态加载
+├── ledger_module/            # 流水账（SQLite + 账单模板 + 收信调度）→ email_module
+└── capture_proxy/            # 抓包代理（cdylib 动态库，仅桌面端）
+```
+
+## Rust 模块依赖图
+
+```
+基础层（无业务依赖）: slime_logger, db_module, http_bridge, email_module,
+                      lan_transfer, ws_module, manga_module, sentry_log,
+                      game_library, module_manager, capture_proxy,
+                      aliyun_module, power_stats, ncm_decrypt, asr_module
+                      （除 module_manager / capture_proxy 外均依赖 slime_logger）
+
+业务层:  media_collection → db_module
+         novel_reader → db_module + http_bridge
+         extract_module → db_module
+         music_player → db_module
+         whisper_module → db_module
+         ledger_module → email_module
+
+聚合层:  rust_lib_slime_works（rust/src）→ 所有子模块
+```
+
+## 服务层速查
+
+> 速查快照，新增服务以代码为准。
+
+| 服务 | 职责 | 依赖 |
+|------|------|------|
+| `MangaService` | 漫画认证/浏览/搜索/收藏/7种分流 | Rust FFI |
+| `MangaDownloadService` | 下载队列/进度/离线路径 | MangaService |
+| `GameLibraryService` | 游戏 CRUD/分类/统计 | MetadataApi → Rust FFI |
+| `GameProcessTracker` | 进程追踪/时长记录 | GameLibraryService |
+| `GameLibraryMetadataApi` | Steam/VNDB/Bangumi 元数据聚合 | HTTP |
+| `LanTransferService` | 设备发现/文件传输/信任管理 | Rust FFI |
+| `NodeSettingsService` | 节点管理/熔断/流量统计 | Rust FFI |
+| `ExtractService` | 解压/密码库/进度轮询 | Rust FFI |
+| `OllamaService` | AI 翻译/多服务器轮询/流式生成 | HTTP |
+| `SentrySettingsService` | Sentry 配置/远程日志查询 | Rust FFI / HTTP |
+| `MediaPrefsService` | 缩略图质量/并发/缓存管理 | SharedPreferences |
+| `SystemTrayService` | 系统托盘（桌面端） | tray_manager |
+| `WindowPositionService` | 窗口位置持久化 | SharedPreferences |
+| `WebSocketManager` | WS 服务器(桌面)/客户端(移动) | Rust FFI |
+| `LedgerService` | 流水账 FFI 包装/邮箱口令安全存储/移动端节点中转 | Rust FFI / NodeSettingsService |
+| `LedgerStubStore` | 记账增强桩仓库（标签/分组/模板/定时/附件/备份/CSV，进程级单例，后端未接入） | SharedPreferences |
+
+## ViewModel 速查
+
+| 模块 | ViewModel | 核心职责 |
+|------|-----------|----------|
+| 媒体 | MediaLibraryViewModel + VmCollections + VmRemote + VmSmartFolders | 浏览/集合/远程/智能文件夹 |
+| 小说 | NovelLibraryViewModel(+Actions+Novel) / NovelReaderViewModel | 列表/操作/数据/阅读 |
+| 游戏 | Home / Library / Detail / Categories / Stats / Settings | 首页/CRUD/详情/分类/统计/设置 |
+| Manga | Home / ComicDetail / Search / Reader / Downloads / Favourites / History | 完整漫画业务 |
+| 传输 | LanTransferViewModel | 设备发现/传输管理 |
+| 抓包 | CaptureScreenViewModel | 代理控制/流量展示 |
+| 日志 | SentryLogViewModel | 日志查询/过滤 |
+| 流水账 | Home / Records / Stats / Pending / Settings / Accounts / Organize / Templates / Data | 概览/明细/统计/待确认入账/邮箱规则/账户/分类与标签/模板与定时/导入导出 |
+
+## Node Server 路由
+
+| 路由 | 功能 |
+|------|------|
+| `POST /node/call` | action 分发（media_collection/novel_reader 等） |
+| `GET /node/media` | 媒体文件流（缩放/Range） |
+| `POST /node/upload` | 文件上传 |
+| `POST /manga/api` | Manga API 中转 |
+| `GET /manga/img` | Manga 图片中转 |
+| `POST /api/{id}/store\|envelope` | Sentry 兼容端点 |
+
+`POST /node/call` 的 `action` 用扁平命名（`list_media_collections` / `get_novel_content` / …）；流水账统一带 `ledger_` 前缀，分发前先 `ensure_ledger_ready` 让节点自己建库。`init/is_ready/version/set_rule_password/rule_detail` 五个不转发（本机专属）。详见 [ledger.md](ledger.md)。
+
+## 日志文件位置
+
+- macOS：`~/Library/Logs/史莱姆工坊/logs/slime_works_<日期>.log`
+- Windows：`%APPDATA%\SlimeWorks\logs\`
+- 由 `slime_logger` 按天滚动并保留 30 天。

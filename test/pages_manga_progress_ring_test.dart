@@ -2,7 +2,7 @@
 //
 // 旧实现 Timer.periodic 永不取消：图片一直不回来（节点挂起/解码卡住）时，
 // 这个纯装饰动画会每秒重建 12 次直到 widget 被移出树。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';

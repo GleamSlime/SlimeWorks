@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:cue/cue.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 通用可交互容器，集成 Cue 动画库，提供：
 /// - 桌面/平板：悬停放大反馈（`Cue.onHover`）

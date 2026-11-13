@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:path_drawing/path_drawing.dart' show CircularIntervalList, dashPath;
 
 import '../lab_kit.dart';

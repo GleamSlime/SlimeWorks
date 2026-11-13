@@ -9,12 +9,12 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_secure_storage_windows
   gal
   media_kit_libs_windows_video
-  media_kit_video
   permission_handler_windows
   screen_retriever_windows
-  share_plus
   tray_manager
   url_launcher_windows
+  share_plus
+  media_kit_video
   window_manager
 )
 

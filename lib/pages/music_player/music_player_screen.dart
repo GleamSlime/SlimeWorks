@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/components/window/desktop_head.dart';

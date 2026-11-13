@@ -2,7 +2,7 @@ library;
 
 /// Manga 漫画详情页
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/dialogs/node_directory_picker.dart';

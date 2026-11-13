@@ -4,7 +4,7 @@ library;
 /// PC 端：可以创建服务器和客户端
 /// 移动端：只能创建客户端
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';

@@ -4,7 +4,7 @@ import 'package:slime_works/core/utils/size_utils.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:slime_works/src/rust/api/novel_reader.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';

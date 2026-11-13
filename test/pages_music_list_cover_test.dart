@@ -4,7 +4,7 @@
 // 1) Image 的 provider 是 ResizeImage，且 targetWidth 约等于显示宽 × dpr；
 // 2) build 本身不产生 existsSync（用不存在路径也能正常建出骨架，
 //    并且不进任何同步 IO 分支——旧实现会先 existsSync 再决定走哪条）。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';

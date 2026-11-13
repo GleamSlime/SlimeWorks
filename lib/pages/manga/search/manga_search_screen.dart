@@ -7,7 +7,7 @@ library;
 /// - 支持搜索历史 Tag（本地存储，上限 20 条）
 /// - 支持排序切换
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';

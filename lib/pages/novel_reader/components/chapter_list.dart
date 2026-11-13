@@ -1,6 +1,6 @@
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';

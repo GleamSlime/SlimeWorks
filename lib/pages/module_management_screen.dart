@@ -1,5 +1,5 @@
 import 'package:slime_works/core/theme/app_theme.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:slime_works/src/rust/api/module_manager.dart';
 import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/widgets/glass_menu.dart';

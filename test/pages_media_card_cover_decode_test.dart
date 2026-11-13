@@ -4,7 +4,7 @@
 // 不设 cacheWidth 就是整张 4K 解码进 ImageCache。这里断言 MediaCardCover
 // 对 http 源产出的 provider 是 ResizeImage，且 targetWidth 约等于
 // 「格子布局宽 × dpr」而不是 null。
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:slime_works/core/provider/main.dart';

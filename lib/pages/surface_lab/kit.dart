@@ -19,7 +19,7 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind, TapUpDetails;
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:path_drawing/path_drawing.dart';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 参考稿的浅色盘（`:root` 的 `--*` 原值，站点是 shadcn 那一套灰阶）
 abstract final class SvColor {

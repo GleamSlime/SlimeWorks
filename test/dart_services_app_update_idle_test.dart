@@ -8,7 +8,7 @@
 //  1) 活跃输入会重置闲置计时（窗口聚焦时一律不算可静默安装）；
 //  2) 窗口失焦 + 闲置够久才算可以静默安装；
 //  3) 失败退避 1min → 2 → 4 … 上限 1h。
-import 'package:flutter/material.dart' show AppLifecycleState;
+import 'package:material_ui/material_ui.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slime_works/core/services/app_update_service.dart';

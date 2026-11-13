@@ -16,7 +16,7 @@ import 'package:path_drawing/path_drawing.dart';
 
 import 'package:flutter/gestures.dart'
     show PointerDeviceKind, TapUpDetails, kTouchSlop;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 参考稿的浅色盘（`--*` 变量原值）
 abstract final class LabColor {

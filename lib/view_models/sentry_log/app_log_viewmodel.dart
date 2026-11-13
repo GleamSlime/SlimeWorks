@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:get/get.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/utils/logger.dart';

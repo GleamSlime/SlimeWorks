@@ -8,7 +8,7 @@
 /// 不吃窗口缩放——这张页要的是像素级还原，不是全站换肤。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../lab_kit.dart';
 

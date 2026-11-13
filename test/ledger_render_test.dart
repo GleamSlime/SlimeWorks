@@ -7,7 +7,7 @@
 // 数据全是编的（仓库公开，真实账单不许进仓库），金额商户名都只对"排版长得对不对"负责。
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';

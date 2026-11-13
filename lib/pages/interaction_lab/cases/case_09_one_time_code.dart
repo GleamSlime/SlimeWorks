@@ -3,7 +3,7 @@ import 'dart:typed_data' show Float64List;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/scheduler.dart' show Ticker;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart'
     show
         KeyEvent,
