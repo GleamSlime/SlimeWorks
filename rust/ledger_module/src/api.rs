@@ -366,151 +366,44 @@ fn check_with_limit(rule_id: i64, password: &str, limit: u64, history: bool) -> 
         }
     };
 
-    let mut new_emails = 0i64;
-    let mut new_tx = 0i64;
-    let mut skipped = 0i64;
-    // 真正写库失败（非"已存在"去重跳过）的笔数。必须与 skipped 区分开：
-    // 混在一起会 finish_log(ok=true) 并推进 last_run_at，每日规则当天不再重试，
-    // 而 record_email 已记下 UID，下次收取直接跳过 → 账单永久丢失且日志看不出异常。
-    let mut write_failed = 0i64;
-    // 命中规则却解析不了的封数：单独记，改版要有数可看
-    let mut parse_failed = 0i64;
+    let mut tally = BatchTally::default();
     // 批中任何 DB 错误都要收尾日志：早期用 `?` 直接 return，finish_log 被跳过，
     // 日志永久停在「进行中」，用户看不出这一轮到底失败了没有。
     // 所以整段放闭包，提前返回的错误收敛到 batch_result，后面统一 finish_log。
-    let batch_result: Result<(), String> = (|| {
-        let known = storage::known_email_uids(rule_id).map_err(|e| e.to_string())?;
-        // 账户尾号/类别名/商户习惯一次载入：一封账单十几笔逐笔回表在 WAL 上就是十几趟 I/O
-        let lookup = storage::TxLookup::load().map_err(|e| e.to_string())?;
-        for msg in &outcome.messages {
-            if !parse_glue::message_matches(&rule, &msg.from, &msg.subject) {
-                continue;
-            }
-            let template_id =
-                parse_glue::resolve_template_id(&rule, &msg.subject, &msg.body_html);
-            // 留档要留解析器真正吃过的那份：没 HTML 时它退而用纯文本
-            let body = if msg.body_html.is_empty() { msg.body_text.as_str() } else { msg.body_html.as_str() };
-            let parsed = match parse_glue::parse_message(
-                &template_id,
-                &rule.template_config,
-                &msg.body_html,
-                &msg.body_text,
-            ) {
-                Ok(p) => p,
-                Err(e) => {
-                    let archived = archive_parse_failure(rule_id, &msg.uid, &msg.subject, body);
-                    sw_warn!(
-                        "[ledger] 邮件《{}》解析失败: {}{}",
-                        msg.subject,
-                        e,
-                        match &archived {
-                            Some(p) => format!("；原文已留档 {}", p.display()),
-                            None => String::new(),
-                        }
-                    );
-                    if archived.is_some() {
-                        parse_failed += 1;
-                    }
-                    skipped += 1;
-                    continue;
-                }
-            };
-            if parsed.transactions.is_empty() {
-                // 命中了规则却没解析出任何一笔：多半是银行改了模板，必须可见
-                if archive_parse_failure(rule_id, &msg.uid, &msg.subject, body).is_some() {
-                    parse_failed += 1;
-                }
-                skipped += 1;
-                continue;
-            }
-            if known.iter().any(|u| u == &msg.uid) {
-                // 已收过：不重复入账，也不重复计数
-                continue;
-            }
-            let received = if msg.date.is_empty() { now_text() } else { msg.date.clone() };
-            let bill_date = pick_bill_date(&parsed.bill_date, &received);
+    // panic 走 unwind 同样会跳过收尾，catch_unwind 把它一并收敛成错误字符串。
+    let batch_result = catch_batch_error(|| run_batch(&rule, &outcome, &mut tally));
 
-            // 一封邮件的所有流水攒成一批：单事务提交，索引也已载入
-            let mut batch: Vec<Transaction> = Vec::with_capacity(parsed.transactions.len());
-            for (seq, item) in parsed.transactions.iter().enumerate() {
-                let mut tx = parse_glue::tx_from_parsed(
-                    item,
-                    &rule,
-                    &msg.uid,
-                    &bill_date,
-                    lookup.account_for(&item.card_tail, rule.default_account_id)?,
-                    seq,
-                );
-                tx.bill_date = bill_date.clone();
-                if rule.auto_apply {
-                    tx.status = STATUS_POSTED.to_string();
-                    // 类别映射已在批前载入，这里不再逐笔回表查 categories
-                    tx.category_id = lookup.default_category_for(&tx.direction);
-                }
-                batch.push(tx);
-            }
-            let mut stored_tx = 0i64;
-            match storage::insert_transactions(&batch) {
-                Ok((inserted, deduped)) => {
-                    new_tx += inserted;
-                    stored_tx = inserted;
-                    skipped += deduped;
-                }
-                Err(e) => {
-                    // 整批回滚：这批既没入账也没记账，记失败让下一轮重试
-                    sw_warn!("[ledger] 流水批量写入失败: {}", e);
-                    write_failed += batch.len() as i64;
-                }
-            }
-
-            let applied = rule.auto_apply && stored_tx > 0;
-            let recorded = storage::record_email(
-                rule_id,
-                &msg.uid,
-                &msg.message_id,
-                &msg.from,
-                &msg.subject,
-                &received,
-                &bill_date,
-                stored_tx,
-                applied,
-                parsed.available_credit,
-                parsed.points_balance,
-                &parsed.warnings,
-                msg.body_html.len() as i64,
-            )
-            .unwrap_or(false);
-            if recorded {
-                new_emails += 1;
-            } else {
-                skipped += stored_tx;
-            }
-        }
-        Ok(())
-    })();
-
-    // 闭包里的任何提前返回都收敛到这里：日志无论如何都要收尾
+    // 闭包里的任何提前返回（含 panic）都收敛到这里：日志无论如何都要收尾
     if let Err(e) = &batch_result {
-        return Err(abort_batch(log_id, rule_id, &rule.name, new_emails, new_tx, skipped, e));
+        return Err(abort_batch(
+            log_id,
+            rule_id,
+            &rule.name,
+            tally.new_emails,
+            tally.new_tx,
+            tally.skipped,
+            e,
+        ));
     }
 
     let elapsed = started.elapsed().as_secs();
     let scanned = outcome.messages.len();
     // 解析失败要留档：银行一改模板，没有原文就只能靠猜，猜一次错一次
-    let archive_note = if parse_failed > 0 {
+    let archive_note = if tally.parse_failed > 0 {
         match storage::db_dir() {
             Some(dir) => format!(
                 "，{} 封解析失败（原文已存 {}，把这里的文件发给作者才改得动模板）",
-                parse_failed,
+                tally.parse_failed,
                 dir.join("parse_failures").display()
             ),
-            None => format!("，{} 封解析失败", parse_failed),
+            None => format!("，{} 封解析失败", tally.parse_failed),
         }
     } else {
         String::new()
     };
-    let failed_note = if write_failed > 0 {
-        format!("，{} 笔写库失败（下一轮会重试）", write_failed)
+    let failed_note = if tally.write_failed > 0 {
+        // 失败批没登记 UID，下一轮是真重收而不是"跳过已收"，文案必须说清这点
+        format!("，{} 笔写库失败（未登记邮件，下一轮重收重试）", tally.write_failed)
     } else {
         String::new()
     };
@@ -520,9 +413,9 @@ fn check_with_limit(rule_id: i64, password: &str, limit: u64, history: bool) -> 
         format!(
             "历史回补：扫描 {} 封，新增 {} 封账单 / {} 笔流水，跳过 {} 笔{}（{} 秒）{}",
             scanned,
-            new_emails,
-            new_tx,
-            skipped,
+            tally.new_emails,
+            tally.new_tx,
+            tally.skipped,
             failed_note,
             elapsed,
             archive_note
@@ -530,18 +423,174 @@ fn check_with_limit(rule_id: i64, password: &str, limit: u64, history: bool) -> 
     } else {
         format!(
             "收取 {} 封新邮件，新增 {} 笔流水，跳过 {} 笔{}（{} 秒）{}",
-            new_emails, new_tx, skipped, failed_note, elapsed, archive_note
+            tally.new_emails, tally.new_tx, tally.skipped, failed_note, elapsed, archive_note
         )
     };
     // 有写库失败时不能报成功：每日模式下 finish_log(ok=false) + 不推进 last_run_at，
-    // 让下一轮自动收信重试，而不是把账单静默丢掉
-    let ok = write_failed == 0;
-    finish_log(log_id, ok, new_emails, new_tx, skipped, &detail);
+    // 失败批又没登记 UID，下一轮自动收信会重新收到这封并重试，而不是把账单静默丢掉
+    let ok = tally.write_failed == 0;
+    finish_log(log_id, ok, tally.new_emails, tally.new_tx, tally.skipped, &detail);
     if ok {
         let _ = storage::touch_rule_run(rule_id, &detail);
     }
     sw_info!("[ledger] 规则《{}》检查完成：{}", rule.name, detail);
     Ok(detail)
+}
+
+/// 一轮批量入账的计数
+#[derive(Default)]
+struct BatchTally {
+    new_emails: i64,
+    new_tx: i64,
+    skipped: i64,
+    // 真正写库失败（非"已存在"去重跳过）的笔数。必须与 skipped 区分开：
+    // 混在一起会 finish_log(ok=true) 并推进 last_run_at，每日规则当天不再重试，
+    // 而 record_email 已记下 UID，下次收取直接跳过 → 账单永久丢失且日志看不出异常。
+    write_failed: i64,
+    // 命中规则却解析不了的封数：单独记，改版要有数可看
+    parse_failed: i64,
+}
+
+/// 把一次收信结果批量入账；独立成函数让测试能喂本地邮件走真实链路，错误交调用方收尾日志
+fn run_batch(
+    rule: &EmailRule,
+    outcome: &WireFetchOutcome,
+    tally: &mut BatchTally,
+) -> Result<(), String> {
+    let rule_id = rule.id;
+    let known = storage::known_email_uids(rule_id).map_err(|e| e.to_string())?;
+    // 账户尾号/类别名/商户习惯一次载入：一封账单十几笔逐笔回表在 WAL 上就是十几趟 I/O
+    let lookup = storage::TxLookup::load().map_err(|e| e.to_string())?;
+    for msg in &outcome.messages {
+        if !parse_glue::message_matches(rule, &msg.from, &msg.subject) {
+            continue;
+        }
+        let template_id = parse_glue::resolve_template_id(rule, &msg.subject, &msg.body_html);
+        // 留档要留解析器真正吃过的那份：没 HTML 时它退而用纯文本
+        let body = if msg.body_html.is_empty() { msg.body_text.as_str() } else { msg.body_html.as_str() };
+        let parsed = match parse_glue::parse_message(
+            &template_id,
+            &rule.template_config,
+            &msg.body_html,
+            &msg.body_text,
+        ) {
+            Ok(p) => p,
+            Err(e) => {
+                let archived = archive_parse_failure(rule_id, &msg.uid, &msg.subject, body);
+                sw_warn!(
+                    "[ledger] 邮件《{}》解析失败: {}{}",
+                    msg.subject,
+                    e,
+                    match &archived {
+                        Some(p) => format!("；原文已留档 {}", p.display()),
+                        None => String::new(),
+                    }
+                );
+                if archived.is_some() {
+                    tally.parse_failed += 1;
+                }
+                tally.skipped += 1;
+                continue;
+            }
+        };
+        if parsed.transactions.is_empty() {
+            // 命中了规则却没解析出任何一笔：多半是银行改了模板，必须可见
+            if archive_parse_failure(rule_id, &msg.uid, &msg.subject, body).is_some() {
+                tally.parse_failed += 1;
+            }
+            tally.skipped += 1;
+            continue;
+        }
+        if known.iter().any(|u| u == &msg.uid) {
+            // 已收过：不重复入账，也不重复计数
+            continue;
+        }
+        let received = if msg.date.is_empty() { now_text() } else { msg.date.clone() };
+        let bill_date = pick_bill_date(&parsed.bill_date, &received);
+
+        // 一封邮件的所有流水攒成一批：单事务提交，索引也已载入
+        let mut batch: Vec<Transaction> = Vec::with_capacity(parsed.transactions.len());
+        for (seq, item) in parsed.transactions.iter().enumerate() {
+            let mut tx = parse_glue::tx_from_parsed(
+                item,
+                rule,
+                &msg.uid,
+                &bill_date,
+                lookup.account_for(&item.card_tail, rule.default_account_id)?,
+                seq,
+            );
+            tx.bill_date = bill_date.clone();
+            if rule.auto_apply {
+                tx.status = STATUS_POSTED.to_string();
+                // 类别映射已在批前载入，这里不再逐笔回表查 categories
+                tx.category_id = lookup.default_category_for(&tx.direction);
+            }
+            batch.push(tx);
+        }
+        let mut stored_tx = 0i64;
+        // 批失败绝不能登记 UID：emails 一记下，下轮 known_email_uids 就跳过这封，整批流水永久丢失
+        let mut batch_ok = false;
+        match storage::insert_transactions(&batch) {
+            Ok((inserted, deduped)) => {
+                tally.new_tx += inserted;
+                stored_tx = inserted;
+                tally.skipped += deduped;
+                // 去重跳过（inserted=0）也算成功，要照常登记 UID
+                batch_ok = true;
+            }
+            Err(e) => {
+                // 整批回滚：这批没入账，也不记账号，下一轮重新收信才重试得到
+                sw_warn!("[ledger] 流水批量写入失败: {}", e);
+                tally.write_failed += batch.len() as i64;
+            }
+        }
+        if !batch_ok {
+            continue;
+        }
+
+        let applied = rule.auto_apply && stored_tx > 0;
+        let recorded = storage::record_email(
+            rule_id,
+            &msg.uid,
+            &msg.message_id,
+            &msg.from,
+            &msg.subject,
+            &received,
+            &bill_date,
+            stored_tx,
+            applied,
+            parsed.available_credit,
+            parsed.points_balance,
+            &parsed.warnings,
+            msg.body_html.len() as i64,
+        )
+        .unwrap_or(false);
+        if recorded {
+            tally.new_emails += 1;
+        } else {
+            tally.skipped += stored_tx;
+        }
+    }
+    Ok(())
+}
+
+/// panic 走 unwind 会跳过 finish_log，日志永久停在「进行中」；这里把它收敛成错误字符串
+fn catch_batch_error(f: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(inner) => inner,
+        Err(payload) => Err(panic_reason(payload.as_ref())),
+    }
+}
+
+/// panic 载荷转成可读原因：日志里只写「panic」等于没写，修不了问题
+fn panic_reason(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        format!("批处理 panic: {}", s)
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        format!("批处理 panic: {}", s)
+    } else {
+        "批处理 panic（无文本载荷）".to_string()
+    }
 }
 
 /// 只做一次远程收取并解析，不落库；设置页"预览"用
@@ -852,6 +901,7 @@ mod tests {
     /// 留档落在账本旁边、文件名认得出是哪封、没正文不建空文件
     #[test]
     fn parse_failure_archive_lands_next_to_the_ledger() {
+        let _guard = db_test_lock();
         let dir = std::env::temp_dir().join(format!("sw_ledger_archive_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         storage::init_db(dir.join("ledger.db").to_str().unwrap()).unwrap();
@@ -883,6 +933,7 @@ mod tests {
     /// 以前是 check-then-init，会撞 categories.name UNIQUE 并让 DB_CONN 被顶掉。
     #[test]
     fn init_db_is_safe_under_concurrent_first_calls() {
+        let _guard = db_test_lock();
         let dir = std::env::temp_dir().join(format!("sw_ledger_conc_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let db = dir.join("ledger.db");
@@ -922,6 +973,7 @@ mod tests {
     /// 半截入账最难收拾：用户看到几条、重试又撞去重键，账目永远对不上。
     #[test]
     fn batch_insert_is_atomic_and_dedups_within_batch() {
+        let _guard = db_test_lock();
         let dir = std::env::temp_dir().join(format!("sw_ledger_batch_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         storage::init_db(dir.join("ledger.db").to_str().unwrap()).unwrap();
@@ -973,6 +1025,7 @@ mod tests {
     /// 并顺手锁住 synchronous=NORMAL —— 它一旦退回 FULL，逐笔提交就会重新卡顿。
     #[test]
     fn init_creates_merchant_index_and_sets_normal_sync() {
+        let _guard = db_test_lock();
         let dir = std::env::temp_dir().join(format!("sw_ledger_idx_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let db = dir.join("ledger.db");
@@ -1003,6 +1056,7 @@ mod tests {
     /// P2-19：批中失败时日志必须收尾成「失败」，不能停在「进行中」
     #[test]
     fn aborted_batch_finishes_the_fetch_log_as_failed() {
+        let _guard = db_test_lock();
         let dir = std::env::temp_dir().join(format!("sw_ledger_abort_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         storage::init_db(dir.join("ledger.db").to_str().unwrap()).unwrap();
@@ -1031,6 +1085,274 @@ mod tests {
         // 失败不推进 last_run_at：下一轮自动收信还要重试
         let rule = storage::get_email_rule(rule_id).unwrap().unwrap();
         assert!(rule.last_run_at.is_empty(), "失败不该推进 last_run_at");
+
+        storage::close_db();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── 批失败重收 / panic 收尾 / 锁中毒 / 长尾商户 ─────────────────────────────
+
+    /// DB_CONN 是进程级单例：并行用例会互相把库顶掉，所有碰库的用例必须串行
+    fn db_test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn temp_db(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("sw_ledger_{}_{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        storage::init_db(dir.join("ledger.db").to_str().unwrap()).unwrap();
+        dir
+    }
+
+    /// 造一封能被自定义正则解析出两笔的账单：走真实解析/入账链路，不必连真邮箱
+    fn bill_message(uid: &str) -> parse_glue::WireEmailMessage {
+        parse_glue::WireEmailMessage {
+            uid: uid.to_string(),
+            message_id: format!("<{}@test.local>", uid),
+            from: "bank@test.local".to_string(),
+            from_name: String::new(),
+            to: String::new(),
+            subject: "测试电子账单".to_string(),
+            date: "2026-09-03 08:00:00".to_string(),
+            body_html: String::new(),
+            body_text: "2026-09-01 咖啡店 18.00\n2026-09-02 地铁站 6.00\n".to_string(),
+            size_bytes: 0,
+        }
+    }
+
+    fn outcome_of(messages: Vec<parse_glue::WireEmailMessage>) -> WireFetchOutcome {
+        WireFetchOutcome {
+            protocol: "imap".to_string(),
+            folder: "INBOX".to_string(),
+            uid_validity: "1".to_string(),
+            total_seen: messages.len() as u64,
+            messages,
+        }
+    }
+
+    /// 两行「日期 商户 金额」的自定义正则规则，解析结果稳定可断言
+    fn regex_rule(name: &str, account_id: i64) -> EmailRule {
+        EmailRule {
+            name: name.to_string(),
+            template_id: "custom_regex".to_string(),
+            template_config: r#"{"pattern":"^(?<date>\\d{4}-\\d{2}-\\d{2})\\s+(?<merchant>\\S+)\\s+(?<amount>\\d+\\.\\d{2})$"}"#
+                .to_string(),
+            default_account_id: account_id,
+            ..Default::default()
+        }
+    }
+
+    /// H2：批失败一旦登记 UID，下轮 known_email_uids 直接跳过，整封流水永久丢失还假称会重试
+    #[test]
+    fn failed_batch_keeps_uid_unregistered_so_next_round_really_retries() {
+        let _guard = db_test_lock();
+        let dir = temp_db("h2");
+        let account = storage::list_accounts(false).unwrap()[0].id;
+        let rule_id = storage::upsert_email_rule(&regex_rule("批失败重收", account)).unwrap();
+        let rule = storage::get_email_rule(rule_id).unwrap().unwrap();
+        let outcome = outcome_of(vec![bill_message("uid-h2-1")]);
+
+        // 把流水表挪走制造真实 SQL 错（不是 mock 被测逻辑）：批 insert 必然整批回滚
+        storage::with_db(|c| {
+            c.execute("ALTER TABLE transactions RENAME TO transactions_bak", [])?;
+            Ok(())
+        })
+        .unwrap();
+
+        let mut tally = BatchTally::default();
+        run_batch(&rule, &outcome, &mut tally).unwrap();
+        assert_eq!(tally.write_failed, 2, "两笔都该记成写库失败");
+        assert_eq!((tally.new_tx, tally.new_emails), (0, 0));
+        assert!(
+            !storage::known_email_uids(rule_id).unwrap().iter().any(|u| u == "uid-h2-1"),
+            "失败批不得登记 UID，否则下一轮跳过、账单永久丢失"
+        );
+
+        // 表恢复后重收同一封：必须真的入账，证明「下一轮重试」不是假承诺
+        storage::with_db(|c| {
+            c.execute("ALTER TABLE transactions_bak RENAME TO transactions", [])?;
+            Ok(())
+        })
+        .unwrap();
+        let mut retry = BatchTally::default();
+        run_batch(&rule, &outcome, &mut retry).unwrap();
+        assert_eq!((retry.new_tx, retry.new_emails, retry.write_failed), (2, 1, 0));
+        assert!(
+            storage::known_email_uids(rule_id).unwrap().iter().any(|u| u == "uid-h2-1"),
+            "成功路径必须照常登记 UID"
+        );
+
+        // 去重情形（inserted=0 / deduped>0）仍算成功，要照常登记，不能因为「没新增」就不记
+        storage::with_db(|c| {
+            c.execute(
+                "DELETE FROM emails WHERE message_uid = ?1",
+                rusqlite::params!["uid-h2-1"],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+        let mut dedup = BatchTally::default();
+        run_batch(&rule, &outcome, &mut dedup).unwrap();
+        assert_eq!((dedup.new_tx, dedup.write_failed), (0, 0));
+        assert_eq!(dedup.skipped, 2, "两笔都该被去重键挡下");
+        assert_eq!(dedup.new_emails, 1, "去重成功也要登记 UID");
+        assert!(storage::known_email_uids(rule_id).unwrap().iter().any(|u| u == "uid-h2-1"));
+
+        storage::close_db();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 中危2：批处理 panic 也必须收尾日志，否则 fetch_log 永久停在「进行中」
+    #[test]
+    fn panic_in_batch_is_converged_and_finishes_the_log() {
+        let _guard = db_test_lock();
+        let dir = temp_db("panic");
+        let account = storage::list_accounts(false).unwrap()[0].id;
+        let rule_id = storage::upsert_email_rule(&regex_rule("panic 收尾", account)).unwrap();
+        let rule = storage::get_email_rule(rule_id).unwrap().unwrap();
+        let outcome = outcome_of(vec![bill_message("uid-panic-1")]);
+        let log_id = storage::begin_fetch_log(rule_id).unwrap();
+
+        let mut tally = BatchTally::default();
+        // 真实入账之后触发 panic：unwind 必须被收敛成错误，而不是绕过日志收尾
+        let err = catch_batch_error(|| {
+            run_batch(&rule, &outcome, &mut tally)?;
+            panic!("批处理中途 panic");
+        })
+        .expect_err("panic 必须收敛成 Err");
+        assert!(err.contains("批处理中途 panic"), "err = {err}");
+        assert_eq!(tally.new_tx, 2, "panic 前已入账的笔数要留给日志交代");
+
+        let detail = abort_batch(
+            log_id,
+            rule_id,
+            &rule.name,
+            tally.new_emails,
+            tally.new_tx,
+            tally.skipped,
+            &err,
+        );
+        assert!(detail.contains("中止"), "detail = {detail}");
+        let logs = storage::list_fetch_logs(10).unwrap();
+        let log = logs.iter().find(|l| l.id == log_id).expect("日志必须存在");
+        assert!(!log.ok, "panic 必须记为失败");
+        assert!(
+            !log.finished_at.is_empty(),
+            "panic 路径也要写 finished_at，否则前端一直显示进行中"
+        );
+        assert!(log.detail.contains("panic"), "detail = {}", log.detail);
+        assert!(
+            storage::get_email_rule(rule_id).unwrap().unwrap().last_run_at.is_empty(),
+            "失败不该推进 last_run_at"
+        );
+
+        storage::close_db();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// panic 载荷三种形态都要能取出可读原因，否则日志里只写「panic」等于没写
+    #[test]
+    fn panic_reason_reads_str_string_and_untyped_payloads() {
+        let s: Box<dyn std::any::Any + Send> = Box::new("静态串");
+        assert!(panic_reason(s.as_ref()).contains("静态串"));
+        let s: Box<dyn std::any::Any + Send> = Box::new(String::from("堆串"));
+        assert!(panic_reason(s.as_ref()).contains("堆串"));
+        let s: Box<dyn std::any::Any + Send> = Box::new(42u32);
+        assert!(panic_reason(s.as_ref()).contains("无文本载荷"));
+    }
+
+    /// 中危1：持锁 panic 会毒化 DB_CONN，unwrap 则此后每拍都 panic，自动记账瘫到重启
+    #[test]
+    fn poisoned_db_lock_still_serves_reads_and_writes() {
+        let _guard = db_test_lock();
+        let dir = temp_db("poison");
+
+        // 在持锁期间 panic，真实制造一次锁中毒
+        let handle = std::thread::spawn(|| {
+            let _ = storage::with_db(|_c| -> anyhow::Result<()> { panic!("持锁 panic 制造中毒") });
+        });
+        assert!(handle.join().is_err(), "线程必须真的 panic 才能毒化锁");
+
+        assert!(storage::is_ready(), "中毒后就绪检查不能自己先 panic");
+        assert!(!storage::list_accounts(false).unwrap().is_empty(), "中毒后仍要能读");
+        let new_rule = storage::upsert_email_rule(&regex_rule("中毒后写入", 0)).unwrap();
+        assert!(new_rule > 0, "中毒后仍要能写");
+
+        storage::close_db();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 中危3：精确匹配只认 top-200 预载会丢掉长尾商户记过的归类，必须回表按主键命中
+    #[test]
+    fn exact_merchant_memory_beyond_top200_still_resolves() {
+        let _guard = db_test_lock();
+        let dir = temp_db("merchant");
+        let account = storage::list_accounts(false).unwrap()[0].id;
+        let hot_cid = storage::list_categories(DIRECTION_EXPENSE).unwrap()[0].id;
+        let tail_cid = storage::upsert_category(&Category {
+            id: 0,
+            name: "长尾归类".to_string(),
+            icon: String::new(),
+            direction: DIRECTION_EXPENSE.to_string(),
+            sort_order: 999,
+            is_builtin: false,
+        })
+        .unwrap();
+
+        // 250 个高 hits 商户占满 top-200 预载，把长尾键挤出去
+        storage::with_db(|c| {
+            for i in 0..250 {
+                c.execute(
+                    "INSERT INTO merchant_memory (merchant_key, category_id, hits, updated_at) \
+                     VALUES (?1, ?2, 1000, '2026-01-01 00:00:00')",
+                    rusqlite::params![format!("热门商户{}", i), hot_cid],
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        storage::remember_merchant("长尾冷门商户", tail_cid).unwrap();
+        assert!(
+            !storage::list_merchant_memory().unwrap().iter().any(|(k, _)| k == "长尾冷门商户"),
+            "长尾键必须真的被 top-200 截断，否则这个用例证明不了回表生效"
+        );
+
+        let tx = Transaction {
+            occurred_at: "2026-09-01 10:00:00".to_string(),
+            bill_date: "2026-09-01".to_string(),
+            direction: DIRECTION_EXPENSE.to_string(),
+            amount: 18.0,
+            currency: "CNY".to_string(),
+            account_id: account,
+            category_id: 0,
+            merchant: "长尾冷门商户".to_string(),
+            source: SOURCE_EMAIL.to_string(),
+            email_uid: "uid-tail".to_string(),
+            status: STATUS_PENDING.to_string(),
+            ..Default::default()
+        };
+        let id = storage::insert_transaction(&tx).unwrap();
+        assert_eq!(
+            storage::get_transaction(id).unwrap().unwrap().category_id,
+            tail_cid,
+            "长尾商户的精确记忆必须命中，不能落到默认类"
+        );
+
+        // top-200 内的热缓存路径不能因为改成回表而退化
+        let hot = Transaction {
+            merchant: "热门商户7".to_string(),
+            email_uid: "uid-hot".to_string(),
+            ..tx.clone()
+        };
+        let hot_id = storage::insert_transaction(&hot).unwrap();
+        assert_eq!(
+            storage::get_transaction(hot_id).unwrap().unwrap().category_id,
+            hot_cid,
+            "预载命中的热门商户仍要按记忆归类"
+        );
 
         storage::close_db();
         let _ = std::fs::remove_dir_all(&dir);

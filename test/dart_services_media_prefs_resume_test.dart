@@ -120,6 +120,37 @@ void main() {
         expect(reloaded.videoResumePosition('/movies/e.mp4'), 123000);
       });
     });
+
+    test('退出时值更新走节流，紧随的 flush 立即落盘（不等 10s）', () {
+      fakeAsync((async) {
+        final svc = MediaPrefsService();
+        svc.init();
+        async.flushMicrotasks();
+        // 先建条目（结构变化立刻落盘），把节流计时起点定下来
+        svc.setVideoResumePosition('/movies/exit.mp4', 60000);
+        async.flushMicrotasks();
+        final baseline = svc.resumePersistCount;
+
+        // 节流窗内推进进度：值更新只置脏不写盘（模拟播放器每秒 tick）
+        svc.setVideoResumePosition('/movies/exit.mp4', 61000);
+        async.elapse(const Duration(milliseconds: 100));
+        async.flushMicrotasks();
+        expect(svc.resumePersistCount, baseline, reason: '节流窗内值更新不该写盘');
+
+        // 模拟退出：_flushResumePosition 在 setVideoResumePosition 后立即 flush
+        svc.flushVideoResumePositions();
+        async.flushMicrotasks();
+        expect(svc.resumePersistCount, baseline + 1,
+            reason: '退出 flush 必须立即落盘，无需等满 10s 节流');
+
+        // 落盘内容拿到最新值（节流窗内杀进程也不丢这几秒）
+        String? raw;
+        SharedPreferences.getInstance().then((p) => raw = p.getString(keyResume));
+        async.flushMicrotasks();
+        final decoded = jsonDecode(raw!) as Map<String, dynamic>;
+        expect(decoded['/movies/exit.mp4'], 61000);
+      });
+    });
   });
 
   group('续播表 LRU 上限（P2-16）', () {

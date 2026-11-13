@@ -1,6 +1,7 @@
 /// PC 端 WebSocket 服务器
 use super::types::*;
 use flutter_rust_bridge::frb;
+use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
@@ -8,9 +9,10 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, Mutex, RwLock};
-use tokio_tungstenite::accept_async;
+use tokio_tungstenite::{accept_async, WebSocketStream};
 use tokio_tungstenite::tungstenite::protocol::Message;
 
 lazy_static! {
@@ -32,6 +34,9 @@ const HEARTBEAT_CHECK_INTERVAL_MS: u64 = 5000;
 /// 历史上这里是阻塞式 send，而发送时刻正持着全局 clients 锁——
 /// 一个停滞客户端就能把心跳、广播、单发、新连接注册全部冻结。
 const CLIENT_CHANNEL_CAPACITY: usize = 100;
+
+// 单条消息写超时（秒）：零窗口对端会让 send().await 永久挂住，而 evict 只 drop Sender，卡在写上的任务回不到 recv() 看不到 None，连接就成僵尸；写超时保证 send 任务必能退出并关闭 socket
+const CLIENT_WRITE_TIMEOUT_SECS: u64 = 30;
 
 /// 客户端连接句柄
 struct ClientHandle {
@@ -82,6 +87,7 @@ async fn client_snapshot(
 ///
 /// 返回的这批 id 就是慢客户端：调用方负责把它们从表里摘掉——
 /// 摘掉 Sender 会让该连接的 send 任务收到 None 后退出，socket 随之关闭。
+/// 卡在写上的 send 任务由 CLIENT_WRITE_TIMEOUT_SECS 写超时兜底退出（见 run_send_loop），不会残留僵尸连接。
 fn try_send_snapshot(
     snapshot: &[(String, mpsc::Sender<Message>)],
     message: &Message,
@@ -103,6 +109,7 @@ async fn evict_clients(clients: &Arc<Mutex<HashMap<String, ClientHandle>>>, ids:
     if ids.is_empty() {
         return;
     }
+    // 卡在零窗口写上的 send 任务看不到 drop Sender 后的 None，由 run_send_loop 的写超时兜底退出，不会留僵尸
     let mut guard = clients.lock().await;
     for id in ids {
         if guard.remove(*id).is_some() {
@@ -468,6 +475,31 @@ impl WsServer {
         Ok(client_list)
     }
 }
+/// 发送循环抽成独立函数：写超时可注入，测试才能用短超时验证慢客户端被真正断开
+async fn run_send_loop(
+    mut ws_sender: SplitSink<WebSocketStream<TcpStream>, Message>,
+    mut rx: mpsc::Receiver<Message>,
+    write_timeout: Duration,
+) {
+    while let Some(msg) = rx.recv().await {
+        // 写超时兜底：evict drop Sender 后，卡在零窗口写上的任务看不到 None，必须靠超时退出关 socket
+        match tokio::time::timeout(write_timeout, ws_sender.send(msg)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                println!("Failed to send message: {}", e);
+                break;
+            }
+            Err(_) => {
+                println!(
+                    "Client write timed out ({:?}), closing slow connection",
+                    write_timeout
+                );
+                break;
+            }
+        }
+    }
+}
+
 /// 处理单个 WebSocket 连接
 async fn handle_connection(
     stream: TcpStream,
@@ -484,8 +516,8 @@ async fn handle_connection(
 
     println!("WebSocket connection established: {}", client_id);
 
-    let (mut ws_sender, mut ws_receiver) = ws_stream.split();
-    let (tx, mut rx) = mpsc::channel::<Message>(CLIENT_CHANNEL_CAPACITY);
+    let (ws_sender, mut ws_receiver) = ws_stream.split();
+    let (tx, rx) = mpsc::channel::<Message>(CLIENT_CHANNEL_CAPACITY);
 
     // 创建客户端信息
     let client_info = ClientInfo::new(client_id.clone(), client_id.clone());
@@ -519,14 +551,11 @@ async fn handle_connection(
     }
 
     // 发送任务：从 channel 接收消息并发送给客户端
-    let mut send_task = tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            if let Err(e) = ws_sender.send(msg).await {
-                println!("Failed to send message: {}", e);
-                break;
-            }
-        }
-    });
+    let mut send_task = tokio::spawn(run_send_loop(
+        ws_sender,
+        rx,
+        Duration::from_secs(CLIENT_WRITE_TIMEOUT_SECS),
+    ));
 
     // 接收任务：从客户端接收消息
     let client_id_clone = client_id.clone();
@@ -725,5 +754,81 @@ mod tests {
         let clients: Arc<Mutex<HashMap<String, ClientHandle>>> =
             Arc::new(Mutex::new(HashMap::new()));
         assert!(super::sender_of(&clients, "nobody").await.is_none());
+    }
+
+    /// 零窗口对端：握手后一个字节都不读，服务端写大消息必然阻塞；
+    /// 写超时必须让 send 任务退出并关闭 socket（evict 僵尸连接修复的验收）
+    #[tokio::test]
+    async fn write_timeout_closes_zero_window_client() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let client_tcp = TcpStream::connect(addr).await.unwrap();
+        let (server_tcp, _) = listener.accept().await.unwrap();
+        // 客户端完成 WS 握手但之后绝不读数据，模拟零窗口/停滞对端
+        // 握手必须两侧并发驱动：先 await 客户端会干等服务端响应，而 accept_async 尚未开始，单任务运行时下死锁
+        let (client_res, server_res) = tokio::join!(
+            tokio_tungstenite::client_async("ws://127.0.0.1/", client_tcp),
+            accept_async(server_tcp)
+        );
+        let (mut client_ws, _) = client_res.expect("客户端握手应成功");
+        let server_ws = server_res.expect("服务端握手应成功");
+        let (ws_sender, ws_receiver) = server_ws.split();
+        let (tx, rx) = mpsc::channel::<Message>(CLIENT_CHANNEL_CAPACITY);
+        // 32MB 远超环回 socket 缓冲：对端不读时 send().await 必然挂住
+        tx.try_send(Message::Text("x".repeat(32 * 1024 * 1024).into()))
+            .expect("容量内应能塞入");
+        // 模拟 evict：表里的 Sender 已摘掉，只剩 send 任务手里这一个
+        drop(tx);
+
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            run_send_loop(ws_sender, rx, Duration::from_millis(300)),
+        )
+        .await
+        .expect("写超时必须让 send 任务退出，不得僵尸");
+
+        // 服务端两半都 drop ⇒ TCP 关闭：客户端必须读到 EOF/错误而不是永久挂住
+        drop(ws_receiver);
+        let ended = tokio::time::timeout(Duration::from_secs(5), client_ws.next())
+            .await
+            .expect("服务端断开后客户端不得挂住");
+        assert!(
+            !matches!(ended, Some(Ok(_))),
+            "连接应已关闭，却读到完整消息: {:?}",
+            ended
+        );
+    }
+
+    /// 正常客户端：消息原样送达；通道关闭（Sender 全 drop）后 send 任务正常退出
+    #[tokio::test]
+    async fn send_loop_delivers_and_exits_on_channel_close() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let client_tcp = TcpStream::connect(addr).await.unwrap();
+        let (server_tcp, _) = listener.accept().await.unwrap();
+        // 握手必须两侧并发驱动：先 await 客户端会干等服务端响应，而 accept_async 尚未开始，单任务运行时下死锁
+        let (client_res, server_res) = tokio::join!(
+            tokio_tungstenite::client_async("ws://127.0.0.1/", client_tcp),
+            accept_async(server_tcp)
+        );
+        let (mut client_ws, _) = client_res.expect("客户端握手应成功");
+        let server_ws = server_res.expect("服务端握手应成功");
+        let (ws_sender, ws_receiver) = server_ws.split();
+        let (tx, rx) = mpsc::channel::<Message>(CLIENT_CHANNEL_CAPACITY);
+        tx.try_send(text("hello")).expect("容量内应能塞入");
+        drop(tx);
+
+        let loop_done = tokio::spawn(run_send_loop(ws_sender, rx, Duration::from_secs(5)));
+        let got = tokio::time::timeout(Duration::from_secs(5), client_ws.next())
+            .await
+            .expect("正常客户端应及时收到消息")
+            .expect("应有消息")
+            .expect("消息不应是错误");
+        assert_eq!(got, text("hello"));
+        tokio::time::timeout(Duration::from_secs(5), loop_done)
+            .await
+            .expect("通道关闭后 send 任务应退出")
+            .expect("任务不应 panic");
+        drop(ws_receiver);
     }
 }

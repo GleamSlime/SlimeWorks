@@ -185,6 +185,8 @@ class _MediaItemTileState extends State<MediaItemTile> {
       NetworkImage(src),
       context,
       onError: (_, _) {
+        // tile 回收后旧 precache 的失败仍会回调：src 已变就丢弃，免得取消新 item 计时器、对旧 URL 记退避
+        if (widget.source != src) return;
         // 缩略图生成失败（节点忙回 503 等）：与超时走同一条退避闸门。
         // 旧实现在这里直接切原图，于是每次重建/滚动都立刻再打一次原图，
         // 慢节点下同一屏能连着打十几张 4K。
@@ -193,6 +195,8 @@ class _MediaItemTileState extends State<MediaItemTile> {
         _scheduleFallback(src);
       },
     ).then((_) {
+      // 回收后旧 precache 的完成回调同样会触发（失败也正常完成）：src 已变就丢弃，免得替新 item 取消计时器/置就绪
+      if (widget.source != src) return;
       if (_coverPrecacheFailed) return;
       _coverFallbackTimer?.cancel();
       if (!mounted) return;

@@ -56,6 +56,13 @@ pub fn get_model_file_size(preset: WhisperModelPreset) -> Option<u64> {
     std::fs::metadata(&path).ok().map(|m| m.len())
 }
 
+// 连接阶段卡住要尽早失败，不能让用户对着 0 字节干等
+const CONNECT_TIMEOUT_SECS: u64 = 10;
+
+// 只卡「两次成功读之间的间隔」而非总时长：3.1GB 的 large-v3 在慢网下要跑几十分钟，
+// 设总上限会让它每次都在同一处超时删档重下，永远装不上
+const READ_IDLE_TIMEOUT_SECS: u64 = 30;
+
 /// 下载模型文件（阻塞）
 /// 返回下载的字节数
 pub fn download_model(preset: WhisperModelPreset) -> Result<u64, String> {
@@ -65,24 +72,12 @@ pub fn download_model(preset: WhisperModelPreset) -> Result<u64, String> {
 
     slime_logger::sw_info!("[whisper] 开始下载模型: {} -> {:?}", url, dest);
 
-    // 大模型（2.9GB）在慢网下分钟级，但绝不能无限等：连接 10 秒、总时长 300 秒
-    let client = reqwest::blocking::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(300))
-        .build()
-        .map_err(|e| format!("创建下载客户端失败: {}", e))?;
-
-    let mut response = client
-        .get(&url)
-        .send()
-        .map_err(|e| format!("下载请求失败: {}", e))?;
-
-    if !response.status().is_success() {
-        return Err(format!("下载失败，HTTP 状态: {}", response.status()));
-    }
-
     // 先写 .part：任何一步失败都要删掉，否则下次会在同一目录留下垃圾
-    let write_result = write_stream_to(&mut response, &part);
+    let write_result = download_to_part(
+        &url,
+        &part,
+        std::time::Duration::from_secs(READ_IDLE_TIMEOUT_SECS),
+    );
     let total_bytes = match write_result {
         Ok(n) => n,
         Err(e) => {
@@ -108,6 +103,69 @@ pub fn download_model(preset: WhisperModelPreset) -> Result<u64, String> {
 
     slime_logger::sw_info!("[whisper] 模型下载完成: {} 字节", total_bytes);
     Ok(total_bytes)
+}
+
+// reqwest 0.12 的 blocking ClientBuilder 没有 read_timeout（只有 async 客户端有），
+// 而 blocking 的 timeout() 覆盖整个 body 读取，慢网大模型必被总上限掐断，
+// 所以这里用 async 客户端 + 自建 runtime，只保留连接与单次读空闲两道卡口
+fn download_to_part(url: &str, part: &Path, read_idle: std::time::Duration) -> Result<u64, String> {
+    // FRB 的 Normal 任务跑在普通线程池上，自建 runtime 不会与既有 runtime 嵌套
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .map_err(|e| format!("创建下载运行时失败: {}", e))?;
+
+    // send() 会同步构造 tokio::time::Sleep，必须在 runtime 上下文内调用：
+    // 写成 block_on(client.get(url).send()) 时 send() 先于上下文建立执行，直接 panic
+    let mut response = runtime
+        .block_on(async {
+            let client = reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(CONNECT_TIMEOUT_SECS))
+                .read_timeout(read_idle)
+                .build()
+                .map_err(|e| format!("创建下载客户端失败: {}", e))?;
+            client
+                .get(url)
+                .send()
+                .await
+                .map_err(|e| format!("下载请求失败: {}", e))
+        })?;
+
+    if !response.status().is_success() {
+        return Err(format!("下载失败，HTTP 状态: {}", response.status()));
+    }
+
+    let mut stream = ChunkReader {
+        runtime: &runtime,
+        response: &mut response,
+        pending: std::io::Cursor::new(Vec::new()),
+    };
+    write_stream_to(&mut stream, part)
+}
+
+// 把 async 的 chunk 流适配成 std::io::Read，让落盘逻辑继续复用 write_stream_to
+struct ChunkReader<'a> {
+    runtime: &'a tokio::runtime::Runtime,
+    response: &'a mut reqwest::Response,
+    pending: std::io::Cursor<Vec<u8>>,
+}
+
+impl std::io::Read for ChunkReader<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        // 上一块没读完必须先交出去，否则 chunk 尾部字节会被丢掉
+        if self.pending.position() >= self.pending.get_ref().len() as u64 {
+            let chunk = self
+                .runtime
+                .block_on(self.response.chunk())
+                .map_err(std::io::Error::other)?;
+            match chunk {
+                Some(bytes) => self.pending = std::io::Cursor::new(bytes.to_vec()),
+                None => return Ok(0),
+            }
+        }
+        std::io::Read::read(&mut self.pending, buf)
+    }
 }
 
 /// 流式落盘，返回写入字节数；不负责清理临时文件
@@ -241,6 +299,109 @@ mod tests {
 
         let err = write_stream_to(&mut Broken, &part).unwrap_err();
         assert!(err.contains("读取数据失败"), "err = {err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // 起一个只服务一次的本地 HTTP 服务器：body 按 chunk_size 分块、每块间隔 gap 写出；
+    // stall=true 时只发首块就静默且不关连接，用来验证读空闲超时真的生效
+    fn spawn_http_server(
+        body: Vec<u8>,
+        chunk_size: usize,
+        gap: std::time::Duration,
+        stall: bool,
+    ) -> (u16, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = std::thread::spawn(move || {
+            let Ok((mut sock, _)) = listener.accept() else {
+                return;
+            };
+            // 先读完整请求头再响应，否则客户端可能因发送缓冲写满而卡住
+            let mut req = Vec::new();
+            let mut one = [0u8; 1];
+            while !req.ends_with(b"\r\n\r\n") {
+                match sock.read(&mut one) {
+                    Ok(0) | Err(_) => return,
+                    Ok(_) => req.extend_from_slice(&one),
+                }
+            }
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            if sock.write_all(header.as_bytes()).is_err() {
+                return;
+            }
+            for (i, chunk) in body.chunks(chunk_size).enumerate() {
+                if stall && i > 0 {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    return;
+                }
+                if sock.write_all(chunk).is_err() {
+                    return;
+                }
+                let _ = sock.flush();
+                if !gap.is_zero() {
+                    std::thread::sleep(gap);
+                }
+            }
+        });
+        (port, handle)
+    }
+
+    // 慢而稳定的分块下载必须完整落盘：chunk 大于 8192 读缓冲，覆盖「一块要读多次」的边界
+    #[test]
+    fn slow_chunked_download_reassembles_every_byte() {
+        let body: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+        let (port, server) = spawn_http_server(
+            body.clone(),
+            20_000,
+            std::time::Duration::from_millis(1),
+            false,
+        );
+        let dir = std::env::temp_dir().join(format!("sw_whisper_dl_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let part = dir.join(".model.bin.part");
+
+        let n = download_to_part(
+            &format!("http://127.0.0.1:{port}/model.bin"),
+            &part,
+            std::time::Duration::from_secs(10),
+        )
+        .expect("慢而稳定的下载不该失败");
+        server.join().unwrap();
+
+        assert_eq!(n, body.len() as u64);
+        assert_eq!(std::fs::read(&part).unwrap(), body, "分块重组不得丢字节");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // 对端静默属真卡死：必须靠读空闲超时尽快中止，而不是挂着等总时长上限
+    #[test]
+    fn stalled_download_aborts_on_read_idle_timeout() {
+        let body: Vec<u8> = vec![7u8; 200_000];
+        let (port, _server) = spawn_http_server(body, 20_000, std::time::Duration::ZERO, true);
+        let dir = std::env::temp_dir().join(format!("sw_whisper_stall_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let part = dir.join(".model.bin.part");
+
+        let start = std::time::Instant::now();
+        let err = download_to_part(
+            &format!("http://127.0.0.1:{port}/model.bin"),
+            &part,
+            std::time::Duration::from_millis(300),
+        )
+        .expect_err("对端静默必须报错");
+        let elapsed = start.elapsed();
+
+        assert!(err.contains("读取数据失败"), "err = {err}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "读空闲超时应尽快生效, 耗时 {elapsed:?}"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

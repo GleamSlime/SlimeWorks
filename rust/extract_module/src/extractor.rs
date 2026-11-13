@@ -168,6 +168,17 @@ fn describe_zip_error_anyhow(err: &anyhow::Error, password_given: bool) -> Strin
             return describe_zip_error(zip_err, password_given);
         }
     }
+    // 读取期 AES HMAC 失败是 zip 直接 new 出来的裸 io::Error，链里没有 ZipError，
+    // 只 downcast ZipError 会让上面那条 Io(InvalidData) 映射永远命中不了
+    if password_given {
+        for cause in err.chain() {
+            if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
+                if io_err.kind() == std::io::ErrorKind::InvalidData {
+                    return "密码错误或未提供".to_string();
+                }
+            }
+        }
+    }
     format!("{}", err)
 }
 
@@ -1237,6 +1248,69 @@ mod zip_tests {
         .unwrap_err()
         .to_string();
         assert!(err.contains("密码"), "缺密码应提示需要密码, got: {err}");
+    }
+
+    // 读取期 HMAC 失败是裸 io::Error（链里没有 ZipError），旧实现只 downcast ZipError
+    // 时这条映射是死代码；这里直接打真实入口证明它已激活
+    #[test]
+    fn hmac_io_error_maps_to_password_error() {
+        let e = anyhow::Error::from(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid authentication code, this could be due to an invalid password or errors in the data",
+        ));
+        assert_eq!(describe_zip_error_anyhow(&e, true), "密码错误或未提供");
+    }
+
+    // 没给密码时同样的 HMAC 错误不得被误判成「密码错」，否则用户会去改一个根本不存在的密码
+    #[test]
+    fn hmac_io_error_without_password_is_not_blamed_on_password() {
+        let e = anyhow::Error::from(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid authentication code, this could be due to an invalid password or errors in the data",
+        ));
+        let msg = describe_zip_error_anyhow(&e, false);
+        assert_ne!(msg, "密码错误或未提供");
+        assert!(!msg.contains("密码"), "got: {msg}");
+    }
+
+    // 真实调用链上 io::Error 常被 anyhow context 包一层，必须遍历 chain 才认得出来
+    #[test]
+    fn hmac_io_error_survives_context_wrapping() {
+        let e = anyhow::Error::from(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid authentication code",
+        ))
+        .context("读取压缩包条目失败");
+        assert_eq!(describe_zip_error_anyhow(&e, true), "密码错误或未提供");
+    }
+
+    // 只有 InvalidData 才是 HMAC 语义；其它 IO 错误（磁盘满/提前 EOF）不得冒充密码问题
+    #[test]
+    fn other_io_errors_are_not_rewritten_as_password_error() {
+        for kind in [
+            std::io::ErrorKind::UnexpectedEof,
+            std::io::ErrorKind::PermissionDenied,
+            std::io::ErrorKind::ConnectionReset,
+        ] {
+            let e = anyhow::Error::from(std::io::Error::new(kind, "io failure"));
+            let msg = describe_zip_error_anyhow(&e, true);
+            assert!(!msg.contains("密码"), "kind={kind:?} 被误判, got: {msg}");
+        }
+    }
+
+    // 原有 ZipError 分支必须保持优先级，新增的 io 识别不能把它挤掉
+    #[test]
+    fn zip_error_branch_still_takes_precedence() {
+        let e = anyhow::Error::from(zip::result::ZipError::InvalidPassword);
+        assert_eq!(describe_zip_error_anyhow(&e, false), "密码错误或未提供");
+
+        let e = anyhow::Error::from(zip::result::ZipError::UnsupportedArchive(
+            zip::result::ZipError::PASSWORD_REQUIRED,
+        ));
+        assert_eq!(
+            describe_zip_error_anyhow(&e, false),
+            "该压缩包已加密，需要提供密码"
+        );
     }
 
     #[test]

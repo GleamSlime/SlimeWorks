@@ -159,7 +159,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
     });
   }
 
-  /// 立即把当前进度落盘（切页/销毁时用，免得丢掉最后这几秒）。
+  /// 退出时强制把当前进度落盘（切页/销毁时用，绕过节流免得丢最后这几秒）。
   void _flushResumePosition() {
     final player = _player;
     if (player == null) return;
@@ -171,6 +171,8 @@ class _VideoPreviewState extends State<_VideoPreview> {
       src,
       pos >= dur - 10000 ? 0 : pos,
     );
+    // 值更新只进节流（最坏 10s），dispose 不能 await，用 unawaited 立刻补齐落盘
+    unawaited(_volumePrefs.flushVideoResumePositions());
   }
 
   // 应用内迷你悬浮窗（画中画）：复用同一 Player 的第二个视频输出

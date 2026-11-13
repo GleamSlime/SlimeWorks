@@ -255,8 +255,12 @@ impl EpubParser {
 
         let mut image_map: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
+        // basename 兜底索引按章建一次（仅在精确候选全 miss 时才真正构建），多张图共享
+        let mut basename_index: Option<BasenameIndex> = None;
         for src in &wanted {
-            if let Some(data_url) = load_image_data_url(archive, epub_key, chapter_path, src) {
+            if let Some(data_url) =
+                load_image_data_url(archive, epub_key, chapter_path, src, &mut basename_index)
+            {
                 image_map.insert(src.clone(), data_url);
             } else {
                 println!("EpubParser: Image not found in archive: {}", src);
@@ -658,16 +662,80 @@ impl EpubParser {
 // （旧实现每张图往 image_map 塞 4 个路径别名，等于把内存放大 4 倍）；
 // ③ 跨章复用已编码的 base64，避免翻页时反复读 zip + 反复编码。
 
-/// 跨章 base64 缓存的总字节预算。插图本单张常见 100KB~2MB，
-/// 32 MiB 大约覆盖一章到两章的图；超出后按 LRU 淘汰，保证内存有上界。
+/// 跨章 base64 缓存的**全局**字节预算：所有书共享同一上界（不是每书各 32MiB），
+/// 超出后按全局 LRU 跨书逐出最久未用条目，读 N 本书内存也不会超过该值。
 const IMAGE_CACHE_BUDGET_BYTES: usize = 32 * 1024 * 1024;
 
-/// 缓存键：epub 绝对路径。条目值为 (base64 data URL, 字节数)。
-type ImageCache = std::collections::HashMap<String, std::collections::VecDeque<(String, String)>>;
+/// 同时保留的缓存键（书）数量上限：键含 mtime，书被替换/重导出即产生新键，
+/// 超限时整队回收最久未用的书（含同一书的旧 mtime 版本），避免旧键永久滞留。
+const IMAGE_CACHE_MAX_KEYS: usize = 8;
+
+/// 全局图片缓存。缓存键：epub 路径#mtime；books 每书一个队列（资源名, data URL），
+/// order 记录跨书的全局 LRU 次序，total_bytes 增量维护总字节，逐出依据全局次序。
+#[derive(Default)]
+struct ImageCache {
+    books: std::collections::HashMap<String, std::collections::VecDeque<(String, String)>>,
+    order: std::collections::VecDeque<(String, String)>,
+    total_bytes: usize,
+}
+
+impl ImageCache {
+    /// 把 (书, 资源) 提到全局队首：命中与写入都刷新全局 LRU，跨书逐出才不误杀刚用过的图
+    fn touch(&mut self, epub_key: &str, resource: &str) {
+        if let Some(pos) = self
+            .order
+            .iter()
+            .position(|(k, r)| k == epub_key && r == resource)
+        {
+            self.order.remove(pos);
+        }
+        self.order
+            .push_front((epub_key.to_string(), resource.to_string()));
+    }
+
+    /// 整队回收一本书：旧 mtime 版本必须连键带图一起清掉，否则键集合只增不减
+    fn drop_book(&mut self, epub_key: &str) {
+        if let Some(queue) = self.books.remove(epub_key) {
+            for (_, url) in &queue {
+                self.total_bytes = self.total_bytes.saturating_sub(url.len());
+            }
+        }
+        self.order.retain(|(k, _)| k != epub_key);
+    }
+
+    /// 全局总字节超预算时跨书逐出全局最久未用条目；队列空了的书连键一起移除
+    fn evict_over_budget(&mut self) {
+        while self.total_bytes > IMAGE_CACHE_BUDGET_BYTES {
+            let Some((key, resource)) = self.order.pop_back() else {
+                break;
+            };
+            if let Some(queue) = self.books.get_mut(&key) {
+                if let Some(pos) = queue.iter().position(|(k, _)| k == &resource) {
+                    if let Some((_, url)) = queue.remove(pos) {
+                        self.total_bytes = self.total_bytes.saturating_sub(url.len());
+                    }
+                }
+                if queue.is_empty() {
+                    self.books.remove(&key);
+                }
+            }
+        }
+    }
+
+    /// 键数超限时整队逐出最久未用的书（全局队尾条目所属的书）
+    fn evict_overflow_keys(&mut self) {
+        while self.books.len() > IMAGE_CACHE_MAX_KEYS {
+            let Some((key, _)) = self.order.back().cloned() else {
+                break;
+            };
+            self.drop_book(&key);
+        }
+    }
+}
 
 fn image_cache() -> &'static std::sync::Mutex<ImageCache> {
     static CACHE: std::sync::OnceLock<std::sync::Mutex<ImageCache>> = std::sync::OnceLock::new();
-    CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+    CACHE.get_or_init(|| std::sync::Mutex::new(ImageCache::default()))
 }
 
 /// 缓存键 = 路径 + mtime：同一路径的 epub 被替换/重导出后，
@@ -682,18 +750,20 @@ fn epub_cache_key(path: &Path) -> String {
     format!("{}#{}", path.to_string_lossy(), mtime)
 }
 
-/// 取缓存里的 data URL（命中即提到队首，淘汰发生在插入时）。
+/// 取缓存里的 data URL（命中即提到全局队首，淘汰发生在插入时）。
 fn cache_get(epub_key: &str, resource: &str) -> Option<String> {
     let mut cache = image_cache().lock().ok()?;
-    let queue = cache.get_mut(epub_key)?;
+    let queue = cache.books.get_mut(epub_key)?;
     let pos = queue.iter().position(|(k, _)| k == resource)?;
     let entry = queue.remove(pos)?;
     let url = entry.1.clone();
     queue.push_front(entry);
+    // 书内队首之外还要刷新全局次序，否则跨书逐出会把刚命中的图当最久未用杀掉
+    cache.touch(epub_key, resource);
     Some(url)
 }
 
-/// 写入缓存并按预算淘汰队尾；单张超出预算的图不缓存（仍会正常返回）。
+/// 写入缓存并按**全局**预算跨书淘汰队尾；单张超出预算的图不缓存（仍会正常返回）。
 fn cache_put(epub_key: &str, resource: &str, url: String) {
     let size = url.len();
     if size > IMAGE_CACHE_BUDGET_BYTES {
@@ -702,18 +772,23 @@ fn cache_put(epub_key: &str, resource: &str, url: String) {
     let Ok(mut cache) = image_cache().lock() else {
         return;
     };
-    let queue = cache.entry(epub_key.to_string()).or_default();
-    if let Some(pos) = queue.iter().position(|(k, _)| k == resource) {
-        queue.remove(pos);
+    // 同键同资源重复写入先摘旧值，避免总字节被重复计数
+    if let Some(queue) = cache.books.get_mut(epub_key) {
+        if let Some(pos) = queue.iter().position(|(k, _)| k == resource) {
+            if let Some((_, old)) = queue.remove(pos) {
+                cache.total_bytes = cache.total_bytes.saturating_sub(old.len());
+            }
+        }
     }
-    queue.push_front((resource.to_string(), url));
-    let mut total: usize = queue.iter().map(|(_, v)| v.len()).sum();
-    while total > IMAGE_CACHE_BUDGET_BYTES {
-        let Some((_, dropped)) = queue.pop_back() else {
-            break;
-        };
-        total = total.saturating_sub(dropped.len());
-    }
+    cache
+        .books
+        .entry(epub_key.to_string())
+        .or_default()
+        .push_front((resource.to_string(), url));
+    cache.total_bytes = cache.total_bytes.saturating_add(size);
+    cache.touch(epub_key, resource);
+    cache.evict_over_budget();
+    cache.evict_overflow_keys();
 }
 
 /// 按 zip 条目名猜测图片 MIME。
@@ -787,39 +862,93 @@ fn resource_candidates(chapter_path: Option<&Path>, src: &str) -> Vec<String> {
     out
 }
 
+/// basename（小写）→ zip 条目名 的兜底索引：只存名字不存数据，
+/// 避免旧实现「全书图片 base64 + 4 个路径别名」的内存放大。
+type BasenameIndex = std::collections::HashMap<String, String>;
+
+/// 一次性扫中央目录建 basename 索引（仅图片条目）；file_names 来自 HashMap 无序，
+/// 同名条目按「路径更浅、再字典序更小」确定性择优，避免兜底命中随迭代顺序漂移而张冠李戴。
+fn build_basename_index(archive: &ZipArchive<File>) -> BasenameIndex {
+    let mut index = BasenameIndex::new();
+    for name in archive.file_names() {
+        if !is_image_entry(&name.to_lowercase()) {
+            continue;
+        }
+        // 条目名也可能含反斜杠（不规范打包），与 src 一样按两种分隔符取 basename
+        if let Some(base) = name.rsplit(['/', '\\']).next() {
+            let key = base.to_lowercase();
+            let better = match index.get(&key) {
+                Some(prev) => {
+                    (name.matches('/').count(), name) < (prev.matches('/').count(), prev.as_str())
+                }
+                None => true,
+            };
+            if better {
+                index.insert(key, name.to_string());
+            }
+        }
+    }
+    index
+}
+
+/// 按单个候选名取图：先查缓存，再精确查中央目录，命中即编码并写缓存
+fn load_candidate_data_url(
+    archive: &mut ZipArchive<File>,
+    epub_key: &str,
+    candidate: &str,
+) -> Option<String> {
+    if let Some(url) = cache_get(epub_key, candidate) {
+        return Some(url);
+    }
+    // 中央目录里按名字精确查一次即可，不再遍历全部条目
+    let Ok(mut entry) = archive.by_name(candidate) else {
+        return None;
+    };
+    if entry.is_dir() {
+        return None;
+    }
+    let name_lower = entry.name().to_lowercase();
+    if !is_image_entry(&name_lower) {
+        return None;
+    }
+    let mut buffer = Vec::new();
+    if entry.read_to_end(&mut buffer).is_err() || buffer.is_empty() {
+        return None;
+    }
+    let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &buffer);
+    let url = format!("data:{};base64,{}", guess_image_mime(&name_lower), base64_data);
+    cache_put(epub_key, candidate, url.clone());
+    Some(url)
+}
+
 /// 读取 src 对应图片并编码成 data URL；找不到返回 None。
+/// basename_index 由调用方按章持有：精确候选全 miss 时才建一次，供同章多张图复用。
 fn load_image_data_url(
     archive: &mut ZipArchive<File>,
     epub_key: &str,
     chapter_path: Option<&Path>,
     src: &str,
+    basename_index: &mut Option<BasenameIndex>,
 ) -> Option<String> {
+    // 候选优先级不变：先按章节路径精确解析，再裸 src / 文件名
     for candidate in resource_candidates(chapter_path, src) {
-        if let Some(url) = cache_get(epub_key, &candidate) {
+        if let Some(url) = load_candidate_data_url(archive, epub_key, &candidate) {
             return Some(url);
         }
-        // 中央目录里按名字精确查一次即可，不再遍历全部条目
-        let Ok(mut entry) = archive.by_name(&candidate) else {
-            continue;
-        };
-        if entry.is_dir() {
-            continue;
-        }
-        let name_lower = entry.name().to_lowercase();
-        if !is_image_entry(&name_lower) {
-            continue;
-        }
-        let mut buffer = Vec::new();
-        if entry.read_to_end(&mut buffer).is_err() || buffer.is_empty() {
-            continue;
-        }
-        let base64_data =
-            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &buffer);
-        let url = format!("data:{};base64,{}", guess_image_mime(&name_lower), base64_data);
-        cache_put(epub_key, &candidate, url.clone());
-        return Some(url);
     }
-    None
+    // 精确候选全 miss（chapter_path 缺失、../ 越界、反斜杠 src）且图在子目录时，
+    // 按 basename 查索引兜底命中任意目录下的同名条目，否则这些插图本会静默丢图
+    let plain = src.split('#').next().unwrap_or(src);
+    let plain = plain.split('?').next().unwrap_or(plain);
+    let basename = plain.rsplit(['/', '\\']).next()?.to_lowercase();
+    if basename.is_empty() {
+        return None;
+    }
+    if basename_index.is_none() {
+        *basename_index = Some(build_basename_index(archive));
+    }
+    let entry_name = basename_index.as_ref()?.get(&basename)?;
+    load_candidate_data_url(archive, epub_key, entry_name)
 }
 
 #[cfg(test)]
@@ -1042,6 +1171,94 @@ mod tests {
         path
     }
 
+    /// 构造「精确候选必 miss」的插图本：越界 ../、反斜杠 src、裸文件名引子目录图，
+    /// 另加一章精确可解析的同名图 + 同名诱饵，验证兜底不会抢走精确候选的优先级。
+    fn build_fallback_epub(dir: &Path, file_name: &str) -> PathBuf {
+        let path = dir.join(file_name);
+        let file = File::create(&path).expect("创建 epub 文件失败");
+        let mut writer = zip::ZipWriter::new(file);
+        let stored = FileOptions::default().compression_method(CompressionMethod::Stored);
+
+        writer.start_file("mimetype", stored).unwrap();
+        writer.write_all(b"application/epub+zip").unwrap();
+
+        writer.start_file("META-INF/container.xml", stored).unwrap();
+        writer
+            .write_all(
+                br#"<?xml version="1.0" encoding="UTF-8"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#,
+            )
+            .unwrap();
+
+        let opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>兜底插图书</dc:title>
+    <dc:identifier id="bookid">urn:uuid:1a2b3c4d-0000-4000-8000-00000000000f</dc:identifier>
+    <dc:language>zh-CN</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch3" href="ch3.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch4" href="text/ch4.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine progression="ltr">
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+    <itemref idref="ch3"/>
+    <itemref idref="ch4"/>
+  </spine>
+</package>"#;
+        writer.start_file("OEBPS/content.opf", stored).unwrap();
+        writer.write_all(opf.as_bytes()).unwrap();
+
+        // ch1 在 OEBPS/ 下引 ../images/a.png：消解后落到根 images/a.png，实际条目在 OEBPS/images/
+        let ch1 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body><p>越界相对路径</p>
+<img src="../images/a.png" alt="a"/></body></html>"#;
+        writer.start_file("OEBPS/ch1.xhtml", stored).unwrap();
+        writer.write_all(ch1.as_bytes()).unwrap();
+
+        // ch2 用反斜杠 src：按 '/' 消解会得到畸形候选，只能靠 basename 兜底
+        let ch2 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body><p>反斜杠 src</p>
+<img src="..\images\b.png" alt="b"/></body></html>"#;
+        writer.start_file("OEBPS/ch2.xhtml", stored).unwrap();
+        writer.write_all(ch2.as_bytes()).unwrap();
+
+        // ch3 用裸文件名引子目录里的图：精确候选只命中根目录，必须靠索引兜底
+        let ch3 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body><p>裸文件名</p>
+<img src="c.png" alt="c"/></body></html>"#;
+        writer.start_file("OEBPS/ch3.xhtml", stored).unwrap();
+        writer.write_all(ch3.as_bytes()).unwrap();
+
+        // ch4 在 OEBPS/text/ 下引 ../images/a.png：可精确解析，必须压过同名诱饵
+        let ch4 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body><p>精确优先</p>
+<img src="../images/a.png" alt="a"/></body></html>"#;
+        writer.start_file("OEBPS/text/ch4.xhtml", stored).unwrap();
+        writer.write_all(ch4.as_bytes()).unwrap();
+
+        for (name, payload) in [
+            ("OEBPS/images/a.png", "PNG-FALLBACK-A"),
+            ("OEBPS/images/b.png", "PNG-FALLBACK-B"),
+            ("OEBPS/images/c.png", "PNG-FALLBACK-C"),
+            ("OEBPS/other/a.png", "PNG-DECOY-A"),
+        ] {
+            writer.start_file(name, stored).unwrap();
+            writer.write_all(payload.as_bytes()).unwrap();
+        }
+
+        writer.finish().expect("写入 epub zip 失败");
+        path
+    }
+
     /// 创建唯一临时目录
     fn make_temp_dir(tag: &str) -> PathBuf {
         // 先把进程 HOME 拉进隔离临时目录：get_chapter_content 会把 epub_css 缓存
@@ -1074,6 +1291,27 @@ mod tests {
         assert!(css_dir.exists(), "get_chapter_content 应创建 CSS 缓存目录");
         std::fs::remove_dir_all(&css_dir).expect("删除 CSS 缓存目录失败");
         assert!(!css_dir.exists(), "删除后不应残留任何缓存（写入即归零）");
+    }
+
+    /// 全局图片缓存是进程级共享的：断言缓存状态的用例必须串行，避免并发互相逐出导致误判
+    fn cache_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// 取当前全局缓存总字节（真实状态，非 mock）
+    fn cache_total_bytes() -> usize {
+        image_cache().lock().unwrap_or_else(|e| e.into_inner()).total_bytes
+    }
+
+    /// 取当前全局缓存键数量（真实状态，非 mock）
+    fn cache_key_count() -> usize {
+        image_cache().lock().unwrap_or_else(|e| e.into_inner()).books.len()
+    }
+
+    /// 测试用：payload → 标准 base64（与实现同一引擎，用于核对内嵌内容）
+    fn b64(payload: &str) -> String {
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, payload.as_bytes())
     }
 
     #[test]
@@ -1264,6 +1502,7 @@ mod tests {
     #[test]
     fn test_image_cache_reuses_across_chapters_and_respects_budget() {
         // 跨章缓存：同一本书重复读章不应反复读 zip、反复 base64（需 mtime 参与缓存键）
+        let _guard = cache_test_guard();
         let dir = make_temp_dir("cache");
         let path = build_illustrated_epub(&dir, "illus.epub", 2);
 
@@ -1283,6 +1522,157 @@ mod tests {
         );
 
         delete_css_cache_and_assert_zero(&path);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_image_cache_budget_is_global_across_books() {
+        let _guard = cache_test_guard();
+        // 9MiB × 5 本书 = 45MiB > 32MiB：预算必须是全局上界，跨书逐出，而非每书各留 32MiB
+        let chunk = 9 * 1024 * 1024;
+        let keys: Vec<String> = (0..5).map(|i| format!("/global/book{i}.epub#1")).collect();
+        for (i, key) in keys.iter().enumerate() {
+            cache_put(key, "img/a.png", format!("data:image/png;base64,{}", "x".repeat(chunk)));
+            let total = cache_total_bytes();
+            assert!(
+                total <= IMAGE_CACHE_BUDGET_BYTES,
+                "第 {i} 次写入后全局总字节必须 ≤ 预算，实际 {total}"
+            );
+        }
+        // 最久未用的两本书被跨书逐出，最新一本仍可命中复用
+        assert!(cache_get(&keys[0], "img/a.png").is_none(), "最旧的书应被全局逐出");
+        assert!(cache_get(&keys[1], "img/a.png").is_none(), "次旧的书应被全局逐出");
+        let embedded = cache_get(&keys[4], "img/a.png").expect("最新的书应仍在缓存");
+        assert!(embedded.starts_with("data:image/png;base64,"));
+
+        // 命中提到全局队首：随后再写一本，被逐出的应是未命中的那本而非刚命中的
+        assert!(cache_get(&keys[2], "img/a.png").is_some());
+        cache_put("/global/book5.epub#1", "img/a.png", format!("data:image/png;base64,{}", "x".repeat(chunk)));
+        assert!(cache_total_bytes() <= IMAGE_CACHE_BUDGET_BYTES);
+        assert!(cache_get(&keys[3], "img/a.png").is_none(), "未命中的书应先被逐出");
+        assert!(cache_get(&keys[2], "img/a.png").is_some(), "刚命中的书不应被逐出");
+
+        // 单张超预算拒存：不得进缓存，也不得触发逐出影响其它条目
+        let before = cache_total_bytes();
+        cache_put("/global/book5.epub#1", "img/huge.png", "x".repeat(IMAGE_CACHE_BUDGET_BYTES + 1));
+        assert!(cache_get("/global/book5.epub#1", "img/huge.png").is_none(), "单张超预算不得进缓存");
+        assert_eq!(cache_total_bytes(), before, "拒存超预算图不应改变总字节");
+        assert!(cache_get(&keys[2], "img/a.png").is_some());
+
+        // 已内嵌（已返回）的 data URL 是独立 String，后续逐出不得影响它
+        assert!(embedded.starts_with("data:image/png;base64,"), "已取出的内嵌图不受逐出影响");
+        assert!(cache_key_count() <= IMAGE_CACHE_MAX_KEYS);
+    }
+
+    #[test]
+    fn test_image_cache_reclaims_stale_keys_and_old_mtime_versions() {
+        let _guard = cache_test_guard();
+        let dir = make_temp_dir("stalekey");
+        let path = build_illustrated_epub(&dir, "illus.epub", 1);
+
+        // 第一版书：读章后旧键进缓存
+        let old_key = epub_cache_key(&path);
+        let _ = EpubParser::get_chapter_content(&path, 0).expect("读取第 0 章失败");
+        assert!(cache_get(&old_key, "OEBPS/img/ch0.png").is_some());
+
+        // 同一路径被替换/重导出：mtime 前移产生新键，旧键在键数超限前仍保留
+        let new_mtime = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(new_mtime)
+            .unwrap();
+        let new_key = epub_cache_key(&path);
+        assert_ne!(old_key, new_key, "mtime 变化必须产生新缓存键");
+        let _ = EpubParser::get_chapter_content(&path, 0).expect("重读第 0 章失败");
+        assert!(cache_get(&new_key, "OEBPS/img/ch0.png").is_some());
+        assert!(cache_get(&old_key, "OEBPS/img/ch0.png").is_some(), "未超限时旧键暂留");
+
+        // 再读 MAX_KEYS 本别的书：键数超限后最久未用的书（含同一书旧 mtime 版本）整队回收
+        for i in 0..IMAGE_CACHE_MAX_KEYS {
+            cache_put(
+                &format!("/stale/other{i}.epub#1"),
+                "img/x.png",
+                "data:image/png;base64,eA==".to_string(),
+            );
+        }
+        assert!(
+            cache_get(&old_key, "OEBPS/img/ch0.png").is_none(),
+            "旧 mtime 版本的键必须被回收，不得永久滞留"
+        );
+        assert!(
+            cache_key_count() <= IMAGE_CACHE_MAX_KEYS,
+            "缓存键数量必须有上界，实际 {}",
+            cache_key_count()
+        );
+        assert!(
+            cache_get(&format!("/stale/other{}.epub#1", IMAGE_CACHE_MAX_KEYS - 1), "img/x.png").is_some(),
+            "最新写入的书仍可命中"
+        );
+
+        delete_css_cache_and_assert_zero(&path);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_image_fallback_finds_subdir_entries_by_basename() {
+        let dir = make_temp_dir("fallback");
+        let path = build_fallback_epub(&dir, "fallback.epub");
+
+        // ① ../ 越界解析：OEBPS/ch1.xhtml 引 ../images/a.png，实际条目在 OEBPS/images/a.png
+        let h1 = EpubParser::get_chapter_content(&path, 0).expect("读取第 0 章失败");
+        assert!(h1.contains(&b64("PNG-FALLBACK-A")), "越界 ../ 的图应按 basename 兜底命中");
+        assert!(!h1.contains(&b64("PNG-DECOY-A")), "兜底不得张冠李戴到同名诱饵");
+
+        // ② 反斜杠 src：..\images\b.png 只能靠 basename 兜底
+        let h2 = EpubParser::get_chapter_content(&path, 1).expect("读取第 1 章失败");
+        assert!(h2.contains(&b64("PNG-FALLBACK-B")), "反斜杠 src 的图应兜底命中");
+
+        // ③ 裸文件名引子目录图：c.png 实际在 OEBPS/images/c.png
+        let h3 = EpubParser::get_chapter_content(&path, 2).expect("读取第 2 章失败");
+        assert!(h3.contains(&b64("PNG-FALLBACK-C")), "子目录图应按 basename 兜底命中");
+
+        // ④ 精确候选优先：text/ch4.xhtml 可精确解析到 OEBPS/images/a.png，不得被诱饵抢走
+        let h4 = EpubParser::get_chapter_content(&path, 3).expect("读取第 3 章失败");
+        assert!(h4.contains(&b64("PNG-FALLBACK-A")), "精确解析应命中正确条目");
+        assert!(!h4.contains(&b64("PNG-DECOY-A")), "精确候选必须压过同名诱饵");
+
+        // 各章不得串图
+        assert!(!h1.contains(&b64("PNG-FALLBACK-B")));
+        assert!(!h2.contains(&b64("PNG-FALLBACK-C")));
+
+        delete_css_cache_and_assert_zero(&path);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_load_image_data_url_without_chapter_path_uses_basename_index() {
+        let dir = make_temp_dir("nochapter");
+        let path = build_fallback_epub(&dir, "fallback.epub");
+        let mut archive = ZipArchive::new(File::open(&path).unwrap()).unwrap();
+        let key = epub_cache_key(&path);
+        let mut index: Option<BasenameIndex> = None;
+
+        // chapter_path 缺失时裸文件名只能靠索引命中子目录条目
+        let url = load_image_data_url(&mut archive, &key, None, "c.png", &mut index)
+            .expect("子目录图应兜底命中");
+        assert!(url.contains(&b64("PNG-FALLBACK-C")));
+        assert!(index.is_some(), "兜底命中后索引应已建立以便同章复用");
+
+        // 第二次走缓存复用：结果一致，索引不重建
+        let again = load_image_data_url(&mut archive, &key, None, "c.png", &mut index)
+            .expect("缓存复用应命中");
+        assert_eq!(url, again);
+
+        // 反斜杠 src 在 chapter_path 缺失时同样靠 basename 兜底
+        let b = load_image_data_url(&mut archive, &key, None, "..\\images\\b.png", &mut index)
+            .expect("反斜杠 src 应兜底命中");
+        assert!(b.contains(&b64("PNG-FALLBACK-B")));
+
+        // 不存在的图仍应返回 None
+        assert!(load_image_data_url(&mut archive, &key, None, "missing.png", &mut index).is_none());
+
         std::fs::remove_dir_all(&dir).ok();
     }
 

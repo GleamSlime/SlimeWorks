@@ -29,7 +29,7 @@ const FRAME_IO_TIMEOUT_SECS: u64 = 60;
 /// transfers 表保留的终态条目上限。
 ///
 /// 传输记录原先只增不删，传几百个文件就能把它撑到几千条，而 get_transfers
-/// 每轮轮询都会把这堆记录整份克隆+序列化。只清理终态（完成/取消/失败）记录，
+/// 每轮轮询都会把这堆记录整份克隆+序列化。只清理终态（完成/取消/失败/拒绝）记录，
 /// 进行中的一条都不动。
 const MAX_FINISHED_TRANSFERS: usize = 200;
 
@@ -78,7 +78,7 @@ async fn read_frame(stream: &mut TcpStream, max_size: usize) -> Result<Vec<u8>> 
     Ok(buf)
 }
 
-/// 清理终态（完成/取消/失败）的旧记录，保留最近 MAX_FINISHED_TRANSFERS 条。
+/// 清理终态（完成/取消/失败/拒绝）的旧记录，保留最近 MAX_FINISHED_TRANSFERS 条。
 ///
 /// 抽成自由函数是因为三个调用点（cancel_transfer / 发送完成 / 接收完成）
 /// 里只有 cancel 那条挂在 &self 上，其余都在自由函数里跑。
@@ -87,9 +87,13 @@ async fn prune_finished_transfers(transfers: &Arc<RwLock<HashMap<String, Transfe
     let mut finished: Vec<(String, String)> = t
         .values()
         .filter(|item| {
+            // Rejected 也是终态：漏掉它会让被拒绝的记录永不回收，表无限增长
             matches!(
                 item.status,
-                TransferStatus::Completed | TransferStatus::Cancelled | TransferStatus::Failed
+                TransferStatus::Completed
+                    | TransferStatus::Cancelled
+                    | TransferStatus::Failed
+                    | TransferStatus::Rejected
             )
         })
         .map(|item| (item.transfer_id.clone(), item.updated_at.clone()))
@@ -635,7 +639,7 @@ impl TransferService {
         Ok(())
     }
 
-    /// 清理终态（完成/取消/失败）的旧记录，最少保留最近 MAX_FINISHED_TRANSFERS 条。
+    /// 清理终态（完成/取消/失败/拒绝）的旧记录，最少保留最近 MAX_FINISHED_TRANSFERS 条。
     async fn prune_finished_transfers(&self) {
         prune_finished_transfers(&self.transfers).await;
     }
@@ -901,8 +905,11 @@ async fn do_send(
     if !response.accepted {
         let mut t = transfers.write().await;
         if let Some(item) = t.get_mut(&tid) {
-            item.status = TransferStatus::Rejected;
-            item.updated_at = Utc::now().to_rfc3339();
+            // 等待响应期间用户可能已取消：迟到的拒绝结果不得覆盖 Cancelled
+            if item.status != TransferStatus::Cancelled {
+                item.status = TransferStatus::Rejected;
+                item.updated_at = Utc::now().to_rfc3339();
+            }
         }
         sw_info!("传输被拒绝: {}", tid);
         return Ok(());
@@ -912,8 +919,11 @@ async fn do_send(
     {
         let mut t = transfers.write().await;
         if let Some(item) = t.get_mut(&tid) {
-            item.status = TransferStatus::Transferring;
-            item.updated_at = Utc::now().to_rfc3339();
+            // 等待响应期间用户可能已取消：已取消的传输不得被覆写回 Transferring
+            if item.status != TransferStatus::Cancelled {
+                item.status = TransferStatus::Transferring;
+                item.updated_at = Utc::now().to_rfc3339();
+            }
         }
     }
 
@@ -1124,8 +1134,11 @@ async fn handle_connection(
             if !accepted {
                 let mut t = transfers.write().await;
                 if let Some(item) = t.get_mut(&tid) {
-                    item.status = TransferStatus::Rejected;
-                    item.updated_at = Utc::now().to_rfc3339();
+                    // 接受等待期取消会走这条拒绝回应分支：不得把用户刚置的 Cancelled 覆盖成 Rejected
+                    if item.status != TransferStatus::Cancelled {
+                        item.status = TransferStatus::Rejected;
+                        item.updated_at = Utc::now().to_rfc3339();
+                    }
                 }
                 return Ok(());
             }
@@ -1134,8 +1147,11 @@ async fn handle_connection(
             {
                 let mut t = transfers.write().await;
                 if let Some(item) = t.get_mut(&tid) {
-                    item.status = TransferStatus::Transferring;
-                    item.updated_at = Utc::now().to_rfc3339();
+                    // 取消可能紧跟在接受之后到达：已取消的传输不得被覆写回 Transferring
+                    if item.status != TransferStatus::Cancelled {
+                        item.status = TransferStatus::Transferring;
+                        item.updated_at = Utc::now().to_rfc3339();
+                    }
                 }
             }
 
@@ -1690,5 +1706,280 @@ mod tests {
         write_frame(&mut a, b"").await.unwrap();
         let err = recv_msg(&mut b).await.unwrap_err().to_string();
         assert!(err.contains("空消息帧"), "err = {err}");
+    }
+
+    // ── 接受等待期取消：终态必须停在 Cancelled，不被 Transferring/Rejected/Failed 覆盖 ──
+
+    /// 造一条可指定状态/时间的传输记录，供取消与清理用例复用
+    fn test_item(id: &str, status: TransferStatus, at: &str) -> TransferItem {
+        TransferItem {
+            transfer_id: id.to_string(),
+            sender_device_id: "s".to_string(),
+            sender_device_name: "s".to_string(),
+            receiver_device_id: "r".to_string(),
+            transfer_type: TransferType::File,
+            file_name: Some("f.bin".to_string()),
+            file_size: Some(1),
+            text_content: None,
+            file_path: None,
+            status,
+            progress: 0.0,
+            created_at: at.to_string(),
+            updated_at: at.to_string(),
+            error_message: None,
+        }
+    }
+
+    /// 发送侧打真实入口 spawn_send：等待接受响应期间先取消、对端响应迟到，
+    /// 无论响应是接受还是拒绝，最终状态都必须停在 Cancelled 且不进 Failed 分支
+    async fn sender_cancel_before_response(accepted: bool) {
+        let service = TransferService::new(0, "d".to_string(), "n".to_string())
+            .await
+            .expect("建服务应成功");
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind 应成功");
+        let addr = listener.local_addr().unwrap();
+
+        let dir = std::env::temp_dir().join(format!(
+            "lan_send_cancel_{}_{}",
+            std::process::id(),
+            accepted
+        ));
+        let _ = std::fs::create_dir_all(&dir);
+        let file_path = dir.join("payload.bin");
+        std::fs::write(&file_path, b"payload bytes").expect("写临时文件应成功");
+
+        let tid = format!("tid-send-cancel-{}", accepted);
+        let request = TransferRequest {
+            transfer_id: tid.clone(),
+            sender_device_id: "d".to_string(),
+            sender_device_name: "n".to_string(),
+            transfer_type: TransferType::File,
+            file_name: Some("payload.bin".to_string()),
+            file_size: Some(13),
+            text_content: None,
+            access_code: None,
+        };
+        service.transfers.write().await.insert(
+            tid.clone(),
+            test_item(&tid, TransferStatus::Pending, "2026-01-01T00:00:00Z"),
+        );
+
+        TransferService::spawn_send(
+            addr.ip().to_string(),
+            addr.port(),
+            request,
+            Some(file_path.to_str().unwrap().to_string()),
+            service.transfers.clone(),
+            service.cancel_txs.clone(),
+            tid.clone(),
+        );
+
+        let (mut peer, _) = listener.accept().await.expect("发送任务应连上来");
+        let msg = recv_msg(&mut peer).await.expect("应收到传输请求");
+        assert!(matches!(msg.message_type, MessageType::TransferRequest));
+
+        // 用户在等待响应期间取消
+        service.cancel_transfer(tid.clone()).await.expect("取消应成功");
+
+        // 对端响应在取消之后才到：模拟接受/拒绝迟到的竞态
+        let resp = TransferResponse {
+            transfer_id: tid.clone(),
+            accepted,
+            receiver_device_id: "r".to_string(),
+        };
+        send_msg(
+            &mut peer,
+            &TransferMessage {
+                message_type: MessageType::TransferResponse,
+                payload: serde_json::to_string(&resp).unwrap(),
+                timestamp: Utc::now().to_rfc3339(),
+            },
+        )
+        .await
+        .expect("回应应发送成功");
+
+        // 发送任务必须因取消尽快退出并关闭连接（EOF），而不是把文件传完
+        let mut buf = [0u8; 1];
+        let n = tokio::time::timeout(Duration::from_secs(5), peer.read(&mut buf))
+            .await
+            .expect("取消后发送任务不得挂住")
+            .expect("读 EOF 应成功");
+        assert_eq!(n, 0, "发送任务应已经关闭连接");
+
+        let t = service.transfers.read().await;
+        let item = t.get(&tid).expect("记录应仍在");
+        assert_eq!(
+            item.status,
+            TransferStatus::Cancelled,
+            "不得被 Transferring/Rejected/Failed 覆盖"
+        );
+        assert!(item.error_message.is_none(), "不得进 Failed 分支写错误信息");
+        drop(t);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 接受等待期取消后对端才回「接受」：Transferring 与 Failed 都不得覆盖 Cancelled
+    #[tokio::test]
+    async fn sender_cancel_then_late_accept_stays_cancelled() {
+        sender_cancel_before_response(true).await;
+    }
+
+    /// 接受等待期取消后对端才回「拒绝」：Rejected 同样不得覆盖 Cancelled
+    #[tokio::test]
+    async fn sender_cancel_then_late_reject_stays_cancelled() {
+        sender_cancel_before_response(false).await;
+    }
+
+    /// 接收侧打真实入口 handle_connection：挂在服务的真实状态表上，用环回对端驱动
+    fn spawn_receiver(service: &TransferService, stream: TcpStream) -> JoinHandle<Result<()>> {
+        tokio::spawn(handle_connection(
+            stream,
+            service.transfers.clone(),
+            service.trusted_devices.clone(),
+            service.pending_accept.clone(),
+            service.cancel_txs.clone(),
+            service.save_dir.clone(),
+            service.access_code.clone(),
+            "recv-d".to_string(),
+            "recv-n".to_string(),
+            0,
+        ))
+    }
+
+    /// 以陌生设备身份发一条文件传输请求（未设授权码 ⇒ 进入待人工确认）
+    async fn send_request(peer: &mut TcpStream, tid: &str) {
+        let request = TransferRequest {
+            transfer_id: tid.to_string(),
+            sender_device_id: "peer-d".to_string(),
+            sender_device_name: "peer-n".to_string(),
+            transfer_type: TransferType::File,
+            file_name: Some("in.bin".to_string()),
+            file_size: Some(4),
+            text_content: None,
+            access_code: None,
+        };
+        send_msg(
+            peer,
+            &TransferMessage {
+                message_type: MessageType::TransferRequest,
+                payload: serde_json::to_string(&request).unwrap(),
+                timestamp: Utc::now().to_rfc3339(),
+            },
+        )
+        .await
+        .expect("传输请求应发送成功");
+    }
+
+    /// 等 handle_connection 注册好 pending_accept（即真正进入接受等待期）
+    async fn wait_pending(service: &TransferService, tid: &str) {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if service.pending_accept.read().await.contains_key(tid) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("应进入接受等待状态");
+    }
+
+    /// 接受等待期取消（接收侧）：拒绝回应分支不得把 Cancelled 覆盖成 Rejected
+    #[tokio::test]
+    async fn receiver_cancel_while_pending_stays_cancelled() {
+        let service = TransferService::new(0, "d".to_string(), "n".to_string())
+            .await
+            .expect("建服务应成功");
+        let (mut peer, server_stream) = duplex_streams().await;
+        let handle = spawn_receiver(&service, server_stream);
+        let tid = "tid-recv-pending-cancel".to_string();
+        send_request(&mut peer, &tid).await;
+        wait_pending(&service, &tid).await;
+
+        service.cancel_transfer(tid.clone()).await.expect("取消应成功");
+
+        let result = tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("连接任务不得挂住")
+            .expect("任务不应 panic");
+        assert!(result.is_ok(), "拒绝回应路径应正常返回");
+
+        let resp_msg = recv_msg(&mut peer).await.expect("应收到传输响应");
+        let resp: TransferResponse = serde_json::from_str(&resp_msg.payload).unwrap();
+        assert!(!resp.accepted, "取消应让对端收到拒绝响应");
+
+        let t = service.transfers.read().await;
+        let item = t.get(&tid).expect("记录应仍在");
+        assert_eq!(item.status, TransferStatus::Cancelled, "不得被 Rejected 覆盖");
+    }
+
+    /// 先接受后取消（接收侧）：接受信号已入通道必走 Transferring 分支，
+    /// 状态必须停在 Cancelled，接收流的取消报错也不得改写成 Failed
+    #[tokio::test]
+    async fn receiver_accept_then_cancel_stays_cancelled() {
+        let service = TransferService::new(0, "d".to_string(), "n".to_string())
+            .await
+            .expect("建服务应成功");
+        let dir = std::env::temp_dir().join(format!("lan_recv_cancel_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        service.set_save_dir(dir.to_str().unwrap().to_string()).await;
+
+        let (mut peer, server_stream) = duplex_streams().await;
+        let handle = spawn_receiver(&service, server_stream);
+        let tid = "tid-recv-accept-cancel".to_string();
+        send_request(&mut peer, &tid).await;
+        wait_pending(&service, &tid).await;
+
+        service.accept_transfer(tid.clone()).await.expect("接受应成功");
+        service.cancel_transfer(tid.clone()).await.expect("取消应成功");
+        // 取消后再补一帧：即使接收任务已阻塞在 read_frame，也能回到循环顶看到取消信号
+        write_frame(&mut peer, b"data").await.expect("数据帧应发送成功");
+
+        let result = tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("连接任务不得挂住")
+            .expect("任务不应 panic");
+        assert!(result.is_err(), "接收流应以取消错误退出");
+
+        let t = service.transfers.read().await;
+        let item = t.get(&tid).expect("记录应仍在");
+        assert_eq!(
+            item.status,
+            TransferStatus::Cancelled,
+            "不得被 Transferring/Failed 覆盖"
+        );
+        assert!(item.error_message.is_none(), "不得进 Failed 分支写错误信息");
+        drop(t);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Rejected 属于终态：超上限时必须与 Completed 一样被回收，进行中的不动
+    #[tokio::test]
+    async fn prune_finished_transfers_reclaims_rejected() {
+        let service = TransferService::new(0, "d".to_string(), "n".to_string())
+            .await
+            .expect("建服务应成功");
+        {
+            let mut t = service.transfers.write().await;
+            t.insert(
+                "inflight".to_string(),
+                test_item("inflight", TransferStatus::Transferring, "1970-01-01T00:00:00Z"),
+            );
+            for i in 0..(MAX_FINISHED_TRANSFERS + 25) {
+                let id = format!("rej-{:03}", i);
+                let at = format!("2026-01-01T00:00:{:02}Z", i % 60);
+                t.insert(id.clone(), test_item(&id, TransferStatus::Rejected, &at));
+            }
+        }
+
+        service.prune_finished_transfers().await;
+
+        let t = service.transfers.read().await;
+        assert!(t.contains_key("inflight"), "进行中的记录不得被清理");
+        let rejected = t
+            .values()
+            .filter(|item| item.status == TransferStatus::Rejected)
+            .count();
+        assert_eq!(rejected, MAX_FINISHED_TRANSFERS, "Rejected 终态记录必须被回收");
     }
 }

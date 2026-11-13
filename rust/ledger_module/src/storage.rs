@@ -40,7 +40,8 @@ fn today_str() -> String {
 /// 全程持 INIT_LOCK 串行化：并发首次调用（节点上多个 ledger_* 请求同时到达）
 /// 会重复建表播种，后面的连接还会把 DB_CONN 里的连接对象顶掉。
 pub fn init_db(db_path: &str) -> Result<()> {
-    let _init_guard = INIT_LOCK.lock().unwrap();
+    // 建库中途 panic 会毒化这把锁，unwrap 会让之后所有 init 直接 panic、账本再也开不起来
+    let _init_guard = INIT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let path = PathBuf::from(db_path);
     // 双检：等锁期间别人可能已经建好了。必须连路径一起比——
     // 只判连接是否存在的话，指向另一个文件的 init 会误判成功，
@@ -193,9 +194,10 @@ pub fn init_db(db_path: &str) -> Result<()> {
 
     seed_builtins(&conn)?;
 
-    let mut guard = DB_CONN.lock().unwrap();
+    // 中毒也要能把新连接装回去，否则一次 panic 之后账本永远停在"未初始化"
+    let mut guard = DB_CONN.lock().unwrap_or_else(|e| e.into_inner());
     *guard = Some(conn);
-    *DB_PATH.lock().unwrap() = db_path.to_string();
+    *DB_PATH.lock().unwrap_or_else(|e| e.into_inner()) = db_path.to_string();
     Ok(())
 }
 
@@ -255,18 +257,20 @@ const BUILTIN_CATEGORIES: &[(&str, &str, &str)] = &[
 ];
 
 pub fn is_ready() -> bool {
-    DB_CONN.lock().unwrap().is_some()
+    // 与 with_db 同口径：中毒后仍要能回答"库开没开"，否则就绪检查自己先 panic
+    DB_CONN.lock().unwrap_or_else(|e| e.into_inner()).is_some()
 }
 
 pub fn close_db() {
-    let mut guard = DB_CONN.lock().unwrap();
+    // 中毒也要能关库重开，不然一次 panic 就把账本永久锁死
+    let mut guard = DB_CONN.lock().unwrap_or_else(|e| e.into_inner());
     *guard = None;
-    *DB_PATH.lock().unwrap() = String::new();
+    *DB_PATH.lock().unwrap_or_else(|e| e.into_inner()) = String::new();
 }
 
 /// 账本文件所在目录；未初始化时 None，调用方自己决定降级成什么
 pub fn db_dir() -> Option<PathBuf> {
-    let path = DB_PATH.lock().unwrap().clone();
+    let path = DB_PATH.lock().unwrap_or_else(|e| e.into_inner()).clone();
     if path.is_empty() {
         return None;
     }
@@ -277,7 +281,8 @@ pub fn db_dir() -> Option<PathBuf> {
 ///
 /// 对 crate 内可见：测试要读连接级 PRAGMA（synchronous 是每连接设置，新开连接读不到）
 pub(crate) fn with_db<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
-    let guard = DB_CONN.lock().unwrap();
+    // 持锁 panic 会让锁中毒，unwrap 则此后每拍都 panic、自动记账瘫到重启；取回内层继续用
+    let guard = DB_CONN.lock().unwrap_or_else(|e| e.into_inner());
     let conn = guard.as_ref().context("账本数据库未初始化")?;
     f(conn)
 }
@@ -686,6 +691,7 @@ impl TxLookup {
             .copied()
             .unwrap_or(default_expense_category);
 
+        // top-200 只当精确匹配的热缓存与模糊匹配的来源，长尾精确命中由 guess_category 回表补
         let mut merchant_exact: HashMap<String, i64> = HashMap::new();
         let mut merchant_fuzzy: Vec<(String, i64)> = Vec::new();
         {
@@ -744,16 +750,23 @@ impl TxLookup {
     }
 
     /// 历史习惯：先精确、再按包含（与旧的逐笔回表实现同口径）
-    pub fn guess_category(&self, merchant: &str) -> Option<i64> {
+    pub fn guess_category(&self, conn: &Connection, merchant: &str) -> Result<Option<i64>> {
         if let Some(cid) = self.merchant_exact.get(merchant) {
-            return Some(*cid);
+            return Ok(Some(*cid));
+        }
+        // 预载只有 hits top-200，长尾商户的精确记忆必须回表按主键查，否则会落回模糊/默认类
+        let mut stmt =
+            conn.prepare("SELECT category_id FROM merchant_memory WHERE merchant_key = ?1")?;
+        let mut rows = stmt.query_map(params![merchant], |r| r.get::<_, i64>(0))?;
+        if let Some(cid) = rows.next().transpose()? {
+            return Ok(Some(cid));
         }
         for (key, cid) in &self.merchant_fuzzy {
             if merchant.contains(key.as_str()) || key.contains(merchant) {
-                return Some(*cid);
+                return Ok(Some(*cid));
             }
         }
-        None
+        Ok(None)
     }
 
     /// 名称 → 类别 id（导出给 api 层做默认类别解析）
@@ -776,7 +789,7 @@ fn insert_one(conn: &Connection, tx: &Transaction, lookup: &TxLookup, stamp: &st
         }
         if tx.category_id == 0 && !tx.merchant.is_empty() {
             // 没指定类别时按历史习惯猜一次，猜不中就落"其他支出"
-            let guessed = lookup.guess_category(&tx.merchant).unwrap_or(0);
+            let guessed = lookup.guess_category(conn, &tx.merchant)?.unwrap_or(0);
             tx.category_id = if guessed > 0 {
                 guessed
             } else {

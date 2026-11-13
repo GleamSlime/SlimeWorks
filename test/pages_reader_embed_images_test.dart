@@ -73,6 +73,37 @@ String _legacyEmbedLocalImages(String html) {
 
         File file = File(path);
         if (!file.existsSync()) {
+          // 旧版 epub_images 目录兜底：每张缺图都重新 listSync 整棵目录树（不缓存、失败可重试）
+          final baseLower = path.toLowerCase();
+          final marker = '${Platform.pathSeparator}epub_images${Platform.pathSeparator}';
+          final markerIdx = baseLower.indexOf(marker);
+          if (markerIdx >= 0) {
+            final after = path.substring(markerIdx + marker.length);
+            final parts = after.split(Platform.pathSeparator);
+            if (parts.isNotEmpty) {
+              final novelId = parts[0];
+              final baseDir =
+                  Directory('${path.substring(0, markerIdx + marker.length)}$novelId');
+              if (baseDir.existsSync()) {
+                final basename = path.split(Platform.pathSeparator).last;
+                try {
+                  final found = baseDir
+                      .listSync(recursive: true)
+                      .whereType<File>()
+                      .firstWhere(
+                        (f) => f.path.split(Platform.pathSeparator).last == basename,
+                        orElse: () => File(''),
+                      );
+                  if (found.path.isNotEmpty && found.existsSync()) {
+                    file = found;
+                    path = file.path;
+                  }
+                } catch (_) {}
+              }
+            }
+          }
+        }
+        if (!file.existsSync()) {
           idx = endQuote + 1;
           continue;
         }
@@ -110,6 +141,11 @@ void main() {
   late String pngPath;
   late String jpgPath;
   late String pngUri;
+  // epub_images 目录兜底夹具：原路径缺图，同名文件藏在 epub_images/<novelId> 下别处
+  late String epubBaseDir;
+  late String epubHitSrc;
+  late String epubHitSrc2;
+  late String epubMissSrc;
 
   setUpAll(() {
     tmp = Directory.systemTemp.createTempSync('embed_imgs_');
@@ -124,6 +160,17 @@ void main() {
     final jpg = File('${tmp.path}/pic.JPG');
     jpg.writeAsBytesSync(<int>[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]);
     jpgPath = jpg.path;
+
+    // 真实文件在 deep/ 下；src 指向不存在的 missing/ 子目录，触发按 basename 兜底
+    epubBaseDir = '${tmp.path}/epub_images/novel1';
+    Directory('$epubBaseDir/deep').createSync(recursive: true);
+    File('$epubBaseDir/deep/cover.png').writeAsBytesSync(<int>[
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
+      0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    ]);
+    epubHitSrc = '$epubBaseDir/missing/cover.png';
+    epubHitSrc2 = '$epubBaseDir/missing2/cover.png';
+    epubMissSrc = '$epubBaseDir/missing/absent.png';
   });
 
   tearDownAll(() {
@@ -167,6 +214,13 @@ void main() {
       sb.write('</div>');
       return sb.toString();
     });
+
+    // epub_images 目录兜底：旧版每张缺图重试 listSync，新版按目录建索引复用，输出须逐字节一致
+    addCase('epub_images 目录兜底命中', () => '<img src="$epubHitSrc">');
+    addCase('epub_images 同目录多张缺图（命中+未命中+索引复用）',
+        () => '<img src="$epubHitSrc"><img src="$epubMissSrc"><img src="$epubHitSrc2">');
+    addCase('epub_images 目录兜底未命中', () => '<img src="$epubMissSrc">');
+    addCase('epub_images 目录不存在', () => '<img src="${tmp.path}/epub_images/nope/x/cover.png">');
 
     for (final entry in cases.entries) {
       test(entry.key, () {

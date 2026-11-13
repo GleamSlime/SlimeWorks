@@ -416,10 +416,10 @@ String embedLocalImages(String html) {
                   '${path.substring(0, markerIdx + marker.length)}$novelId';
               if (Directory(baseDirPath).existsSync()) {
                 final basename = path.split(Platform.pathSeparator).last;
-                final index = dirIndex.putIfAbsent(
-                  baseDirPath,
-                  () => _indexDirByBasename(Directory(baseDirPath)),
-                );
+                // null 不进缓存：旧版每张缺图都重试 listSync，缓存 null 会让同目录后续缺图永久放弃兜底
+                final index =
+                    dirIndex[baseDirPath] ?? _indexDirByBasename(Directory(baseDirPath));
+                if (index != null) dirIndex[baseDirPath] = index;
                 final found = index?[basename];
                 if (found != null && found.isNotEmpty) {
                   file = File(found);
@@ -505,7 +505,7 @@ const Map<String, String> _kImageMimeByExt = <String, String>{
   'svg': 'image/svg+xml',
 };
 
-/// 递归列一次目录，建「文件名 → 路径」索引；目录不可读时返回 null（本次不再重试）。
+/// 递归列一次目录，建「文件名 → 路径」索引；目录不可读时返回 null（调用方不缓存 null，按旧版每张重试）。
 ///
 /// 同名文件取旧实现 firstWhere 的第一个命中，保证与旧结果一致。
 Map<String, String>? _indexDirByBasename(Directory dir) {

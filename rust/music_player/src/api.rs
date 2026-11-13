@@ -400,15 +400,15 @@ pub fn import_music_folder(
 
     // 保存到数据库（单事务批量写入）
     let _ = db_module::db_register_table(item_table());
-    persist_items_batch(&items).map_err(|e| e.to_string())?;
 
     // 计数与最大 order 增量累加，不再整表重扫
     let max_new_order = items.iter().map(|i| i.order).max().unwrap_or(-1);
-    playlist_append_meta(&playlist_id, items.len(), max_new_order)?;
-
-    // 清空缓存
     {
-        let mut guard = music_items_cache().lock().unwrap();
+        // 落库与改元数据必须同锁：并发导入各自读到旧 count 再写回，增量会互相覆盖
+        let mut guard = lock_items_meta();
+        persist_items_batch(&items).map_err(|e| e.to_string())?;
+        playlist_append_meta_locked(&playlist_id, items.len(), max_new_order)?;
+        // 清空缓存
         *guard = None;
     }
 
@@ -449,6 +449,10 @@ pub fn import_music_file(playlist_id: String, file_path: String) -> Result<Music
     // 提取音频元数据（时长、标签等）
     let audio_meta = scanner::extract_audio_metadata(path);
 
+    let _ = db_module::db_register_table(item_table());
+    // order 分配、条目落库、元数据增量必须同锁完成：并发两首否则会同读一个
+    // max_order 而撞号，计数也会互相覆盖（标签解析等重活已在上面做完）
+    let mut guard = lock_items_meta();
     // 下一个 order 直接取播放列表上的元数据，不再把整张表读出来求最大值
     let max_order = playlist_next_order(&playlist_id)? - 1;
 
@@ -472,17 +476,13 @@ pub fn import_music_file(playlist_id: String, file_path: String) -> Result<Music
         has_cue,
     };
 
-    let _ = db_module::db_register_table(item_table());
     let json = serde_json::to_string(&item).map_err(|e| e.to_string())?;
     db_module::db_set(item_table(), item.id.clone(), json).map_err(|e| e.to_string())?;
 
-    playlist_append_meta(&playlist_id, 1, item.order)?;
+    playlist_append_meta_locked(&playlist_id, 1, item.order)?;
 
     // 清空缓存
-    {
-        let mut guard = music_items_cache().lock().unwrap();
-        *guard = None;
-    }
+    *guard = None;
 
     Ok(item)
 }
@@ -514,9 +514,11 @@ pub fn add_remote_music_items(
     remote_items: Vec<RemoteMusicItem>,
 ) -> Result<Vec<MusicItem>, String> {
     ensure_db();
+    let _ = db_module::db_register_table(item_table());
+    // 与单曲追加同理：order 分配和元数据增量同锁，避免并发批量追加撞号/丢计数
+    let mut guard = lock_items_meta();
     let mut max_order = playlist_next_order(&playlist_id)? - 1;
 
-    let _ = db_module::db_register_table(item_table());
     let mut items = Vec::new();
     for r in remote_items {
         max_order += 1;
@@ -545,9 +547,8 @@ pub fn add_remote_music_items(
 
     if !items.is_empty() {
         let max_new_order = items.iter().map(|i| i.order).max().unwrap_or(-1);
-        playlist_append_meta(&playlist_id, items.len(), max_new_order)?;
-        // 清空缓存
-        let mut guard = music_items_cache().lock().unwrap();
+        playlist_append_meta_locked(&playlist_id, items.len(), max_new_order)?;
+        // 清空缓存（复用上面已持有的锁，std Mutex 不可重入）
         *guard = None;
     }
     sw_info!("[music_player] 批量添加远程音乐项 {} 首", items.len());
@@ -650,15 +651,15 @@ pub fn save_playlist_order(playlist_id: String, item_ids: Vec<String>) -> Result
     // 这里只补齐「元数据落后于实际」的一种边界：旧记录尚未回填时 order 被
     // 排到更大值，max_order 必须跟上。
     let new_max = reordered.iter().map(|item| item.order).max().unwrap_or(-1);
-    if let Some(playlist) = load_playlist_meta(&playlist_id)? {
-        if playlist.max_order.unwrap_or(-1) < new_max {
-            write_playlist_meta(&playlist_id, playlist.item_count, new_max)?;
-        }
-    }
-
-    // 清空缓存
     {
-        let mut guard = music_items_cache().lock().unwrap();
+        // 读 meta 再写回同样是 read-modify-write，与增删共用同一把锁才不会被并发覆盖
+        let mut guard = lock_items_meta();
+        if let Some(playlist) = load_playlist_meta(&playlist_id)? {
+            if playlist.max_order.unwrap_or(-1) < new_max {
+                write_playlist_meta(&playlist_id, playlist.item_count, new_max)?;
+            }
+        }
+        // 清空缓存
         *guard = None;
     }
     Ok(())
@@ -1062,6 +1063,13 @@ fn load_playlist_meta(playlist_id: &str) -> Result<Option<Playlist>, String> {
     Ok(Some(playlist))
 }
 
+/// 元数据读改写的串行锁：复用条目缓存那把锁，把「分配 order → 写条目 → 改计数」
+/// 圈成互斥区。无锁 read-modify-write 下并发两操作同读 count=N 各写 N+1（实际 N+2），
+/// 增量路径又没有对账入口，漂移会永久留在库里。扫描/标签解析等重活一律在加锁前做完。
+fn lock_items_meta() -> std::sync::MutexGuard<'static, Option<Vec<MusicItem>>> {
+    music_items_cache().lock().unwrap()
+}
+
 /// 该播放列表下一个可用的 order（空列表为 0）。
 fn playlist_next_order(playlist_id: &str) -> Result<i32, String> {
     let max_order = load_playlist_meta(playlist_id)?
@@ -1071,7 +1079,9 @@ fn playlist_next_order(playlist_id: &str) -> Result<i32, String> {
 }
 
 /// 新增条目后增量维护计数与最大 order（order 只增不减，避免后续追加撞号）。
-fn playlist_append_meta(
+/// 调用方必须已持 lock_items_meta：order 分配与本次增量要同锁完成，否则并发两首
+/// 会同读一个 max_order 而撞号（std Mutex 不可重入，这里不能再自己加锁）。
+fn playlist_append_meta_locked(
     playlist_id: &str,
     added: usize,
     max_new_order: i32,
@@ -1095,6 +1105,7 @@ fn playlist_remove_meta(playlist_id: &str, removed: usize) -> Result<(), String>
     if removed == 0 {
         return Ok(());
     }
+    let _guard = lock_items_meta();
     let Some(playlist) = load_playlist_meta(playlist_id)? else {
         return Ok(());
     };
@@ -1107,6 +1118,7 @@ fn playlist_remove_meta(playlist_id: &str, removed: usize) -> Result<(), String>
 
 /// 列表被清空：计数归零。最大 order 刻意不保留，让复用这个列表时从 0 重新排号。
 fn playlist_reset_meta(playlist_id: &str) -> Result<(), String> {
+    let _guard = lock_items_meta();
     write_playlist_meta(playlist_id, 0, -1)
 }
 
@@ -1195,6 +1207,38 @@ fn path_key(path: &str) -> String {
     format!("{:016x}", hash)
 }
 
+/// 封面缓存的临时文件名必须唯一：批量提取与 UI 会并发请同一张图，固定 .part 名
+/// 会让两个 ffmpeg 交错写同一文件，rename 出去的是拼凑坏图并被长期当作有效缓存。
+/// 后缀保留 .jpg 是因为 ffmpeg 靠扩展名推断输出封装，换成 .part 会猜不出格式直接失败。
+fn music_cover_temp_path(path: &std::path::Path) -> std::path::PathBuf {
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("cover.jpg");
+    path.with_file_name(format!(
+        ".{}.{}.{}.part.jpg",
+        file_name,
+        std::process::id(),
+        seq
+    ))
+}
+
+/// 这份字节是不是一张完整的 JPEG：只判非空不够，并发写坏或进程中途被杀留下的
+/// 半截文件同样非空，命中后这张封面就永远坏下去。只看 SOI/EOI，不做完整解码。
+fn looks_like_jpeg(bytes: &[u8]) -> bool {
+    if bytes.len() < 4 {
+        return false;
+    }
+    // 这条链路固定走 ffmpeg 的 mjpeg 输出，一定以 SOI(FFD8) 开头
+    let starts = bytes[0] == 0xFF && bytes[1] == 0xD8;
+    // 末尾应有 EOI(FFD9)，给某些编码器多写的填充字节留一小段余量
+    let tail = &bytes[bytes.len().saturating_sub(16)..];
+    let ends = tail.windows(2).any(|window| window == [0xFF, 0xD9]);
+    starts && ends
+}
+
 /// 生成封面缩略图（暂不依赖 media_collection，）
 pub fn ensure_music_cover_thumbnail(file_path: String, width: u32) -> Option<String> {
     // 使用 ffmpeg 生成缩略图
@@ -1215,12 +1259,20 @@ pub fn ensure_music_cover_thumbnail(file_path: String, width: u32) -> Option<Str
     let cache_dir = thumb_cache_dir();
     let cache_path = cache_dir.join(format!("{}.jpg", key));
     if cache_path.exists() {
-        if let Ok(meta) = std::fs::metadata(&cache_path) {
-            if meta.len() > 0 {
+        // 读侧也要验魔数：历史版本直写最终路径，磁盘上可能已躺着交错写坏的图，
+        // 只判 len>0 会让它永久命中，删掉才能让本次重新生成。
+        match std::fs::read(&cache_path) {
+            Ok(bytes) if looks_like_jpeg(&bytes) => {
                 return Some(cache_path.to_string_lossy().into_owned());
             }
+            _ => {
+                let _ = std::fs::remove_file(&cache_path);
+                sw_warn!(
+                    "[music_player] 封面缓存不是有效 JPEG，已删除并重新生成: {:?}",
+                    cache_path
+                );
+            }
         }
-        let _ = std::fs::remove_file(&cache_path);
     }
     // 同一路径已经判定过「抽不出封面」就不再起进程：批量导入整库时这条链路
     // 每首歌要跑三次 ffmpeg，失败结论又是文件自身的属性（换宽度也不会变）。
@@ -1234,6 +1286,9 @@ pub fn ensure_music_cover_thumbnail(file_path: String, width: u32) -> Option<Str
     // 「这个文件没有封面」，否则装好 ffmpeg 也不会再重试。
     let mut executed = false;
     for seek in &["00:00:00.000", "00:00:03.000", "00:00:10.000"] {
+        // 先写唯一临时文件再 rename：直写最终路径时并发同 key 会交错成坏图，
+        // 进程中途被杀也会留下半截文件被当作有效缓存。
+        let tmp_path = music_cover_temp_path(&cache_path);
         let mut cmd = std::process::Command::new(db_module::ffmpeg::ffmpeg_cmd());
         cmd.args([
             "-nostdin",
@@ -1250,7 +1305,7 @@ pub fn ensure_music_cover_thumbnail(file_path: String, width: u32) -> Option<Str
             "-frames:v",
             "1",
             "-y",
-            &cache_path.to_string_lossy(),
+            &tmp_path.to_string_lossy(),
         ])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -1259,9 +1314,22 @@ pub fn ensure_music_cover_thumbnail(file_path: String, width: u32) -> Option<Str
         match cmd.status() {
             Ok(status) => {
                 executed = true;
-                if status.success() && cache_path.exists() {
-                    return Some(cache_path.to_string_lossy().into_owned());
+                if status.success() {
+                    // 验过魔数才 rename：不合格的字节宁可不缓存，也不能占住这个 key
+                    let valid = std::fs::read(&tmp_path)
+                        .map(|bytes| looks_like_jpeg(&bytes))
+                        .unwrap_or(false);
+                    if valid && std::fs::rename(&tmp_path, &cache_path).is_ok() {
+                        return Some(cache_path.to_string_lossy().into_owned());
+                    }
+                    if !valid {
+                        sw_warn!(
+                            "[music_player] ffmpeg 输出不是有效 JPEG，已丢弃: {:?}",
+                            tmp_path
+                        );
+                    }
                 }
+                let _ = std::fs::remove_file(&tmp_path);
             }
             Err(error) => {
                 sw_warn!("[music_player] 启动 ffmpeg 失败（不记负缓存）: {}", error);
@@ -2219,6 +2287,237 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    // ── 封面缓存原子写 + 魔数校验（中危1 回归）─────────────────────────────
+
+    /// 最小但魔数完整的 JPEG（SOI + 载荷 + EOI），只用于缓存校验用例
+    fn tiny_jpeg() -> Vec<u8> {
+        let mut bytes = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        bytes.extend_from_slice(b"JFIF-test");
+        bytes.extend_from_slice(&[0xFF, 0xD9]);
+        bytes
+    }
+
+    /// 封面缓存的最终路径（与生产同一套 key 规则）
+    fn cover_cache_path(song: &Path, width: u32) -> PathBuf {
+        thumb_cache_dir().join(format!(
+            "{}_w{}.jpg",
+            path_key(&song.to_string_lossy()),
+            width
+        ))
+    }
+
+    /// 假 ffmpeg：记录完整命令行与**实际输出路径**，再把 payload 拷过去。
+    /// 输出路径取最后一个参数（真实 ffmpeg 也是这么接输出文件的），单独记一行是
+    /// 为了绕开 macOS 缓存目录里 "Application Support" 的空格，按空格切词会切错。
+    #[cfg(unix)]
+    fn fake_ffmpeg(dir: &Path, sentinel: &Path, outs: &Path, payload: Option<&Path>) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let stub = dir.join(format!("fake_ffmpeg_{}.sh", unique_tag()));
+        let copy_line = match payload {
+            Some(p) => format!("cp '{}' \"$last\"\n", p.display()),
+            None => String::new(),
+        };
+        fs::write(
+            &stub,
+            format!(
+                "#!/bin/sh\necho \"$@\" >> '{}'\nfor last; do :; done\nprintf '%s\\n' \"$last\" >> '{}'\n{}exit 0\n",
+                sentinel.display(),
+                outs.display(),
+                copy_line
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&stub, fs::Permissions::from_mode(0o755)).unwrap();
+        stub
+    }
+
+    /// 缓存目录里残留的临时文件：生成结束后必须一个都不剩
+    fn leftover_cover_tmp() -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        if let Ok(entries) = fs::read_dir(thumb_cache_dir()) {
+            for entry in entries.flatten() {
+                if entry.file_name().to_string_lossy().contains(".part.jpg") {
+                    found.push(entry.path());
+                }
+            }
+        }
+        found
+    }
+
+    /// 读到的输出路径列表（每行一个）
+    fn recorded_outputs(outs: &Path) -> Vec<String> {
+        fs::read_to_string(outs)
+            .unwrap_or_default()
+            .lines()
+            .map(|l| l.to_string())
+            .collect()
+    }
+
+    /// 损坏/截断的缓存必须被拒并重建，且重建走「唯一 tmp → 验魔数 → rename」。
+    /// 修复前只判 len>0：坏图非空即命中，这张封面永远坏下去。
+    #[cfg(unix)]
+    #[test]
+    fn corrupt_cover_cache_is_rejected_and_rebuilt_via_tmp_rename() {
+        let _serial = lock_db_test_serial();
+        let original = db_module::ffmpeg::ffmpeg_cmd();
+        let dir = case_dir("cover_corrupt");
+        let song = write_audio(dir.path(), "corrupt.mp3");
+        let cache = cover_cache_path(&song, 300);
+        fs::create_dir_all(cache.parent().unwrap()).unwrap();
+
+        let payload = dir.path().join("good.jpg");
+        fs::write(&payload, tiny_jpeg()).unwrap();
+        let sentinel = dir.path().join("calls");
+        let outs = dir.path().join("outs");
+        let stub = fake_ffmpeg(dir.path(), &sentinel, &outs, Some(&payload));
+        db_module::ffmpeg::register_ffmpeg_path(stub.to_string_lossy().into_owned());
+
+        // 两种坏缓存都要被拒：完全不是 JPEG / 有 SOI 但被截断（缺 EOI）
+        let mut truncated = tiny_jpeg();
+        truncated.truncate(truncated.len() - 2);
+        for bad in [b"not a jpeg at all".to_vec(), truncated] {
+            assert!(!bad.is_empty(), "坏样本必须非空，否则测不到 len>0 的旧判定");
+            fs::write(&cache, &bad).unwrap();
+            let got = ensure_music_cover_thumbnail(song.to_string_lossy().into_owned(), 300);
+            assert_eq!(
+                got.as_deref(),
+                Some(cache.to_string_lossy().as_ref()),
+                "坏缓存必须被拒并重建"
+            );
+            assert_eq!(fs::read(&cache).unwrap(), tiny_jpeg(), "重建后必须是完整 JPEG");
+        }
+
+        let lines = recorded_outputs(&outs);
+        assert_eq!(lines.len(), 2, "两次坏缓存都应重新起 ffmpeg: {lines:?}");
+        let final_path = cache.to_string_lossy().into_owned();
+        for out in &lines {
+            assert_ne!(out, &final_path, "不得直写最终缓存路径");
+            assert!(out.contains(".part.jpg"), "必须写唯一临时文件: {out}");
+        }
+        let mut unique = lines.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), lines.len(), "每次生成的临时名必须互不相同");
+        assert!(leftover_cover_tmp().is_empty(), "rename 后不得留下临时文件");
+        // 重建成功后不得落负缓存
+        assert!(!music_cover_absent(song.to_string_lossy().as_ref()));
+
+        db_module::ffmpeg::register_ffmpeg_path(original);
+    }
+
+    /// 有效缓存仍然直接命中，不得因为加了魔数校验就每次重跑 ffmpeg。
+    #[cfg(unix)]
+    #[test]
+    fn valid_cover_cache_is_reused_without_respawning_ffmpeg() {
+        let _serial = lock_db_test_serial();
+        let original = db_module::ffmpeg::ffmpeg_cmd();
+        let dir = case_dir("cover_hit");
+        let song = write_audio(dir.path(), "hit.mp3");
+        let cache = cover_cache_path(&song, 300);
+        fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        fs::write(&cache, tiny_jpeg()).unwrap();
+
+        let sentinel = dir.path().join("calls");
+        let outs = dir.path().join("outs");
+        let stub = fake_ffmpeg(dir.path(), &sentinel, &outs, None);
+        db_module::ffmpeg::register_ffmpeg_path(stub.to_string_lossy().into_owned());
+
+        let got = ensure_music_cover_thumbnail(song.to_string_lossy().into_owned(), 300);
+        assert_eq!(got.as_deref(), Some(cache.to_string_lossy().as_ref()));
+        assert!(!sentinel.exists(), "命中有效缓存不得再起 ffmpeg");
+        assert_eq!(fs::read(&cache).unwrap(), tiny_jpeg(), "命中不得改写缓存内容");
+
+        db_module::ffmpeg::register_ffmpeg_path(original);
+    }
+
+    /// ffmpeg 吐出的字节不合格（非 JPEG / 截断）时宁可不缓存：
+    /// 既不能占住这个 key，也不能留下临时文件。
+    #[cfg(unix)]
+    #[test]
+    fn invalid_ffmpeg_output_is_discarded_and_never_cached() {
+        let _serial = lock_db_test_serial();
+        let original = db_module::ffmpeg::ffmpeg_cmd();
+        let dir = case_dir("cover_bad_out");
+        let sentinel = dir.path().join("calls");
+        let outs = dir.path().join("outs");
+
+        let mut truncated = tiny_jpeg();
+        truncated.truncate(truncated.len() - 2);
+        // 负缓存以源路径为 key，两种坏输出各用独立歌曲，避免第二种被负缓存挡掉
+        for (name, bad) in [("garbage.mp3", b"plain text".to_vec()), ("trunc.mp3", truncated)] {
+            let song = write_audio(dir.path(), name);
+            let payload = dir.path().join(format!("{name}.out"));
+            fs::write(&payload, &bad).unwrap();
+            let stub = fake_ffmpeg(dir.path(), &sentinel, &outs, Some(&payload));
+            db_module::ffmpeg::register_ffmpeg_path(stub.to_string_lossy().into_owned());
+
+            assert!(
+                ensure_music_cover_thumbnail(song.to_string_lossy().into_owned(), 300).is_none(),
+                "不合格输出不得当作成功: {name}"
+            );
+            let cache = cover_cache_path(&song, 300);
+            assert!(!cache.exists(), "不合格输出不得占住缓存 key: {name}");
+            // 进程真的跑起来过且三个时刻都失败 → 落负缓存（门控逻辑保持不变）
+            assert!(music_cover_absent(song.to_string_lossy().as_ref()));
+        }
+
+        let lines = recorded_outputs(&outs);
+        assert_eq!(lines.len(), 6, "两首歌各三个候选时刻: {lines:?}");
+        let mut unique = lines.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), lines.len(), "临时名必须唯一，否则并发会交错写");
+        assert!(leftover_cover_tmp().is_empty(), "失败路径也要清掉临时文件");
+
+        db_module::ffmpeg::register_ffmpeg_path(original);
+    }
+
+    /// 同一张封面被并发请求（批量提取与 UI 同请一张）时，各写各的 tmp，
+    /// 最终缓存必须是完整 JPEG，不得留下拼凑坏图或临时文件。
+    #[cfg(unix)]
+    #[test]
+    fn concurrent_cover_requests_keep_cache_valid_and_tmp_unique() {
+        let _serial = lock_db_test_serial();
+        let original = db_module::ffmpeg::ffmpeg_cmd();
+        let dir = case_dir("cover_race");
+        let song = write_audio(dir.path(), "race.mp3");
+        let cache = cover_cache_path(&song, 300);
+        fs::create_dir_all(cache.parent().unwrap()).unwrap();
+
+        let payload = dir.path().join("good.jpg");
+        fs::write(&payload, tiny_jpeg()).unwrap();
+        let sentinel = dir.path().join("calls");
+        let outs = dir.path().join("outs");
+        let stub = fake_ffmpeg(dir.path(), &sentinel, &outs, Some(&payload));
+        db_module::ffmpeg::register_ffmpeg_path(stub.to_string_lossy().into_owned());
+
+        let song_str = song.to_string_lossy().into_owned();
+        // 封面链路只碰文件系统与 ffmpeg，不读 DB，因此工作线程无需持 DB 串行锁
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                let path = song_str.clone();
+                scope.spawn(move || {
+                    ensure_music_cover_thumbnail(path, 300);
+                });
+            }
+        });
+
+        assert_eq!(fs::read(&cache).unwrap(), tiny_jpeg(), "并发后缓存必须是完整 JPEG");
+        let lines = recorded_outputs(&outs);
+        assert!(!lines.is_empty(), "至少应有一个请求真的生成过");
+        let final_path = cache.to_string_lossy().into_owned();
+        for out in &lines {
+            assert_ne!(out, &final_path, "并发下更不得直写最终路径");
+        }
+        let mut unique = lines.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), lines.len(), "并发生成的临时名必须互不相同");
+        assert!(leftover_cover_tmp().is_empty(), "并发生成后不得留下临时文件");
+
+        db_module::ffmpeg::register_ffmpeg_path(original);
+    }
+
     // ── 播放列表级元数据一致性（P2-7 回归）─────────────────────────────────
 
     /// 计数与 max_order 必须与真实条目一致，覆盖：批量导入 / 单曲追加 /
@@ -2326,6 +2625,144 @@ mod tests {
         // 已写回库（下次不再付整表代价）
         let healed = db_row(playlist_table(), &pl.id).unwrap();
         assert!(healed.contains("max_order"), "回填结果必须落库: {healed}");
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    /// 并发 append/remove 后计数与 max_order 必须与实际条目一致。
+    /// 修复前两者都是无锁 read-modify-write：同读 count=N 各写 N+1，增量路径
+    /// 又没有对账入口，漂移会永久留在库里；order 同理会丢 → 追加撞号。
+    #[test]
+    fn concurrent_append_and_remove_keep_playlist_meta_consistent() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("meta_race_{tag}"));
+        let pl = create_playlist(format!("并发元数据 {tag}")).unwrap();
+
+        // 预置 4 首给删除线程用
+        let mut seeded = Vec::new();
+        for i in 0..4 {
+            let song = write_audio(dir.path(), &format!("seed{i}.mp3"));
+            seeded.push(
+                import_music_file(pl.id.clone(), song.to_string_lossy().into_owned()).unwrap(),
+            );
+        }
+
+        let workers = 6usize;
+        let per_worker = 3usize;
+        let base = dir.path().to_path_buf();
+        std::thread::scope(|scope| {
+            for w in 0..workers {
+                let pl_id = pl.id.clone();
+                let base = base.clone();
+                scope.spawn(move || {
+                    for i in 0..per_worker {
+                        let song = base.join(format!("w{w}_{i}.mp3"));
+                        fs::write(&song, b"fake audio data").unwrap();
+                        import_music_file(pl_id.clone(), song.to_string_lossy().into_owned())
+                            .unwrap();
+                    }
+                });
+            }
+            for item in seeded {
+                scope.spawn(move || {
+                    delete_music_item(item.id).unwrap();
+                });
+            }
+        });
+
+        // 预置 4 首全删，剩下并发追加的 workers*per_worker 首
+        let expected = workers * per_worker;
+        let items = get_playlist_items(pl.id.clone()).unwrap();
+        assert_eq!(items.len(), expected, "实际条目数应等于并发写入数");
+        let meta = load_playlist_meta(&pl.id).unwrap().unwrap();
+        assert_eq!(meta.item_count, expected, "并发增删后计数不得漂移");
+        let (count, max_order) = recount_playlist_from_items(&pl.id).unwrap();
+        assert_eq!(meta.item_count, count, "增量必须与整表重算一致");
+        assert_eq!(meta.max_order, Some(max_order), "max_order 不得落后于实际");
+        let mut orders: Vec<i32> = items.iter().map(|i| i.order).collect();
+        orders.sort_unstable();
+        orders.dedup();
+        assert_eq!(orders.len(), items.len(), "并发追加不得撞号");
+
+        let _ = delete_playlist(pl.id);
+    }
+
+    /// 单线程边界对账：每条写路径走完都拿增量元数据与整表重算比一次，
+    /// 覆盖空批量、删不存在的条目、重排、清空后复用等增量易错点。
+    #[test]
+    fn playlist_meta_incremental_matches_recount_on_boundaries() {
+        let _serial = lock_db_test_serial();
+        let tag = unique_tag();
+        let dir = case_dir(&format!("meta_edge_{tag}"));
+        let pl = create_playlist(format!("边界 {tag}")).unwrap();
+
+        // max_order 刻意只增不减（重排留空洞时也不回退），故这一项用 >= 对账
+        let check = |stage: &str| {
+            let meta = load_playlist_meta(&pl.id).unwrap().unwrap();
+            let (count, max_order) = recount_playlist_from_items(&pl.id).unwrap();
+            assert_eq!(meta.item_count, count, "{stage}: 计数必须与整表重算一致");
+            assert!(
+                meta.max_order.unwrap_or(-1) >= max_order,
+                "{stage}: max_order 不得落后于实际"
+            );
+        };
+
+        write_audio(dir.path(), "a.mp3");
+        write_audio(dir.path(), "b.mp3");
+        import_music_folder(pl.id.clone(), dir.path().to_string_lossy().into_owned()).unwrap();
+        check("目录导入后");
+
+        let single = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "c.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        check("单曲追加后");
+
+        let remote = |n: usize| RemoteMusicItem {
+            title: format!("流{n}"),
+            url: format!("https://example.com/{n}.mp3"),
+            duration_ms: None,
+            track_number: None,
+        };
+        add_remote_music_items(pl.id.clone(), vec![remote(1), remote(2)]).unwrap();
+        check("远程批量追加后");
+
+        // added=0 直接返回，不得把计数写坏
+        add_remote_music_items(pl.id.clone(), Vec::new()).unwrap();
+        check("空远程批量后");
+
+        delete_music_item(single.id.clone()).unwrap();
+        check("删除一条后");
+
+        // 删不存在的条目：计数不得被减下去
+        delete_music_item(format!("no-such-{tag}")).unwrap();
+        check("删除不存在条目后");
+
+        let ids: Vec<String> = get_playlist_items(pl.id.clone())
+            .unwrap()
+            .into_iter()
+            .rev()
+            .map(|i| i.id)
+            .collect();
+        save_playlist_order(pl.id.clone(), ids).unwrap();
+        check("重排后");
+
+        clear_playlist_items(pl.id.clone()).unwrap();
+        check("清空后");
+        let meta = load_playlist_meta(&pl.id).unwrap().unwrap();
+        assert_eq!(meta.item_count, 0);
+        assert_eq!(meta.max_order, Some(-1), "清空后 order 复位");
+
+        // 复用空列表：从 0 重新排号，增量与重算仍一致
+        let after = import_music_file(
+            pl.id.clone(),
+            write_audio(dir.path(), "d.mp3").to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        assert_eq!(after.order, 0, "清空后重新排号应从 0 开始");
+        check("清空后复用");
 
         let _ = delete_playlist(pl.id);
     }
