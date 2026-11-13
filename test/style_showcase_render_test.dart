@@ -2,47 +2,28 @@
 @Tags(['golden'])
 library;
 
-import 'dart:io';
-
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:slime_works/components/window/sidebar_resize_handle.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/pages/style_showcase_screen.dart';
 
 /// 样式总览页的离屏渲染
 ///
 /// 令牌层（色彩角色 / 圆角 / 阴影 / 字号）改一处就会牵动整页排版，
 /// 靠肉眼在 macOS 窗口里翻页不现实。这里把明暗两版一次性截下来做像素对照。
+///
+/// 字体由 flutter_test_config.dart 的全局 setUpAll 统一载入，这里不再各加载一遍。
 void main() {
-  setUpAll(() async {
-    final fonts = <String, String>{'Inter': 'assets/fonts/Inter-Regular.ttf'};
-    final iconFont = _materialIconsPath();
-    if (iconFont != null) fonts['MaterialIcons'] = iconFont;
-    for (final entry in fonts.entries) {
-      final file = File(entry.value);
-      if (!file.existsSync()) continue;
-      final bytes = file.readAsBytesSync();
-      final loader = FontLoader(
-        entry.key,
-      )..addFont(Future.value(ByteData.view(Uint8List.fromList(bytes).buffer)));
-      await loader.load();
-    }
-  });
-
   testWidgets('明暗双版并排：整套组件一次性出图', (tester) async {
     // 两块 720 面板 + 24 间距 + 24 外边距；外壳行 800 + 控制台行 1040
     tester.view.physicalSize = const Size(1512, 1912);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: const StyleShowcaseScreen(),
-      ),
-    );
+    await tester.pumpWidget(_showcase());
     await tester.pump(const Duration(milliseconds: 400));
 
     await expectLater(
@@ -56,12 +37,7 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: const StyleShowcaseScreen(),
-      ),
-    );
+    await tester.pumpWidget(_showcase());
     await tester.pump(const Duration(milliseconds: 400));
 
     // 两块面板各点一下，明暗两版一起进收起态。
@@ -91,20 +67,20 @@ void main() {
   });
 }
 
-/// 测试进程里图标字体默认不加载，全是方框，排版根本没法验收。
-/// FLUTTER_ROOT 在部分 shell 下为空，再从 dart-sdk 可执行路径回溯一层兜底。
-String? _materialIconsPath() {
-  final candidates = <String>[
-    for (final root in [
-      Platform.environment['FLUTTER_ROOT'] ?? '',
-      File(
-        Platform.resolvedExecutable,
-      ).parent.parent.parent.parent.parent.absolute.path,
-    ])
-      '$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-  ];
-  for (final path in candidates) {
-    if (File(path).existsSync()) return path;
-  }
-  return null;
+/// 页面 build 第一行就读 AppTheme.metrics，而度量是按 ScreenUtil 折算的：
+/// 不先 ScreenUtilInit 把 _data 配上，第一帧就抛 LateInitializationError。
+/// designSize 取窗口实际尺寸，系数为 1，定宽面板的排版才可复现。
+Widget _showcase() {
+  return ScreenUtilInit(
+    designSize: const Size(1512, 1912),
+    minTextAdapt: true,
+    splitScreenMode: false,
+    builder: (context, _) {
+      AppTheme.resetMetrics();
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: const StyleShowcaseScreen(),
+      );
+    },
+  );
 }

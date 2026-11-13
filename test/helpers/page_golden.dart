@@ -25,11 +25,18 @@ import 'package:slime_works/core/theme/app_theme.dart';
 /// 测试里当窗口用的一套尺寸，页面里的 scaleW/scaleS 都按它折算
 const Size kTestWindowSize = Size(1440, 900);
 
+// 字体全局只加载一次的守卫，由 flutter_test_config.dart 的 setUpAll 触发
+bool _appFontsLoaded = false;
+
 /// 载入应用真实用到的字体
 ///
 /// 测试进程默认不带自定义字体，图标全渲染成方框、中文全fallback成系统字，
 /// 排版跟真机差得没法验收。
 Future<void> loadAppFonts() async {
+  // 全局只加载一次（由 flutter_test_config.dart 的 setUpAll 触发）：每测试各加载
+  // 一遍会反复触发系统字体变更通知，relayout 回调挂到各自销毁的树上被 3.50 判失败
+  if (_appFontsLoaded) return;
+  _appFontsLoaded = true;
   final flutterRoot = Platform.environment['FLUTTER_ROOT'] ??
       // 部分 shell 下 FLUTTER_ROOT 为空，从 dart-sdk 可执行路径回溯一层兜底
       File(Platform.resolvedExecutable)
