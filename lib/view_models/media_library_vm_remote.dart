@@ -96,6 +96,24 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
       nodes.map(_loadNodeMetadata),
     );
 
+    // 旧快照按节点分桶：某一路失败（超时/报错）时用它兜底。
+    // ★ 这是「删除节点本地文件后列表整片清空、要重启才恢复」的直接修复点：
+    // 删除瞬间节点正被批量删文件的负载拖着，list_media_collections 超时几乎必现，
+    // 而失败的那一路在 NodeMediaMetadata 里只是一份**空列表**，旧代码照单
+    // assignAll → 该节点的远程集合被清成 0 条。重启后重新取数才回来。
+    final prevFoldersByNode = <String, List<media_api.MediaFolder>>{};
+    for (final folder in remoteFolders) {
+      final nodeId = remoteFolderNodeId[folder.id];
+      if (nodeId != null) prevFoldersByNode.putIfAbsent(nodeId, () => []).add(folder);
+    }
+    final prevCollectionsByNode = <String, List<media_api.MediaCollection>>{};
+    for (final collection in remoteCollections) {
+      final nodeId = remoteCollectionNodeId[collection.id];
+      if (nodeId != null) {
+        prevCollectionsByNode.putIfAbsent(nodeId, () => []).add(collection);
+      }
+    }
+
     final remote = <media_api.MediaFolder>[];
     final nodeIdMap = <String, String>{};
     final nodeNameMap = <String, String>{};
@@ -107,53 +125,108 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
     final collRawIdMap = <String, String>{};
     final remoteSfMap = <String, List<SmartFolder>>{};
 
+    final staleNodes = <String>[];
+
     for (final item in results) {
       final node = item.node;
       final meta = item.metadata;
+      // 整节点取数失败：沿用该节点上一次成功拿到的数据，绝不当成「节点空了」。
+      // 首次取数就失败时没有旧快照可沿用，这时该节点本就不该出现在列表里。
       if (meta == null) {
+        staleNodes.add('${node.name}(全部)');
+        _carryOverNodeEntries(
+          nodeId: node.id,
+          folders: prevFoldersByNode[node.id] ?? const [],
+          collections: prevCollectionsByNode[node.id] ?? const [],
+          smartFolders: _remoteSmartFolders[node.id] ?? const [],
+          remote: remote,
+          nodeIdMap: nodeIdMap,
+          nodeNameMap: nodeNameMap,
+          rawIdMap: rawIdMap,
+          remoteColl: remoteColl,
+          collNodeIdMap: collNodeIdMap,
+          collNameMap: collNameMap,
+          collRawIdMap: collRawIdMap,
+          remoteSfMap: remoteSfMap,
+        );
         continue;
       }
-      for (final payload in meta.folders) {
-        final rawId = (payload['id'] ?? '').toString();
-        if (rawId.isEmpty) {
-          continue;
+      // 单路失败：只把该路回退到旧快照，另外两路照常用新结果。
+      if (meta.foldersOk) {
+        for (final payload in meta.folders) {
+          final rawId = (payload['id'] ?? '').toString();
+          if (rawId.isEmpty) {
+            continue;
+          }
+          final syntheticId = _buildRemoteFolderId(node.id, rawId);
+          remote.add(_buildRemoteFolder(payload, syntheticId, node.id));
+          nodeIdMap[syntheticId] = node.id;
+          nodeNameMap[syntheticId] = node.name;
+          rawIdMap[syntheticId] = rawId;
         }
-        final syntheticId = _buildRemoteFolderId(node.id, rawId);
-        remote.add(_buildRemoteFolder(payload, syntheticId, node.id));
-        nodeIdMap[syntheticId] = node.id;
-        nodeNameMap[syntheticId] = node.name;
-        rawIdMap[syntheticId] = rawId;
+      } else {
+        staleNodes.add('${node.name}(文件夹)');
+        for (final folder in prevFoldersByNode[node.id] ??
+            const <media_api.MediaFolder>[]) {
+          remote.add(folder);
+          final mappedNode = remoteFolderNodeId[folder.id];
+          final rawId = remoteFolderRawId[folder.id];
+          if (mappedNode != null) nodeIdMap[folder.id] = mappedNode;
+          if (rawId != null) rawIdMap[folder.id] = rawId;
+          nodeNameMap[folder.id] =
+              remoteFolderNodeName[folder.id] ?? node.name;
+        }
       }
       final nodeSfs = <SmartFolder>[];
-      for (final payload in meta.collections) {
-        final rawId = (payload['id'] ?? '').toString();
-        if (rawId.isEmpty) {
-          continue;
+      if (meta.collectionsOk) {
+        for (final payload in meta.collections) {
+          final rawId = (payload['id'] ?? '').toString();
+          if (rawId.isEmpty) {
+            continue;
+          }
+          final syntheticId = _buildRemoteCollectionId(node.id, rawId);
+          remoteColl.add(_buildRemoteCollection(payload, syntheticId, node.id));
+          collNodeIdMap[syntheticId] = node.id;
+          collNameMap[syntheticId] = node.name;
+          collRawIdMap[syntheticId] = rawId;
+          // 解析服务端返回的集合总大小
+          final totalSizeRaw = payload['total_size'];
+          if (totalSizeRaw != null) {
+            _collectionSizes[syntheticId] = _parseBigIntLike(totalSizeRaw);
+          }
         }
-        final syntheticId = _buildRemoteCollectionId(node.id, rawId);
-        remoteColl.add(_buildRemoteCollection(payload, syntheticId, node.id));
-        collNodeIdMap[syntheticId] = node.id;
-        collNameMap[syntheticId] = node.name;
-        collRawIdMap[syntheticId] = rawId;
-        // 解析服务端返回的集合总大小
-        final totalSizeRaw = payload['total_size'];
-        if (totalSizeRaw != null) {
-          _collectionSizes[syntheticId] = _parseBigIntLike(totalSizeRaw);
+      } else {
+        staleNodes.add('${node.name}(集合)');
+        for (final collection in prevCollectionsByNode[node.id] ??
+            const <media_api.MediaCollection>[]) {
+          remoteColl.add(collection);
+          final mappedNode = remoteCollectionNodeId[collection.id];
+          final rawId = remoteCollectionRawId[collection.id];
+          if (mappedNode != null) collNodeIdMap[collection.id] = mappedNode;
+          if (rawId != null) collRawIdMap[collection.id] = rawId;
+          collNameMap[collection.id] =
+              remoteCollectionNodeName[collection.id] ?? node.name;
         }
       }
-      for (final payload in meta.smartFolders) {
-        final rawSfId = (payload['id'] ?? '').toString();
-        if (rawSfId.isEmpty) continue;
-        // 用合成 ID 重建 SmartFolder；targetFolderIds 在客户端无效，清空即可
-        nodeSfs.add(
-          SmartFolder.fromJson({
-            ...Map<String, dynamic>.from(payload),
-            'id': '${MediaLibraryViewModel._remoteSmartFolderPrefix}${node.id}:$rawSfId',
-            'targetFolderIds': <String>[],
-          }),
-        );
+      if (meta.smartFoldersOk) {
+        for (final payload in meta.smartFolders) {
+          final rawSfId = (payload['id'] ?? '').toString();
+          if (rawSfId.isEmpty) continue;
+          // 用合成 ID 重建 SmartFolder；targetFolderIds 在客户端无效，清空即可
+          nodeSfs.add(
+            SmartFolder.fromJson({
+              ...Map<String, dynamic>.from(payload),
+              'id': '${MediaLibraryViewModel._remoteSmartFolderPrefix}${node.id}:$rawSfId',
+              'targetFolderIds': <String>[],
+            }),
+          );
+        }
+        remoteSfMap[node.id] = nodeSfs;
+      } else {
+        staleNodes.add('${node.name}(智能文件夹)');
+        final prev = _remoteSmartFolders[node.id];
+        if (prev != null) remoteSfMap[node.id] = prev;
       }
-      remoteSfMap[node.id] = nodeSfs;
     }
 
     remoteFolders.assignAll(remote);
@@ -167,10 +240,61 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
     remoteCollectionRawId.assignAll(collRawIdMap);
     _remoteSmartFolders.assignAll(remoteSfMap);
 
+    // 记下「集合那一路没取到」的节点：删除流程据此拒绝把「列表里没有」
+    // 当成「节点上已经没有了」（否则一次超时就会把节点侧集合记录一起删掉）。
+    remoteCollectionsStaleNodes
+      ..clear()
+      ..addAll(
+        results
+            .where((r) => r.metadata == null || !r.metadata!.collectionsOk)
+            .map((r) => r.node.id),
+      );
+
     if (currentFolderId.value != null && currentFolder == null) {
       currentFolderId.value = null;
     }
-    trace.end();
+    trace.end(
+      note: staleNodes.isEmpty ? null : '沿用旧快照: ${staleNodes.join(' | ')}',
+    );
+  }
+
+  /// 整节点取数失败时把该节点上一次的远程条目原样搬进本轮结果。
+  ///
+  /// 映射表（节点/名称/原始 ID）一并搬回来：少了它们，这些卡片会被当成
+  /// 「本地集合」渲染并出现在错误的层级里。
+  void _carryOverNodeEntries({
+    required String nodeId,
+    required List<media_api.MediaFolder> folders,
+    required List<media_api.MediaCollection> collections,
+    required List<SmartFolder> smartFolders,
+    required List<media_api.MediaFolder> remote,
+    required Map<String, String> nodeIdMap,
+    required Map<String, String> nodeNameMap,
+    required Map<String, String> rawIdMap,
+    required List<media_api.MediaCollection> remoteColl,
+    required Map<String, String> collNodeIdMap,
+    required Map<String, String> collNameMap,
+    required Map<String, String> collRawIdMap,
+    required Map<String, List<SmartFolder>> remoteSfMap,
+  }) {
+    for (final folder in folders) {
+      remote.add(folder);
+      final mappedNode = remoteFolderNodeId[folder.id] ?? nodeId;
+      final rawId = remoteFolderRawId[folder.id];
+      nodeIdMap[folder.id] = mappedNode;
+      nodeNameMap[folder.id] = remoteFolderNodeName[folder.id] ?? mappedNode;
+      if (rawId != null) rawIdMap[folder.id] = rawId;
+    }
+    for (final collection in collections) {
+      remoteColl.add(collection);
+      final mappedNode = remoteCollectionNodeId[collection.id] ?? nodeId;
+      final rawId = remoteCollectionRawId[collection.id];
+      collNodeIdMap[collection.id] = mappedNode;
+      collNameMap[collection.id] =
+          remoteCollectionNodeName[collection.id] ?? mappedNode;
+      if (rawId != null) collRawIdMap[collection.id] = rawId;
+    }
+    if (smartFolders.isNotEmpty) remoteSfMap[nodeId] = smartFolders;
   }
 
   Future<void> refreshRemoteCollections() async {

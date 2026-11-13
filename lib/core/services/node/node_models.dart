@@ -85,7 +85,9 @@ class NodeMediaMetadata {
     required this.collections,
     required this.smartFolders,
     required this.takenAt,
-    this.complete = true,
+    this.foldersOk = true,
+    this.collectionsOk = true,
+    this.smartFoldersOk = true,
   });
 
   final List<Map<String, dynamic>> folders;
@@ -93,7 +95,15 @@ class NodeMediaMetadata {
   final List<Map<String, dynamic>> smartFolders;
   final DateTime takenAt;
 
+  /// 三路各自的成败。失败的那一路拿到的是**空列表**，而空列表既可能是
+  /// 「节点确实没有数据」，也可能是「这一路超时/报错」——调用方必须靠这三个
+  /// 标记区分：把一次超时当成「该节点的集合全没了」，界面就会被整片清空
+  /// （「删除节点本地文件后列表全空、要重启才恢复」就是这条链）。
+  final bool foldersOk;
+  final bool collectionsOk;
+  final bool smartFoldersOk;
+
   /// 三路是否全部取到。为 false 时列表为空可能只是「那一路失败了」，
   /// 不能当成「该节点没有这类数据」渲染给用户。
-  final bool complete;
+  bool get complete => foldersOk && collectionsOk && smartFoldersOk;
 }
