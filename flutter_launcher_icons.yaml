@@ -1,21 +1,25 @@
 # flutter pub run flutter_launcher_icons:main
+# logo-2-icon.png 为 logo-2.png 还原圆角透明通道后的图标源图
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logo.png"
+  image_path: "assets/logo-2-icon.png"
   min_sdk_android: 21
+  # App Store 不接受带 alpha 的图标，生成时按白色底压平
+  remove_alpha_ios: true
   adaptive_icon_background: "#ffffff"
-  adaptive_icon_foreground: "assets/logo.png"
+  adaptive_icon_foreground: "assets/logo-2-icon.png"
 
   macos:
     generate: true
-    image_path: "assets/logo.png"
+    image_path: "assets/logo-2-icon.png"
 
   windows:
     generate: true
-    image_path: "assets/logo.png"
+    image_path: "assets/logo-2-icon.png"
     icon_size: 256
+    # 生成后需跑 scripts/gen_windows_ico.py 补齐多尺寸 ico
 
   web:
     generate: true
-    image_path: "assets/logo.png"
+    image_path: "assets/logo-2-icon.png"
