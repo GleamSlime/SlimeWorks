@@ -37,6 +37,10 @@ export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
 - **`FLUTTER_SWIFT_PACKAGE_MANAGER=false`**：iOS/macOS 钉死 CocoaPods 路线（部分插件无 SPM 支持，iOS 工程不做 SPM 迁移）。Flutter 3.50 起关闭 SPM 每次命令会告警；CocoaPods Trunk 2026-12 进入只读，SPM 迁移是后续专项。
 - Windows 打包只能在 Windows 上做；Linux/Android/iOS 同理。
 - 后台跑打包别信完成通知的 exit 0：grep 日志里自己埋的退出标记，并核对 `dist/` 真出了新包。
+- 重跑打包前先把 `dist/<版本>/` 里的旧 DMG 挪走：appdmg 见目标文件已存在直接报 `Target already exists`，前面整个 flutter build 白跑。
+- **cargo/make 0% CPU 挂起时查 sccache**：构建中途冷启动的 sccache 守护进程会继承 make/cargo 的 jobserver 管道并吞掉令牌——make 阻塞在 `read`（0% CPU、无子进程），cargo 停在 `exec_with_streaming/read2/poll` 等管道 EOF。实证 make 阻塞的管道地址与 sccache 持有的完全一致，sccache 退出后构建立即自愈。macOS 默认 universal 包，cargokit 先后跑 arm64/x86_64 两遍 cargo，whisper.cpp 的 cmake/make 阶段两遍都可能挂。
+- **根治 sccache 挂起**：普通 `sccache --start-server` 预热不够——服务器默认空闲 600s 退出，构建间隙退出后又会中途冷启动。出包前用 `SCCACHE_IDLE_TIMEOUT=0 sccache --start-server`（永不空闲退出，且从干净 shell 启动不带 jobserver fd）；已挂起时杀掉该 sccache 进程即自愈，再按此式重启。
+- fastforge 启动的版本检查用裸 Dio 直连 `PUB_HOSTED_URL`（**不走 https_proxy**），网络抖动时 `HandshakeException` 直接退出、打包根本没开始；出包命令加 `--no-version-check` 跳过。
 
 ## macOS 签名身份（决定更新后要不要重授权限）
 

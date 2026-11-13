@@ -133,14 +133,16 @@ dev_dependencies:
   json_serializable: ^6.12.0 # JSON序列化生成器
   go_router_builder: ^4.1.3 # GoRouter路由生成器
 
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter packages.
+  # 测试直接 import 这些平台接口包注册 mock，须显式声明为直接依赖
   flutter_secure_storage_platform_interface: any
   path_provider_platform_interface: any
   fake_async: any
   connectivity_plus_platform_interface: any
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
 flutter:
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
