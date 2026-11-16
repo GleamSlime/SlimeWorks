@@ -27,6 +27,7 @@ part 'node_media_handler.dart';
 
 class NodeSettingsService extends GetxService {
   static const String _keyRemoteNodes = 'node_remote_nodes';
+  static const String _keyWakeDevices = 'node_wake_devices';
   static const String _keyLocalEnabled = 'node_local_enabled';
   static const String _keyLocalName = 'node_local_name';
   static const String _keyLocalPort = 'node_local_port';
@@ -39,6 +40,8 @@ class NodeSettingsService extends GetxService {
   final RxList<NodeEndpoint> remoteNodes = <NodeEndpoint>[].obs;
   final RxMap<String, bool> nodeConnectivity = <String, bool>{}.obs;
   final RxMap<String, String> nodeConnectivityError = <String, String>{}.obs;
+  final RxList<WakeDevice> wakeDevices = <WakeDevice>[].obs;
+  final RxMap<String, WakeStatus> wakeStatus = <String, WakeStatus>{}.obs;
   final RxDouble appRxKbps = 0.0.obs;
   final RxDouble appTxKbps = 0.0.obs;
   final RxInt nodeRequestCount = 0.obs;
@@ -488,6 +491,166 @@ class NodeSettingsService extends GetxService {
     if (!enabled) {
       nodeConnectivity[nodeId] = false;
       nodeConnectivityError[nodeId] = '节点已禁用';
+    }
+  }
+
+  // ── 设备唤醒 ──────────────────────────────────────────────────────────────
+
+  WakeDevice? getWakeDeviceById(String id) =>
+      wakeDevices.firstWhereOrNull((d) => d.id == id);
+
+  Future<WakeDevice> addWakeDevice({
+    required String name,
+    required String mac,
+    String target = '',
+    int port = 9,
+    WakeMode mode = WakeMode.relay,
+    String relayNodeId = '',
+    String probeNodeId = '',
+    int count = 3,
+  }) async {
+    final device = WakeDevice(
+      id: _createNodeId(),
+      name: name.trim().isEmpty ? '未命名设备' : name.trim(),
+      mac: mac.trim(),
+      target: target.trim(),
+      port: port,
+      mode: mode,
+      relayNodeId: relayNodeId,
+      probeNodeId: probeNodeId,
+      count: count,
+    );
+    wakeDevices.add(device);
+    wakeStatus[device.id] = WakeStatus.idle;
+    await _save();
+    return device;
+  }
+
+  Future<void> updateWakeDevice(WakeDevice device) async {
+    final index = wakeDevices.indexWhere((d) => d.id == device.id);
+    if (index == -1) {
+      return;
+    }
+    wakeDevices[index] = device;
+    wakeDevices.refresh();
+    await _save();
+  }
+
+  Future<void> removeWakeDevice(String id) async {
+    wakeDevices.removeWhere((d) => d.id == id);
+    wakeStatus.remove(id);
+    await _save();
+  }
+
+  /// 发送唤醒包；配置了检测节点时再轮询它的上线状态
+  Future<void> wakeDevice(String id) async {
+    final device = getWakeDeviceById(id);
+    if (device == null) {
+      return;
+    }
+
+    wakeStatus[id] = WakeStatus.waking;
+    // Mock 模式不发真实网络包，也不探测节点
+    if (MockMode.enabled) {
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      wakeStatus[id] = device.probeNodeId.isEmpty ? WakeStatus.sent : WakeStatus.online;
+      return;
+    }
+
+    try {
+      if (device.mode == WakeMode.relay) {
+        final relay = getNodeById(device.relayNodeId);
+        if (relay == null) {
+          throw StateError('请先选择中继节点');
+        }
+        await callNodeAction(
+          nodeId: relay.id,
+          action: 'wake_host',
+          params: {
+            'mac': device.mac,
+            'target': device.target,
+            'port': device.port,
+            'count': device.count,
+          },
+        );
+      } else {
+        await _sendMagicPacketDirect(device);
+      }
+      wakeStatus[id] = WakeStatus.sent;
+    } catch (e, st) {
+      wakeStatus[id] = WakeStatus.failed;
+      _logger.error('唤醒失败: ${device.name}', error: e, stackTrace: st);
+      rethrow;
+    }
+
+    if (device.probeNodeId.isNotEmpty) {
+      unawaited(_pollWakeOnline(device));
+    }
+  }
+
+  /// 本机直发：客户端同网段，或路由器已把 UDP 端口映射到广播地址
+  Future<void> _sendMagicPacketDirect(WakeDevice device) async {
+    final mac = _parseMacBytes(device.mac);
+    final target = device.target.trim();
+    final address = target.isEmpty
+        ? InternetAddress('255.255.255.255')
+        : InternetAddress.tryParse(target);
+    if (address == null) {
+      throw FormatException('唤醒地址格式不正确: $target');
+    }
+    if (address.type != InternetAddressType.IPv4) {
+      throw const FormatException('暂不支持 IPv6 唤醒地址');
+    }
+
+    final packet = Uint8List(102)
+      ..fillRange(0, 6, 0xFF)
+      ..setRange(6, 102, List<int>.generate(96, (i) => mac[i % 6]));
+    final port = device.port <= 0 ? 9 : device.port;
+    final count = device.count <= 0 ? 3 : device.count.clamp(1, 5);
+
+    final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    try {
+      socket.broadcastEnabled = true;
+      for (int index = 0; index < count; index++) {
+        socket.send(packet, address, port);
+        if (index + 1 < count) {
+          await Future<void>.delayed(const Duration(milliseconds: 80));
+        }
+      }
+    } finally {
+      socket.close();
+    }
+  }
+
+  Uint8List _parseMacBytes(String input) {
+    final cleaned = input.replaceAll(RegExp(r'[:\-.\s]'), '');
+    if (cleaned.length != 12 || !RegExp(r'^[0-9a-fA-F]{12}$').hasMatch(cleaned)) {
+      throw FormatException('MAC 地址格式不正确: $input');
+    }
+    return Uint8List.fromList(
+      List<int>.generate(
+        6,
+        (i) => int.parse(cleaned.substring(i * 2, i * 2 + 2), radix: 16),
+      ),
+    );
+  }
+
+  /// 唤醒后按 2 秒间隔探测最多 60 秒
+  Future<void> _pollWakeOnline(WakeDevice device) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 60));
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (wakeStatus[device.id] != WakeStatus.sent) {
+        return;
+      }
+      await checkNodeConnectivity(device.probeNodeId);
+      if (nodeConnectivity[device.probeNodeId] == true) {
+        wakeStatus[device.id] = WakeStatus.online;
+        return;
+      }
+    }
+    if (wakeStatus[device.id] == WakeStatus.sent) {
+      wakeStatus[device.id] = WakeStatus.timeout;
     }
   }
 
@@ -2004,6 +2167,7 @@ class NodeSettingsService extends GetxService {
     }
 
     final raw = prefs.getString(_keyRemoteNodes);
+    _loadWakeDevices(prefs);
     if (raw == null || raw.isEmpty) {
       remoteNodes.clear();
       return;
@@ -2040,6 +2204,34 @@ class NodeSettingsService extends GetxService {
     await prefs.setInt(_keyLocalPort, localNodePort.value);
     await prefs.setString(_keyLocalAuthCode, localNodeAuthCode.value);
     await prefs.setString(_keyRemoteNodes, jsonEncode(remoteNodes.map((n) => n.toJson()).toList()));
+    await prefs.setString(
+      _keyWakeDevices,
+      jsonEncode(wakeDevices.map((d) => d.toJson()).toList()),
+    );
+  }
+
+  void _loadWakeDevices(SharedPreferences prefs) {
+    final raw = prefs.getString(_keyWakeDevices);
+    if (raw == null || raw.isEmpty) {
+      wakeDevices.clear();
+      return;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        wakeDevices.clear();
+        return;
+      }
+      wakeDevices.assignAll(
+        decoded
+            .whereType<Map>()
+            .map((e) => WakeDevice.fromJson(Map<String, dynamic>.from(e)))
+            .where((d) => d.id.isNotEmpty && d.mac.isNotEmpty),
+      );
+    } catch (e, st) {
+      _logger.error('读取唤醒设备失败', error: e, stackTrace: st);
+      wakeDevices.clear();
+    }
   }
 
   String _normalizeBaseUrl(String input) {

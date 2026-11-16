@@ -249,3 +249,32 @@ class PowerStatsRoute extends AppRouteData with $PowerStatsRoute {
     return AppRoutes.buildPage(context, state, const PowerStatsScreen());
   }
 }
+
+@TypedGoRoute<DeviceWakeRoute>(path: '/device-wake')
+class DeviceWakeRoute extends AppRouteData with $DeviceWakeRoute {
+  const DeviceWakeRoute();
+
+  @override
+  String get title => '设备唤醒';
+
+  @override
+  String get sidebarLabel => title;
+
+  @override
+  StrokeIcon get sidebarIcon => StrokeIcons.deviceDesktop;
+
+  @override
+  String get sidebarGroupId => 'tools';
+
+  @override
+  bool get desktopOnly => false;
+
+  static const Permission routePermission = Permission.accessDeviceWake;
+  @override
+  Permission get permission => DeviceWakeRoute.routePermission;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return AppRoutes.buildPage(context, state, const DeviceWakeScreen());
+  }
+}

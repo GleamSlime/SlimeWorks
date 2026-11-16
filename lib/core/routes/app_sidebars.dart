@@ -54,6 +54,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
     const SentryLogRoute(),
     const AliyunDdnsRoute(),
     const PowerStatsRoute(),
+    const DeviceWakeRoute(),
     const LanTransferRoute(),
     const MangaHomeRoute(),
     const MusicPlayerRoute(),

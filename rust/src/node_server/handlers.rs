@@ -95,6 +95,22 @@ pub async fn dispatch_action(
             "version": "1.0",
         })),
 
+        // ── 设备唤醒 ─────────────────────────────────────────────────────────
+        // 魔术包必须从目标主机所在局域网发出，外网客户端经此动作中继
+        "wake_host" => {
+            let mac = s_field(&params, "mac");
+            let target = s_field(&params, "target");
+            let port = params["port"].as_u64().unwrap_or(9) as u16;
+            let count = params["count"].as_u64().unwrap_or(3) as u8;
+            let result = tokio::task::spawn_blocking(move || {
+                super::wake::send_magic_packet(&mac, &target, port, count)
+            })
+            .await
+            .map_err(|e| format!("唤醒任务失败: {}", e))?;
+            let (target, sent) = result?;
+            Ok(json!({ "target": target, "sent": sent }))
+        }
+
         // ── 媒体集合操作 ─────────────────────────────────────────────────────
         // 节点端缩略图生成进度（客户端轮询展示状态，移动端经节点取数时同样可见）
         "get_thumb_progress" => {

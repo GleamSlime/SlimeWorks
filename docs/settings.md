@@ -247,3 +247,19 @@ GetIt.instance.registerSingletonAsync<NodeSettingsService>(() async {
   return service;
 });
 ```
+
+---
+
+## 设备唤醒（`DeviceWakeScreen`）
+
+独立页面 `/device-wake`，用于远程唤醒局域网主机。魔术包是二层广播，无法跨路由器，因此按设备选择下发路径：
+
+| 模式 | 发包方 | 适用场景 |
+|------|--------|----------|
+| 节点中继 | 局域网内常开的本应用节点 | 客户端在外网；调用节点 `wake_host` 动作代发 |
+| 本机直发 | 当前设备 | 客户端与目标同网段，或路由器已把 UDP 端口映射到广播地址 |
+
+- 持久化：`SharedPreferences` key `node_wake_devices`（设备名、MAC、目标地址、端口、模式、中继节点、检测节点）
+- 节点动作：`POST /node/call` → `{"action":"wake_host","params":{"mac":"AA:BB:CC:DD:EE:FF","target":"","port":9,"count":3}}`，走现有授权码校验
+- 唤醒后若配置了「上线检测节点」，按 2 秒间隔轮询 `/health` 最多 60 秒，状态依次为 唤醒中 → 已发送 → 已上线 / 未确认上线
+- 目标主机要求：BIOS 开启网络唤醒并关闭 ErP，网卡勾选「魔术包唤醒」与「关机网络唤醒」，关闭快速启动

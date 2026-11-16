@@ -13,6 +13,7 @@ mod media_handler;
 mod router;
 mod types;
 mod upload_handler;
+mod wake;
 
 pub use handlers::dispatch_action;
 pub use media_handler::*;

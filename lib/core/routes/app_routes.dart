@@ -56,6 +56,7 @@ import 'package:slime_works/pages/tools/tools_screen.dart';
 import 'package:slime_works/pages/sentry_log/sentry_log_screen.dart';
 import 'package:slime_works/pages/aliyun_ddns/aliyun_ddns_screen.dart';
 import 'package:slime_works/pages/power_stats/power_stats_screen.dart';
+import 'package:slime_works/pages/device_wake/device_wake_screen.dart';
 import 'package:slime_works/pages/music_player/music_player_screen.dart';
 import 'package:slime_works/pages/ncm_decrypt/ncm_decrypt_screen.dart';
 import 'package:slime_works/pages/ledger/ledger_screen.dart';
@@ -132,6 +133,7 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
     TypedGoRoute<AliyunDdnsRoute>(path: '/aliyun'),
     TypedGoRoute<NcmDecryptRoute>(path: '/ncm-decrypt'),
     TypedGoRoute<PowerStatsRoute>(path: '/power-stats'),
+    TypedGoRoute<DeviceWakeRoute>(path: '/device-wake'),
 
     // 以下页面过去不在外壳里（整窗都是内容、没有侧边栏）。
     // 侧栏改成全局后它们也进外壳，进入时按默认隐藏态处理，见 kSidebarDefaultHiddenPaths。
@@ -214,6 +216,7 @@ class AppRoutes {
     const AliyunDdnsRoute(),
     const NcmDecryptRoute(),
     const PowerStatsRoute(),
+    const DeviceWakeRoute(),
 
     const NovelReaderRoute(),
     const MangaComicDetailRoute(comicId: ''),

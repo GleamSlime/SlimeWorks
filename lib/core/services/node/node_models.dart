@@ -107,3 +107,100 @@ class NodeMediaMetadata {
   /// 不能当成「该节点没有这类数据」渲染给用户。
   bool get complete => foldersOk && collectionsOk && smartFoldersOk;
 }
+
+/// 唤醒方式：经局域网内节点中继，或由本机直接广播
+enum WakeMode { relay, direct }
+
+/// 唤醒任务状态
+enum WakeStatus { idle, waking, sent, online, timeout, failed }
+
+/// 可远程唤醒的设备（目标主机不必运行本应用）
+class WakeDevice {
+  const WakeDevice({
+    required this.id,
+    required this.name,
+    required this.mac,
+    this.target = '',
+    this.port = 9,
+    this.mode = WakeMode.relay,
+    this.relayNodeId = '',
+    this.probeNodeId = '',
+    this.count = 3,
+  });
+
+  final String id;
+  final String name;
+
+  /// MAC 地址，支持冒号、横线、点分隔与纯十六进制
+  final String mac;
+
+  /// 广播地址或公网地址；留空表示 255.255.255.255
+  final String target;
+
+  final int port;
+  final WakeMode mode;
+
+  /// 中继节点 ID，[WakeMode.relay] 时必填
+  final String relayNodeId;
+
+  /// 唤醒后用于检测上线的节点 ID，可为空
+  final String probeNodeId;
+
+  /// 连续发送次数
+  final int count;
+
+  WakeDevice copyWith({
+    String? id,
+    String? name,
+    String? mac,
+    String? target,
+    int? port,
+    WakeMode? mode,
+    String? relayNodeId,
+    String? probeNodeId,
+    int? count,
+  }) {
+    return WakeDevice(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      mac: mac ?? this.mac,
+      target: target ?? this.target,
+      port: port ?? this.port,
+      mode: mode ?? this.mode,
+      relayNodeId: relayNodeId ?? this.relayNodeId,
+      probeNodeId: probeNodeId ?? this.probeNodeId,
+      count: count ?? this.count,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'mac': mac,
+      'target': target,
+      'port': port,
+      'mode': mode.name,
+      'relayNodeId': relayNodeId,
+      'probeNodeId': probeNodeId,
+      'count': count,
+    };
+  }
+
+  factory WakeDevice.fromJson(Map<String, dynamic> json) {
+    return WakeDevice(
+      id: (json['id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      mac: (json['mac'] ?? '').toString(),
+      target: (json['target'] ?? '').toString(),
+      port: (json['port'] as num?)?.toInt() ?? 9,
+      mode: (json['mode'] ?? '').toString() == WakeMode.direct.name
+          ? WakeMode.direct
+          : WakeMode.relay,
+      relayNodeId: (json['relayNodeId'] ?? '').toString(),
+      probeNodeId: (json['probeNodeId'] ?? '').toString(),
+      count: (json['count'] as num?)?.toInt() ?? 3,
+    );
+  }
+}
+
