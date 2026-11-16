@@ -606,7 +606,11 @@ class NovelLibraryViewModel extends BaseViewModel {
       unawaited(loadFolders());
       _scheduleRemoteRefreshDebounced();
     });
-    await Future.wait([loadData(), loadKeywordRules(), loadChapterCounts()]);
+    await Future.wait([loadData(), loadKeywordRules()]);
+    // 远程模式章节数只能来自节点返回的元数据，本机 JSON 里的那批属于另一份书库
+    if (!nodeSettingsService.isRemoteMode) {
+      await loadChapterCounts();
+    }
     // 审计 #3：远程刷新移出首屏 await——先显示本地书，远程到货再刷新。
     // 原先 N 节点串行 × 全量封面 base64 的传输直接压在进页面链路上。
     _backgroundRemoteRefresh = refreshRemoteNovels();
@@ -649,7 +653,7 @@ class NovelLibraryViewModel extends BaseViewModel {
     final previousRemoteIds = remoteNovelNodeId.keys.toSet();
 
     // 审计 #3：节点间由串行 for-await 改并发（失败熔断由 _callNode 内部负责）
-    final nodes = nodeSettingsService.enabledRemoteNodes;
+    final nodes = nodeSettingsService.dataRemoteNodes;
     await Future.wait(nodes.map((node) async {
       try {
         final payloads = await nodeSettingsService.fetchNodeNovels(node);
@@ -844,6 +848,11 @@ class NovelLibraryViewModel extends BaseViewModel {
   }
 
   Future<void> loadNovels() async {
+    // 远程模式只展示当前节点的书，本机书库不读
+    if (nodeSettingsService.isRemoteMode) {
+      novels.clear();
+      return;
+    }
     final t = TimeConsumptionTest()..start(log: false);
     try {
       novels.value = getAllNovels();
@@ -854,6 +863,10 @@ class NovelLibraryViewModel extends BaseViewModel {
   }
 
   Future<void> loadFolders() async {
+    if (nodeSettingsService.isRemoteMode) {
+      folders.clear();
+      return;
+    }
     try {
       folders.value = getAllFolders();
     } catch (e) {

@@ -82,25 +82,70 @@ class SystemMetricsService extends ChangeNotifier {
   /// 连续采集失败的次数，用于限制错误日志的刷屏。
   int _consecutiveFailures = 0;
 
+  /// 当前数据源标识：空串=本机，否则为节点 ID。
+  /// 切换后必须清空曲线，否则会拿上一个源的旧数据继续画。
+  String? _sourceKey;
+
   /// 失败日志的节流间隔：每 30 次连续失败只写一条，避免每秒一条噪声。
   static const int _kFailureLogEvery = 30;
 
+  /// 清空所有指标曲线与快照，供切换数据源时使用。
+  void _resetSeries() {
+    cpuHistory.clear();
+    memHistory.clear();
+    rxHistory.clear();
+    txHistory.clear();
+    reqHistory.clear();
+    _lastSnapshot = null;
+    _hasData = false;
+  }
+
+  /// 远程节点模式：向节点要它自己机器的指标。
+  Future<rust_sys.SystemResourceSnapshot> _fetchRemoteSnapshot(
+    String nodeId,
+  ) async {
+    final response = await _nodeSettingsService.callNodeAction(
+      nodeId: nodeId,
+      action: 'get_system_metrics',
+    );
+    final raw = response['data'];
+    final data = raw is Map ? raw : response;
+    double asDouble(String key) => (data[key] as num?)?.toDouble() ?? 0;
+    int asInt(String key) => (data[key] as num?)?.toInt() ?? 0;
+    return rust_sys.SystemResourceSnapshot(
+      cpuUsagePercent: asDouble('cpu_usage_percent'),
+      memoryUsedMb: BigInt.from(asInt('memory_used_mb')),
+      memoryTotalMb: BigInt.from(asInt('memory_total_mb')),
+      rxKbps: asDouble('rx_kbps'),
+      txKbps: asDouble('tx_kbps'),
+    );
+  }
+
+  /// 是否有一轮采集在途：远程模式下每轮是一次 HTTP 往返，
+  /// 不能让 1s 定时器把请求叠起来。
+  bool _refreshing = false;
+
   Future<void> _refresh() async {
+    if (_refreshing) return;
+    _refreshing = true;
     try {
-      // 系统资源快照走 FRB 的 `#[frb(sync)]` 同步 FFI：调用本身只是一次
-      // Rust 侧的 sysinfo refresh（System::new_all 的重扫只在首次构造时发生），
-      // 耗时在一毫秒量级，留在主 isolate 直接调用即可。
-      //
-      // 这里曾改成 `Isolate.run(...)` 想避免阻塞主线程，结果反而让看板停更：
-      // FRB 的同步绑定依赖每个 isolate 各自的 RustLib.__state 静态初始化，
-      // 而 Isolate.run 起的是全新的短期 isolate、从没跑过 RustLib.init()，
-      // 于是每个周期都抛 Bad state 并被下面的 catch 吞掉，notifyListeners()
-      // 永远不触发，Dashboard 的折线与数字就冻结在打开时的那一帧。
-      // 若将来确实需要挪出主线程，必须在工作 isolate 内先完成 FRB 初始化。
-      final next = rust_sys.getSystemResourceSnapshot();
+      final sourceKey = _nodeSettingsService.activeNodeId.value;
+      if (_sourceKey != sourceKey) {
+        _sourceKey = sourceKey;
+        _resetSeries();
+      }
+      final remoteNode = _nodeSettingsService.activeNode;
+      // 全局远程节点模式下，概览必须显示节点机器的资源，而不是本机进程的
+      final next = remoteNode == null
+          ? rust_sys.getSystemResourceSnapshot()
+          : await _fetchRemoteSnapshot(remoteNode.id);
       _nodeSettingsService.syncTrafficDisplayNow();
-      final rxKbps = _nodeSettingsService.appRxKbps.value;
-      final txKbps = _nodeSettingsService.appTxKbps.value;
+      final rxKbps = remoteNode == null
+          ? _nodeSettingsService.appRxKbps.value
+          : next.rxKbps;
+      final txKbps = remoteNode == null
+          ? _nodeSettingsService.appTxKbps.value
+          : next.txKbps;
       final reqCount = _nodeSettingsService.nodeRequestCount.value;
       final reqDelta = (reqCount - _lastNodeRequestCount).clamp(0, 999999).toDouble();
 
@@ -128,6 +173,8 @@ class SystemMetricsService extends ChangeNotifier {
       if (_consecutiveFailures == 1 || _consecutiveFailures % _kFailureLogEvery == 0) {
         _logger.error('系统资源快照采集失败', error: e);
       }
+    } finally {
+      _refreshing = false;
     }
   }
 }

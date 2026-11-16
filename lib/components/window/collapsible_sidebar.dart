@@ -10,6 +10,7 @@ import 'package:slime_works/components/buttons/stroke_icon_button.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_zone.dart';
+import 'package:slime_works/components/node/sidebar_node_selector.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/components/window/sidebar_resize_handle.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
@@ -719,9 +720,14 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
           padding: EdgeInsets.symmetric(vertical: AppTheme.metrics.kSpace8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: bottomGroup.items
-                .map((item) => _buildMenuItem(context, controller, item, isExpanded, showExtends))
-                .toList(),
+            children: <Widget>[
+              for (final item in bottomGroup.items) ...[
+                _buildMenuItem(context, controller, item, isExpanded, showExtends),
+                // 节点切换固定跟在「关于」下方；没有配置远程节点时组件内部自动不占位
+                if (item.route.location == '/about')
+                  SidebarNodeSelector(isExpanded: isExpanded, showExtends: showExtends),
+              ],
+            ],
           ),
         ),
       ],

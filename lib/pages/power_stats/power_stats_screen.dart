@@ -178,12 +178,16 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
   // ── 顶部节点切换 ────────────────────────────────────────────────────────
   Widget _buildNodeSwitcher(BuildContext context) {
     if (_nodeService == null) return const SizedBox.shrink();
-    return NodeSwitcherButton(
-      nodeService: _nodeService!,
-      currentNodeId: _viewModel.displayNodeId,
-      availabilityChecker: _viewModel.checkNodePowerStatsAvailable,
-      onNodeSelected: (nodeId) => _viewModel.switchNode(nodeId),
-    );
+    // 全局远程节点模式下，本页节点由侧栏统一控制，不再给第二处入口
+    return Obx(() {
+      if (_nodeService!.isRemoteMode) return const SizedBox.shrink();
+      return NodeSwitcherButton(
+        nodeService: _nodeService!,
+        currentNodeId: _viewModel.displayNodeId,
+        availabilityChecker: _viewModel.checkNodePowerStatsAvailable,
+        onNodeSelected: (nodeId) => _viewModel.switchNode(nodeId),
+      );
+    });
   }
 
   Widget _buildFetchButton(BuildContext context) {

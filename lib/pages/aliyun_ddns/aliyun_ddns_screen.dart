@@ -843,12 +843,14 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
     if (_nodeService == null) return const SizedBox.shrink();
 
     return Obx(
-      () => NodeSwitcherButton(
-        nodeService: _nodeService!,
-        currentNodeId: _viewModel.currentNodeId.value,
-        availabilityChecker: (baseUrl) => _viewModel.checkNodeAliyunAvailable(baseUrl),
-        onNodeSelected: (nodeId) => _viewModel.switchNode(nodeId),
-      ),
+      () => _nodeService!.isRemoteMode
+          ? const SizedBox.shrink()
+          : NodeSwitcherButton(
+              nodeService: _nodeService!,
+              currentNodeId: _viewModel.currentNodeId.value,
+              availabilityChecker: (baseUrl) => _viewModel.checkNodeAliyunAvailable(baseUrl),
+              onNodeSelected: (nodeId) => _viewModel.switchNode(nodeId),
+            ),
     );
   }
 }

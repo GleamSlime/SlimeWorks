@@ -10,6 +10,8 @@ extension MediaLibraryRefreshExt on MediaLibraryViewModel {
   /// 旧实现每次进页面都同步跑全库逐文件 stat（网络卷上 38 万次往返），
   /// 页面打开卡分钟级就是它。
   Future<void> refreshCollectionLiveStats() async {
+    // 远程模式下集合都在节点侧，本机 stat 不到，也不该展示本机统计
+    if (nodeSettingsService.isRemoteMode) return;
     if (_liveStatsInFlight) {
       _liveStatsDirty = true;
       return;
@@ -115,6 +117,11 @@ extension MediaLibraryRefreshExt on MediaLibraryViewModel {
     final inFlight = _refreshAllFuture;
     if (inFlight != null) {
       await inFlight;
+      // 在途那轮可能是在切换节点之前发起的：数据源已经变了就补跑一轮，
+      // 否则会拿着本机列表停在远程模式里。
+      if (_refreshAllSourceKey != nodeSettingsService.activeNodeId.value) {
+        await _refreshAll(throttleRemote: throttleRemote);
+      }
       return;
     }
 
@@ -130,6 +137,23 @@ extension MediaLibraryRefreshExt on MediaLibraryViewModel {
   }
 
   Future<void> _refreshAllInternal({required bool throttleRemote}) async {
+    _refreshAllSourceKey = nodeSettingsService.activeNodeId.value;
+    // 全局远程节点模式：本地 FFI 数据一律不读也不展示，避免本机内容混进节点视图。
+    // 本地列表清空后，浏览层只剩当前节点的那一份文件夹/集合。
+    if (nodeSettingsService.isRemoteMode) {
+      final trace = TimingTrace('媒体库 refreshAll(节点)');
+      if (currentCollectionId.value != null) {
+        exitCollection();
+      }
+      currentFolderId.value = null;
+      folders.clear();
+      collections.clear();
+      smartFolders.clear();
+      _collectionLiveStats.clear();
+      trace.end(note: '已跳过本机数据');
+      _refreshRemoteBackground(throttled: throttleRemote);
+      return;
+    }
     // Phase 1: 立即加载本地数据，使 UI 快速可用
     final trace = TimingTrace('媒体库 refreshAll');
     await _loadSmartFolders();
@@ -145,7 +169,11 @@ extension MediaLibraryRefreshExt on MediaLibraryViewModel {
   }
 
   void _refreshRemoteBackground({bool throttled = false}) {
-    if (isLoadingRemote.value) return; // 已有后台任务在跑
+    if (isLoadingRemote.value) {
+      // 已有后台任务在跑：当前一轮结束后必须补跑，不能把新请求丢掉
+      _remoteRefreshPending = true;
+      return;
+    }
     if (throttled) {
       final last = _lastRemoteRefreshAt;
       if (last != null &&
@@ -169,10 +197,19 @@ extension MediaLibraryRefreshExt on MediaLibraryViewModel {
           trace.end();
           _lastRemoteRefreshAt = DateTime.now();
           isLoadingRemote.value = false;
+          if (_remoteRefreshPending) {
+            _remoteRefreshPending = false;
+            // 补跑一律走强制口径：这次多半是切换节点/节点恢复触发的，不该再被节流
+            _refreshRemoteBackground();
+          }
         });
   }
 
   Future<void> loadFolders() async {
+    if (nodeSettingsService.isRemoteMode) {
+      folders.clear();
+      return;
+    }
     try {
       final raw = await media_api.getAllMediaFolders();
       _logger.info('[媒体库] loadFolders: 加载到 ${raw.length} 个文件夹');
@@ -190,6 +227,10 @@ extension MediaLibraryRefreshExt on MediaLibraryViewModel {
   }
 
   Future<void> loadCollections() async {
+    if (nodeSettingsService.isRemoteMode) {
+      collections.clear();
+      return;
+    }
     try {
       final rawCollections = await media_api.getAllMediaCollections();
       _logger.info('[媒体库] loadCollections: 加载到 ${rawCollections.length} 个集合');

@@ -1,9 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
+import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -72,9 +77,60 @@ class _SettingsPageState extends State<SettingsPage>
           tabs: _tabs.map((tab) => tab.label).toList(),
         ),
       ),
-      child: TabBarView(
-        controller: _controller,
-        children: _tabs.map((tab) => tab.content).toList(),
+      child: Obx(() {
+        final activeNode = getIt<NodeSettingsService>().activeNode;
+        final view = TabBarView(
+          controller: _controller,
+          children: _tabs.map((tab) => tab.content).toList(),
+        );
+        if (activeNode == null) {
+          return view;
+        }
+        // 全局远程节点模式：设置页明确告知当前作用对象，避免误以为改的是本机
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _RemoteSettingsNotice(nodeName: activeNode.name),
+            Expanded(child: view),
+          ],
+        );
+      }),
+    );
+  }
+}
+
+/// 远程节点模式下设置页顶部的节点提示条。
+class _RemoteSettingsNotice extends StatelessWidget {
+  const _RemoteSettingsNotice({required this.nodeName});
+
+  final String nodeName;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSemantic.of(context);
+    final m = AppTheme.metrics;
+    return Container(
+      margin: EdgeInsets.fromLTRB(m.kSpace20, m.kSpace8, m.kSpace20, 0),
+      padding: EdgeInsets.symmetric(horizontal: m.kSpace12, vertical: m.kSpace8),
+      decoration: BoxDecoration(
+        color: s.accentContainer,
+        borderRadius: m.radius8,
+      ),
+      child: Row(
+        children: [
+          DrawIcon(StrokeIcons.dns, size: m.iconSize16, color: s.accent),
+          SizedBox(width: m.kSpace8),
+          Expanded(
+            child: Text(
+              '当前节点：$nodeName，设置与数据均作用于该节点',
+              style: AppTextStyles.role(
+                context,
+                fontSize: m.fontSize12,
+                color: s.accentText,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -119,48 +175,52 @@ class _OtherSettingsWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = Platform.isAndroid || Platform.isIOS;
-    final tabLabels = <String>[
-      '资源库',
-      'Manga',
-      '游戏设置',
-      if (!isMobile) '播放器设置',
-      if (!isMobile) 'Sentry',
-      if (kDebugMode) 'Mock 演示',
-    ];
-    final children = <Widget>[
-      const _ResourcesSettingsTab(),
-      const MangaSettingsTab(),
-      const GameSettingsTab(),
-      if (!isMobile) const MusicPlayerSettingsTab(),
-      if (!isMobile) const SentrySettingsTab(),
-      if (kDebugMode) const MockModeTab(),
-    ];
+    // 远程模式下，Manga/游戏/播放器/Mock 这些入口已被隐藏，对应设置也就不该露出来
+    return Obx(() {
+      final remoteMode = getIt<NodeSettingsService>().isRemoteMode;
+      final tabLabels = <String>[
+        '资源库',
+        if (!remoteMode) 'Manga',
+        if (!remoteMode) '游戏设置',
+        if (!isMobile) '播放器设置',
+        if (!isMobile && !remoteMode) 'Sentry',
+        if (kDebugMode && !remoteMode) 'Mock 演示',
+      ];
+      final children = <Widget>[
+        const _ResourcesSettingsTab(),
+        if (!remoteMode) const MangaSettingsTab(),
+        if (!remoteMode) const GameSettingsTab(),
+        if (!isMobile) const MusicPlayerSettingsTab(),
+        if (!isMobile && !remoteMode) const SentrySettingsTab(),
+        if (kDebugMode && !remoteMode) const MockModeTab(),
+      ];
 
-    return DefaultTabController(
-      length: tabLabels.length,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final controller = DefaultTabController.of(context);
-          return SizedBox(
-            height: constraints.maxHeight,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SettingsTabBar(
-                  controller: controller,
-                  tabs: tabLabels,
-                ),
-                Expanded(
-                  child: TabBarView(
-                    children: children,
+      return DefaultTabController(
+        length: tabLabels.length,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final controller = DefaultTabController.of(context);
+            return SizedBox(
+              height: constraints.maxHeight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SettingsTabBar(
+                    controller: controller,
+                    tabs: tabLabels,
                   ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
+                  Expanded(
+                    child: TabBarView(
+                      children: children,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    });
   }
 }
 
@@ -170,44 +230,48 @@ class _ToolsSettingsWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = Platform.isAndroid || Platform.isIOS;
-    final tabLabels = <String>[
-      if (!isMobile) '解压设置',
-      if (!isMobile) '阿里云',
-    ];
-    final children = <Widget>[
-      if (!isMobile) const ExtractSettingsTab(),
-      if (!isMobile) const AliyunSettingsTab(),
-    ];
+    // 远程模式下解压工具入口已隐藏，这里不再给它的设置
+    return Obx(() {
+      final remoteMode = getIt<NodeSettingsService>().isRemoteMode;
+      final tabLabels = <String>[
+        if (!isMobile && !remoteMode) '解压设置',
+        if (!isMobile) '阿里云',
+      ];
+      final children = <Widget>[
+        if (!isMobile && !remoteMode) const ExtractSettingsTab(),
+        if (!isMobile) const AliyunSettingsTab(),
+      ];
 
-    if (tabLabels.isEmpty) {
-      return const Center(child: Text('当前平台无可用工具设置'));
-    }
+      if (tabLabels.isEmpty) {
+        return const Center(child: Text('当前平台无可用工具设置'));
+      }
 
-    return DefaultTabController(
-      length: tabLabels.length,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final controller = DefaultTabController.of(context);
-          return SizedBox(
-            height: constraints.maxHeight,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SettingsTabBar(
-                  controller: controller,
-                  tabs: tabLabels,
-                ),
-                Expanded(
-                  child: TabBarView(
-                    children: children,
+      return DefaultTabController(
+        length: tabLabels.length,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final controller = DefaultTabController.of(context);
+            return SizedBox(
+              height: constraints.maxHeight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SettingsTabBar(
+                    controller: controller,
+                    tabs: tabLabels,
                   ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
+                  Expanded(
+                    child: TabBarView(
+                      children: children,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    });
   }
 }
 

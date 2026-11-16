@@ -52,6 +52,8 @@ UI：Flutter/Dart、GetX、GoRouter、ScreenUtil ｜ FFI：flutter_rust_bridge �
 
 三道校验通过后，直接 `git commit` 并 `git push`，无需再询问。
 
+**分支规则**：新功能/修复必须从 `main` 单独拉分支开发，发版时才合并回 `main`；禁止直接在 `main` 上提交功能/修复改动。
+
 ---
 
 ## 开工前必读

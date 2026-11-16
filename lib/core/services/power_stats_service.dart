@@ -162,15 +162,39 @@ class PowerStatsService extends GetxService {
     enabled.value = _prefs?.getBool(_keyEnabled) ?? false;
     intervalSecs.value = _prefs?.getInt(_keyInterval) ?? 60;
     selectedNodeId.value = _prefs?.getString(_keySelectedNodeId) ?? '';
+    _bindGlobalNodeSelection();
     // 演示模式默认开启采集，保证图表有数据
     if (MockMode.enabled) enabled.value = true;
   }
+
+  /// 全局远程节点模式：本页数据节点跟随全局选择；切回本机时恢复自己记住的节点。
+  void _bindGlobalNodeSelection() {
+    final nodeService = _nodeSettingsService;
+    if (nodeService == null) return;
+    void apply() {
+      selectedNodeId.value = nodeService.resolveNodeSelection(
+        _prefs?.getString(_keySelectedNodeId) ?? '',
+      );
+    }
+
+    apply();
+    ever<String>(nodeService.activeNodeId, (_) => apply());
+  }
+
+  /// 单元测试里不会注册节点服务，按需取、取不到就跳过全局联动。
+  NodeSettingsService? get _nodeSettingsService =>
+      GetIt.instance.isRegistered<NodeSettingsService>()
+          ? GetIt.instance<NodeSettingsService>()
+          : null;
 
   Future<void> _savePrefs() async {
     await _prefs?.setString(_keyMeterId, meterId.value);
     await _prefs?.setBool(_keyEnabled, enabled.value);
     await _prefs?.setInt(_keyInterval, intervalSecs.value);
-    await _prefs?.setString(_keySelectedNodeId, selectedNodeId.value);
+    // 远程模式下 selectedNodeId 是全局节点的投影，不能覆盖本页自己的记忆值
+    if (_nodeSettingsService?.isRemoteMode != true) {
+      await _prefs?.setString(_keySelectedNodeId, selectedNodeId.value);
+    }
   }
 
   /// 构建配置JSON（持久化标志由是否本地+桌面端决定）
