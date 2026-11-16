@@ -14,6 +14,16 @@
 - 动态加载模块（capture_proxy 等）**仅桌面端可用**
 - 移动端兼容：Rust 功能无法在移动端实现时，通过 HTTP 请求节点服务器中转
 
+## 节点与无头模式（硬性）
+
+NAS/服务器上以 `slime_node` 无头进程常驻，客户端可把全部数据功能切到远程节点（侧栏「节点」下拉）。因此：
+
+- **新功能必须同时有节点侧实现**：数据读写落在 `rust/src/node_server/handlers.rs` 的 action 上，客户端经 `NodeSettingsService` 调用；不允许只写本机 FFI 分支就收工。
+- **节点 action 不得依赖 Flutter 初始化**：日志、ffmpeg、数据目录由 `slime_node` 自行初始化，Rust 侧不得假设已有 Flutter 传入的运行时状态。
+- **无法远程实现的功能要隐藏入口**：依赖本机设备/动态库/临时文件等的功能（如互传、捕获、工具箱）在远程节点模式下必须隐藏侧栏入口与首页卡片，登记到 `kRemoteUnsupportedPathPrefixes`，**绝不静默回退本机**。
+- **改动后要保证无头包仍可构建**：`cargo build --release --bin slime_node` 能过，CI 的 `build-headless-*`（macOS/Windows/Linux）不被破坏。
+- 页面级节点选择统一走 `NodeSettingsService.resolveNodeSelection`：远程模式强制跟随全局节点，页面自己的记忆值只在「本机」模式下生效。
+
 ## 技术栈
 
 UI：Flutter/Dart、GetX、GoRouter、ScreenUtil ｜ FFI：flutter_rust_bridge ｜ Rust：tokio、hyper、redb、rusqlite、serde、reqwest、libloading ｜ 存储：redb(KV)、SQLite、SharedPreferences
