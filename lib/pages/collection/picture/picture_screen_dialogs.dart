@@ -18,6 +18,27 @@ mixin PictureScreenDialogs
       return;
     }
 
+    // 全局远程节点模式：导入/扫描只能落在当前节点上，本机文件选择器一律不走。
+    // 这里不判断当前是否处在远程文件夹里——远程模式下本机文件夹已被排除，
+    // 根目录也要能选节点上的目录导入。
+    final nodeService = viewModel.nodeSettingsService;
+    if (nodeService.isRemoteMode) {
+      final node = nodeService.activeNode;
+      if (node == null) {
+        viewModel.showSnack('错误', '当前节点不可用，请在侧栏重新选择节点');
+        return;
+      }
+      final rawFolderId = activeRemoteFolderId == null
+          ? null
+          : viewModel.getRemoteRawFolderId(activeRemoteFolderId);
+      await _showNodeFolderDialog(
+        scanMode: scanMode,
+        fixedNodeId: node.id,
+        targetRawFolderId: rawFolderId,
+      );
+      return;
+    }
+
     if (activeRemoteFolderId != null && viewModel.isRemoteFolder(activeRemoteFolderId)) {
       final nodeId = viewModel.getRemoteFolderNodeId(activeRemoteFolderId);
       if (nodeId == null) {
@@ -137,11 +158,14 @@ mixin PictureScreenDialogs
     String? fixedNodeId,
     String? targetRawFolderId,
   }) async {
-    if (viewModel.enabledRemoteNodes.isEmpty) {
+    // 远程模式下只剩当前节点可选；本机模式沿用全部启用节点
+    final nodes = viewModel.nodeSettingsService.dataRemoteNodes;
+    final remoteMode = viewModel.nodeSettingsService.isRemoteMode;
+    if (nodes.isEmpty) {
       viewModel.showSnack('提示', '没有可用节点');
       return;
     }
-    String selectedNodeId = fixedNodeId ?? viewModel.enabledRemoteNodes.first.id;
+    String selectedNodeId = fixedNodeId ?? nodes.first.id;
     // 当用户切换节点时，targetRawFolderId 失效（非当前文件夹的节点）
     String? activeTargetRawFolderId = targetRawFolderId;
     // 导入增强选项（仅导入模式显示）
@@ -165,31 +189,33 @@ mixin PictureScreenDialogs
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedNodeId,
-                    decoration: const InputDecoration(labelText: '目标节点'),
-                    items: viewModel.enabledRemoteNodes
-                        .map(
-                          (node) =>
-                              DropdownMenuItem<String>(value: node.id, child: Text(node.name)),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() {
-                        selectedNodeId = value;
-                        // 切换节点时：目标文件夹上下文失效，并加载该节点的历史路径
-                        if (value != fixedNodeId) {
-                          activeTargetRawFolderId = null;
-                        } else {
-                          activeTargetRawFolderId = targetRawFolderId;
-                        }
-                        final nodePath = prefs.getString('node_scan_path_$value') ?? '';
-                        controller.text = nodePath;
-                      });
-                    },
-                  ),
-                  SizedBox(height: appMetrics.kSpace12),
+                  // 远程模式下节点由侧栏统一决定，这里不再给第二个选择入口
+                  if (!remoteMode)
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedNodeId,
+                      decoration: const InputDecoration(labelText: '目标节点'),
+                      items: nodes
+                          .map(
+                            (node) =>
+                                DropdownMenuItem<String>(value: node.id, child: Text(node.name)),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          selectedNodeId = value;
+                          // 切换节点时：目标文件夹上下文失效，并加载该节点的历史路径
+                          if (value != fixedNodeId) {
+                            activeTargetRawFolderId = null;
+                          } else {
+                            activeTargetRawFolderId = targetRawFolderId;
+                          }
+                          final nodePath = prefs.getString('node_scan_path_$value') ?? '';
+                          controller.text = nodePath;
+                        });
+                      },
+                    ),
+                  if (!remoteMode) SizedBox(height: appMetrics.kSpace12),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -289,14 +315,18 @@ mixin PictureScreenDialogs
     final controller = TextEditingController();
     final currentFolderId = viewModel.currentFolderId.value;
     final inFolder = currentFolderId != null;
-    final allowLocalRoot = !Platform.isAndroid && !Platform.isIOS;
-    if (!inFolder && !allowLocalRoot && viewModel.enabledRemoteNodes.isEmpty) {
+    final nodeService = viewModel.nodeSettingsService;
+    // 远程模式下不允许建「本地媒体库」文件夹，位置只能是当前节点
+    final remoteMode = nodeService.isRemoteMode;
+    final allowLocalRoot = !Platform.isAndroid && !Platform.isIOS && !remoteMode;
+    final nodes = nodeService.dataRemoteNodes;
+    if (!inFolder && !allowLocalRoot && nodes.isEmpty) {
       viewModel.showSnack('提示', '当前没有可用节点，无法创建远程文件夹');
       return;
     }
-    String target = allowLocalRoot
-        ? '__local__'
-        : (viewModel.enabledRemoteNodes.firstOrNull?.id ?? '');
+    String target = remoteMode
+        ? nodeService.activeNodeId.value
+        : (allowLocalRoot ? '__local__' : (nodes.firstOrNull?.id ?? ''));
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -307,14 +337,14 @@ mixin PictureScreenDialogs
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (!inFolder && viewModel.enabledRemoteNodes.isNotEmpty)
+                  if (!inFolder && !remoteMode && nodes.isNotEmpty)
                     DropdownButtonFormField<String>(
                       initialValue: target,
                       decoration: const InputDecoration(labelText: '创建位置'),
                       items: [
                         if (allowLocalRoot)
                           const DropdownMenuItem<String>(value: '__local__', child: Text('本地媒体库')),
-                        ...viewModel.enabledRemoteNodes.map(
+                        ...nodes.map(
                           (node) =>
                               DropdownMenuItem<String>(value: node.id, child: Text(node.name)),
                         ),
@@ -325,7 +355,7 @@ mixin PictureScreenDialogs
                         }
                       },
                     ),
-                  if (!inFolder && viewModel.enabledRemoteNodes.isNotEmpty)
+                  if (!inFolder && !remoteMode && nodes.isNotEmpty)
                     SizedBox(height: appMetrics.kSpace12),
                   AppTextField(
                     controller: controller,
@@ -374,11 +404,15 @@ mixin PictureScreenDialogs
     var fileTypeFilter = SmartFolderFileType.all;
     // 如果当前正在浏览远程节点的文件夹，默认创建到该节点
     final currentFolderIdValue = viewModel.currentFolderId.value;
+    final nodeService = viewModel.nodeSettingsService;
+    final remoteMode = nodeService.isRemoteMode;
     String? targetNodeId;
-    if (currentFolderIdValue != null && viewModel.isRemoteFolder(currentFolderIdValue)) {
+    if (remoteMode) {
+      targetNodeId = nodeService.activeNodeId.value;
+    } else if (currentFolderIdValue != null && viewModel.isRemoteFolder(currentFolderIdValue)) {
       targetNodeId = viewModel.getRemoteFolderNodeId(currentFolderIdValue);
     }
-    final enabledNodes = viewModel.enabledRemoteNodes;
+    final enabledNodes = nodeService.dataRemoteNodes;
     final keywords = <String>[];
     await showDialog<void>(
       context: context,
@@ -397,7 +431,7 @@ mixin PictureScreenDialogs
                       autofocus: true,
                       decoration: const InputDecoration(labelText: '文件夹名称', hintText: '例：我的收藏'),
                     ),
-                    if (enabledNodes.isNotEmpty) ...[
+                    if (enabledNodes.isNotEmpty && !remoteMode) ...[
                       SizedBox(height: appMetrics.kSpace12),
                       DropdownButtonFormField<String?>(
                         initialValue: targetNodeId,

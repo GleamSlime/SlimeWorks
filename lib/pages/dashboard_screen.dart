@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:get/get.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
@@ -9,6 +10,7 @@ import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/system_metrics_service.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
@@ -115,17 +117,20 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
             ),
             SliverPadding(
               padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace20),
-              sliver: SliverGrid(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  return _buildFeatureItem(context, index);
-                }, childCount: 6),
-                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: scaleW(320),
-                  mainAxisSpacing: AppTheme.metrics.kSpace16,
-                  crossAxisSpacing: AppTheme.metrics.kSpace16,
-                  mainAxisExtent: scaleW(200).clamp(160.0, 260.0),
-                ),
-              ),
+              sliver: Obx(() {
+                final features = _buildFeatures(context);
+                return SliverGrid(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    return _buildFeatureItem(context, index, features);
+                  }, childCount: features.length),
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: scaleW(320),
+                    mainAxisSpacing: AppTheme.metrics.kSpace16,
+                    crossAxisSpacing: AppTheme.metrics.kSpace16,
+                    mainAxisExtent: scaleW(200).clamp(160.0, 260.0),
+                  ),
+                );
+              }),
             ),
             SliverToBoxAdapter(child: SizedBox(height: AppTheme.metrics.kSpace40)),
           ],
@@ -346,14 +351,16 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildFeatureItem(BuildContext context, int index) {
+  /// 功能模块卡片；远程模式下过滤掉没有节点侧实现的入口。
+  List<_FeatureData> _buildFeatures(BuildContext context) {
     final viz = AppVizSet.of(context);
-    final features = [
+    final all = <_FeatureData>[
       _FeatureData(
         icon: StrokeIcons.accountTree,
         title: '数据捕获',
         description: '强大的数据采集和流量处理中心',
         viz: viz.sky,
+        remoteUnsupported: true,
         onTap: () => const CaptureRoute().go(context),
       ),
       _FeatureData(
@@ -375,6 +382,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         title: '工具箱',
         description: '压缩解压与多格式解密实用工具',
         viz: viz.lilac,
+        remoteUnsupported: true,
         onTap: () => const ToolsRoute().go(context),
       ),
       _FeatureData(
@@ -389,10 +397,17 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         title: '局域网传输',
         description: '多端近场极速发现与双向流转',
         viz: viz.mint,
+        remoteUnsupported: true,
         onTap: () => const LanTransferRoute().go(context),
       ),
     ];
+    if (!getIt<NodeSettingsService>().isRemoteMode) {
+      return all;
+    }
+    return all.where((feature) => !feature.remoteUnsupported).toList();
+  }
 
+  Widget _buildFeatureItem(BuildContext context, int index, List<_FeatureData> features) {
     final feature = features[index];
     final anim = _cardAnimations[(index + 5).clamp(0, _cardAnimations.length - 1)];
 
@@ -440,12 +455,16 @@ class _FeatureData {
   final AppViz viz;
   final VoidCallback? onTap;
 
+  /// 远程节点模式下不可用：入口连同卡片一起隐藏，避免点进去读到本机数据
+  final bool remoteUnsupported;
+
   const _FeatureData({
     required this.icon,
     required this.title,
     required this.description,
     required this.viz,
     this.onTap,
+    this.remoteUnsupported = false,
   });
 }
 

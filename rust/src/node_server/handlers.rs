@@ -95,6 +95,21 @@ pub async fn dispatch_action(
             "version": "1.0",
         })),
 
+        // ── 系统指标 ─────────────────────────────────────────────────────────
+        // 客户端处于全局远程节点模式时，概览面板显示的必须是节点机器的指标，
+        // 不能是本机进程的。字段与 FRB 的 SystemResourceSnapshot 一一对应。
+        "get_system_metrics" => {
+            let snapshot = crate::api::system_metrics::get_system_resource_snapshot()
+                .map_err(|e| format!("采集系统指标失败: {}", e))?;
+            Ok(json!({
+                "cpu_usage_percent": snapshot.cpu_usage_percent,
+                "memory_used_mb": snapshot.memory_used_mb,
+                "memory_total_mb": snapshot.memory_total_mb,
+                "rx_kbps": snapshot.rx_kbps,
+                "tx_kbps": snapshot.tx_kbps,
+            }))
+        }
+
         // ── 设备唤醒 ─────────────────────────────────────────────────────────
         // 魔术包必须从目标主机所在局域网发出，外网客户端经此动作中继
         "wake_host" => {

@@ -41,8 +41,29 @@ bool sidebarDefaultHidden(String location) => kSidebarDefaultHiddenPaths.any(
   (base) => location == base || location.startsWith('$base/'),
 );
 
+/// 全局远程节点模式下隐藏的入口：这些功能没有节点侧实现，留在侧栏点进去
+/// 只会读到本机数据，与「所有功能走节点」直接冲突。宁可隐藏，也不静默回退本机。
+const Set<String> kRemoteUnsupportedPathPrefixes = {
+  '/capture',
+  '/tools',
+  '/lan-transfer',
+  '/manga',
+  '/music',
+  '/game',
+  '/motion-lab',
+  '/interaction-lab',
+  '/surface-lab',
+};
+
+/// [location] 是否命中远程模式不支持的前缀（参数化路径同样算命中）。
+bool remoteUnsupportedPath(String location) => kRemoteUnsupportedPathPrefixes.any(
+  (base) => location == base || location.startsWith('$base/'),
+);
+
 /// 从路由元数据自动生成侧边栏分组
-List<SidebarGroup> buildSidebarGroupsFromRoutes() {
+///
+/// [remoteMode] 为 true 时（已选中全局远程节点），隐藏没有节点侧实现的入口。
+List<SidebarGroup> buildSidebarGroupsFromRoutes({bool remoteMode = false}) {
   final isMobilePlatform = Platform.isAndroid || Platform.isIOS;
 
   // 侧栏只认这一份名单：showInSidebar 的含义是"能从侧栏点到"，
@@ -83,6 +104,7 @@ List<SidebarGroup> buildSidebarGroupsFromRoutes() {
 
   bool visible(AppRouteData route) {
     if (route.desktopOnly && isMobilePlatform) return false;
+    if (remoteMode && remoteUnsupportedPath(route.location)) return false;
     if (route.permission != null && !RoleManager.canAccess(route.permission!)) return false;
     return true;
   }

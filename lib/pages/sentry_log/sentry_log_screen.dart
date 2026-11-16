@@ -341,11 +341,13 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
     if (_sentrySettings == null || _nodeService == null) return const SizedBox.shrink();
 
     return Obx(
-      () => NodeSwitcherButton(
-        nodeService: _nodeService!,
-        currentNodeId: _viewModel.currentNodeId.value,
-        onNodeSelected: (nodeId) => _viewModel.switchNode(nodeId),
-      ),
+      () => _nodeService!.isRemoteMode
+          ? const SizedBox.shrink()
+          : NodeSwitcherButton(
+              nodeService: _nodeService!,
+              currentNodeId: _viewModel.currentNodeId.value,
+              onNodeSelected: (nodeId) => _viewModel.switchNode(nodeId),
+            ),
     );
   }
 

@@ -456,6 +456,14 @@ class MediaLibraryViewModel extends BaseViewModel {
   Worker? _nodeMutationWorker;
   Future<void>? _refreshAllFuture;
 
+  /// 上一轮 refreshAll 对应的数据源（空串=本机，否则节点 ID）。
+  /// 切换节点时若旧一轮仍在途，需要在它结束后补跑一轮，否则界面会停在本机数据上。
+  String? _refreshAllSourceKey;
+
+  /// 远程刷新请求在途时又被要求刷新：记下待办，当前一轮结束后补跑，
+  /// 避免切换节点时新请求被"已有后台任务"直接吞掉。
+  bool _remoteRefreshPending = false;
+
   /// 进页面触发的远程刷新节流窗口：距上次远程刷新完成不足此时长时跳过远程部分。
   /// 强制全量路径（首次初始化 / 节点变更 tick / 手动刷新按钮）不走这个窗口。
   static const _kRemoteRefreshThrottle = Duration(seconds: 60);

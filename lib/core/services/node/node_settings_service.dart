@@ -27,6 +27,7 @@ part 'node_media_handler.dart';
 
 class NodeSettingsService extends GetxService {
   static const String _keyRemoteNodes = 'node_remote_nodes';
+  static const String _keyActiveNodeId = 'node_active_node_id';
   static const String _keyWakeDevices = 'node_wake_devices';
   static const String _keyLocalEnabled = 'node_local_enabled';
   static const String _keyLocalName = 'node_local_name';
@@ -50,6 +51,9 @@ class NodeSettingsService extends GetxService {
   final RxString localNodeName = '本机节点'.obs;
   final RxInt localNodePort = 17888.obs;
   final RxList<String> localNodeApiList = <String>[].obs;
+
+  /// 全局生效的节点：空串表示本机。选中后应用内所有数据功能只走该节点。
+  final RxString activeNodeId = ''.obs;
 
   SharedPreferences? _prefs;
   // 服务器实例已迁移到 Rust 管理，不再需要 Dart 端的 HttpServer
@@ -273,7 +277,7 @@ class NodeSettingsService extends GetxService {
   /// 节点长时间不可达时，定时复探会变成每 20 秒一串无意义的超时日志。
   /// 节点回来了就补预热并通知已打开的媒体库重取远程数据。
   Future<void> recheckOfflineNodes() async {
-    final stale = remoteNodes
+    final stale = dataRemoteNodes
         .where(
           (n) =>
               n.enabled &&
@@ -412,6 +416,59 @@ class NodeSettingsService extends GetxService {
     return remoteNodes.where((n) => n.enabled).toList();
   }
 
+  /// 当前全局节点；null 表示本机。
+  NodeEndpoint? get activeNode {
+    final id = activeNodeId.value;
+    if (id.isEmpty) {
+      return null;
+    }
+    return getNodeById(id);
+  }
+
+  /// 是否处于全局远程节点模式。
+  bool get isRemoteMode => activeNode != null;
+
+  /// 数据层应访问的节点集合：远程模式只有当前节点，本机模式是全部启用节点。
+  List<NodeEndpoint> get dataRemoteNodes {
+    final node = activeNode;
+    if (node != null) {
+      return <NodeEndpoint>[node];
+    }
+    return enabledRemoteNodes;
+  }
+
+  /// 切换全局节点；[nodeId] 为空表示本机。切换后通知所有数据面板刷新。
+  Future<void> selectActiveNode(String nodeId) async {
+    if (nodeId.isNotEmpty && getNodeById(nodeId) == null) {
+      return;
+    }
+    if (activeNodeId.value == nodeId) {
+      return;
+    }
+    activeNodeId.value = nodeId;
+    await _save();
+    // 数据源整体换了一个，已打开的资源库/概览需重新取数
+    _emitLibraryMutation();
+  }
+
+  /// 当前节点被删除或禁用时回落到本机，避免所有数据请求指向不存在的节点。
+  void _validateActiveNode() {
+    final id = activeNodeId.value;
+    if (id.isEmpty) {
+      return;
+    }
+    final node = getNodeById(id);
+    if (node == null || !node.enabled) {
+      activeNodeId.value = '';
+      _emitLibraryMutation();
+    }
+  }
+
+  /// 页面级节点选择的最终口径：远程模式下强制跟随全局节点，
+  /// 本机模式保留各页自己记住的选择。
+  String resolveNodeSelection(String localSelection) =>
+      isRemoteMode ? activeNodeId.value : localSelection;
+
   NodeEndpoint? getNodeById(String nodeId) {
     return remoteNodes.firstWhereOrNull((n) => n.id == nodeId);
   }
@@ -463,6 +520,7 @@ class NodeSettingsService extends GetxService {
     );
     remoteNodes.refresh();
     await _save();
+    _validateActiveNode();
     // 地址/授权码/开关都可能变，旧快照不再可信
     invalidateNodeMediaMetadataCache(nodeId: endpoint.id);
     _nodeAnsweredBase.remove(endpoint.id);
@@ -478,6 +536,7 @@ class NodeSettingsService extends GetxService {
     nodeConnectivityError.remove(nodeId);
     invalidateNodeMediaMetadataCache(nodeId: nodeId);
     _nodeAnsweredBase.remove(nodeId);
+    _validateActiveNode();
     await _save();
   }
 
@@ -2166,10 +2225,13 @@ class NodeSettingsService extends GetxService {
       localNodeAuthCode.value = storedCode;
     }
 
+    activeNodeId.value = prefs.getString(_keyActiveNodeId) ?? '';
+
     final raw = prefs.getString(_keyRemoteNodes);
     _loadWakeDevices(prefs);
     if (raw == null || raw.isEmpty) {
       remoteNodes.clear();
+      _validateActiveNode();
       return;
     }
 
@@ -2187,6 +2249,7 @@ class NodeSettingsService extends GetxService {
           .where((n) => n.id.isNotEmpty && n.apiBaseUrl.isNotEmpty)
           .toList();
       remoteNodes.assignAll(nodes);
+      _validateActiveNode();
     } catch (e, st) {
       _logger.error('读取节点设置失败', error: e, stackTrace: st);
       remoteNodes.clear();
@@ -2203,6 +2266,7 @@ class NodeSettingsService extends GetxService {
     await prefs.setString(_keyLocalName, localNodeName.value);
     await prefs.setInt(_keyLocalPort, localNodePort.value);
     await prefs.setString(_keyLocalAuthCode, localNodeAuthCode.value);
+    await prefs.setString(_keyActiveNodeId, activeNodeId.value);
     await prefs.setString(_keyRemoteNodes, jsonEncode(remoteNodes.map((n) => n.toJson()).toList()));
     await prefs.setString(
       _keyWakeDevices,

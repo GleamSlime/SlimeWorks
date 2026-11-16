@@ -37,6 +37,7 @@ class SentrySettingsService extends GetxService {
     if (_isInitialized) return;
     _prefs = await SharedPreferences.getInstance();
     _load();
+    _bindGlobalNodeSelection();
     _isInitialized = true;
     _logger.info('Sentry设置服务初始化完成');
   }
@@ -48,6 +49,20 @@ class SentrySettingsService extends GetxService {
     refreshIntervalSeconds.value = _prefs?.getInt(_keyRefreshInterval) ?? 30;
   }
 
+  /// 全局远程节点模式下，Sentry 数据节点跟随全局选择；切回本机时恢复自己记住的节点。
+  void _bindGlobalNodeSelection() {
+    final nodeService = _tryGetNodeService();
+    if (nodeService == null) return;
+    void apply() {
+      selectedNodeId.value = nodeService.resolveNodeSelection(
+        _prefs?.getString(_keySelectedNodeId) ?? '',
+      );
+    }
+
+    apply();
+    ever<String>(nodeService.activeNodeId, (_) => apply());
+  }
+
   Future<void> setEnabled(bool value) async {
     enabled.value = value;
     await _prefs?.setBool(_keyEnabled, value);
@@ -55,7 +70,10 @@ class SentrySettingsService extends GetxService {
 
   Future<void> setSelectedNodeId(String nodeId) async {
     selectedNodeId.value = nodeId;
-    await _prefs?.setString(_keySelectedNodeId, nodeId);
+    // 远程模式下这个字段是全局节点的投影，不覆盖本页自己的记忆值
+    if (_tryGetNodeService()?.isRemoteMode != true) {
+      await _prefs?.setString(_keySelectedNodeId, nodeId);
+    }
   }
 
   Future<void> setAutoRefresh(bool value) async {

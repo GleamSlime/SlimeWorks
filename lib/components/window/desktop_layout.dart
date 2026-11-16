@@ -7,6 +7,7 @@ import 'package:slime_works/components/window/desktop_scaffold.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/routes/app_sidebars.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/widgets/atmosphere_backdrop.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
@@ -16,8 +17,8 @@ class DesktopLayout extends StatefulWidget {
 
   const DesktopLayout({super.key, required this.child});
 
-  static List<SidebarGroup> getDefaultSidebarGroups() {
-    return buildSidebarGroupsFromRoutes();
+  static List<SidebarGroup> getDefaultSidebarGroups({bool remoteMode = false}) {
+    return buildSidebarGroupsFromRoutes(remoteMode: remoteMode);
   }
 
   @override
@@ -26,7 +27,14 @@ class DesktopLayout extends StatefulWidget {
 
 class _DesktopLayoutState extends State<DesktopLayout> {
   late final Widget _sidebar = RepaintBoundary(
-    child: CollapsibleSidebar(groups: DesktopLayout.getDefaultSidebarGroups()),
+    // 侧栏分组依赖"当前是否为远程节点模式"：切换节点要立刻隐藏/恢复入口，
+    // 所以这里订阅 activeNodeId，而不是只算一次。
+    child: Obx(() {
+      final remoteMode = getIt<NodeSettingsService>().isRemoteMode;
+      return CollapsibleSidebar(
+        groups: DesktopLayout.getDefaultSidebarGroups(remoteMode: remoteMode),
+      );
+    }),
   );
 
   @override

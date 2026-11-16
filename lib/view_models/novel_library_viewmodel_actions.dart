@@ -265,9 +265,12 @@ extension NovelLibraryActions on NovelLibraryViewModel {
 
       final allResults = <NovelMetadata>[];
 
-      final batches = await searchInAllNovelsBatched(keyword: keyword, batchSize: BigInt.from(5));
+      // 远程模式下本机书库不参与搜索，只问当前节点
+      final localBatches = nodeSettingsService.isRemoteMode
+          ? const <SearchBatchResult>[]
+          : await searchInAllNovelsBatched(keyword: keyword, batchSize: BigInt.from(5));
 
-      for (final batch in batches) {
+      for (final batch in localBatches) {
         if (searchCancelled) {
           showSnack('搜索', '已取消搜索');
           break;
@@ -284,7 +287,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
         contentSearchResults.value = allResults.toList();
       }
 
-      for (final node in nodeSettingsService.enabledRemoteNodes) {
+      for (final node in nodeSettingsService.dataRemoteNodes) {
         try {
           final results = await nodeSettingsService.searchNodeNovels(node, keyword);
           for (final payload in results) {

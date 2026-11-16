@@ -13,7 +13,7 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
   /// 公开供定时器与单测直接驱动（无其它生产调用方）。
   Future<void> pollRemoteThumbProgress() async {
     if (_remoteThumbPolling) return;
-    final nodes = nodeSettingsService.enabledRemoteNodes
+    final nodes = nodeSettingsService.dataRemoteNodes
         .where((n) =>
             !nodeSettingsService.isNodeCircuitBreaked(n.id) &&
             nodeSettingsService.nodeConnectivity[n.id] == true)
@@ -26,7 +26,7 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
       // refreshAll 重新拉起）。有启用节点但全离线：维持 15s 心跳，
       // 节点恢复连接后（checkNodeConnectivity 只写 nodeConnectivity）
       // 下一轮能自动纳入，不必等用户再进一次页面
-      if (nodeSettingsService.enabledRemoteNodes.isNotEmpty) {
+      if (nodeSettingsService.dataRemoteNodes.isNotEmpty) {
         _scheduleRemoteThumbPoll(const Duration(seconds: 15));
       }
       return;
@@ -86,7 +86,10 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
   }
 
   Future<void> refreshRemoteLibrary() async {
-    final nodes = nodeSettingsService.enabledRemoteNodes;
+    final nodes = nodeSettingsService.dataRemoteNodes;
+    // 本轮取数对应的节点选择：切换节点后旧结果必须丢弃，否则会把上一个节点的
+    // 列表写回界面（切换瞬间正好有请求在途就会踩到）。
+    final sourceKey = nodeSettingsService.activeNodeId.value;
     final trace = TimingTrace('刷新远程媒体库', scope: '${nodes.length}个节点');
 
     // 节点之间并发、节点内三路（文件夹/集合/智能文件夹）也并发：
@@ -229,6 +232,10 @@ extension RemoteNodeOperationsExt on MediaLibraryViewModel {
       }
     }
 
+    if (nodeSettingsService.activeNodeId.value != sourceKey) {
+      trace.end(note: '节点已切换，丢弃本轮结果');
+      return;
+    }
     remoteFolders.assignAll(remote);
     remoteFolderNodeId.assignAll(nodeIdMap);
     remoteFolderNodeName.assignAll(nodeNameMap);

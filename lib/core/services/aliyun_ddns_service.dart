@@ -113,6 +113,7 @@ class AliyunDdnsService extends GetxService {
     intervalSecs.value = _prefs?.getInt(_keyIntervalSecs) ?? 300;
     enabled.value = _prefs?.getBool(_keyEnabled) ?? false;
     selectedNodeId.value = _prefs?.getString(_keySelectedNodeId) ?? '';
+    _bindGlobalNodeSelection();
 
     final domainsJson = _prefs?.getString(_keyWatchDomains) ?? '[]';
     try {
@@ -128,10 +129,33 @@ class AliyunDdnsService extends GetxService {
     await _prefs?.setString(_keyAccessKeySecret, accessKeySecret.value);
     await _prefs?.setInt(_keyIntervalSecs, intervalSecs.value);
     await _prefs?.setBool(_keyEnabled, enabled.value);
-    await _prefs?.setString(_keySelectedNodeId, selectedNodeId.value);
+    // 远程模式下 selectedNodeId 是全局节点的投影，不覆盖本页自己的记忆值
+    if (_nodeSettingsService?.isRemoteMode != true) {
+      await _prefs?.setString(_keySelectedNodeId, selectedNodeId.value);
+    }
     final domainsJson = jsonEncode(watchDomains.map((e) => e.toMap()).toList());
     await _prefs?.setString(_keyWatchDomains, domainsJson);
   }
+
+  /// 全局远程节点模式下，本页数据节点跟随全局选择；切回本机时恢复自己记住的节点。
+  void _bindGlobalNodeSelection() {
+    final nodeService = _nodeSettingsService;
+    if (nodeService == null) return;
+    void apply() {
+      selectedNodeId.value = nodeService.resolveNodeSelection(
+        _prefs?.getString(_keySelectedNodeId) ?? '',
+      );
+    }
+
+    apply();
+    ever<String>(nodeService.activeNodeId, (_) => apply());
+  }
+
+  /// 单元测试里不会注册节点服务，按需取、取不到就跳过全局联动。
+  NodeSettingsService? get _nodeSettingsService =>
+      GetIt.instance.isRegistered<NodeSettingsService>()
+          ? GetIt.instance<NodeSettingsService>()
+          : null;
 
   Future<void> setAccessKeyId(String value) async {
     accessKeyId.value = value;
