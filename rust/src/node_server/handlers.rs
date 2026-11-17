@@ -161,8 +161,10 @@ pub async fn dispatch_action(
 
         // 重新扫描封面：客户端指定范围（集合 id 列表 / 文件夹子树 / 不传=全部），
         // 后台按客户端封面宽度补生成缺失的封面，进度由 get_thumb_progress 上报。
+        // force=true 为覆盖模式：先清掉这些集合已有的节点缩略图缓存再重生成。
         "rescan_media_covers" => {
             let width = params["width"].as_u64().unwrap_or(240) as u32;
+            let force = params["force"].as_bool().unwrap_or(false);
             let collections = media_api::get_all_media_collections()
                 .map_err(|e| format!("获取媒体集合失败: {}", e))?;
             let wanted_ids: Option<std::collections::HashSet<String>> = params
@@ -189,6 +191,22 @@ pub async fn dispatch_action(
                 collections
             };
             let count = targets.len();
+            if force {
+                // 覆盖模式：集合封面与集合内资源的节点缓存都要先作废，
+                // 否则 generate_thumbnail_bytes 三级缓存命中会原样吐回旧图
+                for collection in &targets {
+                    if let Some(cover) = collection.cover_path.as_ref() {
+                        if !cover.is_empty() {
+                            media_api::invalidate_node_thumbnail(cover.clone(), width);
+                        }
+                    }
+                    if let Ok(items) = media_api::get_media_collection_items(collection.id.clone()) {
+                        for item in items {
+                            media_api::invalidate_node_thumbnail(item.file_path, width);
+                        }
+                    }
+                }
+            }
             spawn_import_thumbnail_generation(&targets, width);
             Ok(json!({ "count": count.to_string() }))
         }

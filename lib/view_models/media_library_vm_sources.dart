@@ -45,6 +45,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
         filePath: item.filePath,
         thumbnailWidth: width > 0 ? width : null,
         isCover: true,
+        cacheVersion: _remoteCoverEpoch.value,
       );
     }
     final width = mediaPrefs.remoteImageWidth.value;
@@ -52,6 +53,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
       nodeId: nodeId,
       filePath: item.filePath,
       thumbnailWidth: width > 0 ? width : null,
+      cacheVersion: _remoteCoverEpoch.value,
     );
   }
 
@@ -80,6 +82,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
       nodeId: nodeId,
       filePath: item.filePath,
       thumbnailWidth: (width != null && width > 0) ? width : null,
+      cacheVersion: _remoteCoverEpoch.value,
     );
   }
 
@@ -101,6 +104,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
         filePath: coverPath,
         thumbnailWidth: width > 0 ? width : null,
         isCover: true,
+        cacheVersion: _remoteCoverEpoch.value,
       );
     }
     // 本地视频封面 — 异步生成缩略图（暂停期间不入队）
@@ -238,6 +242,24 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
         trackFolder: trackFolder,
         force: force,
       );
+    }
+  }
+
+  /// 覆盖重建：删掉该文件已有的封面缓存，并驱逐已解码的图片条目。
+  ///
+  /// 只删缓存不够：Flutter 的 ImageCache 按 provider key 缓存解码结果，
+  /// 同路径重新生成后仍会显示旧图，必须一并 evict 才会重新读盘。
+  Future<void> _invalidateLocalCoverCache(String filePath) async {
+    try {
+      await media_api.invalidateCoverThumbnail(filePath: filePath);
+    } catch (e) {
+      _logger.error('[CoverRebuild] 清理封面缓存失败: $filePath err=$e');
+    }
+    final width = mediaPrefs.localPreviewWidth.value;
+    final file = File(filePath);
+    await FileImage(file).evict();
+    if (width > 0) {
+      await ResizeImage.resizeIfNeeded(width, null, FileImage(file)).evict();
     }
   }
 
@@ -505,7 +527,7 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
   /// 入队前先问 Rust「磁盘缓存是否就绪」：内存缓存只活在本次进程里，
   /// 重启后再导入/重扫时它必然是空的——不查磁盘就会把已经生成好的封面对统统
   /// 重排一遍，用户看到的就是"文件没动却又冒出一批任务"。
-  void _enqueueItemThumbnail(String filePath, {int? widthOverride}) {
+  void _enqueueItemThumbnail(String filePath, {int? widthOverride, bool force = false}) {
     if (thumbGenerationPaused.value) return;
     if (_itemThumbnails.containsKey(filePath) ||
         _itemThumbFailed.contains(filePath)) {
@@ -515,6 +537,44 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
     if (_coverQueue.contains(key) || _inFlightCoverKeys.contains(key)) return;
     final w = widthOverride ?? mediaPrefs.localPreviewWidth.value;
     final width = w > 0 ? w : 480;
+
+    void enqueueTask() {
+      _coverQueue
+          .enqueue(key, () async {
+            _inFlightCoverKeys.remove(key);
+            try {
+              // FRB 异步调用（Rust 端在后台线程池解码缩放，不阻塞 UI 线程）
+              final thumb = await media_api.ensureCoverThumbnail(
+                filePath: filePath,
+                width: width,
+              );
+              if (thumb == null || thumb.isEmpty) {
+                _itemThumbFailed.add(filePath);
+                // 失败也要通知：卡片此刻停在加载态，不重建就会一直转圈
+                _notifyCoverChanged();
+                return;
+              }
+              _logger.info('[ItemThumb] 缩略图已生成: $thumb');
+              _itemThumbnails[filePath] = thumb;
+              _notifyCoverChanged();
+            } catch (e) {
+              _logger.error('[ItemThumb] 缩略图生成失败: $filePath err=$e');
+              _itemThumbFailed.add(filePath);
+              // 同失败分支：让卡片退回原图，而不是永久停留在加载态
+              _notifyCoverChanged();
+            }
+          })
+          .whenComplete(() {
+            // 任务被取消时闭包不会执行，此处兜底清理 key，避免永久阻断重新入队
+            _inFlightCoverKeys.remove(key);
+          });
+    }
+
+    // 覆盖重建：缓存已由调用方清空，跳过磁盘预检直接排队
+    if (force) {
+      enqueueTask();
+      return;
+    }
     // 入队前先查磁盘：命中就直接采用，连任务都不产生
     // （放在闭包里查的话任务照样会被排进队列，用户看到的仍是"一批新任务"）
     _inFlightCoverKeys.add(key);
@@ -527,60 +587,13 @@ extension MediaLibrarySourceBuildersExt on MediaLibraryViewModel {
             _notifyCoverChanged();
             return;
           }
-          _coverQueue
-              .enqueue(key, () async {
-                _inFlightCoverKeys.remove(key);
-                try {
-                  // FRB 异步调用（Rust 端在后台线程池解码缩放，不阻塞 UI 线程）
-                  final thumb = await media_api.ensureCoverThumbnail(
-                    filePath: filePath,
-                    width: width,
-                  );
-                  if (thumb == null || thumb.isEmpty) {
-                    _itemThumbFailed.add(filePath);
-                    // 失败也要通知：卡片此刻停在加载态，不重建就会一直转圈
-                    _notifyCoverChanged();
-                    return;
-                  }
-                  _logger.info('[ItemThumb] 缩略图已生成: $thumb');
-                  _itemThumbnails[filePath] = thumb;
-                  _notifyCoverChanged();
-                } catch (e) {
-                  _logger.error('[ItemThumb] 缩略图生成失败: $filePath err=$e');
-                  _itemThumbFailed.add(filePath);
-                  // 同失败分支：让卡片退回原图，而不是永久停留在加载态
-                  _notifyCoverChanged();
-                }
-              })
-              .whenComplete(() {
-                // 任务被取消时闭包不会执行，此处兜底清理 key，避免永久阻断重新入队
-                _inFlightCoverKeys.remove(key);
-              });
+          enqueueTask();
         })
         .catchError((Object e) {
           // 查询本身失败：不阻断生成，按原路径直接入队（标记已清，不会递归）
           _logger.error('[ItemThumb] 磁盘就绪查询失败: $filePath err=$e');
           _inFlightCoverKeys.remove(key);
-          _coverQueue.enqueue(key, () async {
-            _inFlightCoverKeys.remove(key);
-            try {
-              final thumb = await media_api.ensureCoverThumbnail(
-                filePath: filePath,
-                width: width,
-              );
-              if (thumb == null || thumb.isEmpty) {
-                _itemThumbFailed.add(filePath);
-                _notifyCoverChanged();
-                return;
-              }
-              _itemThumbnails[filePath] = thumb;
-              _notifyCoverChanged();
-            } catch (err) {
-              _logger.error('[ItemThumb] 缩略图生成失败: $filePath err=$err');
-              _itemThumbFailed.add(filePath);
-              _notifyCoverChanged();
-            }
-          });
+          enqueueTask();
         });
   }
 

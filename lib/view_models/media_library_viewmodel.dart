@@ -330,6 +330,10 @@ class MediaLibraryViewModel extends BaseViewModel {
   /// 视频封面异步生成版本计数器（读取即注册响应式依赖）。
   final _asyncCoverVersion = 0.obs;
 
+  /// 远程封面缓存代数：覆盖重建后自增，让远程封面 URL 带上新的版本参数，
+  /// 绕过 NetworkImage 按 URL 缓存导致「节点已重建、客户端还显示旧图」。
+  final _remoteCoverEpoch = 0.obs;
+
   /// 封面版本号节流定时器：32ms 窗口内的多次变更合并为一次通知。
   Timer? _coverNotifyTimer;
 

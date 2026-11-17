@@ -523,6 +523,101 @@ pub fn ready_cover_thumbnail_path(file_path: String, width: u32) -> Option<Strin
     }
 }
 
+/// 覆盖重建用：清掉某文件已有的封面结论，让后续生成真正重跑一遍。
+///
+/// 清三处：
+/// 1. 资源旁的相邻缩略图缓存（**所有宽度**，用户换过清晰度也不会漏清）；
+/// 2. 音频「无内嵌封面」负缓存（进程内结论 + 资源旁 `.noart` 标记）；
+/// 3. 视频 scrub 预览帧目录（视频封面取帧来源，旧帧留着就重建不出新图）。
+///
+/// 纯删缓存、不解码，可高频调用；返回是否真的清掉了东西。
+pub fn invalidate_cover_thumbnail(file_path: String) -> bool {
+    let src_path = std::path::Path::new(&file_path);
+    if !src_path.is_file() {
+        return false;
+    }
+    let mut removed = false;
+    if let (Some(dir), Some(name)) = (
+        src_path.parent().map(|p| p.join(".SlimeWorks").join("tmp")),
+        src_path.file_name().map(|n| n.to_string_lossy().into_owned()),
+    ) {
+        let prefix = format!("{}_w", name);
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let fname = entry.file_name().to_string_lossy().into_owned();
+                if fname.starts_with(&prefix)
+                    && std::path::Path::new(&fname)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("jpg"))
+                    && std::fs::remove_file(entry.path()).is_ok()
+                {
+                    removed = true;
+                }
+            }
+        }
+        if std::fs::remove_file(dir.join(format!("{}.noart", name))).is_ok() {
+            removed = true;
+        }
+        audio_cover_absent_map()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&file_path);
+    }
+    if let Some(scrub_dir) = adjacent_scrub_dir(&file_path) {
+        if scrub_dir.is_dir() && std::fs::remove_dir_all(&scrub_dir).is_ok() {
+            removed = true;
+        }
+    }
+    removed
+}
+
+/// 覆盖重建用：清掉节点缩略图缓存（内存 + 失败负缓存 + AppData 磁盘缓存）。
+///
+/// 节点侧封面走 [generate_thumbnail_bytes] 的三级缓存，不清理就会原样吐回旧图。
+/// 内存与负缓存按「路径前缀」整批清：用户切换过清晰度时旧宽度的条目同样作废。
+pub fn invalidate_node_thumbnail(file_path: String, width: u32) -> bool {
+    let prefix = format!("{}|", file_path);
+    let mut removed = false;
+    {
+        let mut map = node_thumb_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let keys: Vec<String> = map
+            .keys()
+            .filter(|key| key.starts_with(&prefix))
+            .cloned()
+            .collect();
+        for key in keys {
+            if let Some(entry) = map.remove(&key) {
+                NODE_THUMB_TOTAL_BYTES.fetch_sub(entry.bytes.len() as u64, Ordering::Relaxed);
+                removed = true;
+            }
+        }
+    }
+    {
+        let mut fail = node_thumb_fail_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let keys: Vec<String> = fail
+            .keys()
+            .filter(|key| key.starts_with(&prefix))
+            .cloned()
+            .collect();
+        for key in keys {
+            fail.remove(&key);
+            removed = true;
+        }
+    }
+    if let Ok(meta) = std::fs::metadata(&file_path) {
+        let identity = file_identity(&meta);
+        let disk = node_thumb_disk_path(&file_path, width, &identity);
+        if std::fs::remove_file(&disk).is_ok() {
+            removed = true;
+        }
+    }
+    removed
+}
+
 /// 批量判定「封面是否已就绪」——一次 FFI 调用判一整批文件。
 ///
 /// 为什么要批量：`ready_cover_thumbnail_path` 是每个文件一次跨语言调用，

@@ -354,6 +354,14 @@ pub fn ready_cover_thumbnail_path(file_path: String, width: u32) -> Option<Strin
     media_collection::ready_cover_thumbnail_path(file_path, width)
 }
 
+/// 覆盖重建：清掉某文件已有的本地封面缓存（相邻缩略图 / 音频负缓存 / 视频预取帧）。
+///
+/// 「重新扫描封面」长按走覆盖模式时，先调它再入队；不清理的话 Rust 侧
+/// 缓存命中会把旧图原样返回，队列跑完等于什么都没做。
+pub fn invalidate_cover_thumbnail(file_path: String) -> bool {
+    media_collection::invalidate_cover_thumbnail(file_path)
+}
+
 /// 批量版：一次 FFI 判定一整批文件的封面就绪状态（三态）。
 ///
 /// 为什么要有它：单个版每个文件要跨语言往返一次，调用方还要再调一次

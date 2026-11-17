@@ -1518,12 +1518,14 @@ class NodeSettingsService extends GetxService {
   /// [folderId]：节点原始文件夹 ID，扫描其整棵子树（含所有层级）；
   /// [collectionIds]：节点原始集合 ID 列表；
   /// 两者都不传表示节点上的全部集合。
+  /// [force] = true 为覆盖模式：节点先清掉这些集合已有的缩略图缓存再重新生成。
   /// 返回本次纳入扫描的集合数（生成进度由 `get_thumb_progress` 上报）。
   Future<int> rescanNodeMediaCovers({
     required String nodeId,
     String? folderId,
     List<String>? collectionIds,
     int? width,
+    bool force = false,
   }) async {
     final node = getNodeById(nodeId);
     if (node == null) {
@@ -1539,6 +1541,7 @@ class NodeSettingsService extends GetxService {
         'collection_ids': ?collectionIds,
         // 生成宽度必须与客户端封面请求一致，否则节点缓存 key 不同、等于白生成
         'width': ?width,
+        if (force) 'force': true,
       },
     );
 
@@ -1650,6 +1653,7 @@ class NodeSettingsService extends GetxService {
     required String filePath,
     int? thumbnailWidth,
     bool isCover = false,
+    int? cacheVersion,
   }) {
     final node = getNodeById(nodeId);
     if (node == null) {
@@ -1662,6 +1666,10 @@ class NodeSettingsService extends GetxService {
     }
     if (isCover) {
       params['mode'] = 'cover';
+    }
+    // 覆盖重建后换一个 URL，绕开客户端按 URL 缓存的旧解码结果
+    if (cacheVersion != null && cacheVersion > 0) {
+      params['v'] = cacheVersion.toString();
     }
     // 图片/视频 URL 直接交给 Image.network 与播放器，拿不到自定义请求头，
     // 因此这里把摘要放进查询参数（节点侧 sw_auth 与 X-SW-Auth 等价放行）。

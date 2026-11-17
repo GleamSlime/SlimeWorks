@@ -184,6 +184,14 @@ Future<String?> readyCoverThumbnailPath({
   return rust.readyCoverThumbnailPath(filePath: filePath, width: width);
 }
 
+/// 覆盖重建：清掉该文件已有的本地封面缓存（相邻缩略图 / 音频负缓存 / 视频预取帧）。
+///
+/// 只有「重新扫描封面」长按的覆盖模式会调它；Mock 模式没有真实缓存，直接返回 false。
+Future<bool> invalidateCoverThumbnail({required String filePath}) async {
+  if (MockMode.enabled) return false;
+  return rust.invalidateCoverThumbnail(filePath: filePath);
+}
+
 /// 批量版就绪判定：一次 FFI 判一整批文件（三态：ready/no_cover/pending/missing）。
 ///
 /// 用途：重扫封面、启动预热这类「一上来就是几十上百个文件」的场景。

@@ -678,7 +678,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         showSnack('错误', '远程文件夹映射不存在');
         return;
       }
-      await _rescanRemoteFolderCovers(nodeId: nodeId, folderId: rawId);
+      await _rescanRemoteFolderCovers(nodeId: nodeId, folderId: rawId, force: force);
       return;
     }
 
@@ -730,6 +730,11 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
             // 不清的话，下面的磁盘就绪预检会把它们全部判成"已就绪"直接跳过，
             // 长按就变成了空操作。
             _collectionVideoThumbnails.remove(collection.id);
+            // 磁盘缓存也要删：Rust 侧命中缓存会把旧图原样返回
+            final coverPath = collection.coverPath;
+            if (coverPath != null && coverPath.isNotEmpty) {
+              await _invalidateLocalCoverCache(coverPath);
+            }
           }
         }
         if (force) {
@@ -737,6 +742,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           _itemThumbnails.clear();
           _itemThumbFailed.clear();
           _audioCoverCache.clear();
+          // 视频 scrub 帧缓存也要清：视频封面与视频条目缩略图都取自这些帧
+          _videoFrameCache.clear();
+          _videoFrameResults.clear();
         }
         // 清负缓存后「生成中」加载态需要立刻反映到卡片上
         _notifyCoverChanged();
@@ -775,6 +783,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
             }
             for (final item in items) {
               itemCount++;
+              // 覆盖模式：先作废该文件磁盘上的缩略图/预取帧缓存，
+              // 否则 Rust 侧缓存命中会把旧图原样返回，等于没重建
+              if (force) await _invalidateLocalCoverCache(item.filePath);
               // 视频/音频：振幅缺失就补齐（长按覆盖模式下先清进程缓存，
               // 让它重新走一遍 ensure；Rust 侧仍按源文件身份判断是否真需重算）。
               // 不 await：扫描进度不等解码（服务层闸门限 2 路，其余排队）
@@ -786,7 +797,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
                 case media_api.MediaKind.image:
                   _itemThumbFailed.remove(item.filePath);
                   // _enqueueItemThumbnail 内部会先查磁盘，命中则不入队
-                  _enqueueItemThumbnail(item.filePath);
+                  _enqueueItemThumbnail(item.filePath, force: force);
                 case media_api.MediaKind.video:
                   _enqueueOrPrioritizeScrub(item.filePath);
                 case media_api.MediaKind.audio:
@@ -825,6 +836,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
             remoteCount += await nodeSettingsService.rescanNodeMediaCovers(
               nodeId: nodes[i].id,
               width: mediaPrefs.effectiveRemoteCoverWidth,
+              force: force,
             );
           } catch (e) {
             fail++;
@@ -840,6 +852,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
             nodeId: entry.key,
             collectionIds: entry.value,
             width: mediaPrefs.effectiveRemoteCoverWidth,
+            force: force,
           );
         } catch (e) {
           fail++;
@@ -847,6 +860,11 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         }
       }
       if (remoteCount > 0) {
+        // 覆盖模式：节点缓存已作废，客户端也要换 URL 版本才能绕开旧图缓存
+        if (force) {
+          _remoteCoverEpoch.value += 1;
+          _notifyCoverChanged();
+        }
         // 节点已开始后台生成，立刻切到繁忙轮询（2s）
         _scheduleRemoteThumbPoll(const Duration(seconds: 2));
       }
@@ -868,7 +886,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     ];
     showSnack(
       '完成',
-      parts.isEmpty ? '当前范围没有可扫描的集合' : '${parts.join('，')}，缺失封面已加入生成队列',
+      parts.isEmpty
+          ? '当前范围没有可扫描的集合'
+          : '${parts.join('，')}，${force ? '已有封面已清空并重新生成' : '缺失封面已加入生成队列'}',
     );
   }
 
@@ -876,6 +896,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   Future<void> _rescanRemoteFolderCovers({
     required String nodeId,
     required String folderId,
+    bool force = false,
   }) async {
     isScanning.value = true;
     scanStatusText.value = '节点检查封面...';
@@ -884,8 +905,13 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         nodeId: nodeId,
         folderId: folderId,
         width: mediaPrefs.effectiveRemoteCoverWidth,
+        force: force,
       );
       if (count > 0) {
+        if (force) {
+          _remoteCoverEpoch.value += 1;
+          _notifyCoverChanged();
+        }
         _scheduleRemoteThumbPoll(const Duration(seconds: 2));
       }
       showSnack(

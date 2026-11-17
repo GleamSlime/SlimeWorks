@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `acquire_waveform_permit`, `convert_collection`, `convert_folder`, `convert_item`, `convert_kind`, `convert_smart_folder`, `extract_waveform_via_ffmpeg`, `from_inner`, `has_audio_stream`, `missing`, `no_cover`, `normalize_waveform`, `pending`, `ready`, `record_waveform_no_audio`, `resample_peaks`, `waveform_cache_path`, `waveform_identity`, `waveform_known_no_audio`, `waveform_no_audio_map`, `waveform_no_audio_marker_path`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `WaveformPermit`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `ensure_faststart_copy_blocking`
 
 /// 注册 ffmpeg/ffprobe 可执行文件的绝对路径到 media_collection 模块。
@@ -163,6 +163,15 @@ Future<String?> readyCoverThumbnailPath({
   filePath: filePath,
   width: width,
 );
+
+/// 覆盖重建：清掉某文件已有的本地封面缓存（相邻缩略图 / 音频负缓存 / 视频预取帧）。
+///
+/// 「重新扫描封面」长按走覆盖模式时，先调它再入队；不清理的话 Rust 侧
+/// 缓存命中会把旧图原样返回，队列跑完等于什么都没做。
+Future<bool> invalidateCoverThumbnail({required String filePath}) => RustLib
+    .instance
+    .api
+    .crateApiMediaCollectionInvalidateCoverThumbnail(filePath: filePath);
 
 /// 批量版：一次 FFI 判定一整批文件的封面就绪状态（三态）。
 ///
