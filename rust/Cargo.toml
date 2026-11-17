@@ -141,6 +141,11 @@ members = [
 [target.'cfg(any(target_os = "android", target_os = "linux"))'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
 
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+# 无头节点自更新解包用（release 里的无头包是 tar.gz）。
+# 只给桌面 Unix 平台编译：Android/iOS 没有 slime_node，不必为它付编译时间。
+tar = "0.4"
+
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = [
   "processthreadsapi",

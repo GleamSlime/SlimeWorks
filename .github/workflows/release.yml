@@ -187,6 +187,9 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-headless-
 
       - name: 构建无头节点
+        env:
+          # 自更新靠这一串判断线上版本是否更新，必须与 tag 去 v 后一致
+          SLIME_BUILD_VERSION: ${{ needs.detect-version.outputs.version }}+${{ needs.detect-version.outputs.build_number }}
         run: |
           # bindgen 需要 libclang；runner 上 Xcode 目录带版本号，现取
           export LIBCLANG_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
@@ -237,6 +240,8 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-headless-
 
       - name: 构建无头节点
+        env:
+          SLIME_BUILD_VERSION: ${{ needs.detect-version.outputs.version }}+${{ needs.detect-version.outputs.build_number }}
         run: cargo build --release --bin slime_node
         working-directory: rust
 
@@ -279,6 +284,8 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-headless-
 
       - name: 构建无头节点
+        env:
+          SLIME_BUILD_VERSION: ${{ needs.detect-version.outputs.version }}+${{ needs.detect-version.outputs.build_number }}
         run: cargo build --release --bin slime_node
         working-directory: rust
 

@@ -92,7 +92,10 @@ pub async fn dispatch_action(
         "get_status" => Ok(json!({
             "name": config.name,
             "port": config.port,
+            // 协议版本，客户端据此判断接口兼容性
             "version": "1.0",
+            // 节点构建版本（形如 1.0.0+20261117.abcdef），用于对比是否该更新
+            "build_version": crate::build_version::BUILD_VERSION,
         })),
 
         // ── 系统指标 ─────────────────────────────────────────────────────────

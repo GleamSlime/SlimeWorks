@@ -3157,6 +3157,7 @@ dependencies = [
  "slime_logger",
  "symphonia",
  "sysinfo",
+ "tar",
  "tokio",
  "url",
  "whisper_module",
