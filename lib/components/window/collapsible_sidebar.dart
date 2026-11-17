@@ -12,6 +12,7 @@ import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_zone.dart';
 import 'package:slime_works/components/node/sidebar_node_selector.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
+import 'package:slime_works/components/window/window_drag_region.dart';
 import 'package:slime_works/components/window/sidebar_resize_handle.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
 import 'package:slime_works/core/provider/main.dart';
@@ -643,22 +644,28 @@ class _CollapsibleSidebarState extends State<CollapsibleSidebar>
       duration: widget.animationDuration,
       curve: AppMotion.standard,
       padding: EdgeInsets.symmetric(horizontal: m.kSpace8, vertical: m.kSpace8),
-      child: Row(
-        // 收起态把 logo 和上面的灯、下面的图标条对齐到同一条中轴；展开态才是"字标在左、把手在右"
-        mainAxisAlignment: isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
-        children: [
-          const _SidebarLogo(),
-          if (isExpanded) Expanded(child: SizedBox(width: m.kSpace4)),
-          if (isExpanded)
-            StrokeIconButton(
-              // 展开/收起是同一支笔换字形：旧的擦回去、新的描出来，比硬切更能读出"栏宽变了"
-              StrokeIcons.assetSidebarOpen,
-              size: scaleW(22),
-              onTap: controller.toggleSidebar,
-              color: Theme.of(context).iconTheme.color,
-              semanticLabel: '收起侧栏',
-            ),
-        ],
+      // 侧栏头部也当标题栏用：Windows 没有系统标题栏兜底，而栏顶这一条正是
+      // macOS 三颗灯所在的位置，用户会本能地抓这里拖窗口。只旁听指针、不抢
+      // 手势，logo 的「回概览」和右侧把手照常点；真的拖起来了才交给系统。
+      child: WindowDragRegion(
+        doubleTapToMaximize: false,
+        child: Row(
+          // 收起态把 logo 和上面的灯、下面的图标条对齐到同一条中轴；展开态才是"字标在左、把手在右"
+          mainAxisAlignment: isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+          children: [
+            const _SidebarLogo(),
+            if (isExpanded) Expanded(child: SizedBox(width: m.kSpace4)),
+            if (isExpanded)
+              StrokeIconButton(
+                // 展开/收起是同一支笔换字形：旧的擦回去、新的描出来，比硬切更能读出"栏宽变了"
+                StrokeIcons.assetSidebarOpen,
+                size: scaleW(22),
+                onTap: controller.toggleSidebar,
+                color: Theme.of(context).iconTheme.color,
+                semanticLabel: '收起侧栏',
+              ),
+          ],
+        ),
       ),
     );
   }
