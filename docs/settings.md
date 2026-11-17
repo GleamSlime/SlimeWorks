@@ -261,5 +261,8 @@ GetIt.instance.registerSingletonAsync<NodeSettingsService>(() async {
 
 - 持久化：`SharedPreferences` key `node_wake_devices`（设备名、MAC、目标地址、端口、模式、中继节点、检测节点）
 - 节点动作：`POST /node/call` → `{"action":"wake_host","params":{"mac":"AA:BB:CC:DD:EE:FF","target":"","port":9,"count":3}}`，走现有授权码校验
+- 直发会同时发往「配置地址 + 本机网段定向广播 + 255.255.255.255」，每个地址各发 `count` 次，任一成功即算送出
+- 发包套接字绑定到 Wi-Fi/有线网卡地址并排除蜂窝网卡：手机开着移动数据时，不绑定的广播会走蜂窝出口，导致局域网内收不到
+- 路由器若开启客户端隔离或丢弃无线侧广播，手机直发必然无效；路由器自带的唤醒由路由器代发，因此不受此限制
 - 唤醒后若配置了「上线检测节点」，按 2 秒间隔轮询 `/health` 最多 60 秒，状态依次为 唤醒中 → 已发送 → 已上线 / 未确认上线
 - 目标主机要求：BIOS 开启网络唤醒并关闭 ErP，网卡勾选「魔术包唤醒」与「关机网络唤醒」，关闭快速启动

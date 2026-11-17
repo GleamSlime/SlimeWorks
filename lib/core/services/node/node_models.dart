@@ -114,6 +114,24 @@ enum WakeMode { relay, direct }
 /// 唤醒任务状态
 enum WakeStatus { idle, waking, sent, online, timeout, failed }
 
+/// 唤醒包下发结果：成功送出的地址与逐条失败原因
+class WakeReport {
+  const WakeReport({required this.targets, this.errors = const []});
+
+  final List<String> targets;
+  final List<String> errors;
+
+  bool get delivered => targets.isNotEmpty;
+
+  /// 直发时地址可能有多个（本机子网广播 / 受限广播），全失败才算失败
+  String get summary {
+    if (delivered) {
+      return '已发往 ${targets.join('、')}';
+    }
+    return errors.isEmpty ? '未发出任何唤醒包' : errors.first;
+  }
+}
+
 /// 可远程唤醒的设备（目标主机不必运行本应用）
 class WakeDevice {
   const WakeDevice({
