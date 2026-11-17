@@ -15,6 +15,7 @@ import 'package:slime_works/components/window/collapsible_sidebar.dart';
 import 'package:slime_works/components/window/live_frost.dart';
 import 'package:slime_works/components/window/screen_top_bar.dart';
 import 'package:slime_works/components/window/window_backdrop.dart';
+import 'package:slime_works/components/window/window_drag_region.dart';
 
 class DesktopScaffold extends StatefulWidget {
   final Widget child;
@@ -287,6 +288,35 @@ class DesktopTopBar extends StatelessWidget {
       final lightsHere =
           Platform.isMacOS && sidebar.isHidden.value && !sidebar.following.value;
 
+      // 标题格的内容。页面给了自定义标题位（输入框、聊天标题这类真控件）时
+      // 不包拖拽区：整格盖上去会把「在标题里拖字 / 拖选」误判成拖窗口。
+      final Widget titleCell = Align(
+        alignment: Alignment.centerLeft,
+        child: trail != null
+            ? Breadcrumb(entries: trail)
+            : (chrome.titleWidget ??
+                  (chrome.title != null
+                      ? Text(
+                          chrome.title!,
+                          // 标题字号跟着用户字体比例走，长标题只截断不换行：
+                          // 这一栏高度是定值，换行就是把整条顶破
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: AppTheme.metrics.fontSize14,
+                            weight: FontWeight.w500,
+                            color: AppSemantic.of(context).textPrimary,
+                          ),
+                        )
+                      : const SizedBox.shrink())),
+      );
+
+      // 标题格里的面包屑有没有可点的一级。有的话不能开双击最大化：双击识别器
+      // 会把单击压到双击超时（约 300ms）之后才放行，点面包屑会明显慢半拍。
+      final bool titleHasClickableCrumb =
+          trail != null && trail.any((e) => e.navigable);
+
       return Container(
         padding: EdgeInsets.only(
           left: AppTheme.metrics.kSpace12,
@@ -300,27 +330,20 @@ class DesktopTopBar extends StatelessWidget {
             if (lightsHere) const MacWindowButtonsReserve(withLeadingGap: true),
             if (chrome.hasLeading) chrome.leading!,
             Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: trail != null
-                    ? Breadcrumb(entries: trail)
-                    : (chrome.titleWidget ??
-                          (chrome.title != null
-                              ? Text(
-                                  chrome.title!,
-                                  // 标题字号跟着用户字体比例走，长标题只截断不换行：
-                                  // 这一栏高度是定值，换行就是把整条顶破
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.role(
-                                    context,
-                                    fontSize: AppTheme.metrics.fontSize14,
-                                    weight: FontWeight.w500,
-                                    color: AppSemantic.of(context).textPrimary,
-                                  ),
-                                )
-                              : const SizedBox.shrink())),
-              ),
+              // 纯文本标题 / 面包屑纳入窗口拖拽区。Windows 上没有系统标题栏
+              // 兜底，而标题文字自己会吃掉命中（RenderParagraph 的 hitTestSelf
+              // 返回 true），压在页面之下的 ScreenTopBar 根本接不到 —— 不显式
+              // 挂这一层，Windows 上「抓住标题附近拖窗口」毫无反应，macOS 却因为
+              // 系统标题栏透明地还在而照常能拖。这一层只把「按下后确实移动了」
+              // 翻译成拖窗口，单击返回、点面包屑跳转照旧。
+              child: chrome.titleWidget != null
+                  ? titleCell
+                  : WindowDragRegion(
+                      // 双击标题栏最大化/还原只在"这一格里没有可点控件"时开：
+                      // 有可跳转面包屑时开双击，单击会被压到双击超时后放行。
+                      doubleTapToMaximize: !titleHasClickableCrumb,
+                      child: titleCell,
+                    ),
             ),
             if (chrome.hasActions)
               Row(
