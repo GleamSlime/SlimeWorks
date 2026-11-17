@@ -438,59 +438,18 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         isScanning.value = false;
         return;
       }
-      scanStatusText.value = '导入中...';
-      if (softLink) {
-        // 原路径软链导入：镜像全部目录层级（含空目录）并登记源路径，
-        // 后续右键/顶栏「重新扫描」即可对该目录做磁盘 ↔ 库增量同步。
-        await _importFolderSoftLinkSync(
-          selectedPath: selectedPath,
-          targetFolderId: targetFolderId,
-          generateThumbnails: generateThumbnails,
-        );
-        return;
-      }
-      final List<media_api.MediaCollection> imported;
-      if (preserveStructure) {
-        // 按原始目录导入：扫描子目录创建集合，再按目录层级创建文件夹归档
-        final scanned = await media_api.scanMediaFolders(folderPath: selectedPath);
-        imported = await _archiveImportedCollectionsByStructure(
-          root: selectedPath,
-          collections: scanned.where((c) => c.itemCount > BigInt.zero).toList(),
-          baseFolderId: (targetFolderId != null && !isRemoteFolder(targetFolderId))
-              ? targetFolderId
-              : null,
-        );
-        if (imported.isEmpty) {
-          await loadCollections();
-          scanStatusText.value = '';
-          showSnack('提示', '该目录无有效媒体文件，图片文件过小或分辨率过低已被过滤');
-          return;
-        }
-        await loadFolders();
-      } else {
-        final collection = await media_api.importMediaFolder(folderPath: selectedPath);
-        if (collection.itemCount == BigInt.zero) {
-          media_api.deleteMediaCollection(collectionId: collection.id);
-          await loadCollections();
-          scanStatusText.value = '';
-          showSnack('提示', '该目录无有效媒体文件，图片文件过小或分辨率过低已被过滤');
-          return;
-        }
-        if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
-          media_api.moveMediaCollectionToFolder(
-            collectionId: collection.id,
-            folderId: targetFolderId,
-          );
-        }
-        imported = [collection];
-      }
-      if (generateThumbnails) {
-        // 导入后全量生成：全部文件加入缩略图队列（暂停期间由队列自行拦截）
-        await _enqueueBulkItemThumbnails(imported);
-      }
-      await loadCollections();
+      // 与拖拽导入同一套落地流程：每个子目录独立成集合，
+      // preserveStructure 时按原始层级归档，否则新建同名包裹文件夹
+      isScanning.value = false;
       scanStatusText.value = '';
-      showSnack('成功', '媒体集合导入完成');
+      await importDroppedPaths(
+        [selectedPath],
+        generateThumbnails: generateThumbnails,
+        preserveStructure: preserveStructure,
+        softLink: softLink,
+        targetFolderId: targetFolderId,
+      );
+      return;
     } catch (error) {
       scanStatusText.value = '';
       final errorMsg = error.toString();
@@ -982,17 +941,19 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
   /// [generateThumbnails]：全部扫描入库后批量入队缩略图任务（与点击导入一致）
   /// [preserveStructure]：按原始目录层级归档（与点击导入一致）；false 时为同名包裹文件夹
   /// [softLink]：原路径软链导入（与点击导入一致）；目录逐个镜像并登记源路径
+  /// [targetFolderId]：调用方预先捕获的落点文件夹；不传则取当前浏览上下文
   Future<void> importDroppedPaths(
     List<String> paths, {
     bool generateThumbnails = false,
     bool preserveStructure = false,
     bool softLink = false,
+    String? targetFolderId,
   }) async {
     if (paths.isEmpty) return;
     if (isScanning.value) return;
 
     // 当前上下文是远程节点文件夹：先上传到节点再让节点自己导入
-    final dropFolderId = effectiveFolderId;
+    final dropFolderId = targetFolderId ?? effectiveFolderId;
     if (dropFolderId != null && isRemoteFolder(dropFolderId)) {
       final nodeId = getRemoteFolderNodeId(dropFolderId);
       final rawFolderId = getRemoteRawFolderId(dropFolderId);
@@ -1007,6 +968,11 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         generateThumbnails: generateThumbnails,
         preserveStructure: preserveStructure,
       );
+      return;
+    }
+    // 远程模式下没有节点文件夹上下文时不能落回本机库：本机集合在远程模式不可见
+    if (nodeSettingsService.isRemoteMode) {
+      showSnack('提示', '请先进入节点上的文件夹再导入');
       return;
     }
 
@@ -1037,7 +1003,8 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     int success = 0;
     int fail = 0;
     bool foldersChanged = false;
-    final targetFolderId = effectiveFolderId;
+    // 落点上下文：调用方传入的优先，兜底当前浏览文件夹
+    final resolvedTargetId = dropFolderId;
     // 收集所有扫描入库后的有效集合，用于最后统一批量入队缩略图任务
     final allValidCollections = <media_api.MediaCollection>[];
 
@@ -1054,7 +1021,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           // 缩略图入队统一交给下方批量流程，这里不单独触发
           final linked = await _importDroppedPathSoftLink(
             dir: dir,
-            targetFolderId: targetFolderId,
+            targetFolderId: resolvedTargetId,
           );
           allValidCollections.addAll(linked);
           success += linked.length;
@@ -1073,19 +1040,19 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           await _archiveImportedCollectionsByStructure(
             root: dir,
             collections: validCollections,
-            baseFolderId: (targetFolderId != null && !isRemoteFolder(targetFolderId))
-                ? targetFolderId
+            baseFolderId: (resolvedTargetId != null && !isRemoteFolder(resolvedTargetId))
+                ? resolvedTargetId
                 : null,
           );
           foldersChanged = true;
         } else if (validCollections.isNotEmpty &&
             dirName.isNotEmpty &&
-            (targetFolderId == null || !isRemoteFolder(targetFolderId))) {
+            (resolvedTargetId == null || !isRemoteFolder(resolvedTargetId))) {
           // 每次导入都新建同名包裹文件夹：同名文件夹允许共存（UI 按 ID 渲染），
           // 不再按名字复用旧夹——复用会把新导入的内容混进旧夹，等于变相合并
-          final created = targetFolderId == null
+          final created = resolvedTargetId == null
               ? media_api.createMediaFolder(name: dirName)
-              : media_api.createChildMediaFolder(name: dirName, parentId: targetFolderId);
+              : media_api.createChildMediaFolder(name: dirName, parentId: resolvedTargetId);
           foldersChanged = true;
           for (final collection in validCollections) {
             media_api.moveMediaCollectionToFolder(
@@ -1125,10 +1092,10 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           _logger.info('[拖拽] 空集合已删除: ${dir.split(Platform.pathSeparator).last}');
           continue;
         }
-        if (targetFolderId != null && !isRemoteFolder(targetFolderId)) {
+        if (resolvedTargetId != null && !isRemoteFolder(resolvedTargetId)) {
           media_api.moveMediaCollectionToFolder(
             collectionId: collection.id,
-            folderId: targetFolderId,
+            folderId: resolvedTargetId,
           );
         }
         allValidCollections.add(collection);

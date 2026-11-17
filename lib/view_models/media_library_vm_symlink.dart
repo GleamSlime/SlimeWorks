@@ -235,46 +235,6 @@ extension MediaLinkImportExt on MediaLibraryViewModel {
     return (created, nodeIds.length - 1);
   }
 
-  /// importFolder(softLink) 的落地过程：路径已由外层选好，
-  /// isScanning / scanStatusText / 异常提示均由外层 importFolder 统一管理。
-  Future<void> _importFolderSoftLinkSync({
-    required String selectedPath,
-    required String? targetFolderId,
-    bool generateThumbnails = false,
-  }) async {
-    String canonical;
-    try {
-      canonical = await Directory(selectedPath).resolveSymbolicLinks();
-    } catch (_) {
-      canonical = selectedPath;
-    }
-    if (!Directory(canonical).existsSync()) {
-      showSnack('错误', '源目录不存在: $canonical');
-      return;
-    }
-    final dirName = _linkBaseName(canonical);
-    if (dirName.isEmpty) {
-      showSnack('错误', '无法从路径取得目录名');
-      return;
-    }
-    final baseId =
-        (targetFolderId != null && !isRemoteFolder(targetFolderId)) ? targetFolderId : null;
-    // 每次导入独立成树：新建同名包裹夹（同名允许共存）。若复用旧夹，
-    // 下方 _syncMediaLinkFromDisk 会用新源路径覆盖旧夹的软链登记，旧树就丢了
-    final wrapperId = await _createLocalFolder(dirName, baseId);
-    final result = await _syncMediaLinkFromDisk(
-      root: canonical,
-      wrapperId: wrapperId,
-      generateThumbnails: generateThumbnails,
-    );
-    await loadFolders();
-    await loadCollections();
-    showSnack(
-      '成功',
-      '软链导入完成：${result.$1.length} 个集合、${result.$2} 个镜像文件夹（源路径已登记，可重新扫描）',
-    );
-  }
-
   /// 拖入目录的软链导入过程：返回本次入库的集合列表；
   /// isScanning / scanStatusText / try-catch 均由 importDroppedPaths 外层管理。
   Future<List<media_api.MediaCollection>> _importDroppedPathSoftLink({

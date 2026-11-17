@@ -18,10 +18,33 @@ mixin PictureScreenDialogs
       return;
     }
 
-    // 全局远程节点模式：导入/扫描只能落在当前节点上，本机文件选择器一律不走。
-    // 这里不判断当前是否处在远程文件夹里——远程模式下本机文件夹已被排除，
-    // 根目录也要能选节点上的目录导入。
     final nodeService = viewModel.nodeSettingsService;
+
+    // 桌面端导入：与拖拽导入共用同一个弹窗与同一套落地流程
+    // （每个子目录一个集合 + 同名包裹文件夹，选项含义也完全一致）
+    if (!scanMode && !Platform.isAndroid && !Platform.isIOS) {
+      if (nodeService.isRemoteMode) {
+        // 远程模式下本机选择器不能落回本机库：必须有节点文件夹作为上传落点
+        final target = viewModel.effectiveFolderId;
+        if (target == null || !viewModel.isRemoteFolder(target)) {
+          viewModel.showSnack('提示', '请先进入节点上的文件夹再导入');
+          return;
+        }
+      }
+      final options = await _showImportOptionsDialog();
+      if (options == null) return;
+      await viewModel.importFolder(
+        localTargetFolderId: viewModel.effectiveFolderId,
+        generateThumbnails: options.$1,
+        preserveStructure: options.$2,
+        softLink: options.$3,
+      );
+      return;
+    }
+
+    // 全局远程节点模式：扫描只能落在当前节点上，本机文件选择器一律不走。
+    // 这里不判断当前是否处在远程文件夹里——远程模式下本机文件夹已被排除，
+    // 根目录也要能选节点上的目录扫描。
     if (nodeService.isRemoteMode) {
       final node = nodeService.activeNode;
       if (node == null) {
@@ -59,19 +82,7 @@ mixin PictureScreenDialogs
       // 在打开文件选择器前同步捕获当前本地文件夹上下文，
       // 避免异步 scanFolder 内部读取响应式状态时因时序问题丢失文件夹归属。
       final localFolderId = viewModel.effectiveFolderId;
-      if (scanMode) {
-        await viewModel.scanFolder(localTargetFolderId: localFolderId);
-      } else {
-        // 导入前弹出增强选项（全量缩略图 / 按原始目录导入 / 原路径软链）
-        final options = await _showImportOptionsDialog();
-        if (options == null) return;
-        await viewModel.importFolder(
-          localTargetFolderId: localFolderId,
-          generateThumbnails: options.$1,
-          preserveStructure: options.$2,
-          softLink: options.$3,
-        );
-      }
+      await viewModel.scanFolder(localTargetFolderId: localFolderId);
       return;
     }
 
