@@ -36,8 +36,8 @@ class _DeviceWakeScreenState extends State<DeviceWakeScreen> {
 
   Future<void> _wake(WakeDevice device) async {
     try {
-      await _service.wakeDevice(device.id);
-      _showSnack('${device.name} 唤醒包已发送');
+      final report = await _service.wakeDevice(device.id);
+      _showSnack('${device.name} ${report.summary}');
     } catch (e) {
       _showSnack('唤醒失败: $e');
     }
@@ -169,6 +169,16 @@ class _DeviceWakeScreenState extends State<DeviceWakeScreen> {
                 SizedBox(height: m.kSpace4),
                 Text(
                   '目标主机需在 BIOS 开启网络唤醒并关闭 ErP，网卡勾选「魔术包唤醒」与「关机网络唤醒」。',
+                  style: AppTextStyles.role(
+                    context,
+                    fontSize: m.fontSize12,
+                    color: s.textTertiary,
+                  ),
+                ),
+                SizedBox(height: m.kSpace4),
+                Text(
+                  '手机直发需允许「本地网络」权限；路由器开启客户端隔离时广播会被丢弃，'
+                  '此时改用节点中继（路由器自带的唤醒是由路由器代发，所以能唤起）。',
                   style: AppTextStyles.role(
                     context,
                     fontSize: m.fontSize12,
@@ -440,7 +450,8 @@ class _WakeEditorDialogState extends State<_WakeEditorDialog> {
     _macCtrl = TextEditingController(text: initial?.mac ?? '');
     _targetCtrl = TextEditingController(text: initial?.target ?? '');
     _portCtrl = TextEditingController(text: (initial?.port ?? 9).toString());
-    _mode = initial?.mode ?? WakeMode.relay;
+    _mode = initial?.mode ??
+        (widget.nodes.isEmpty ? WakeMode.direct : WakeMode.relay);
     _relayNodeId = initial?.relayNodeId ?? '';
     _probeNodeId = initial?.probeNodeId ?? '';
   }
@@ -506,7 +517,13 @@ class _WakeEditorDialogState extends State<_WakeEditorDialog> {
                   ChoiceChip(
                     label: const Text('节点中继'),
                     selected: relayMode,
-                    onSelected: (_) => setState(() => _mode = WakeMode.relay),
+                    // 切过来时补上第一个节点，避免「选完方式仍报未选中继节点」
+                    onSelected: (_) => setState(() {
+                      _mode = WakeMode.relay;
+                      if (_relayNodeId.isEmpty && widget.nodes.isNotEmpty) {
+                        _relayNodeId = widget.nodes.first.id;
+                      }
+                    }),
                   ),
                   ChoiceChip(
                     label: const Text('本机直发'),
@@ -548,7 +565,9 @@ class _WakeEditorDialogState extends State<_WakeEditorDialog> {
                 controller: _targetCtrl,
                 decoration: InputDecoration(
                   labelText: '目标地址（可选）',
-                  hintText: relayMode ? '留空为 255.255.255.255' : '公网地址或 192.168.x.255',
+                  hintText: relayMode
+                      ? '留空为 255.255.255.255'
+                      : '留空自动广播；也可填设备 IP 或 192.168.x.255',
                 ),
               ),
               SizedBox(height: m.kSpace12),
