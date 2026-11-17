@@ -602,10 +602,10 @@ class NodeSettingsService extends GetxService {
   }
 
   /// 发送唤醒包；配置了检测节点时再轮询它的上线状态
-  Future<void> wakeDevice(String id) async {
+  Future<WakeReport> wakeDevice(String id) async {
     final device = getWakeDeviceById(id);
     if (device == null) {
-      return;
+      return const WakeReport(targets: [], errors: ['设备不存在']);
     }
 
     wakeStatus[id] = WakeStatus.waking;
@@ -613,16 +613,17 @@ class NodeSettingsService extends GetxService {
     if (MockMode.enabled) {
       await Future<void>.delayed(const Duration(milliseconds: 600));
       wakeStatus[id] = device.probeNodeId.isEmpty ? WakeStatus.sent : WakeStatus.online;
-      return;
+      return WakeReport(targets: ['${device.target.isEmpty ? '255.255.255.255' : device.target}:${device.port}']);
     }
 
+    WakeReport report;
     try {
       if (device.mode == WakeMode.relay) {
         final relay = getNodeById(device.relayNodeId);
         if (relay == null) {
           throw StateError('请先选择中继节点');
         }
-        await callNodeAction(
+        final data = await callNodeAction(
           nodeId: relay.id,
           action: 'wake_host',
           params: {
@@ -632,53 +633,213 @@ class NodeSettingsService extends GetxService {
             'count': device.count,
           },
         );
+        final target = (data['target'] ?? '').toString();
+        report = WakeReport(targets: ['${target.isEmpty ? '广播' : target}:${device.port}（经 ${relay.name}）']);
       } else {
-        await _sendMagicPacketDirect(device);
+        report = await _sendMagicPacketDirect(device);
       }
-      wakeStatus[id] = WakeStatus.sent;
+      wakeStatus[id] = report.delivered ? WakeStatus.sent : WakeStatus.failed;
     } catch (e, st) {
       wakeStatus[id] = WakeStatus.failed;
       _logger.error('唤醒失败: ${device.name}', error: e, stackTrace: st);
       rethrow;
     }
 
-    if (device.probeNodeId.isNotEmpty) {
+    if (report.delivered && device.probeNodeId.isNotEmpty) {
       unawaited(_pollWakeOnline(device));
     }
+    return report;
   }
 
-  /// 本机直发：客户端同网段，或路由器已把 UDP 端口映射到广播地址
-  Future<void> _sendMagicPacketDirect(WakeDevice device) async {
+  /// 本机直发：逐个子网广播地址发送，单个地址失败不影响其余地址
+  ///
+  /// 只发 255.255.255.255 在多数家用 AP 上会被丢掉（受限广播不出无线侧，
+  /// 部分 AP 还默认隔离客户端广播），因此同时按本机网段补一份定向广播。
+  ///
+  /// 套接字绑定到本机私有地址而不是 0.0.0.0：手机同时开着移动数据时，
+  /// 受限广播会按默认路由走蜂窝口，绑到 Wi-Fi 地址才能保证从无线网卡发出。
+  Future<WakeReport> _sendMagicPacketDirect(WakeDevice device) async {
     final mac = _parseMacBytes(device.mac);
-    final target = device.target.trim();
-    final address = target.isEmpty
-        ? InternetAddress('255.255.255.255')
-        : InternetAddress.tryParse(target);
-    if (address == null) {
-      throw FormatException('唤醒地址格式不正确: $target');
-    }
-    if (address.type != InternetAddressType.IPv4) {
-      throw const FormatException('暂不支持 IPv6 唤醒地址');
-    }
+    final port = device.port <= 0 ? 9 : device.port;
+    final count = device.count <= 0 ? 3 : device.count.clamp(1, 5);
+    final configured = device.target.trim();
 
     final packet = Uint8List(102)
       ..fillRange(0, 6, 0xFF)
       ..setRange(6, 102, List<int>.generate(96, (i) => mac[i % 6]));
-    final port = device.port <= 0 ? 9 : device.port;
-    final count = device.count <= 0 ? 3 : device.count.clamp(1, 5);
 
-    final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    final locals = await _localIpv4Addresses();
+    final sources = locals.isEmpty
+        ? <InternetAddress>[InternetAddress.anyIPv4]
+        : locals;
+
+    final sent = <String>[];
+    final errors = <String>[];
+
+    Future<void> dispatch(InternetAddress source) async {
+      final socket = await RawDatagramSocket.bind(source, 0, reuseAddress: true);
+      try {
+        socket.broadcastEnabled = true;
+        for (final address in _wakeTargets(configured, source)) {
+          final label = '${address.address}:$port';
+          try {
+            for (int index = 0; index < count; index++) {
+              socket.send(packet, address, port);
+              if (index + 1 < count) {
+                await Future<void>.delayed(const Duration(milliseconds: 80));
+              }
+            }
+            if (!sent.contains(label)) {
+              sent.add(label);
+            }
+          } catch (e) {
+            final message = '$label $e';
+            if (!errors.contains(message)) {
+              errors.add(message);
+            }
+          }
+        }
+      } finally {
+        socket.close();
+      }
+    }
+
+    for (final source in sources) {
+      try {
+        await dispatch(source);
+      } catch (e) {
+        errors.add('绑定 $source 失败: $e');
+      }
+    }
+    // 绑定具体网卡一个都没发出去时退回 0.0.0.0，至少保留"不绑定网卡"的老行为
+    if (sent.isEmpty && !sources.contains(InternetAddress.anyIPv4)) {
+      try {
+        await dispatch(InternetAddress.anyIPv4);
+      } catch (e) {
+        errors.add('绑定 0.0.0.0 失败: $e');
+      }
+    }
+
+    if (sent.isNotEmpty) {
+      _logger.info(
+        '唤醒包已发送: ${device.name} → ${sent.join(', ')} | 源地址 ${sources.join(', ')}',
+      );
+    } else {
+      _logger.error('唤醒包全部发送失败: ${device.name} | ${errors.join(' ; ')}');
+    }
+    return WakeReport(targets: sent, errors: errors);
+  }
+
+  /// 蜂窝网卡常见命名，开移动数据时绑上去只会让广播走错网卡
+  static const List<String> _cellularIfacePrefixes = <String>[
+    'pdp_ip',
+    'pdp',
+    'rmnet',
+    'ccmni',
+    'wwan',
+    'clat',
+  ];
+
+  /// 局域网网卡命名（Wi-Fi / 有线），命中则优先作为发包源
+  static const List<String> _lanIfacePrefixes = <String>[
+    'en',
+    'wlan',
+    'eth',
+    'wl',
+    'swlan',
+  ];
+
+  /// 虚拟网卡命名：VPN / 回环 / 虚拟机桥，发广播没有意义
+  static const List<String> _virtualIfacePrefixes = <String>[
+    'utun',
+    'tun',
+    'tap',
+    'ppp',
+    'ipsec',
+    'awdl',
+    'llw',
+    'bridge',
+    'vmnet',
+    'docker',
+    'veth',
+    'br-',
+    'virbr',
+  ];
+
+  /// 本机私有 IPv4 地址（Wi-Fi / 有线），用于枚举待发网段与绑定发包网卡
+  ///
+  /// 必须排除蜂窝网卡：移动数据的地址同样是内网段，绑上去发包会直接走蜂窝出口。
+  Future<List<InternetAddress>> _localIpv4Addresses() async {
+    final lan = <InternetAddress>[];
+    final others = <InternetAddress>[];
+
+    bool skip(String name) =>
+        _cellularIfacePrefixes.any(name.startsWith) ||
+        _virtualIfacePrefixes.any(name.startsWith);
+
     try {
-      socket.broadcastEnabled = true;
-      for (int index = 0; index < count; index++) {
-        socket.send(packet, address, port);
-        if (index + 1 < count) {
-          await Future<void>.delayed(const Duration(milliseconds: 80));
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      for (final interface in interfaces) {
+        final name = interface.name.toLowerCase();
+        if (skip(name)) {
+          continue;
+        }
+        final preferLan = _lanIfacePrefixes.any(name.startsWith);
+        for (final address in interface.addresses) {
+          if (!_isPrivateIpv4(address.rawAddress)) {
+            continue;
+          }
+          final bucket = preferLan ? lan : others;
+          if (!bucket.contains(address)) {
+            bucket.add(address);
+          }
         }
       }
-    } finally {
-      socket.close();
+    } catch (e, st) {
+      _logger.error('枚举本机网段失败', error: e, stackTrace: st);
     }
+    return lan.isNotEmpty ? lan : others;
+  }
+
+  /// 收集下发地址：显式配置的地址优先，另外必须带上本机网段的定向广播
+  List<InternetAddress> _wakeTargets(String configured, InternetAddress source) {
+    final targets = <String>[];
+    void add(String value) {
+      final trimmed = value.trim();
+      if (trimmed.isNotEmpty && !targets.contains(trimmed)) {
+        targets.add(trimmed);
+      }
+    }
+
+    add(configured);
+    // 按 /24 推算网段广播：家用网络基本都是这个掩码，误判也只是多发一个包
+    final raw = source.rawAddress;
+    if (raw.length == 4 && _isPrivateIpv4(raw)) {
+      add('${raw[0]}.${raw[1]}.${raw[2]}.255');
+    }
+    add('255.255.255.255');
+
+    final result = <InternetAddress>[];
+    for (final target in targets) {
+      final address = InternetAddress.tryParse(target);
+      if (address == null) {
+        throw FormatException('唤醒地址格式不正确: $target');
+      }
+      if (address.type != InternetAddressType.IPv4) {
+        throw const FormatException('暂不支持 IPv6 唤醒地址');
+      }
+      result.add(address);
+    }
+    return result;
+  }
+
+  bool _isPrivateIpv4(List<int> raw) {
+    return raw[0] == 10 ||
+        (raw[0] == 172 && raw[1] >= 16 && raw[1] <= 31) ||
+        (raw[0] == 192 && raw[1] == 168);
   }
 
   Uint8List _parseMacBytes(String input) {
@@ -958,6 +1119,13 @@ class NodeSettingsService extends GetxService {
       return;
     }
 
+    // 已用无头模式切出去过：端口被独立 slime_node 占着，内置服务再起只会 bind 失败。
+    // 端口上有节点应答就当本机节点已就绪，避免重新打开界面时刷一条错误日志。
+    if (await _isPortServingNode(localNodePort.value)) {
+      _logger.info('端口 ${localNodePort.value} 已有节点进程在运行，跳过内置服务');
+      return;
+    }
+
     try {
       // 调用 Rust 启动节点服务器（授权码明文交给 Rust，Rust 只保存其 sha256 摘要）
       http_bridge_api.startNodeServer(
@@ -986,8 +1154,23 @@ class NodeSettingsService extends GetxService {
     }
   }
 
-  bool get isLocalServerRunning {
-    return http_bridge_api.isNodeServerRunning();
+  bool get isLocalServerRunning => http_bridge_api.isNodeServerRunning();
+
+  /// 本机端口上是否已有节点在应答（通常是无头模式的独立进程）。
+  ///
+  /// 只探测 127.0.0.1：判断的是"这个端口还能不能给内置服务用"，不需要外网可达性。
+  Future<bool> _isPortServingNode(int port) async {
+    final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 300);
+    try {
+      final request = await client.getUrl(Uri.parse('http://127.0.0.1:$port/health'));
+      final response = await request.close().timeout(const Duration(milliseconds: 600));
+      await response.drain<void>();
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
   }
 
   Future<List<Map<String, dynamic>>> fetchNodeNovels(NodeEndpoint node) async {

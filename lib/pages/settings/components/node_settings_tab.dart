@@ -1,7 +1,12 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/node/headless_node_launcher.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
@@ -26,6 +31,15 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
 
   final TextEditingController _localNameCtrl = TextEditingController();
   final TextEditingController _localPortCtrl = TextEditingController();
+  final TextEditingController _headlessPathCtrl = TextEditingController();
+
+  /// 无头模式启动器；仅在桌面端创建，设置页在移动端不展示该区块
+  HeadlessNodeLauncher? _launcher;
+  bool _headlessBusy = false;
+  String? _headlessHint;
+
+  /// 提示是否为警告（找不到可执行文件 / 启动失败）：决定文字颜色
+  bool _headlessWarning = false;
 
   @override
   void initState() {
@@ -48,12 +62,38 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
 
     _localNameCtrl.text = service.localNodeName.value;
     _localPortCtrl.text = service.localNodePort.value.toString();
+    await _initHeadless(service);
+  }
+
+  /// 初始化无头模式区块：优先用上次保存的路径，其次自动探测。
+  Future<void> _initHeadless(NodeSettingsService service) async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      return;
+    }
+    final launcher = HeadlessNodeLauncher(service);
+    final saved = await launcher.loadSavedBinary();
+    final binary = saved ?? await launcher.detectBinary();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _launcher = launcher;
+      _headlessPathCtrl.text = binary ?? '';
+      _headlessWarning = binary == null;
+      _headlessHint = binary == null
+          ? '未找到 ${HeadlessNodeLauncher.executableName}，请指定路径，'
+              '或把无头节点包解压后放到 /usr/local/bin（Windows 可放到程序目录）'
+          : saved != null
+          ? '使用上次保存的路径'
+          : '已自动找到可执行文件';
+    });
   }
 
   @override
   void dispose() {
     _localNameCtrl.dispose();
     _localPortCtrl.dispose();
+    _headlessPathCtrl.dispose();
     super.dispose();
   }
 
@@ -124,6 +164,116 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
     } catch (e) {
       _showSnack('重置授权码失败: $e');
     }
+  }
+
+  /// 手动指定 slime_node 可执行文件。
+  Future<void> _pickHeadlessBinary() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: '选择 slime_node 可执行文件',
+      allowMultiple: false,
+    );
+    final path = result?.files.singleOrNull?.path;
+    if (path == null || path.isEmpty || !mounted) {
+      return;
+    }
+    setState(() {
+      _headlessPathCtrl.text = path;
+      _headlessHint = '已选择可执行文件';
+      _headlessWarning = false;
+    });
+  }
+
+  /// 重新按常见位置探测一次（换了安装位置后不用重启应用）。
+  Future<void> _detectHeadlessBinary() async {
+    final launcher = _launcher;
+    if (launcher == null) {
+      return;
+    }
+    final binary = await launcher.detectBinary();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      if (binary != null) {
+        _headlessPathCtrl.text = binary;
+        _headlessHint = '已自动找到可执行文件';
+        _headlessWarning = false;
+      } else {
+        _headlessHint = '仍未找到 ${HeadlessNodeLauncher.executableName}，请手动指定路径';
+        _headlessWarning = true;
+      }
+    });
+  }
+
+  /// 一键切换：停内置服务 → 拉起独立 slime_node → 确认端口就绪 → 退出界面。
+  Future<void> _switchToHeadless() async {
+    final launcher = _launcher;
+    final service = _service;
+    if (launcher == null || service == null) {
+      return;
+    }
+    final path = _headlessPathCtrl.text.trim();
+    if (path.isEmpty) {
+      _showSnack('请先指定 slime_node 可执行文件路径');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('切换为无头模式'),
+        content: Text(
+          '应用界面会退出，节点服务改由 slime_node 独立进程常驻，'
+          '端口仍为 ${service.localNodePort.value}，数据目录与现在完全一致，'
+          '已配置该节点的设备无需改动。\n\n'
+          '如需开机自启，请把这条命令加入系统服务（systemd / launchd / 计划任务）。',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('切换并退出')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() => _headlessBusy = true);
+    final result = await launcher.switchToHeadless(binaryPath: path);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _headlessBusy = false);
+
+    if (!result.ok) {
+      _showSnack(result.message);
+      setState(() {
+        _headlessHint = result.message;
+        _headlessWarning = true;
+      });
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('已切换为无头模式'),
+        content: Text('${result.message}\n\n点击下方按钮结束界面进程，节点会继续在后台运行。'),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('退出界面'),
+          ),
+        ],
+      ),
+    );
+    try {
+      await windowManager.destroy();
+    } catch (_) {
+      // 窗口管理器未初始化（如无桌面环境）时直接退出进程即可
+    }
+    exit(0);
   }
 
   Future<void> _showNodeEditor({NodeEndpoint? initial}) async {
@@ -340,6 +490,80 @@ class _NodeSettingsTabState extends State<NodeSettingsTab> {
                         ),
                       ),
                     ),
+                  // 无头模式：NAS / 常驻机器上省掉 Flutter 运行时的内存占用
+                  if (!Platform.isAndroid && !Platform.isIOS) ...[
+                    SizedBox(height: m.kSpace16),
+                    Divider(height: m.kSpace8),
+                    SizedBox(height: m.kSpace8),
+                    Row(
+                      children: [
+                        Text('无头模式', style: AppTextStyles.cardTitle(context)),
+                        SizedBox(width: m.kSpace8),
+                        Text(
+                          '退出界面后由独立进程常驻',
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: m.fontSize12,
+                            color: s.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: m.kSpace8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: AppTextField(
+                            controller: _headlessPathCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'slime_node 可执行文件',
+                              hintText: '/usr/local/bin/slime_node',
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: m.kSpace8),
+                        IconButton(
+                          onPressed: _headlessBusy ? null : _pickHeadlessBinary,
+                          icon: DrawIcon(StrokeIcons.folderOpen),
+                          iconSize: m.iconSize18,
+                          tooltip: '选择可执行文件',
+                        ),
+                      ],
+                    ),
+                    if (_headlessHint != null)
+                      Padding(
+                        padding: EdgeInsets.only(top: m.kSpace6),
+                        child: Text(
+                          _headlessHint!,
+                          style: AppTextStyles.role(
+                            context,
+                            fontSize: m.fontSize12,
+                            color: _headlessWarning ? s.danger.color : s.textTertiary,
+                          ),
+                        ),
+                      ),
+                    SizedBox(height: m.kSpace8),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: _headlessBusy ? null : _detectHeadlessBinary,
+                          child: const Text('自动查找'),
+                        ),
+                        const Spacer(),
+                        FilledButton(
+                          onPressed: _headlessBusy ? null : _switchToHeadless,
+                          child: _headlessBusy
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('切换为无头模式并退出'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
