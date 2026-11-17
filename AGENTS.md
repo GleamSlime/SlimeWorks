@@ -54,11 +54,19 @@ UI：Flutter/Dart、GetX、GoRouter、ScreenUtil ｜ FFI：flutter_rust_bridge �
 
 ## 校验与提交（硬性门槛）
 
-任何一次 `git commit` 之前，三道校验缺一不可：
+任何一次 `git commit` 之前，必须先完整跑一遍校验脚本，它把三道门固定在同一套环境里（SDK 读 `.dart_tool/version`、补镜像变量、`--no-pub`、打包前清旧产物），只输出结论摘要，完整日志落在 `$TMPDIR/slime_works_gate/<时间戳>/`：
+
+```bash
+bash scripts/precommit_gate.sh
+```
+
+脚本内部的三道门：
 
 1. **`flutter analyze` 干净** —— 不许有 error，warning/info 也尽量清零。
 2. **全量 `flutter test`** —— 必须是全量，不是只跑改动相关的文件。golden 基线失败属既有环境问题，判定标准是**对比基线失败集合**：用 `git worktree` 起基线 commit，两边用同一 SDK 跑全量，head 侧不得新增任何失败。
 3. **打包能过** —— `fastforge`，命令与本机姿势见 [docs/dev-environment.md](docs/dev-environment.md)。
+
+`--skip-package` / `--skip-test` 只用于临时排查，**提交前必须补跑完整的一遍**；脚本退出码非 0 即视为不通过。
 
 三道校验通过后，直接 `git commit` 并 `git push`，无需再询问。
 
