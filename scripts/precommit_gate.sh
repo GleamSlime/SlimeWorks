@@ -28,7 +28,7 @@ for arg in "$@"; do
     --skip-package) SKIP_PACKAGE=1 ;;
     --skip-test) SKIP_TEST=1 ;;
     -h|--help) awk 'NR>1 && /^#/ {print} NR>1 && !/^#/ {exit}' "${BASH_SOURCE[0]}"; exit 0 ;;
-    *) echo "未知参数: $arg（--help 查看用法）"; exit 2 ;;
+    *) echo "未知参数: ${arg}（--help 查看用法）"; exit 2 ;;
   esac
 done
 
@@ -167,5 +167,5 @@ if [ "$FAILED" -eq 0 ]; then
   fi
   exit 0
 fi
-echo "结论: 校验失败，禁止提交（日志: $LOG_DIR）"
+echo "结论: 校验失败，禁止提交（日志: ${LOG_DIR}）"
 exit 1
