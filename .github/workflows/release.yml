@@ -193,7 +193,7 @@ jobs:
         run: |
           # bindgen 需要 libclang；runner 上 Xcode 目录带版本号，现取
           export LIBCLANG_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
-          cargo build --release --bin slime_node
+          cargo build --release --bin slime_node --bin slime_node_updater
         working-directory: rust
 
       - name: 打包
@@ -202,8 +202,9 @@ jobs:
           BUILD="${{ needs.detect-version.outputs.build_number }}"
           mkdir -p out
           cp rust/target/release/slime_node "out/slime_node-macos-arm64"
-          tar -czf "out/slime_node-${VERSION}+${BUILD}-macos-arm64.tar.gz" -C out slime_node-macos-arm64
-          rm "out/slime_node-macos-arm64"
+          cp rust/target/release/slime_node_updater "out/slime_node_updater-macos-arm64"
+          tar -czf "out/slime_node-${VERSION}+${BUILD}-macos-arm64.tar.gz" -C out slime_node-macos-arm64 slime_node_updater-macos-arm64
+          rm "out/slime_node-macos-arm64" "out/slime_node_updater-macos-arm64"
 
       - name: 上传无头节点产物
         uses: actions/upload-artifact@v4
@@ -242,7 +243,7 @@ jobs:
       - name: 构建无头节点
         env:
           SLIME_BUILD_VERSION: ${{ needs.detect-version.outputs.version }}+${{ needs.detect-version.outputs.build_number }}
-        run: cargo build --release --bin slime_node
+        run: cargo build --release --bin slime_node --bin slime_node_updater
         working-directory: rust
 
       - name: 打包
@@ -251,8 +252,9 @@ jobs:
           BUILD="${{ needs.detect-version.outputs.build_number }}"
           mkdir -p out
           cp rust/target/release/slime_node out/slime_node-linux-x86_64
-          tar -czf "out/slime_node-${VERSION}+${BUILD}-linux-x86_64.tar.gz" -C out slime_node-linux-x86_64
-          rm out/slime_node-linux-x86_64
+          cp rust/target/release/slime_node_updater out/slime_node_updater-linux-x86_64
+          tar -czf "out/slime_node-${VERSION}+${BUILD}-linux-x86_64.tar.gz" -C out slime_node-linux-x86_64 slime_node_updater-linux-x86_64
+          rm out/slime_node-linux-x86_64 out/slime_node_updater-linux-x86_64
 
       - name: 上传无头节点产物
         uses: actions/upload-artifact@v4
@@ -286,7 +288,7 @@ jobs:
       - name: 构建无头节点
         env:
           SLIME_BUILD_VERSION: ${{ needs.detect-version.outputs.version }}+${{ needs.detect-version.outputs.build_number }}
-        run: cargo build --release --bin slime_node
+        run: cargo build --release --bin slime_node --bin slime_node_updater
         working-directory: rust
 
       - name: 打包
@@ -296,8 +298,9 @@ jobs:
           $build = "${{ needs.detect-version.outputs.build_number }}"
           New-Item -ItemType Directory -Force -Path out | Out-Null
           Copy-Item rust/target/release/slime_node.exe out/slime_node-windows-x86_64.exe
-          Compress-Archive -Path out/slime_node-windows-x86_64.exe -DestinationPath "out/slime_node-$version+$build-windows-x86_64.zip"
-          Remove-Item out/slime_node-windows-x86_64.exe
+          Copy-Item rust/target/release/slime_node_updater.exe out/slime_node_updater-windows-x86_64.exe
+          Compress-Archive -Path out/slime_node-windows-x86_64.exe, out/slime_node_updater-windows-x86_64.exe -DestinationPath "out/slime_node-$version+$build-windows-x86_64.zip"
+          Remove-Item out/slime_node-windows-x86_64.exe, out/slime_node_updater-windows-x86_64.exe
 
       - name: 上传无头节点产物
         uses: actions/upload-artifact@v4

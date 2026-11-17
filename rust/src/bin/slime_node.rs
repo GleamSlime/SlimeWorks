@@ -83,12 +83,15 @@ SlimeWorks 无头节点
   --update-interval <小时>  自更新检查间隔（默认 6）
   --update-api-base <url>   GitHub API 地址，可指向镜像（默认 https://api.github.com）
   --check-update      只检查是否有新版本，不安装
-  --self-update       检查并立即安装（Unix 下替换后原地重启）
+  --self-update       检查并立即安装（交给 slime_node_updater 完成替换与重启）
   -h, --help          显示帮助
   -V, --version       显示版本
 
 环境变量: SLIME_NODE_HOST / PORT / NAME / AUTH / DATA_DIR / FFMPEG / FFPROBE / LOG_DIR / CONFIG
          SLIME_NODE_AUTO_UPDATE / SLIME_NODE_UPDATE_INTERVAL_HOURS / SLIME_NODE_UPDATE_API_BASE
+
+自更新需要同目录的 slime_node_updater：节点只负责查版本、下载与自检，
+替换和重启由它在本进程退出后完成。
 ";
 
 fn main() -> ExitCode {
@@ -163,6 +166,7 @@ fn main() -> ExitCode {
     let update_opts = self_update::UpdateOptions {
         api_base: update_api_base,
         interval: Duration::from_secs(update_interval_hours.saturating_mul(3600)),
+        port,
     };
 
     // 一次性动作：查完/装完就退出，不启动服务，方便 cron 或人工调用

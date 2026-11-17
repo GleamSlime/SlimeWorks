@@ -2,14 +2,12 @@
 //!
 //! 数据源与客户端更新一致：GitHub Release。流程是
 //! 查最新 tag → 比对构建版本 → 下载对应平台的无头包 → 校验 sha256
-//! → 解包暂存 → 新二进制自检（`--version`）→ 替换可执行文件 → 原地重启。
+//! → 解包暂存 → 新二进制自检（`--version`）→ 交给 `slime_node_updater` 替换并重启。
 //!
-//! 替换采用 `rename` 覆盖：Unix 上正在运行的旧 inode 不受影响，
-//! 替换后 `exec` 新文件即可完成重启，不依赖 systemd / launchd 的 Restart 策略。
-//! 任一步失败都保留旧文件继续服务，最坏情况只是这轮没更新。
-//!
-//! Windows 不允许覆盖运行中的 exe，这里只下载到暂存位置并提示手动替换，
-//! 不做「先退出再让外部脚本拉起」那套：节点无人值守，一旦脚本失败就彻底失联。
+//! 为什么不在进程内直接替换自己：运行中的可执行文件在 Windows 上被锁死，
+//! 只有另一个进程能在它退出后动手。所以节点只负责「发现 + 下载 + 自检」，
+//! 替换与重启由同目录的 `slime_node_updater` 完成，节点拉起它之后自行退出。
+//! 找不到更新程序时，Unix 退回旧的原地 exec 方案，Windows 则放弃本次更新。
 
 use std::fs;
 use std::io::Write;
@@ -28,6 +26,8 @@ pub struct UpdateOptions {
     pub api_base: String,
     /// 定时检查间隔
     pub interval: Duration,
+    /// 节点监听端口：交给更新程序，用来判断退出后是否已被别人拉起
+    pub port: u16,
 }
 
 /// 一次查询得到的线上版本信息。
@@ -192,13 +192,16 @@ fn download(info: &ReleaseInfo, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// 从无头包里取出可执行文件写到 [dest]。
+/// 从无头包里取出节点与更新程序，分别写到 [dest_node] / [dest_updater]。
+///
+/// 更新程序是可选的：老版本包里没有它，取不到就沿用磁盘上已有的那份。
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn extract(archive: &Path, dest: &Path) -> Result<(), String> {
+fn extract(archive: &Path, dest_node: &Path, dest_updater: &Path) -> Result<(), String> {
     let file = fs::File::open(archive).map_err(|e| format!("打开压缩包失败: {e}"))?;
     let decoder = flate2::read::GzDecoder::new(file);
     let mut tar = tar::Archive::new(decoder);
     let entries = tar.entries().map_err(|e| format!("读取压缩包失败: {e}"))?;
+    let mut found_node = false;
     for entry in entries {
         let mut entry = entry.map_err(|e| format!("读取压缩包条目失败: {e}"))?;
         let path = entry
@@ -209,20 +212,59 @@ fn extract(archive: &Path, dest: &Path) -> Result<(), String> {
             .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or_default();
-        if !name.starts_with("slime_node") {
+        let dest = if name.starts_with("slime_node_updater") {
+            dest_updater
+        } else if name.starts_with("slime_node") {
+            found_node = true;
+            dest_node
+        } else {
             continue;
-        }
-        let mut out =
-            fs::File::create(dest).map_err(|e| format!("创建 {} 失败: {e}", dest.display()))?;
+        };
+        let mut out = fs::File::create(dest)
+            .map_err(|e| format!("创建 {} 失败: {e}", dest.display()))?;
         std::io::copy(&mut entry, &mut out).map_err(|e| format!("解包失败: {e}"))?;
-        return Ok(());
     }
-    Err("压缩包里没有 slime_node".to_string())
+    if !found_node {
+        return Err("压缩包里没有 slime_node".to_string());
+    }
+    Ok(())
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn extract(_archive: &Path, _dest: &Path) -> Result<(), String> {
-    Err("当前平台不支持自动替换".to_string())
+#[cfg(windows)]
+fn extract(archive: &Path, dest_node: &Path, dest_updater: &Path) -> Result<(), String> {
+    let file = fs::File::open(archive).map_err(|e| format!("打开压缩包失败: {e}"))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {e}"))?;
+    let mut found_node = false;
+    for index in 0..zip.len() {
+        let mut entry = zip
+            .by_index(index)
+            .map_err(|e| format!("读取压缩包条目失败: {e}"))?;
+        let name = Path::new(entry.name())
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string();
+        let dest = if name.starts_with("slime_node_updater") {
+            dest_updater
+        } else if name.starts_with("slime_node") {
+            found_node = true;
+            dest_node
+        } else {
+            continue;
+        };
+        let mut out = fs::File::create(dest)
+            .map_err(|e| format!("创建 {} 失败: {e}", dest.display()))?;
+        std::io::copy(&mut entry, &mut out).map_err(|e| format!("解包失败: {e}"))?;
+    }
+    if !found_node {
+        return Err("压缩包里没有 slime_node".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+fn extract(_archive: &Path, _dest_node: &Path, _dest_updater: &Path) -> Result<(), String> {
+    Err("当前平台不支持自动更新".to_string())
 }
 
 #[cfg(unix)]
@@ -283,13 +325,105 @@ fn swap_and_restart(exe: &Path, staged: &Path) -> Result<(), String> {
 fn swap_and_restart(exe: &Path, staged: &Path) -> Result<(), String> {
     let _ = fs::remove_file(staged);
     Err(format!(
-        "Windows 不允许覆盖运行中的程序（{}），请手动下载 release 里的无头包替换后重启",
+        "找不到同目录的 slime_node_updater，无法自动更新（{}）",
         exe.display()
     ))
 }
 
-/// 下载、校验、替换、重启。成功时进程已被新版本接管，不会返回。
-pub fn apply(info: &ReleaseInfo) -> Result<(), String> {
+/// 同目录的独立更新程序。
+fn updater_file_name() -> &'static str {
+    if cfg!(windows) {
+        "slime_node_updater.exe"
+    } else {
+        "slime_node_updater"
+    }
+}
+
+fn find_updater(exe: &Path) -> Option<std::path::PathBuf> {
+    let candidate = exe.parent()?.join(updater_file_name());
+    candidate.exists().then_some(candidate)
+}
+
+/// 拉起更新程序后退出本进程：后续的替换与重启都归它管。
+fn launch_updater(
+    updater: &Path,
+    exe: &Path,
+    staged: &Path,
+    version: &str,
+    port: u16,
+) -> Result<(), String> {
+    let log_path = exe
+        .parent()
+        .map(|dir| dir.join("slime_node_updater.log"))
+        .ok_or_else(|| "无法定位更新程序日志目录".to_string())?;
+
+    let mut cmd = std::process::Command::new(updater);
+    cmd.arg("--pid")
+        .arg(std::process::id().to_string())
+        .arg("--target")
+        .arg(exe)
+        .arg("--new")
+        .arg(staged)
+        .arg("--expect")
+        .arg(version)
+        .arg("--port")
+        .arg(port.to_string())
+        .arg("--timeout")
+        .arg("60")
+        .arg("--");
+    // 原样带走启动参数，重启后监听地址/数据目录/授权码都不变。
+    // 但一次性开关必须剔除：--self-update / --check-update 是「跑完就退出」的，
+    // 传回去会让重启后的进程查完就退，服务永远起不来。
+    let restart_args: Vec<std::ffi::OsString> = std::env::args_os()
+        .skip(1)
+        .filter(|arg| {
+            let text = arg.to_string_lossy();
+            text != "--self-update" && text != "--check-update"
+        })
+        .collect();
+    cmd.args(&restart_args);
+    cmd.stdin(std::process::Stdio::null());
+
+    // 更新程序的输出单独落一个日志：节点退出后终端可能已经关了
+    match fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        Ok(file) => {
+            let stderr = file
+                .try_clone()
+                .map_err(|e| format!("准备更新日志失败: {e}"))?;
+            cmd.stdout(std::process::Stdio::from(file));
+            cmd.stderr(std::process::Stdio::from(stderr));
+        }
+        Err(_) => {
+            cmd.stdout(std::process::Stdio::null());
+            cmd.stderr(std::process::Stdio::null());
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        // 脱离当前进程组：前台 Ctrl+C、终端 SIGHUP 都不会带走更新程序
+        cmd.process_group(0);
+    }
+
+    let child = cmd
+        .spawn()
+        .map_err(|e| format!("启动更新程序失败: {e}"))?;
+    println!(
+        "[自更新] 已交给更新程序（pid {}），日志 {}",
+        child.id(),
+        log_path.display()
+    );
+    let _ = std::io::stdout().flush();
+    std::process::exit(0);
+}
+
+/// 下载、校验、暂存，然后把替换与重启交给更新程序。
+pub fn apply(info: &ReleaseInfo, opts: &UpdateOptions) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| format!("定位可执行文件失败: {e}"))?;
     let dir = exe
         .parent()
@@ -297,6 +431,7 @@ pub fn apply(info: &ReleaseInfo) -> Result<(), String> {
     let pid = std::process::id();
     let archive = dir.join(format!(".slime_node.update-{pid}.download"));
     let staged = dir.join(format!(".slime_node.update-{pid}.new"));
+    let staged_updater = dir.join(format!(".slime_node.update-{pid}.updater"));
 
     println!(
         "[自更新] 下载 {} → {}",
@@ -304,10 +439,21 @@ pub fn apply(info: &ReleaseInfo) -> Result<(), String> {
         info.version
     );
     download(info, &archive)?;
-    let extracted = extract(&archive, &staged);
+    let extracted = extract(&archive, &staged, &staged_updater);
     let _ = fs::remove_file(&archive);
     extracted?;
     set_executable(&staged)?;
+
+    // 更新程序自身也随包升级。此刻它还没被启动，直接覆盖即可；
+    // 覆盖不了就沿用磁盘上那份，不影响本次更新。
+    if staged_updater.exists() {
+        set_executable(&staged_updater)?;
+        let updater_path = dir.join(updater_file_name());
+        let _ = fs::remove_file(&updater_path);
+        if fs::rename(&staged_updater, &updater_path).is_err() {
+            let _ = fs::remove_file(&staged_updater);
+        }
+    }
 
     // 自检：新文件至少得能报出版本号，避免把坏包换上去
     let probe = std::process::Command::new(&staged)
@@ -323,6 +469,10 @@ pub fn apply(info: &ReleaseInfo) -> Result<(), String> {
         ));
     }
 
+    if let Some(updater) = find_updater(&exe) {
+        return launch_updater(&updater, &exe, &staged, &info.version, opts.port);
+    }
+    println!("[自更新] 未找到 slime_node_updater，改用进程内替换");
     swap_and_restart(&exe, &staged)
 }
 
@@ -364,7 +514,7 @@ pub fn run_check(opts: &UpdateOptions) -> ExitCode {
 /// `--self-update`：查一次，有就装。
 pub fn run_once(opts: &UpdateOptions) -> ExitCode {
     match check_once(opts) {
-        Ok(Some(latest)) => match apply(&latest) {
+        Ok(Some(latest)) => match apply(&latest, opts) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 eprintln!("[自更新] 更新失败: {err}");
@@ -393,7 +543,7 @@ pub fn start_auto_update(opts: UpdateOptions) {
             println!("[自更新] 开始检查新版本");
             match check_once(&opts) {
                 Ok(Some(latest)) => {
-                    if let Err(err) = apply(&latest) {
+                    if let Err(err) = apply(&latest, &opts) {
                         // 更新失败不影响节点继续服务，下一轮再试
                         eprintln!("[自更新] 更新到 {} 失败: {err}", latest.version);
                     }

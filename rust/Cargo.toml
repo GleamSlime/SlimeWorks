@@ -147,6 +147,9 @@ openssl = { version = "0.10", features = ["vendored"] }
 tar = "0.4"
 
 [target.'cfg(windows)'.dependencies]
+# 无头节点自更新解包用（release 里的 Windows 无头包是 zip）。
+# 版本跟工作区里已有的 zip 对齐，避免再多出一份重复编译。
+zip = { version = "2", default-features = false, features = ["deflate"] }
 winapi = { version = "0.3.9", features = [
   "processthreadsapi",
   "securitybaseapi",
