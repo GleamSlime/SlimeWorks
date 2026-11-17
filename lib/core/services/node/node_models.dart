@@ -108,8 +108,8 @@ class NodeMediaMetadata {
   bool get complete => foldersOk && collectionsOk && smartFoldersOk;
 }
 
-/// 唤醒方式：经局域网内节点中继，或由本机直接广播
-enum WakeMode { relay, direct }
+/// 唤醒方式：经局域网内节点中继、本机直接广播，或按网络环境自动选择
+enum WakeMode { relay, direct, auto }
 
 /// 唤醒任务状态
 enum WakeStatus { idle, waking, sent, online, timeout, failed }
@@ -140,7 +140,7 @@ class WakeDevice {
     required this.mac,
     this.target = '',
     this.port = 9,
-    this.mode = WakeMode.relay,
+    this.mode = WakeMode.auto,
     this.relayNodeId = '',
     this.probeNodeId = '',
     this.count = 3,
@@ -212,9 +212,11 @@ class WakeDevice {
       mac: (json['mac'] ?? '').toString(),
       target: (json['target'] ?? '').toString(),
       port: (json['port'] as num?)?.toInt() ?? 9,
-      mode: (json['mode'] ?? '').toString() == WakeMode.direct.name
-          ? WakeMode.direct
-          : WakeMode.relay,
+      // 缺省视为自动：老配置里显式存了 relay/direct 的按原样保留
+      mode: WakeMode.values.firstWhere(
+        (m) => m.name == (json['mode'] ?? '').toString(),
+        orElse: () => WakeMode.auto,
+      ),
       relayNodeId: (json['relayNodeId'] ?? '').toString(),
       probeNodeId: (json['probeNodeId'] ?? '').toString(),
       count: (json['count'] as num?)?.toInt() ?? 3,

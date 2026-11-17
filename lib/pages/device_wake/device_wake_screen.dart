@@ -234,9 +234,13 @@ class _DeviceWakeScreenState extends State<DeviceWakeScreen> {
     final s = AppSemantic.of(context);
     final status = _service.wakeStatus[device.id] ?? WakeStatus.idle;
     final tone = _statusTone(s, status);
-    final relayName = device.mode == WakeMode.relay
-        ? (_service.getNodeById(device.relayNodeId)?.name ?? '未选择中继节点')
-        : '本机直发';
+    final relayName = switch (device.mode) {
+      WakeMode.direct => '本机直发',
+      WakeMode.relay => _service.getNodeById(device.relayNodeId)?.name ?? '未选择中继节点',
+      WakeMode.auto => device.relayNodeId.isEmpty
+          ? '自动 · 仅本机直发'
+          : '自动 · 外网经 ${_service.getNodeById(device.relayNodeId)?.name ?? '已删除节点'}',
+    };
     final probeName = device.probeNodeId.isEmpty
         ? ''
         : ' · 检测节点 ${_service.getNodeById(device.probeNodeId)?.name ?? '已删除'}';
@@ -450,8 +454,7 @@ class _WakeEditorDialogState extends State<_WakeEditorDialog> {
     _macCtrl = TextEditingController(text: initial?.mac ?? '');
     _targetCtrl = TextEditingController(text: initial?.target ?? '');
     _portCtrl = TextEditingController(text: (initial?.port ?? 9).toString());
-    _mode = initial?.mode ??
-        (widget.nodes.isEmpty ? WakeMode.direct : WakeMode.relay);
+    _mode = initial?.mode ?? WakeMode.auto;
     _relayNodeId = initial?.relayNodeId ?? '';
     _probeNodeId = initial?.probeNodeId ?? '';
   }
@@ -484,7 +487,7 @@ class _WakeEditorDialogState extends State<_WakeEditorDialog> {
   Widget build(BuildContext context) {
     final m = AppTheme.metrics;
     final s = AppSemantic.of(context);
-    final relayMode = _mode == WakeMode.relay;
+    final needsRelay = _mode != WakeMode.direct;
 
     return AlertDialog(
       title: Text(widget.initial == null ? '添加设备' : '编辑设备'),
@@ -515,8 +518,18 @@ class _WakeEditorDialogState extends State<_WakeEditorDialog> {
                 spacing: m.kSpace8,
                 children: [
                   ChoiceChip(
+                    label: const Text('自动'),
+                    selected: _mode == WakeMode.auto,
+                    onSelected: (_) => setState(() {
+                      _mode = WakeMode.auto;
+                      if (_relayNodeId.isEmpty && widget.nodes.isNotEmpty) {
+                        _relayNodeId = widget.nodes.first.id;
+                      }
+                    }),
+                  ),
+                  ChoiceChip(
                     label: const Text('节点中继'),
-                    selected: relayMode,
+                    selected: _mode == WakeMode.relay,
                     // 切过来时补上第一个节点，避免「选完方式仍报未选中继节点」
                     onSelected: (_) => setState(() {
                       _mode = WakeMode.relay;
@@ -527,20 +540,35 @@ class _WakeEditorDialogState extends State<_WakeEditorDialog> {
                   ),
                   ChoiceChip(
                     label: const Text('本机直发'),
-                    selected: !relayMode,
+                    selected: _mode == WakeMode.direct,
                     onSelected: (_) => setState(() => _mode = WakeMode.direct),
                   ),
                 ],
               ),
-              if (relayMode) ...[
+              SizedBox(height: m.kSpace4),
+              Text(
+                _mode == WakeMode.auto
+                    ? '与中继节点同局域网时直发＋中继一起发，不在该局域网时只走中继'
+                    : _mode == WakeMode.relay
+                    ? '始终由中继节点在局域网内代发'
+                    : '始终由本机广播，需与目标主机同网段',
+                style: AppTextStyles.role(
+                  context,
+                  fontSize: m.fontSize12,
+                  color: s.textTertiary,
+                ),
+              ),
+              if (needsRelay) ...[
                 SizedBox(height: m.kSpace12),
                 if (widget.nodes.isEmpty)
                   Text(
-                    '暂无远程节点，请先在设置中添加局域网内的常开节点',
+                    _mode == WakeMode.relay
+                        ? '暂无远程节点，请先在设置中添加局域网内的常开节点'
+                        : '暂无远程节点，自动模式将等同本机直发',
                     style: AppTextStyles.role(
                       context,
                       fontSize: m.fontSize12,
-                      color: s.danger.color,
+                      color: _mode == WakeMode.relay ? s.danger.color : s.textTertiary,
                     ),
                   )
                 else
@@ -565,7 +593,7 @@ class _WakeEditorDialogState extends State<_WakeEditorDialog> {
                 controller: _targetCtrl,
                 decoration: InputDecoration(
                   labelText: '目标地址（可选）',
-                  hintText: relayMode
+                  hintText: needsRelay
                       ? '留空为 255.255.255.255'
                       : '留空自动广播；也可填设备 IP 或 192.168.x.255',
                 ),

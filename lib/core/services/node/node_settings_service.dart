@@ -563,7 +563,7 @@ class NodeSettingsService extends GetxService {
     required String mac,
     String target = '',
     int port = 9,
-    WakeMode mode = WakeMode.relay,
+    WakeMode mode = WakeMode.auto,
     String relayNodeId = '',
     String probeNodeId = '',
     int count = 3,
@@ -618,26 +618,7 @@ class NodeSettingsService extends GetxService {
 
     WakeReport report;
     try {
-      if (device.mode == WakeMode.relay) {
-        final relay = getNodeById(device.relayNodeId);
-        if (relay == null) {
-          throw StateError('请先选择中继节点');
-        }
-        final data = await callNodeAction(
-          nodeId: relay.id,
-          action: 'wake_host',
-          params: {
-            'mac': device.mac,
-            'target': device.target,
-            'port': device.port,
-            'count': device.count,
-          },
-        );
-        final target = (data['target'] ?? '').toString();
-        report = WakeReport(targets: ['${target.isEmpty ? '广播' : target}:${device.port}（经 ${relay.name}）']);
-      } else {
-        report = await _sendMagicPacketDirect(device);
-      }
+      report = await _dispatchWake(device);
       wakeStatus[id] = report.delivered ? WakeStatus.sent : WakeStatus.failed;
     } catch (e, st) {
       wakeStatus[id] = WakeStatus.failed;
@@ -649,6 +630,82 @@ class NodeSettingsService extends GetxService {
       unawaited(_pollWakeOnline(device));
     }
     return report;
+  }
+
+  Future<WakeReport> _dispatchWake(WakeDevice device) {
+    switch (device.mode) {
+      case WakeMode.direct:
+        return _sendMagicPacketDirect(device);
+      case WakeMode.relay:
+        final relay = getNodeById(device.relayNodeId);
+        if (relay == null) {
+          throw StateError('请先选择中继节点');
+        }
+        return _sendViaRelay(device, relay);
+      case WakeMode.auto:
+        return _sendAuto(device);
+    }
+  }
+
+  /// 自动模式：本机与中继节点同处一个局域网时两路并发，否则只走中继
+  ///
+  /// 魔术包没有应答，直发成功只代表包出去了，判断不了设备收没收到。
+  /// 因此用「中继节点的内网地址是否可达」来判断本机在不在那个局域网：
+  /// 在局域网内就直发＋中继一起发（多一个包无害，成功率最高），
+  /// 不在就只走中继，避免把一个注定到不了的广播当成发送成功。
+  Future<WakeReport> _sendAuto(WakeDevice device) async {
+    final relay = getNodeById(device.relayNodeId);
+    if (relay == null) {
+      return _sendMagicPacketDirect(device);
+    }
+
+    final sameLan = await isNodeLanReachable(relay.id);
+    _logger.info('自动唤醒: ${device.name} | 中继=${relay.name} | 同局域网=$sameLan');
+    if (!sameLan) {
+      return _sendViaRelay(device, relay);
+    }
+
+    final results = await Future.wait<WakeReport>([
+      _sendMagicPacketDirect(device).catchError(
+        (Object e) => WakeReport(targets: const [], errors: ['直发 $e']),
+      ),
+      _sendViaRelay(device, relay).catchError(
+        (Object e) => WakeReport(targets: const [], errors: ['中继 $e']),
+      ),
+    ]);
+    return WakeReport(
+      targets: [for (final r in results) ...r.targets],
+      errors: [for (final r in results) ...r.errors],
+    );
+  }
+
+  Future<WakeReport> _sendViaRelay(WakeDevice device, NodeEndpoint relay) async {
+    final data = await callNodeAction(
+      nodeId: relay.id,
+      action: 'wake_host',
+      params: {
+        'mac': device.mac,
+        'target': device.target,
+        'port': device.port,
+        'count': device.count,
+      },
+    );
+    final target = (data['target'] ?? '').toString();
+    return WakeReport(
+      targets: ['${target.isEmpty ? '广播' : target}:${device.port}（经 ${relay.name}）'],
+    );
+  }
+
+  /// 中继节点的内网地址是否可达：可达说明本机与它同处一个局域网
+  Future<bool> isNodeLanReachable(String nodeId) async {
+    final node = getNodeById(nodeId);
+    final lan = (node?.lanApiBaseUrl ?? '').trim();
+    if (node == null || !node.enabled || lan.isEmpty) {
+      return false;
+    }
+    final result = await _probeNodeUrl(lan, timeout: probeConfirmTimeout);
+    // 401 也说明这个地址通了，只是授权码不对
+    return result != _ProbeResult.unreachable;
   }
 
   /// 本机直发：逐个子网广播地址发送，单个地址失败不影响其余地址

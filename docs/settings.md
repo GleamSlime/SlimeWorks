@@ -256,8 +256,11 @@ GetIt.instance.registerSingletonAsync<NodeSettingsService>(() async {
 
 | 模式 | 发包方 | 适用场景 |
 |------|--------|----------|
+| 自动（默认） | 按网络环境决定 | 设备可能在也可能不在局域网：同一个局域网内直发＋中继并发，否则只走中继 |
 | 节点中继 | 局域网内常开的本应用节点 | 客户端在外网；调用节点 `wake_host` 动作代发 |
 | 本机直发 | 当前设备 | 客户端与目标同网段，或路由器已把 UDP 端口映射到广播地址 |
+
+自动模式的判定依据是**中继节点的内网地址是否可达**（`isNodeLanReachable`）：可达说明本机与中继节点同处一个局域网，此时直发与中继两路并发；不可达则认为本机在外网，只走中继。未配置中继节点时等同本机直发。
 
 - 持久化：`SharedPreferences` key `node_wake_devices`（设备名、MAC、目标地址、端口、模式、中继节点、检测节点）
 - 节点动作：`POST /node/call` → `{"action":"wake_host","params":{"mac":"AA:BB:CC:DD:EE:FF","target":"","port":9,"count":3}}`，走现有授权码校验
