@@ -67,13 +67,13 @@ class _DesktopShell extends StatelessWidget {
     return Obx(() {
       final isImmersive = getIt<DesktopScreenProvider>().desktopImmersiveMode.value;
       final contentAlpha = WindowGlass.contentAlpha;
-      if (isImmersive) {
-        // 沉浸模式：不显示侧边栏和顶部栏，整窗都是内容区。
-        return _ContentSurface(alpha: contentAlpha, child: child);
-      }
+      // 沉浸模式只把侧栏/顶栏折叠掉，**绝不更换 content 的父级链路**：
+      // 页面由路由构建，换个父节点（Row → _ContentSurface）会让整页 State 重建——
+      // 滚动位置回到顶部、列表重新 initAsync、封面全部重新解析。预览进出都会
+      // 切换沉浸态，所以必须在同一棵树上切换可见性。
       return Row(
         children: [
-          sidebar,
+          Offstage(offstage: isImmersive, child: sidebar),
           Expanded(
             // 侧栏把手压在内容区左缘上：侧栏内部有滚动条，Row 里内容区又后画
             child: Stack(
@@ -85,7 +85,7 @@ class _DesktopShell extends StatelessWidget {
                     alpha: contentAlpha,
                     child: Column(
                       children: [
-                        const DesktopTopBar(),
+                        Offstage(offstage: isImmersive, child: const DesktopTopBar()),
                         Expanded(child: child),
                       ],
                     ),
@@ -95,7 +95,10 @@ class _DesktopShell extends StatelessWidget {
                   left: 0,
                   top: 0,
                   bottom: 0,
-                  child: const SidebarResizeStrip(),
+                  child: Offstage(
+                    offstage: isImmersive,
+                    child: const SidebarResizeStrip(),
+                  ),
                 ),
               ],
             ),
