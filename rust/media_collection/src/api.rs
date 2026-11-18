@@ -3466,7 +3466,12 @@ fn path_spelling_variants(raw: &str) -> Vec<String> {
     variants
 }
 
-fn find_owning_collection_path(target_path: &str) -> Option<String> {
+/// 找出「包含某路径」的已导入集合实体（路径最长即最深的那一个）。
+///
+/// 返回整条集合记录而不只是路径：删文件后除了要重扫它的根目录，还得按它的
+/// **id** 重算聚合值（见 [delete_media_item_file]），路径字符串再反查一次
+/// 既多一趟锁、又可能因为同一目录两种写法而取错对象。
+fn find_owning_collection(target_path: &str) -> Option<MediaCollection> {
     // 两种写法都要试，理由见 path_spelling_variants
     let candidates = path_spelling_variants(target_path);
 
@@ -3489,10 +3494,21 @@ fn find_owning_collection_path(target_path: &str) -> Option<String> {
                 .any(|target| *target == root || target.starts_with(&prefix))
         })
         .max_by_key(|collection| collection.folder_path.len())
-        .map(|collection| collection.folder_path.clone())
+        .cloned()
 }
 
-/// 把已删除的物理文件从**所有包含它的集合**里摘掉（条目表 + 索引 + 内存缓存）。
+/// `upsert_collection_from_folder` 对「目录里一条媒体都不剩」返回的错误。
+///
+/// ★ 对「删掉集合里最后一条文件」这条路径它**不是故障**：集合确实空了，
+/// 只是 upsert 在 items 为空时提前 return Err，走不到它自己那一步写聚合值。
+/// 所以这里既不能把它当成功掩盖过去（重扫确实没做任何事），也不能当失败
+/// 跳过收口——聚合值由 [delete_media_item_file] / purge 补写。
+fn is_empty_media_folder_error(error: &str) -> bool {
+    error.contains("No media found")
+}
+
+/// 把已删除的物理文件从**所有包含它的集合**里摘掉（条目表 + 索引 + 路径快照
+/// + 内存缓存），并给因此清空的集合把聚合值重算写实。
 ///
 /// 嵌套集合是常态（`/相册` 与 `/相册/2024` 都可能被导入），同一个文件因此
 /// 可能同时属于多个集合；重扫只修拥有它的那一个，其余集合里就留下幽灵条目
@@ -3578,6 +3594,23 @@ fn purge_missing_paths_from_collections(paths: &[String]) {
     delete_items_from_db(&stale_ids);
     if let Err(error) = persist_collection_item_ids(&index_updates) {
         sw_warn!("[media_scan] 清理幽灵条目的集合索引失败: {}", error);
+    }
+    // 条目被删空的集合必须把聚合值与集合记录一起写实。
+    //
+    // 只摘条目是不够的：`upsert_collection_from_folder` 在 items 为空时会提前
+    // `return Err("No media found ...")`，根本走不到它自己那步
+    // `record_collection_size`，聚合表就永久停在删除前的体积与条数。而节点
+    // `list_media_collections` 与本地 `get_cached_collection_live_stats` 读的
+    // 都是这张表，用户看到的就是「点开集合一片空白、返回上一级还显示
+    // 1 个文件 270KB」。
+    //
+    // 口径与 `delete_collection_local_files` 末尾那次重算一致（那里调
+    // `refresh_collection_live_stats` 把 0 写实）；这里省掉逐文件 stat——条目
+    // 已经一条不剩，现存体积与条数铁定是 0，没必要再 stat 一遍。
+    for (collection_id, kept) in &index_updates {
+        if kept.is_empty() {
+            write_empty_collection_stats(collection_id);
+        }
     }
     // 内存缓存同步：索引已经干净了，但已加载的缓存里还留着这些死条目
     let mut guard = lock_items();
@@ -3752,7 +3785,7 @@ pub fn delete_media_collection(collection_id: String) -> Result<bool, String> {
 }
 
 /// 删除单个媒体文件的物理文件，然后重新导入集合目录以同步数据库。
-/// 返回 (删除成功, 重新导入后的集合ID)。
+/// 返回「物理文件是否真的被删掉」（文件早已不存在时返回 false）。
 pub fn delete_media_item_file(item_file_path: String) -> Result<bool, String> {
     let path = std::path::Path::new(&item_file_path);
     let deleted = if path.exists() {
@@ -3769,14 +3802,72 @@ pub fn delete_media_item_file(item_file_path: String) -> Result<bool, String> {
     // 而真正拥有它的大集合仍挂着已删条目。
     // 必须走 rescan：`import_media_folder` 对已导入路径直接报「该文件夹已导入」，
     // 条目永远留在库里，集合体积/条数也就一直停在删除前的值。
-    match find_owning_collection_path(&item_file_path) {
-        Some(root) => {
-            let _ = rescan_media_folder(root);
+    let owner = find_owning_collection(&item_file_path);
+    // 重扫撞上真故障（权限/IO）时集合可能还有条目挂着已删路径，
+    // 那种情况才值得再付一次逐文件 stat；正常删除不该为它买单（见下）。
+    let mut rescan_hard_failed = false;
+    match owner.as_ref() {
+        Some(collection) => {
+            // 这行曾经的写法是 `let _ = rescan_media_folder(...)`，把「目录里一条
+            // 媒体都不剩」的那个 Err 也一并吞了 —— 而它恰好是删掉最后一条文件时
+            // 必然出现的结果，于是失败路径彻底无声：聚合值永久停在删除前。
+            // 现在分三档：空目录错误属预期（下方 purge/收口负责写实）、其它错误
+            // 记 warn、成功也留一行 debug 便于追。
+            match rescan_media_folder(collection.folder_path.clone()) {
+                Ok(_) => sw_debug!(
+                    "[media_scan] 删除文件后重扫集合完成: {}",
+                    collection.folder_path
+                ),
+                Err(error) if is_empty_media_folder_error(&error) => sw_debug!(
+                    "[media_scan] 集合已无媒体文件，聚合值交由收口步骤写实: id={} ({})",
+                    collection.id,
+                    error
+                ),
+                Err(error) => {
+                    rescan_hard_failed = true;
+                    sw_warn!(
+                        "[media_scan] 删除文件后重扫集合失败 id={} path={}: {}",
+                        collection.id,
+                        collection.folder_path,
+                        error
+                    );
+                }
+            }
         }
         None => sw_debug!("[media_scan] 删除的文件不属于任何已导入集合，跳过重扫: {}", item_file_path),
     }
-    // 兜底：文件已经删了，任何集合都不该再认它（含重扫没覆盖到的兄弟集合）
+    // 兜底：文件已经删了，任何集合都不该再认它（含重扫没覆盖到的兄弟集合）。
+    // 它内部会给被摘空的集合同步写实聚合值/路径快照/条数。
     purge_missing_paths_from_collections(std::slice::from_ref(&item_file_path));
+    // 收口：**删掉最后一条文件时聚合值永久停在删前值**，根因就在上面那趟重扫
+    // 提前 `return Err("No media found ...")`，走不到它自己那步
+    // `record_collection_size`；而 purge 又可能因为条目早已不在库里而直接返回。
+    // 这里按集合当下的条目实况分档，口径与 `delete_collection_local_files`
+    // 末尾那次重算一致，但只在真有必要时才付出代价：
+    // - 条目已一条不剩（最后一条被删的主场景）：直接写实 0，无需逐文件 stat；
+    // - 重扫撞硬故障：条目可能还挂着已删路径，逐文件 stat 一次把 live 值校准；
+    // - 其余（重扫成功）：`record_collection_size` 已写好记录体积，display
+    //   口径会退回它，再 stat 一遍纯属浪费（外置卷上每个文件一次睡眠级 stat）。
+    if let Some(collection) = owner.as_ref() {
+        match get_media_collection_items(collection.id.clone()) {
+            Ok(items) if items.is_empty() => write_empty_collection_stats(&collection.id),
+            Ok(_) if rescan_hard_failed => {
+                if let Err(error) = refresh_collection_live_stats(&collection.id) {
+                    sw_warn!(
+                        "[media_scan] 删除文件后现存体积回写失败 id={}: {}",
+                        collection.id,
+                        error
+                    );
+                }
+            }
+            Ok(_) => {}
+            Err(error) => sw_warn!(
+                "[media_scan] 删除文件后读取集合条目失败 id={}: {}",
+                collection.id,
+                error
+            ),
+        }
+    }
     Ok(deleted)
 }
 
@@ -3859,6 +3950,80 @@ fn refresh_collection_live_stats(collection_id: &str) -> Result<(), String> {
         },
     };
     persist_collection_aggregates(std::slice::from_ref(&aggregate))
+}
+
+/// 集合的条目已一条不剩时，把「体积/条数」三处口径一次性写实为 0。
+///
+/// 起因见 [delete_media_item_file]：删掉集合里**最后一条**文件时，
+/// `upsert_collection_from_folder` 在 items 为空处提前 `return Err`，走不到
+/// 它自己那步 `record_collection_size`，于是三处全都停在删除前的值：
+/// - 聚合表 `recorded_size`/`live_size`/`live_count` → 节点 `list_media_collections`
+///   与本地集合卡读它，表现为「1 个文件 270KB」；
+/// - 路径快照 `media_collection_paths` → 文件名智能文件夹、深度搜索、悬停预览
+///   仍按旧路径匹配，等于对一个已删文件做匹配；
+/// - 集合记录 `MediaCollection.item_count` → 未经 stat 的旧库/旧客户端直接读它。
+///
+/// 这些写入都应当「要么都成、要么都记日志」，但彼此独立：单条失败不该连带
+/// 拖垮其它口径（聚合表写失败时条目表已经干净了，此时报错也没有可回滚的对象）。
+fn write_empty_collection_stats(collection_id: &str) {
+    // 1) 聚合表：现存与记录两份体积都是 0，live 结论直接写实（无需逐文件 stat）
+    let aggregate = CollectionAggregate {
+        collection_id: collection_id.to_string(),
+        recorded_size: 0,
+        live_size: Some(0),
+        live_count: Some(0),
+        live_checked_at: Some(Utc::now().timestamp()),
+    };
+    if let Err(error) = persist_collection_aggregates(std::slice::from_ref(&aggregate)) {
+        sw_warn!(
+            "[media_stats] 清空集合聚合值失败 id={}: {}",
+            collection_id,
+            error
+        );
+    }
+    // 2) 路径快照写空数组：与「没记录（旧库待回填）」区别开，别让它回退去读条目表
+    if let Err(error) = persist_collection_paths(&[(collection_id.to_string(), Vec::new())]) {
+        sw_warn!(
+            "[media_stats] 清空集合路径快照失败 id={}: {}",
+            collection_id,
+            error
+        );
+    }
+    // 3) 集合记录：条数归零、封面清掉（封面文件本身已经删了，留着是死引用）
+    let updated = {
+        let mut collections = match get_collections().lock() {
+            Ok(guard) => guard,
+            Err(error) => {
+                sw_warn!(
+                    "[media_stats] 清空集合条数失败（集合表锁不可用）id={}: {}",
+                    collection_id,
+                    error
+                );
+                return;
+            }
+        };
+        let Some(collection) = collections
+            .iter_mut()
+            .find(|collection| collection.id == collection_id)
+        else {
+            return;
+        };
+        collection.item_count = 0;
+        collection.cover_path = None;
+        collection.updated_at = Utc::now();
+        collection.clone()
+    };
+    if let Err(error) = persist_collection(&updated) {
+        sw_warn!(
+            "[media_stats] 清空集合条数落库失败 id={}: {}",
+            collection_id,
+            error
+        );
+    }
+    sw_info!(
+        "[media_stats] 集合已清空，体积/条数归零: id={}",
+        collection_id
+    );
 }
 
 /// 收集 `root` 目录树内**所有** `.SlimeWorks` 缓存目录（广度优先，限深限条目）。
@@ -4873,7 +5038,7 @@ mod tests {
         let collection = import_media_folder(root.to_string_lossy().into_owned()).unwrap();
         assert_eq!(collection.item_count, 2);
 
-        // 删掉嵌套目录里的文件后重扫**根目录**（生产路径：find_owning_collection_path 的结果）
+        // 删掉嵌套目录里的文件后重扫**根目录**（生产路径：find_owning_collection 的结果）
         std::fs::remove_file(sub.join("b.bmp")).unwrap();
         let rescanned = rescan_media_folder(root.to_string_lossy().into_owned()).unwrap();
         assert_eq!(rescanned.id, collection.id, "重扫必须复用同一个集合");
@@ -4908,7 +5073,9 @@ mod tests {
 
         // 归属查询应命中集合根，而不是 deep 或 pages
         let target = deep.join("gone.bmp").to_string_lossy().into_owned();
-        let owner = find_owning_collection_path(&target).expect("应能定位所属集合");
+        let owner = find_owning_collection(&target)
+            .expect("应能定位所属集合")
+            .folder_path;
         assert!(
             paths_equivalent(&owner, &normalize_folder_path(&root).unwrap()),
             "应重扫集合根 {root:?}，实际 {owner}"
@@ -4940,7 +5107,7 @@ mod tests {
 
         // album_backup 里的文件不属于 album 集合
         let target = backup.join("y.bmp").to_string_lossy().into_owned();
-        let owner = find_owning_collection_path(&target);
+        let owner = find_owning_collection(&target).map(|collection| collection.folder_path);
         assert!(
             owner.is_none(),
             "album_backup 不该被当成 album 的子路径，实际: {owner:?}"
@@ -4980,6 +5147,175 @@ mod tests {
         );
         assert!(inner_items.is_empty(), "内层集合应被清空");
 
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 删到最后一条：聚合值必须归零（幽灵体积回归）───────────────────────
+
+    /// 删掉集合里**最后一条**文件后，聚合值/路径快照/集合条数必须立刻归零。
+    ///
+    /// 这是「幽灵体积」的直接回归：`upsert_collection_from_folder` 在 items 为空时
+    /// 提前 `return Err("No media found ...")`，走不到它自己那步
+    /// `record_collection_size`；而 `delete_media_item_file` 当时用
+    /// `let _ = rescan_media_folder(...)` 把这个 Err 静默吞掉，
+    /// `purge_missing_paths_from_collections` 又完全不碰聚合表。
+    /// 结果：条目确实空了，节点 `list_media_collections` 却照旧回报
+    /// 「1 个文件 270KB」——用户点开一片空白、返回上一级体积不变。
+    ///
+    /// 断言覆盖三条读路径各自的口径，缺一条都可能让某个客户端继续显示旧值：
+    /// 1. 聚合表 live_size/live_count（节点 list_media_collections、本地集合卡）
+    /// 2. 聚合表 recorded_size（未 stat 过时 display_size 的兜底）
+    /// 3. 集合记录 item_count（未经聚合表的旧读路径）
+    #[test]
+    fn db_delete_last_item_file_zeroes_collection_aggregates() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("last_item_zero");
+        std::fs::create_dir_all(&root).unwrap();
+        write_test_image(&root.join("only.bmp"));
+
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(collection.item_count, 1, "前提：单文件集合");
+
+        let file_path_bytes = std::fs::metadata(root.join("only.bmp")).unwrap().len();
+        // 导入后聚合表的记录体积先对得上
+        let before: CollectionAggregate = serde_json::from_str(
+            &db_row(collection_stats_table_name(), &collection.id).expect("导入应写聚合行"),
+        )
+        .unwrap();
+        assert_eq!(before.recorded_size, file_path_bytes);
+
+        // 删掉唯一一条（生产路径：节点 delete_media_item_local_file / 本地 FFI）
+        let target = root.join("only.bmp").to_string_lossy().into_owned();
+        assert!(delete_media_item_file(target.clone()).unwrap());
+
+        // 条目确实空了（修复前这里就已经是空的，正是缺陷的对照面）
+        assert!(
+            get_media_collection_items(collection.id.clone())
+                .unwrap()
+                .is_empty(),
+            "条目表应已清空"
+        );
+
+        // 1+2) 聚合表：现存与记录两份体积、条数全部归零
+        let stored: CollectionAggregate = serde_json::from_str(
+            &db_row(collection_stats_table_name(), &collection.id)
+                .expect("删到空集合后必须仍有聚合行（要写实，不是删行）"),
+        )
+        .unwrap();
+        assert_eq!(stored.live_size, Some(0), "现存体积必须归零");
+        assert_eq!(stored.live_count, Some(0), "现存条数必须归零");
+        assert_eq!(stored.recorded_size, 0, "记录体积也必须归零");
+        assert_eq!(stored.display_size(), 0, "展示口径必须归零");
+
+        // 节点 list_media_collections 就是用这两处拼 item_count/total_size 的
+        let counts = get_all_collection_counts().unwrap();
+        let count = counts
+            .iter()
+            .find(|c| c.collection_id == collection.id)
+            .expect("集合应仍在统计里");
+        assert_eq!(count.item_count, 0, "节点回报条数必须为 0");
+        assert_eq!(count.total_size, 0, "节点回报体积必须为 0");
+
+        // 3) 集合记录本身
+        let listed = get_all_media_collections()
+            .unwrap()
+            .into_iter()
+            .find(|c| c.id == collection.id)
+            .expect("集合记录应保留（不删集合，只归零）");
+        assert_eq!(listed.item_count, 0, "集合记录条数必须归零");
+        assert!(listed.cover_path.is_none(), "封面指向已删文件，应清掉");
+
+        // 路径快照也要写空：文件名智能文件夹/深度搜索/悬停预览读的是它，
+        // 留着旧路径等于对一个已删文件做匹配。
+        assert!(
+            get_collection_file_paths(collection.id.clone())
+                .unwrap()
+                .is_empty(),
+            "路径快照必须清空"
+        );
+
+        assert!(delete_media_collection(collection.id).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 删非最后一条时，聚合值必须同步递减而不是整体归零/停在原值。
+    /// 与上一条配对：修法若把「空集合」的判断写宽（例如 purge 时一律写 0），
+    /// 这条会立刻红。
+    #[test]
+    fn db_delete_non_last_item_file_decrements_aggregates() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("non_last_item");
+        write_test_image(&root.join("a.bmp"));
+        write_test_image(&root.join("b.bmp"));
+
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(collection.item_count, 2);
+        let total: u64 = ["a.bmp", "b.bmp"]
+            .iter()
+            .map(|name| std::fs::metadata(root.join(name)).unwrap().len())
+            .sum();
+
+        let first = root.join("a.bmp").to_string_lossy().into_owned();
+        let removed = std::fs::metadata(root.join("a.bmp")).unwrap().len();
+        assert!(delete_media_item_file(first).unwrap());
+
+        // 集合还剩一条，记录体积应精确少掉被删文件的大小
+        let stored: CollectionAggregate = serde_json::from_str(
+            &db_row(collection_stats_table_name(), &collection.id).expect("应有聚合行"),
+        )
+        .unwrap();
+        assert_eq!(
+            stored.recorded_size,
+            total - removed,
+            "记录体积应只减掉被删的那一条"
+        );
+        let listed = get_all_media_collections()
+            .unwrap()
+            .into_iter()
+            .find(|c| c.id == collection.id)
+            .unwrap();
+        assert_eq!(listed.item_count, 1, "还剩一条，条数应为 1");
+        assert_eq!(
+            get_media_collection_items(collection.id.clone()).unwrap().len(),
+            1
+        );
+
+        assert!(delete_media_collection(collection.id).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// purge 直接清空某个集合时（不走 delete_media_item_file，例如文件被外部
+    /// 删除后由别的路径触发），聚合值同样要归零——这条覆盖「purge 内部写实」
+    /// 那一分支，而不是靠 delete_media_item_file 末尾的显式收口。
+    #[test]
+    fn purge_zeroes_aggregates_of_emptied_collection() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("purge_zero");
+        write_test_image(&root.join("only.bmp"));
+
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+
+        // 绕过 delete_media_item_file：模拟文件在文件管理器里被直接删掉
+        let gone = root.join("only.bmp").to_string_lossy().into_owned();
+        std::fs::remove_file(&gone).unwrap();
+        purge_missing_paths_from_collections(std::slice::from_ref(&gone));
+
+        assert!(get_media_collection_items(collection.id.clone())
+            .unwrap()
+            .is_empty());
+        let stored: CollectionAggregate = serde_json::from_str(
+            &db_row(collection_stats_table_name(), &collection.id)
+                .expect("purge 清空后必须写下聚合行"),
+        )
+        .unwrap();
+        assert_eq!(stored.live_count, Some(0), "purge 后现存条数应归零");
+        assert_eq!(stored.live_size, Some(0), "purge 后现存体积应归零");
+        assert_eq!(stored.display_size(), 0, "展示口径应归零");
+
+        assert!(delete_media_collection(collection.id).unwrap());
         let _ = std::fs::remove_dir_all(&root);
     }
 
