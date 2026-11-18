@@ -197,6 +197,22 @@ class SentrySettingsService extends GetxService {
     return (response.data?['deleted'] as num?)?.toInt() ?? 0;
   }
 
+  /// 清空远程节点上某个项目的全部事件，返回删除条数。
+  ///
+  /// 节点侧 `DELETE /sentry/projects/<id>/events` 一直是实现好的，
+  /// 但客户端此前根本没调它：`clearProjectEvents` 在远程分支里只写了一行
+  /// `_logger.info('远程节点不支持清空项目事件')` 就照旧刷新列表 ——
+  /// 用户点带「此操作不可撤销」确认弹窗的按钮，结果一条没少，纯假成功。
+  Future<int> clearRemoteProjectEvents(String projectId) async {
+    final baseUrl = currentNodeBaseUrl;
+    if (baseUrl == null) throw StateError('未选择远程节点');
+
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '$baseUrl/sentry/projects/${Uri.encodeComponent(projectId)}/events',
+    );
+    return (response.data?['deleted'] as num?)?.toInt() ?? 0;
+  }
+
   Future<String> exportRemoteLogs({
     String? projectId,
     String? level,

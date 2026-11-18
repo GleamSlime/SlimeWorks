@@ -278,7 +278,12 @@ class SentryLogViewModel extends GetxController {
       if (isLocal) {
         await sentryLogClearProjectEvents(projectId: projectId);
       } else {
-        _logger.info('远程节点不支持清空项目事件');
+        // 节点侧 `DELETE /sentry/projects/<id>/events` 一直实现着，
+        // 之前这里却只写一行日志就刷新列表 —— 用户点带「不可撤销」确认的
+        // 按钮，结果一条没少，属于纯假成功。现在真的发到节点。
+        await GetIt.instance
+            .get<SentrySettingsService>()
+            .clearRemoteProjectEvents(projectId);
       }
       await loadInitialData();
     } catch (e) {
