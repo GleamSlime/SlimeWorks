@@ -350,10 +350,16 @@ class PictureLibraryToolbar extends StatelessWidget {
                     ),
                   ),
                 // 刷新/同步按钮（始终显示）
-                DesktopHeadToolsButton(
-                  icon: DrawIcon(StrokeIcons.refresh),
-                  size: AppTheme.metrics.kSpace40,
-                  onTap: onRefresh,
+                // 补 Tooltip 与同排其它按钮保持一致：这个按钮此前是整排里
+                // 唯一没有提示的，鼠标悬停时用户得不到「这是刷新」的确认
+                // （真机验收时正因为找不到 tooltip 才暴露出这处不一致）。
+                Tooltip(
+                  message: '刷新媒体库',
+                  child: DesktopHeadToolsButton(
+                    icon: DrawIcon(StrokeIcons.refresh),
+                    size: AppTheme.metrics.kSpace40,
+                    onTap: onRefresh,
+                  ),
                 ),
               ],
             ),
