@@ -1382,6 +1382,47 @@ class NodeSettingsService extends GetxService {
     return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
+  /// 让节点重新扫描**已被导入过**的媒体目录，返回与导入同形状的集合 JSON。
+  ///
+  /// 与 [importNodeMediaFolder] 的区别只有一条：绕开「该文件夹已导入」拦截，
+  /// 对同一 folder_path 做 upsert 覆盖。节点的盘上文件被外部增删（NAS 上直接
+  /// 拷文件、别的设备删了几张图）之后，这是唯一能让库同步回来的入口。
+  ///
+  /// [generateThumbnails] = true 时节点会给重扫出来的文件预生成缩略图：
+  /// 盘上新增的文件必然没有旁路缓存，不预热的话客户端点进去才开始出图。
+  /// [coverWidth] 必须与客户端封面请求宽度一致（缓存 key 含宽度），
+  /// 0 表示原图档（客户端不带宽度请求），节点据此跳过预生成。
+  ///
+  /// 返回 null = 节点没给 data（异常形状），调用方按「无信息」处理。
+  /// 节点出错（路径不存在等）照常抛异常，错误原文由调用方展示，不吞。
+  Future<Map<String, dynamic>?> rescanNodeMediaFolder({
+    required String nodeId,
+    required String folderPath,
+    bool generateThumbnails = false,
+    int? coverWidth,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) {
+      throw StateError('节点不存在: $nodeId');
+    }
+
+    final response = await _callNode(
+      node: node,
+      action: 'rescan_media_folder',
+      params: <String, dynamic>{
+        'folder_path': folderPath,
+        'generate_thumbnails': generateThumbnails,
+        'cover_width': ?coverWidth,
+      },
+    );
+
+    final data = response['data'];
+    if (data is! Map) {
+      return null;
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
   /// 列举节点上 [path] 目录下的一级子目录路径列表。
   Future<List<String>> listNodeDirectories({required String nodeId, required String path}) async {
     final node = getNodeById(nodeId);
@@ -2696,6 +2737,14 @@ class NodeSettingsService extends GetxService {
     // 远程拖拽导入：节点要遍历整棵目录并逐条入库，大目录远超默认 12s，
     // 按默认超时会让客户端先放弃（节点其实还在导）。
     if (action == 'import_media_folder') {
+      return Options(
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(minutes: 10),
+      );
+    }
+    // 重扫同一次导入同等量级：节点要重新遍历整棵目录、逐条 stat 入库，
+    // 几万文件的集合远超默认 12s。超时档与导入对齐（同一个遍历代价）。
+    if (action == 'rescan_media_folder') {
       return Options(
         sendTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(minutes: 10),

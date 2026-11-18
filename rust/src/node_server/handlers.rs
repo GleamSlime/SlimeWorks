@@ -548,6 +548,39 @@ pub async fn dispatch_action(
             }))
         }
 
+        // 重新扫描**已导入过**的媒体目录：绕开 import 的「该文件夹已导入」拦截，
+        // 对同一 folder_path 做 upsert 覆盖。用途是「用户在节点磁盘上直接增删
+        // 文件后让库同步」——这是远程/无头模式下唯一能达成该目的的入口。
+        //
+        // 用 `rescan_media_folder_allow_empty` 而不是裸的 `rescan_media_folder`：
+        // 后者在「目录里一条媒体都不剩」时提前 Err（upsert 的 early return），
+        // 而把节点上的文件全删掉恰恰是用户会主动做的事，此时必须回「集合还在、
+        // item_count=0」并让聚合值/条目写实归零，既不能报成失败（那会让人以为
+        // 重扫没生效），也不能假成功（留着旧条目和旧体积）。
+        "rescan_media_folder" => {
+            let folder_path = params["folder_path"].as_str().unwrap_or("").to_string();
+            require_id(&folder_path, "媒体文件夹路径")?;
+            // 缩略图预生成：盘上新增的文件必然没有旁路缓存，不预热的话客户端
+            // 点进去才开始出图。宽度必须与客户端封面请求一致（缓存 key 含宽度）。
+            let generate_thumbnails = params["generate_thumbnails"].as_bool().unwrap_or(false);
+            let cover_width = params["cover_width"].as_u64().unwrap_or(240) as u32;
+            let collection = media_api::rescan_media_folder_allow_empty(folder_path.clone())
+                .map_err(|e| format!("重新扫描媒体文件夹失败: {}", e))?;
+            if generate_thumbnails {
+                spawn_import_thumbnail_generation(std::slice::from_ref(&collection), cover_width);
+            }
+            Ok(json!({
+                "id": collection.id,
+                "title": collection.title,
+                "folder_path": collection.folder_path,
+                "folder_id": collection.folder_id,
+                "cover_path": collection.cover_path,
+                "item_count": collection.item_count.to_string(),
+                "created_at": collection.created_at.timestamp(),
+                "updated_at": collection.updated_at.timestamp(),
+            }))
+        }
+
         "rename_media_collection" => {
             let collection_id = params["collection_id"].as_str().unwrap_or("").to_string();
             let title = params["title"].as_str().unwrap_or("").to_string();

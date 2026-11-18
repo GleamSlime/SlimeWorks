@@ -3718,6 +3718,82 @@ pub fn rescan_media_folder(folder_path: String) -> Result<MediaCollection, Strin
     upsert_collection_from_folder(Path::new(&normalized), true)
 }
 
+/// 重新扫描已导入集合的目录，并**接受「目录已被清空」这一结果**。
+///
+/// 与 [rescan_media_folder] 的唯一差别在「目录里一条媒体都没有」时：
+/// upsert 在 items 为空时提前 `return Err("No media found ...")`，走不到它自己
+/// 那一步写聚合值，库里的旧条目与体积/条数就永久停在删除前的值（点开一片
+/// 空白、返回上一级还显示「1 个文件 270KB」）。
+///
+/// 对「用户把 NAS/服务器上的文件全删了，然后点重新扫描」这条路径，空目录正是
+/// **预期结果**，不能报成失败；但也不能假成功——集合记录保留（目录还在，只是
+/// 空了），条目表清空，聚合值/路径快照/条数一律写实为 0，返回 item_count=0。
+///
+/// 目录**不存在**（还是 0 条媒体，但连目录都没了）与「库里没有这个集合」不走
+/// 这条收口：前者照常透出底层错误，后者说明这个路径压根没导入过，重扫无从谈起。
+pub fn rescan_media_folder_allow_empty(folder_path: String) -> Result<MediaCollection, String> {
+    let normalized = normalize_folder_path(Path::new(&folder_path))?;
+    sw_debug!(
+        "[media_scan] rescan_media_folder_allow_empty: 重新扫描 {:?}",
+        normalized
+    );
+    // 目录本身必须还在：不存在时是「路径写错/盘掉了」，与「被清空」是两回事
+    if !Path::new(&normalized).is_dir() {
+        return Err(format!("目录不存在或不是目录: {}", normalized));
+    }
+    match upsert_collection_from_folder(Path::new(&normalized), true) {
+        Ok(collection) => Ok(collection),
+        Err(error) if is_empty_media_folder_error(&error) => {
+            // 只有「库里已经有这个集合的登记」才算被清空；否则确实是没东西可扫
+            let existing = {
+                let collections = get_collections()
+                    .lock()
+                    .map_err(|lock_error| lock_error.to_string())?;
+                collections
+                    .iter()
+                    .find(|collection| paths_equivalent(&collection.folder_path, &normalized))
+                    .cloned()
+            };
+            let Some(mut collection) = existing else {
+                return Err(error);
+            };
+            // 清掉库里残留的条目记录（它们指向的物理文件已经不在了）
+            if let Some(ids) = load_collection_item_ids(&collection.id) {
+                delete_items_from_db(&ids);
+            } else {
+                // 旧库没有条目索引：退回整表过滤一次，把属于本集合的条目全删
+                let mut guard = lock_items();
+                ensure_items_ready(&mut guard)?;
+                let ids: Vec<String> = items_or_err(&guard)?
+                    .iter()
+                    .filter(|item| item.collection_id == collection.id)
+                    .map(|item| item.id.clone())
+                    .collect();
+                drop(guard);
+                delete_items_from_db(&ids);
+            }
+            // 条目、聚合值、路径快照、集合条数/封面一次性写实为 0
+            write_empty_collection_stats(&collection.id);
+            // 上面写实改了集合记录，回读一份最新的（item_count=0、cover 已清）
+            if let Ok(collections) = get_collections().lock() {
+                if let Some(fresh) = collections
+                    .iter()
+                    .find(|candidate| candidate.id == collection.id)
+                {
+                    collection = fresh.clone();
+                }
+            }
+            sw_info!(
+                "[media_scan] 集合目录已清空，重扫结果按 0 条收口: id={} path={}",
+                collection.id,
+                collection.folder_path
+            );
+            Ok(collection)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 pub fn scan_media_folders(folder_path: String) -> Result<Vec<MediaCollection>, String> {
     let root = Path::new(&folder_path);
     sw_debug!("[media_scan] scan_media_folders called: {:?}", root);
@@ -5140,6 +5216,93 @@ mod tests {
             .count();
         assert_eq!(mine, 1, "同一目录只能有一个集合");
 
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 「目录被清空后重新扫描」必须成功收口为 item_count=0，而不是报错。
+    ///
+    /// 这是节点 `rescan_media_folder` action 依赖的语义：用户在 NAS/服务器上直接
+    /// 把集合里的文件全删了，再点「重新扫描」——此时 upsert 会提前
+    /// `return Err("No media found")`，裸的 rescan_media_folder 会把它当失败透出。
+    /// 但空目录正是**预期结果**，所以 allow_empty 版本要走清空收口：
+    /// 集合记录保留、条目清空、聚合值（体积/条数）写实为 0、封面清掉。
+    #[test]
+    fn rescan_allow_empty_zeroes_emptied_collection() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("rescan_allow_empty");
+        std::fs::create_dir_all(&root).unwrap();
+        write_test_image(&root.join("a.bmp"));
+        write_test_image(&root.join("b.bmp"));
+
+        let collection = import_media_folder(root.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(collection.item_count, 2);
+        // 导入后聚合表有记录体积
+        let before = get_all_collection_aggregates()
+            .unwrap()
+            .into_iter()
+            .find(|a| a.collection_id == collection.id)
+            .expect("导入后应有聚合记录");
+        assert!(before.recorded_size > 0, "导入后记录体积必须大于 0");
+
+        // 用户把磁盘上的文件全删了，然后点「重新扫描」
+        for name in ["a.bmp", "b.bmp"] {
+            std::fs::remove_file(root.join(name)).unwrap();
+        }
+        let rescanned =
+            rescan_media_folder_allow_empty(root.to_string_lossy().into_owned()).unwrap();
+        // 集合仍是同一个（不能变成"不存在"或新建一个空集合）
+        assert_eq!(rescanned.id, collection.id, "空目录重扫必须复用同一个集合");
+        assert_eq!(rescanned.item_count, 0, "清空后条数必须归零");
+        assert!(rescanned.cover_path.is_none(), "封面已删，不能再留死引用");
+
+        // 条目表真的空了
+        assert!(
+            get_media_collection_items(collection.id.clone())
+                .unwrap()
+                .is_empty(),
+            "条目必须被清掉，否则点开集合会看到一片指向已删文件的幽灵条目"
+        );
+
+        // 聚合值写实为 0：节点的 list_media_collections 只读这张表，
+        // 不写实的话用户返回上一级仍看到旧体积/旧条数
+        let after = get_all_collection_aggregates()
+            .unwrap()
+            .into_iter()
+            .find(|a| a.collection_id == collection.id)
+            .expect("清空后聚合行仍应在（只是值归零）");
+        assert_eq!(after.recorded_size, 0, "记录体积必须归零");
+        assert_eq!(after.live_size, Some(0), "现存体积必须写实为 0");
+        assert_eq!(after.live_count, Some(0), "现存条数必须写实为 0");
+
+        // 集合本身还在库里（只是空了）
+        assert!(
+            get_all_media_collections()
+                .unwrap()
+                .iter()
+                .any(|c| c.id == collection.id),
+            "集合记录必须保留：目录还在，重扫只是发现它空了"
+        );
+
+        // 清场：单测共用同一个测试库，留下的集合会让后续「全库只有 N 个集合」
+        // 一类断言（如 delete_media_item_file_rescans_owning_collection_not_parent）
+        // 无辜失败。自己的记录自己收干净。
+        let _ = delete_media_collection(collection.id.clone());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// allow_empty 不能把「目录根本不存在」也当成功：那是路径写错/盘掉了。
+    #[test]
+    fn rescan_allow_empty_rejects_missing_directory() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("rescan_allow_empty_missing");
+        std::fs::create_dir_all(&root).unwrap();
+        let missing = root.join("not_here");
+        let err = rescan_media_folder_allow_empty(missing.to_string_lossy().into_owned())
+            .expect_err("不存在的目录必须报错，不能假成功");
+        assert!(
+            err.contains("目录不存在"),
+            "错误文案应说清目录不存在，实际: {err}"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -584,35 +584,100 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
 
   /// 重新扫描选中（或当前打开）集合的物理目录，增量同步磁盘变动。
   ///
-  /// 去重保证：Rust 端 upsert 以规范化 folder_path 匹配已有集合并复用其 ID，
+  /// 本地集合走 FFI（`media_api.rescanMediaFolder`），远程集合走节点
+  /// `rescan_media_folder` action —— 后者的目录在节点磁盘上，本机 FFI 看不见，
+  /// 早先这里把远程集合整个过滤掉，于是远程模式下点「重新扫描」只会得到一句
+  /// 「请先选中要重新扫描的集合」。用户视角：在 NAS 上增删文件后库永远不同步。
+  ///
+  /// 去重保证：两端 upsert 都以规范化 folder_path 匹配已有集合并复用其 ID，
   /// 条目按"整集合删旧插新"重写，因此不会产生重复资源；收藏键为集合 ID，不受影响。
-  /// 仅处理本地集合；扫描完成后只为新增文件入队缩略图生成。
   Future<void> rescanCollection() async {
     if (isScanning.value) return;
-    if (Platform.isIOS || Platform.isAndroid) {
-      showSnack('提示', '移动端不支持本地重新扫描');
-      return;
-    }
-    // 目标集合：优先使用浏览模式长按选中的本地集合；未选中时退回当前打开的集合
-    final List<media_api.MediaCollection> targets;
-    if (selectedIds.isNotEmpty) {
-      targets = collections
-          .where((c) => selectedIds.contains(c.id) && !isRemoteCollection(c.id))
-          .toList(growable: false);
-    } else {
-      final openId = currentCollectionId.value;
-      final openCol = (openId != null && !isRemoteCollection(openId)) ? currentCollection : null;
-      targets = openCol == null ? const [] : [openCol];
+    // 目标集合：优先使用浏览模式长按选中的集合；未选中时退回当前打开的集合。
+    // ★ 不按 isRemoteCollection 过滤：远程集合同样要能重扫（见方法注释）。
+    // ★ selectedIds 在**详情模式**里装的是媒体条目 ID，与集合 ID 不会命中；
+    //   此时必须退回当前打开的集合，否则用户明明开着集合、点了「重新扫描当前
+    //   集合目录」，得到的却是「请先选中要重新扫描的集合」——那句莫名其妙的话。
+    var targets = selectedIds.isEmpty
+        ? const <media_api.MediaCollection>[]
+        : mergedCollections
+              .where((c) => selectedIds.contains(c.id))
+              .toList(growable: false);
+    if (targets.isEmpty) {
+      final openCol = currentCollection;
+      targets = openCol == null
+          ? const <media_api.MediaCollection>[]
+          : <media_api.MediaCollection>[openCol];
     }
     if (targets.isEmpty) {
       showSnack('提示', '请先选中要重新扫描的集合');
       return;
     }
+    // 按来源分流：远程集合发给节点扫它的磁盘目录，本地集合仍走本机 FFI
+    final remoteTargets = targets
+        .where((c) => isRemoteCollection(c.id))
+        .toList(growable: false);
+    var localTargets = targets
+        .where((c) => !isRemoteCollection(c.id))
+        .toList(growable: false);
+    if (localTargets.isNotEmpty && (Platform.isIOS || Platform.isAndroid)) {
+      // 移动端没有本机媒体库，本地集合无从扫起；远程集合仍然可以（那是节点在扫）
+      if (remoteTargets.isEmpty) {
+        showSnack('提示', '移动端不支持本地重新扫描');
+        return;
+      }
+      _logger.info('[Rescan] 移动端跳过 ${localTargets.length} 个本地集合');
+      localTargets = const [];
+    }
+
     isScanning.value = true;
     scanStatusText.value = '重新扫描中...';
     int totalNew = 0;
     int fail = 0;
-    for (final col in targets) {
+    // 远程侧只按条数净变化汇报：把整集合条目两次跨网络拉回来只为算"新增"，
+    // 大集合是几十 MB 的往返，而用户在意的就是"盘上的变化同步进来了没有"。
+    int remoteDelta = 0;
+    int remoteScanned = 0;
+    List<String> remoteErrors = const [];
+
+    // ── 远程集合：节点侧 rescan ────────────────────────────────────────────
+    for (final col in remoteTargets) {
+      final nodeId = getRemoteNodeId(col.id);
+      if (nodeId == null || col.folderPath.isEmpty) {
+        fail++;
+        _logger.error('[Rescan] 远程集合映射/路径缺失，跳过: ${col.id}');
+        remoteErrors = [...remoteErrors, '${col.title}（节点映射不存在）'];
+        continue;
+      }
+      try {
+        scanStatusText.value = '重新扫描: ${col.title}（节点）';
+        final before = col.itemCount.toInt();
+        final payload = await nodeSettingsService.rescanNodeMediaFolder(
+          nodeId: nodeId,
+          folderPath: col.folderPath,
+          generateThumbnails: true,
+          coverWidth: mediaPrefs.effectiveRemoteCoverWidth,
+        );
+        // 节点的 item_count 是重扫后的真实条数；拿不到就退回集合列表刷新的值
+        final after = payload == null
+            ? before
+            : _parseIntLike(payload['item_count']);
+        remoteDelta += after - before;
+        remoteScanned++;
+      } catch (e) {
+        fail++;
+        final message = '$e';
+        remoteErrors = [...remoteErrors, _briefNodeError(col.title, message)];
+        _logger.error('[Rescan] 节点集合 ${col.title} 重新扫描失败: $e');
+      }
+    }
+    if (remoteTargets.isNotEmpty) {
+      // 条数/体积/封面都由节点重算过，列表必须重新取一次才对得上
+      await refreshRemoteLibrary();
+    }
+
+    // ── 本地集合：本机 FFI ──────────────────────────────────────────────────
+    for (final col in localTargets) {
       try {
         final oldPaths = (await media_api.getMediaCollectionItems(collectionId: col.id))
             .map((item) => item.filePath)
@@ -634,23 +699,76 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
         _logger.error('[Rescan] 集合 ${col.title} 重新扫描失败: $e');
       }
     }
-    await loadCollections();
-    if (currentCollectionId.value != null &&
-        !isRemoteCollection(currentCollectionId.value!) &&
-        targets.any((c) => c.id == currentCollectionId.value)) {
+    if (localTargets.isNotEmpty) {
+      await loadCollections();
+    }
+    // 当前打开的就是被扫的集合（本地或远程）：条目列表就地刷一次
+    final openId = currentCollectionId.value;
+    if (openId != null && targets.any((c) => c.id == openId)) {
       await loadCurrentCollectionItems();
     }
     scanStatusText.value = '';
     isScanning.value = false;
+
     final scanned = targets.length - fail;
-    _logger.info('[Rescan] 完成: 扫描 $scanned 个集合，新增 $totalNew 项，失败 $fail 个');
+    _logger.info(
+      '[Rescan] 完成: 扫描 $scanned 个集合（节点 $remoteScanned），'
+      '本地新增 $totalNew 项，节点净变化 $remoteDelta，失败 $fail 个',
+    );
+    _reportRescanOutcome(
+      localScanned: localTargets.length,
+      remoteScanned: remoteScanned,
+      totalNew: totalNew,
+      remoteDelta: remoteDelta,
+      fail: fail,
+      scanned: scanned,
+      remoteErrors: remoteErrors,
+    );
+  }
+
+  /// 重扫结果如实汇报：节点回错就弹节点原文，别吞成"无新增"。
+  void _reportRescanOutcome({
+    required int localScanned,
+    required int remoteScanned,
+    required int totalNew,
+    required int remoteDelta,
+    required int fail,
+    required int scanned,
+    required List<String> remoteErrors,
+  }) {
     if (fail > 0 && scanned == 0) {
-      showSnack('错误', '重新扫描失败，请检查目录是否存在');
-    } else if (totalNew > 0) {
-      showSnack('成功', '重新扫描完成，新增 $totalNew 个资源');
-    } else {
-      showSnack('提示', '重新扫描完成，未发现新文件');
+      // 全失败：把节点原文（或常见原因）摆给用户，别只丢一句"请检查目录"
+      final detail = remoteErrors.isEmpty ? '' : '：${remoteErrors.first}';
+      showSnack('错误', '重新扫描失败，请检查目录是否存在$detail');
+      return;
     }
+    final parts = <String>[];
+    if (remoteScanned > 0) {
+      // 节点侧只报净变化：新增/移除如实说，净变化为 0 就是"无新增"
+      if (remoteDelta > 0) {
+        parts.add('节点集合新增 $remoteDelta 项');
+      } else if (remoteDelta < 0) {
+        parts.add('节点集合移除了 ${-remoteDelta} 项');
+      } else {
+        parts.add('节点集合无新增');
+      }
+    }
+    if (localScanned > 0) {
+      parts.add(totalNew > 0 ? '本地新增 $totalNew 个资源' : '本地无新增');
+    }
+    if (fail > 0) {
+      final detail = remoteErrors.isEmpty ? '' : '（${remoteErrors.first}）';
+      showSnack('部分完成', '${parts.join('，')}，$fail 个集合失败$detail');
+      return;
+    }
+    final changed = remoteDelta != 0 || totalNew > 0;
+    showSnack(changed ? '成功' : '提示', '重新扫描完成，${parts.join('，')}');
+  }
+
+  /// 节点错误原文太长的截断成一句话（完整原文仍进日志）
+  String _briefNodeError(String title, String message) {
+    final brief = message.length > 140 ? '${message.substring(0, 140)}…' : message;
+    return '$title: $brief';
   }
 
   // ── 封面重新扫描 ─────────────────────────────────────────────────────────
