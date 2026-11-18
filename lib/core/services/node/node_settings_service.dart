@@ -1815,19 +1815,35 @@ class NodeSettingsService extends GetxService {
     final uploadUrl = buildNodeUploadUrl(nodeId);
     final file = File(localPath);
     final filename = localPath.split('/').last;
-    final formData = FormData.fromMap(<String, dynamic>{
-      'file': await MultipartFile.fromFile(localPath, filename: filename),
-      'filename': filename,
-      if (collectionId != null && collectionId.isNotEmpty) 'collection_id': collectionId,
-    });
     final txBytes = await file.length();
     try {
-      final resp = await _dio.post<Map<String, dynamic>>(
+      // 单文件上传走**原始字节流**，不用 multipart：
+      // 节点侧是一条流式落盘通道（`handle_file_upload`，理由同归档上传——
+      // 通用 body 读取是 vec![0u8; content_length]，大媒体文件会打爆内存）。
+      // multipart 会让节点还得在内存里攒边界帧，对几百 MB 的文件毫无意义。
+      // 目标目录与文件名都放 query：客户端已明确知道落哪个集合、叫什么名字。
+      final destDir = await _resolveNodeUploadDir(nodeId, uploadUrl, collectionId);
+      if (destDir == null || destDir.isEmpty) {
+        throw Exception('无法确定节点落盘目录（集合不存在或文件夹路径缺失）');
+      }
+      final query = <String, String>{
+        'dest': destDir,
+        'filename': filename,
+        if (collectionId != null && collectionId.isNotEmpty) 'collection_id': collectionId,
+      };
+      final uri = Uri.parse(
         uploadUrl,
-        data: formData,
+      ).replace(queryParameters: query);
+      final resp = await _dio.post<Map<String, dynamic>>(
+        uri.toString(),
+        data: file.openRead(),
         options: Options(
-          sendTimeout: const Duration(seconds: 120),
-          receiveTimeout: const Duration(seconds: 30),
+          headers: <String, Object>{
+            Headers.contentLengthHeader: txBytes,
+            Headers.contentTypeHeader: 'application/octet-stream',
+          },
+          sendTimeout: const Duration(seconds: 300),
+          receiveTimeout: const Duration(seconds: 120),
         ),
       );
       final body = resp.data ?? <String, dynamic>{};
@@ -1841,6 +1857,39 @@ class NodeSettingsService extends GetxService {
       _logger.error('媒体上传失败: $nodeId | $filename', error: business ?? e);
       throw business ?? e;
     }
+  }
+
+  /// 反推单文件上传该落到节点上的哪个目录。
+  ///
+  /// [collectionId] 是节点原始集合 ID：优先用它反查该集合的 `folder_path`
+  /// （集合目录就是它的媒体文件所在目录）。集合没有 folder_path 时返回 null，
+  /// 让调用方明确失败——绝不猜一个目录把文件丢进去。
+  Future<String?> _resolveNodeUploadDir(
+    String nodeId,
+    String uploadUrl,
+    String? collectionId,
+  ) async {
+    if (collectionId == null || collectionId.isEmpty) {
+      return null;
+    }
+    try {
+      final raw = await _callNode(
+        node: getNodeById(nodeId)!,
+        action: 'list_media_collections',
+        params: const <String, dynamic>{},
+      );
+      final data = raw['data'];
+      if (data is! List) return null;
+      for (final item in data) {
+        if (item is! Map) continue;
+        if ((item['id'] ?? '').toString() != collectionId) continue;
+        final folderPath = (item['folder_path'] ?? '').toString().trim();
+        return folderPath.isEmpty ? null : folderPath;
+      }
+    } catch (e) {
+      _logger.error('反查节点集合目录失败: $collectionId -> $e');
+    }
+    return null;
   }
 
   /// 删除节点上某个集合的本地物理文件（不删除数据库记录）。

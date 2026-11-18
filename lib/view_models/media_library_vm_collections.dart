@@ -1533,6 +1533,9 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     isScanning.value = true;
     int success = 0;
     int fail = 0;
+    // 记下最后一个失败原因：旧代码只 +=1，用户看到「N 失败」却不知道
+    // 为什么失败（节点没实现、目录不可写、集合不存在……全被吞成同一个数）。
+    String? lastFailure;
 
     for (int i = 0; i < result.files.length; i++) {
       final path = result.files[i].path;
@@ -1545,18 +1548,49 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
           collectionId: rawId,
         );
         success++;
-      } catch (_) {
+      } catch (e) {
         fail++;
+        lastFailure = e.toString();
+        _logger.error('[上传] 文件上传失败: $path => $e');
+      }
+    }
+
+    // 文件已落到节点磁盘，但库还不知道：必须让节点重扫这个集合目录，
+    // 否则用户看到「已上传成功」却进集合看不到新文件（条目/体积都没动）。
+    // 重扫本身失败不影响「文件确实传上去了」这个事实，但要如实说出来。
+    String? rescanWarning;
+    if (success > 0) {
+      scanStatusText.value = '节点入库中...';
+      try {
+        final collection = mergedCollections.firstWhereOrNull((c) => c.id == collectionId);
+        final folderPath = collection?.folderPath ?? '';
+        if (folderPath.isNotEmpty) {
+          await nodeSettingsService.rescanNodeMediaFolder(
+            nodeId: nodeId,
+            folderPath: folderPath,
+            generateThumbnails: true,
+            coverWidth: mediaPrefs.effectiveRemoteCoverWidth,
+          );
+        }
+      } catch (e) {
+        rescanWarning = '文件已上传，但节点入库失败：$e';
+        _logger.error('[上传] 上传后重扫失败: $collectionId => $e');
       }
     }
 
     isScanning.value = false;
     scanStatusText.value = '';
 
-    if (fail == 0) {
+    if (fail == 0 && rescanWarning == null) {
       showSnack('成功', '已上传 $success 个文件');
+    } else if (rescanWarning != null) {
+      showSnack('警告', rescanWarning);
     } else {
-      showSnack('部分完成', '上传 $success 成功，$fail 失败');
+      // 把节点原文带出来，别只报一个计数
+      final brief = lastFailure == null
+          ? ''
+          : (lastFailure.length > 120 ? '：${lastFailure.substring(0, 120)}…' : '：$lastFailure');
+      showSnack('部分完成', '上传 $success 成功，$fail 失败$brief');
     }
 
     // 刷新远程集合列表 + 当前集合内容

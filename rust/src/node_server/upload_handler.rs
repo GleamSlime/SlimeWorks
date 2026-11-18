@@ -63,6 +63,190 @@ fn temp_zip_path() -> std::path::PathBuf {
     std::env::temp_dir().join(format!("sw_upload_{pid}_{millis}_{counter}.zip"))
 }
 
+/// 处理单文件上传：`POST /node/upload?dest=<目录>&filename=<文件名>`
+///
+/// 与归档上传同一套思路——**流式落盘，绝不整块进内存**。
+/// 单文件走的是 `Content-Length` 声明的原始字节（不是 multipart）：
+/// 客户端已经知道文件名与目标目录，再套一层 multipart 只会让节点多解析一遍
+/// 边界、还要在内存里攒边界帧，对几百 MB 的媒体文件毫无意义。
+///
+/// 落盘策略：
+/// - `dest` 必须是已存在的绝对目录（与归档上传同一把尺子，节点不替客户端造目录）；
+/// - 同名文件**唯一化**（`照片.png` → `照片 (2).png`），绝不覆盖用户已有文件——
+///   媒体库里同名不同内容是常态，覆盖等于静默丢数据；
+/// - 边收边写临时文件，收完再原子改名，避免半截文件被当成品。
+pub fn handle_file_upload(
+    mut stream: TcpStream,
+    reader: &mut BufReader<TcpStream>,
+    query: &str,
+    content_length: usize,
+) {
+    let _ = reader
+        .get_ref()
+        .set_read_timeout(Some(Duration::from_secs(30 * 60)));
+    let outcome = receive_file(reader, query, content_length);
+    let body = if outcome.status == 200 {
+        serde_json::json!({
+            "success": true,
+            "data": {
+                "path": outcome.dest,
+                "bytes": outcome.bytes.to_string(),
+                "message": outcome.message,
+            }
+        })
+        .to_string()
+    } else {
+        serde_json::json!({"success": false, "error": outcome.message}).to_string()
+    };
+    let head = format!(
+        "HTTP/1.1 {}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+        status_line(outcome.status),
+        body.len()
+    );
+    let _ = stream.write_all(head.as_bytes());
+    let _ = stream.write_all(body.as_bytes());
+    let _ = stream.flush();
+}
+
+/// 取文件名最后一段，挡掉路径穿越（`../evil`、绝对路径、含分隔符）。
+fn safe_file_name(raw: &str) -> Result<String, String> {
+    let name = raw.trim();
+    if name.is_empty() {
+        return Err("缺少 filename 参数".to_string());
+    }
+    if name.contains('\0') {
+        return Err("filename 含非法字符".to_string());
+    }
+    // 只取最后一段：客户端传 `a/b/c.png` 或 `..\..\x.png` 都归到纯文件名
+    let leaf = name
+        .rsplit(|c| c == '/' || c == '\\')
+        .next()
+        .unwrap_or("")
+        .trim();
+    if leaf.is_empty() || leaf == "." || leaf == ".." {
+        return Err(format!("非法的 filename: {raw}"));
+    }
+    Ok(leaf.to_string())
+}
+
+/// 在 `dir` 下为 `name` 找一个不冲突的文件名：`a.png` → `a (2).png` → `a (3).png` …
+fn unique_target_path(dir: &Path, name: &str) -> std::path::PathBuf {
+    let candidate = dir.join(name);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let path = Path::new(name);
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| name.to_string());
+    let ext = path.extension().map(|e| e.to_string_lossy().to_string());
+    for seq in 2..10_000u32 {
+        let file_name = match &ext {
+            Some(ext) => format!("{stem} ({seq}).{ext}"),
+            None => format!("{stem} ({seq})"),
+        };
+        let c = dir.join(file_name);
+        if !c.exists() {
+            return c;
+        }
+    }
+    // 一万个同名还没找到空位：退化成唯一后缀，宁可名字怪也不能覆盖
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    dir.join(format!("{stem}_{millis}"))
+}
+
+fn receive_file<R: Read>(
+    reader: &mut R,
+    query: &str,
+    content_length: usize,
+) -> UploadOutcome {
+    let dest = query_param(query, "dest").unwrap_or_default();
+    if let Err(e) = validate_dest(&dest) {
+        return fail(400, e, dest);
+    }
+    let name = match safe_file_name(&query_param(query, "filename").unwrap_or_default()) {
+        Ok(n) => n,
+        Err(e) => return fail(400, e, dest),
+    };
+    if content_length == 0 {
+        return fail(400, "空的上传请求体".to_string(), dest);
+    }
+    if content_length as u64 > MAX_UPLOAD_BYTES {
+        return fail(
+            413,
+            format!(
+                "文件过大: {} 字节，上限 {} 字节",
+                content_length, MAX_UPLOAD_BYTES
+            ),
+            dest,
+        );
+    }
+
+    let dir = Path::new(&dest);
+    let target = unique_target_path(dir, &name);
+    let final_path = target.to_string_lossy().to_string();
+
+    // 先写同目录下的 .part 临时文件：同目录 → 改名是原子的；
+    // 写跨盘临时目录再 rename 会退化成拷贝，还可能跨设备失败。
+    let mut part_name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| name.clone());
+    part_name.push_str(".part");
+    let part_path = dir.join(part_name);
+
+    let mut file = match std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&part_path)
+    {
+        Ok(f) => f,
+        Err(e) => return fail(500, format!("创建文件失败: {e}"), dest),
+    };
+
+    let copied = match take_body(reader, content_length as u64, &mut file) {
+        Ok(n) => n,
+        Err(e) => {
+            drop(file);
+            let _ = std::fs::remove_file(&part_path);
+            return fail(500, format!("接收文件失败: {e}"), dest);
+        }
+    };
+    // 落盘要真正刷到磁盘再改名：不 flush 就 rename，进程崩在中间会留下空文件
+    if let Err(e) = file.sync_all() {
+        drop(file);
+        let _ = std::fs::remove_file(&part_path);
+        return fail(500, format!("写入文件失败: {e}"), dest);
+    }
+    drop(file);
+
+    if copied != content_length as u64 {
+        let _ = std::fs::remove_file(&part_path);
+        return fail(
+            400,
+            format!("文件不完整: 期望 {content_length} 字节，实收 {copied} 字节"),
+            dest,
+        );
+    }
+
+    if let Err(e) = std::fs::rename(&part_path, &target) {
+        let _ = std::fs::remove_file(&part_path);
+        return fail(500, format!("保存文件失败: {e}"), dest);
+    }
+
+    UploadOutcome {
+        status: 200,
+        message: format!("已保存 {}", final_path),
+        dest: final_path,
+        bytes: copied,
+    }
+}
+
 /// 处理归档上传：流式落盘 → 解压 → 删除临时 zip。
 ///
 /// 任何一步失败都立即回 HTTP 错误，并尽量清理临时文件，避免节点 temp 目录堆积。

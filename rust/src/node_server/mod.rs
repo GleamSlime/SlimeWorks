@@ -380,6 +380,17 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
         return;
     }
 
+    // ── 单文件上传分流 ───────────────────────────────────────────────────────
+    // 与归档上传同样的理由：媒体文件动辄几百 MB，绝不能走下面那条
+    // `vec![0u8; content_length]` 的通用读取（那会直接把节点内存打爆，
+    // 而且 MAX_BODY_BYTES 只有 8MB，正常媒体文件根本过不去）。
+    // 这里流式落盘到目标集合目录，落完再由调用方触发重扫入库。
+    if method == "POST" && route == "/node/upload" {
+        let query = path.splitn(2, '?').nth(1).unwrap_or("").to_string();
+        upload_handler::handle_file_upload(stream, &mut reader, &query, content_length);
+        return;
+    }
+
     // 读 body
     //
     // 体积上限必须卡在**分配之前**：`vec![0u8; content_length]` 是按客户端
