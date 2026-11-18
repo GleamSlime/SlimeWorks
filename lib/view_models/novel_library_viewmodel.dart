@@ -111,6 +111,15 @@ class NovelLibraryViewModel extends BaseViewModel {
   final remoteNovelRawId = <String, String>{}.obs;
   final remoteFolderDisplayNames = <String, String>{}.obs;
 
+  /// 节点侧小说文件夹原始行：合成 id → 节点返回的 JSON（含 name/order/parent_id）。
+  ///
+  /// 用途：新建的空文件夹没有任何书，靠 remoteNovels 反推永远看不见它；
+  /// 这份列表让「文件夹」成为独立于书籍的一等卡片来源。
+  /// 旧节点没有 `list_novel_folders` 时保持空表，退回归结到书籍反推。
+  /// ★ 用 RxMap 而非普通 Map：它是 filteredItems 的输入之一，
+  ///   普通 Map 变化不会通知 Obx，「新建空文件夹后列表不刷新」就是这么来的。
+  final remoteFolderRows = <String, Map<String, dynamic>>{}.obs;
+
   // 排序相关
   final sortField = 'addedAt'.obs; // 'addedAt', 'title', 'fileSize'
   final sortAscending = false.obs; // true=升序, false=降序
@@ -198,6 +207,28 @@ class NovelLibraryViewModel extends BaseViewModel {
   String _buildRemoteFolderSyntheticId(String nodeId, String folderId) {
     return 'remote-folder:$nodeId:$folderId';
   }
+
+  /// 合成 ID 前缀（与 _buildRemoteFolderSyntheticId 对称）
+  static const _remoteFolderPrefix = 'remote-folder:';
+
+  /// 解析 `remote-folder:<nodeId>:<rawFolderId>`。
+  ///
+  /// ★ 只按「前两段是 nodeId、其余整体是 rawId」切：nodeId 是节点 UUID（不含冒号），
+  /// 而 rawFolderId 本身可能含冒号（如 'folder:x'），用 split(':') 取第 3 段会截断。
+  /// 解析失败（缺目录段）返回 null，调用方按无效远程目录处理。
+  (String nodeId, String rawFolderId)? parseRemoteFolderSyntheticId(String id) {
+    if (!id.startsWith(_remoteFolderPrefix)) return null;
+    final suffix = id.substring(_remoteFolderPrefix.length);
+    final sep = suffix.indexOf(':');
+    if (sep <= 0 || sep >= suffix.length - 1) return null;
+    return (suffix.substring(0, sep), suffix.substring(sep + 1));
+  }
+
+  /// 远程文件夹的节点 ID（本地文件夹返回 null）
+  String? getRemoteFolderNodeId(String folderId) => parseRemoteFolderSyntheticId(folderId)?.$1;
+
+  /// 远程文件夹在节点侧的原始 ID（本地文件夹返回 null）
+  String? getRemoteFolderRawId(String folderId) => parseRemoteFolderSyntheticId(folderId)?.$2;
 
   List<NovelMetadata> _getBooksInFolder(String folderId) {
     _ensureFolderBooksCache();
@@ -371,9 +402,35 @@ class NovelLibraryViewModel extends BaseViewModel {
     }
   }
 
+  /// 远程文件夹卡片 = 「节点侧文件夹列表」∪「本地从书籍反推的目录」。
+  ///
+  /// ★ 只按书籍反推是不够的：新建的空文件夹在节点上有记录但没有任何书，
+  /// 反推法永远看不见它（用户建完夹回列表一看「没建成功」）。所以节点给了
+  /// `list_novel_folders` 就按它建卡，书籍反推仅作为旧节点兜底。
+  /// 两者按合成 id 合并，节点列表优先（它有真实 order / created_at）。
   List<NovelFolder> _buildRemoteVirtualFolders() {
     final map = <String, NovelFolder>{};
 
+    // 1. 节点侧文件夹列表（新节点）：保留顺序与父级，供子夹展开使用
+    //    ★ 本函数由 filteredItems 在 Obx build 里调，**只许读 Rx、不许写**；
+    //      节点名以 refreshRemoteNovels 合并出的 remoteFolderDisplayNames 为准。
+    for (final entry in remoteFolderRows.entries) {
+      final syntheticId = entry.key;
+      final row = entry.value;
+      final parsed = parseRemoteFolderSyntheticId(syntheticId);
+      map[syntheticId] = NovelFolder(
+        id: syntheticId,
+        name: remoteFolderDisplayNames[syntheticId] ??
+            ((row['name'] ?? '').toString().isEmpty ? '远程目录' : row['name'].toString()),
+        createdAt: (row['created_at'] as num?)?.toInt() ?? 0,
+        order: (row['order'] as num?)?.toInt() ?? 999999,
+        parentId: parsed == null
+            ? null
+            : _buildRemoteParentSyntheticId(parsed.$1, row['parent_id']?.toString()),
+      );
+    }
+
+    // 2. 从书籍 payload 反推（旧节点没有 list_novel_folders 时的唯一来源）
     for (final novel in remoteNovels) {
       final nodeId = getRemoteNodeId(novel.id);
       final folderId = novel.folderId;
@@ -381,6 +438,7 @@ class NovelLibraryViewModel extends BaseViewModel {
         continue;
       }
       final syntheticId = _buildRemoteFolderSyntheticId(nodeId, folderId);
+      if (map.containsKey(syntheticId)) continue;
       final name = remoteFolderDisplayNames[syntheticId] ?? '远程目录';
       map[syntheticId] = NovelFolder(
         id: syntheticId,
@@ -395,6 +453,12 @@ class NovelLibraryViewModel extends BaseViewModel {
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     _logger.log('[RemoteDebug] 构建远程目录卡片数: ${list.length}', name: '书库');
     return list;
+  }
+
+  /// 把节点侧 raw parent_id 转成合成 id；空值/自身返回 null（当顶级夹处理）
+  String? _buildRemoteParentSyntheticId(String nodeId, String? rawParentId) {
+    if (rawParentId == null || rawParentId.isEmpty) return null;
+    return _buildRemoteFolderSyntheticId(nodeId, rawParentId);
   }
 
   /// 当前展示的 items（文件夹 + 书籍）
@@ -431,7 +495,14 @@ class NovelLibraryViewModel extends BaseViewModel {
         folderBooks = folderBooks.where((n) => n.isFavorite).toList();
       }
       _sortBooks(folderBooks);
-      return folderBooks.map<LibraryItem>((n) => LibraryBookItem(n)).toList();
+      // 远程夹里的子夹也要能进（节点支持父子层级；本地夹走 folders 表那一套）
+      final childFolders = filterTags.isEmpty
+          ? _buildRemoteVirtualFolders().where((f) => f.parentId == fid).toList()
+          : <NovelFolder>[];
+      return [
+        ...childFolders.map<LibraryItem>((f) => LibraryFolderItem(f)),
+        ...folderBooks.map<LibraryItem>((n) => LibraryBookItem(n)),
+      ];
     }
 
     final sortedFolders = folders.toList()
@@ -440,7 +511,10 @@ class NovelLibraryViewModel extends BaseViewModel {
         if (cmp != 0) return cmp;
         return b.createdAt.compareTo(a.createdAt);
       });
-    final remoteFolders = _buildRemoteVirtualFolders();
+    // 根层只列顶级夹：父夹在别处的子夹不该同时出现在根目录
+    final remoteFolders = _buildRemoteVirtualFolders()
+        .where((f) => f.parentId == null)
+        .toList();
 
     var rootBooks = novels.where((n) => n.folderId == null).toList();
     rootBooks.addAll(remoteNovels.where((n) => n.folderId == null || n.folderId!.isEmpty));
@@ -651,13 +725,30 @@ class NovelLibraryViewModel extends BaseViewModel {
     final remoteFolderNames = <String, String>{};
     final remoteChapterCounts = <String, int>{};
     final previousRemoteIds = remoteNovelNodeId.keys.toSet();
+    // 节点侧文件夹列表（新节点）：同轮内与书籍一起收集，取不到时保持空表
+    final nextFolderRows = <String, Map<String, dynamic>>{};
 
     // 审计 #3：节点间由串行 for-await 改并发（失败熔断由 _callNode 内部负责）
     final nodes = nodeSettingsService.dataRemoteNodes;
     await Future.wait(nodes.map((node) async {
       try {
-        final payloads = await nodeSettingsService.fetchNodeNovels(node);
-        _logger.log('[RemoteDebug] 节点 ${node.name} 返回书籍数: ${payloads.length}', name: '书库');
+        // 文件夹列表与书籍列表互不依赖：并行取，文件夹失败不影响书架显示
+        //（旧节点没有该 action 会报「不支持的动作」，此时退回归结到书籍反推）
+        final results = await Future.wait<Object>([
+          nodeSettingsService.fetchNodeNovels(node),
+          fetchRemoteFolderRowsOrEmpty(node),
+        ]);
+        final payloads = results[0] as List<Map<String, dynamic>>;
+        final folderRows = results[1] as List<Map<String, dynamic>>;
+        _logger.log(
+          '[RemoteDebug] 节点 ${node.name} 返回书籍数: ${payloads.length}, 文件夹数: ${folderRows.length}',
+          name: '书库',
+        );
+        for (final row in folderRows) {
+          final rawFolderId = (row['id'] ?? '').toString();
+          if (rawFolderId.isEmpty) continue;
+          nextFolderRows[_buildRemoteFolderSyntheticId(node.id, rawFolderId)] = row;
+        }
         for (final payload in payloads) {
           final remoteId = (payload['id'] ?? '').toString();
           if (remoteId.isEmpty) continue;
@@ -693,11 +784,21 @@ class NovelLibraryViewModel extends BaseViewModel {
       return;
     }
 
+    // 节点文件夹列表里的名字是权威值（书籍 payload 的 folder_name 可能过期，
+    // 重命名后仍带旧名）；先以书籍反推名为底，再用文件夹列表覆盖。
+    nextFolderRows.forEach((syntheticId, row) {
+      final name = row['name']?.toString() ?? '';
+      if (name.isNotEmpty) {
+        remoteFolderNames[syntheticId] = name;
+      }
+    });
+
     remoteNovels.assignAll(allRemote);
     remoteNovelNodeId.assignAll(nodeIdMap);
     remoteNovelNodeName.assignAll(nodeNameMap);
     remoteNovelRawId.assignAll(rawIdMap);
     remoteFolderDisplayNames.assignAll(remoteFolderNames);
+    remoteFolderRows.assignAll(nextFolderRows);
     _logger.log(
       '[RemoteDebug] 汇总: remoteNovels=${allRemote.length}, remoteFolders=${remoteFolderNames.length}',
       name: '书库',
@@ -707,6 +808,21 @@ class NovelLibraryViewModel extends BaseViewModel {
       (novelId, _) => previousRemoteIds.contains(novelId) && !nodeIdMap.containsKey(novelId),
     );
     chapterCountMap.addAll(remoteChapterCounts);
+  }
+
+  /// 取节点侧小说文件夹列表；旧节点没有该 action（或本次失败）时回空表。
+  ///
+  /// ★ 必须吞掉失败：文件夹列表只是「空夹也要显示成卡片」的增强来源，
+  /// 它挂了不该连带整个书架刷新失败（旧节点的书架本来就没有空夹概念）。
+  /// `@protected` 之外还标 `@visibleForTesting`——测试用桩子类覆写它注入文件夹。
+  @visibleForTesting
+  Future<List<Map<String, dynamic>>> fetchRemoteFolderRowsOrEmpty(NodeEndpoint node) async {
+    try {
+      return await nodeSettingsService.fetchNodeNovelFolders(node);
+    } catch (e) {
+      _logger.log('拉取远程节点文件夹失败（旧节点或离线）: ${node.name} -> $e', name: '书库');
+      return <Map<String, dynamic>>[];
+    }
   }
 
   int? _parseChapterCount(Map<String, dynamic> payload) {

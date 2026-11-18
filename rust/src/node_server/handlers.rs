@@ -75,6 +75,92 @@ fn ledger_void(raw: Result<(), String>, what: &str) -> Result<Value, String> {
     Ok(json!({ "ok": true }))
 }
 
+// ── mutation 动作的结果收口 ──────────────────────────────────────────────────
+// media_collection / novel_reader 的一批写接口统一返回 `Result<bool, String>`：
+// 只有真正改到了数据才回 true，false 表示「目标不存在、什么都没动」。
+// 早期 handler 用 `.map_err(...)?` 把 bool 直接丢掉，再无条件回 `{"ok": true}`，
+// 于是对不存在的 id 做重命名/删除/移动时节点回 success:true，而数据毫无变化
+// —— 正是用户报的「提示操作成功、实际数据没变」。下面几个小函数统一把 false
+// 翻成带具体 id 的中文错误，避免再逐个漏掉。
+
+/// 必填 ID 参数校验：空 id 直接报错，别让错误文案里留一个空 id
+fn require_id(id: &str, subject: &str) -> Result<(), String> {
+    if id.trim().is_empty() {
+        return Err(format!("{} ID 不能为空", subject));
+    }
+    Ok(())
+}
+
+/// 把 `Result<bool, String>` 的 false 翻成「<对象>不存在 <id>」错误。
+/// `what` 沿用各分支原有的错误前缀（如「删除文件夹失败」），`missing` 由调用方
+/// 拼好带 id 的赘述（如「文件夹不存在 media_folder_x」）。
+fn require_changed(raw: Result<bool, String>, what: &str, missing: String) -> Result<(), String> {
+    let changed = raw.map_err(|e| format!("{}失败: {}", what, e))?;
+    if !changed {
+        return Err(format!("{}失败: {}", what, missing));
+    }
+    Ok(())
+}
+
+/// 媒体文件夹存在性校验（media_collection 没有单个查询接口，只能查全表：
+/// 文件夹是小表，全量取一次比让调用方拼出幽灵父子关系便宜）。
+fn ensure_media_folder_exists(folder_id: &str, what: &str) -> Result<(), String> {
+    require_id(folder_id, "文件夹")?;
+    let exists = media_api::get_all_media_folders()
+        .map_err(|e| format!("{}失败: {}", what, e))?
+        .iter()
+        .any(|folder| folder.id == folder_id);
+    if !exists {
+        return Err(format!("{}失败: 文件夹不存在 {}", what, folder_id));
+    }
+    Ok(())
+}
+
+/// 小说文件夹存在性校验。
+///
+/// novel_reader 没有单查文件夹的接口，只能 `get_all_folders()` 全量取一次比对
+/// ——文件夹是小表，全量取一次比让调用方拼出「parent_id 指向幽灵夹」或者把
+/// 不存在的夹当「删成功」便宜。给这几类底层接口用：
+/// `delete_folder_with_novels` 回 `Result<()>`（不存在也是静默 no-op）、
+/// `create_child_folder` 不校验父夹、`move_novel_to_folder` 不校验目标夹。
+fn ensure_novel_folder_exists(folder_id: &str, what: &str) -> Result<(), String> {
+    require_id(folder_id, "小说文件夹")?;
+    let exists = novel_api::get_all_folders()
+        .map_err(|e| format!("{}失败: {}", what, e))?
+        .iter()
+        .any(|folder| folder.id == folder_id);
+    if !exists {
+        return Err(format!("{}失败: 小说文件夹不存在 {}", what, folder_id));
+    }
+    Ok(())
+}
+
+/// 小说文件夹 → 节点 JSON。
+/// 字段风格与 `list_media_folders` 对齐：created_at 用 Unix 秒（本地 FFI 也是秒）。
+fn novel_folder_json(folder: novel_reader::types::NovelFolder) -> Value {
+    json!({
+        "id": folder.id,
+        "name": folder.name,
+        "created_at": folder.created_at.timestamp(),
+        "order": folder.order,
+        "parent_id": folder.parent_id,
+    })
+}
+
+/// 媒体集合存在性校验：给「底层不报缺失」的接口用
+/// （`delete_collection_local_files` 对不存在的集合只会回 deleted:0）。
+fn ensure_media_collection_exists(collection_id: &str, what: &str) -> Result<(), String> {
+    require_id(collection_id, "集合")?;
+    let exists = media_api::get_all_media_collections()
+        .map_err(|e| format!("{}失败: {}", what, e))?
+        .iter()
+        .any(|collection| collection.id == collection_id);
+    if !exists {
+        return Err(format!("{}失败: 集合不存在 {}", what, collection_id));
+    }
+    Ok(())
+}
+
 /// 分发动作到对应的处理函数
 pub async fn dispatch_action(
     action: &str,
@@ -309,6 +395,10 @@ pub async fn dispatch_action(
         "create_child_media_folder" => {
             let name = params["name"].as_str().unwrap_or("").to_string();
             let parent_id = params["parent_id"].as_str().unwrap_or("").to_string();
+            // 父夹必须先存在：create_child_media_folder 底层不校验 parent_id，
+            // 对幽灵 id 会「成功」建出一个 parent_id 指向不存在文件夹的孤儿夹
+            // （客户端拿到 success 后刷新列表看不到它，表现为新建子文件夹没生效）。
+            ensure_media_folder_exists(&parent_id, "创建子文件夹")?;
             let folder = media_api::create_child_media_folder(name, parent_id)
                 .map_err(|e| format!("创建子文件夹失败: {}", e))?;
             Ok(json!({
@@ -323,15 +413,22 @@ pub async fn dispatch_action(
         "rename_media_folder" => {
             let folder_id = params["folder_id"].as_str().unwrap_or("").to_string();
             let name = params["name"].as_str().unwrap_or("").to_string();
-            media_api::rename_media_folder(folder_id, name)
-                .map_err(|e| format!("重命名文件夹失败: {}", e))?;
+            // false = 没有这个文件夹：必须报错，不能回 ok:true 骗客户端
+            require_changed(
+                media_api::rename_media_folder(folder_id.clone(), name),
+                "重命名文件夹",
+                format!("文件夹不存在 {}", folder_id),
+            )?;
             Ok(json!({"ok": true}))
         }
 
         "delete_media_folder" => {
             let folder_id = params["folder_id"].as_str().unwrap_or("").to_string();
-            media_api::delete_media_folder(folder_id)
-                .map_err(|e| format!("删除文件夹失败: {}", e))?;
+            require_changed(
+                media_api::delete_media_folder(folder_id.clone()),
+                "删除文件夹",
+                format!("文件夹不存在 {}", folder_id),
+            )?;
             Ok(json!({"ok": true}))
         }
 
@@ -378,6 +475,12 @@ pub async fn dispatch_action(
                 .as_str()
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty());
+            // 归档目标夹必须在导入**之前**校验：扁平导入路径下，import_media_folder
+            // 已经落库了才去移动集合，父夹不存在时就会留下一条「已导入」却没挂到
+            // 目标夹的集合，用户重试还会撞「该文件夹已导入」。先失败，不留副作用。
+            if let Some(pid) = &base_folder_id {
+                ensure_media_folder_exists(pid, "导入媒体文件夹")?;
+            }
             // 按原始目录导入：扫描子目录集合，并按目录层级创建文件夹归档
             if preserve_structure {
                 let collections = media_api::scan_media_folders(folder_path.clone())
@@ -407,15 +510,27 @@ pub async fn dispatch_action(
             // 客户端指定显示名：磁盘目录被唯一化过，库内标题仍用原名（同名共存）
             if let Some(name) = &display_name {
                 if &collection.title != name {
-                    media_api::rename_media_collection(collection.id.clone(), name.clone())
-                        .map_err(|e| format!("重命名媒体集合失败: {}", e))?;
+                    // 集合刚由 import_media_folder 建出来，false 只可能是并发被删，
+                    // 这一步失败就不该继续往下假装导入成功
+                    require_changed(
+                        media_api::rename_media_collection(collection.id.clone(), name.clone()),
+                        "重命名媒体集合",
+                        format!("集合不存在 {}", collection.id),
+                    )?;
                     collection.title = name.clone();
                 }
             }
             let mut folder_id = collection.folder_id.clone();
             if let Some(pid) = &base_folder_id {
-                media_api::move_media_collection_to_folder(collection.id.clone(), Some(pid.clone()))
-                    .map_err(|e| format!("移动集合失败: {}", e))?;
+                // 父夹存在性已在导入前校验过（见上），这里只需确认集合本身还在
+                require_changed(
+                    media_api::move_media_collection_to_folder(
+                        collection.id.clone(),
+                        Some(pid.clone()),
+                    ),
+                    "移动集合",
+                    format!("集合不存在 {}", collection.id),
+                )?;
                 folder_id = Some(pid.clone());
             }
             if generate_thumbnails {
@@ -436,34 +551,97 @@ pub async fn dispatch_action(
         "rename_media_collection" => {
             let collection_id = params["collection_id"].as_str().unwrap_or("").to_string();
             let title = params["title"].as_str().unwrap_or("").to_string();
-            media_api::rename_media_collection(collection_id, title)
-                .map_err(|e| format!("重命名媒体集合失败: {}", e))?;
+            require_changed(
+                media_api::rename_media_collection(collection_id.clone(), title),
+                "重命名媒体集合",
+                format!("集合不存在 {}", collection_id),
+            )?;
             Ok(json!({"ok": true}))
         }
 
         "delete_media_collection" => {
             let collection_id = params["collection_id"].as_str().unwrap_or("").to_string();
-            media_api::delete_media_collection(collection_id)
-                .map_err(|e| format!("删除媒体集合失败: {}", e))?;
+            require_changed(
+                media_api::delete_media_collection(collection_id.clone()),
+                "删除媒体集合",
+                format!("集合不存在 {}", collection_id),
+            )?;
             Ok(json!({"ok": true}))
         }
 
         "move_media_collection_to_folder" => {
             let collection_id = params["collection_id"].as_str().unwrap_or("").to_string();
-            let folder_id = params["folder_id"].as_str().map(|s| s.to_string());
-            media_api::move_media_collection_to_folder(collection_id, folder_id)
-                .map_err(|e| format!("移动媒体集合失败: {}", e))?;
+            // 空串等同于「移到根目录」，不能当成一个要校验的 folder_id
+            let folder_id = params["folder_id"]
+                .as_str()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+            // 目标文件夹不存在时底层照样回 true（它只改 collection.folder_id），
+            // 集合会挂到一个看不见的父 id 上：必须自己先校验。
+            if let Some(pid) = &folder_id {
+                ensure_media_folder_exists(pid, "移动媒体集合")?;
+            }
+            require_changed(
+                media_api::move_media_collection_to_folder(collection_id.clone(), folder_id),
+                "移动媒体集合",
+                format!("集合不存在 {}", collection_id),
+            )?;
             Ok(json!({"ok": true}))
         }
 
         "delete_collection_local_files" => {
             let collection_id = params["collection_id"].as_str().unwrap_or("").to_string();
+            // delete_collection_local_files 对不存在的集合回 Ok(0)，与「集合在但文件早被
+            // 外部清空」同形（都是 deleted:0）。先查存在性，否则客户端会收到一个
+            // 看起来正常的 deleted:0 而不知道目标根本没删。
+            ensure_media_collection_exists(&collection_id, "删除集合本地文件")?;
             // 复用本机 FFI 那套实现：除了删物理文件，它还会收掉目录树内的 .SlimeWorks
             // 缓存目录、清空后的集合目录，并把聚合表里这条集合的现存体积/条数改写掉。
             // 少了最后一步，客户端删完文件返回上一级看到的仍是删除前的旧体积。
             let deleted = media_api::delete_collection_local_files(collection_id)
                 .map_err(|e| format!("删除集合本地文件失败: {}", e))?;
             Ok(json!({"deleted": deleted}))
+        }
+
+        // 删除单个条目的物理文件，但**保留集合记录**（客户端 media_library_vm_actions
+        // 的 deleteRemoteItemLocalFile 走这里）。
+        "delete_media_item_local_file" => {
+            let item_id = params["item_id"].as_str().unwrap_or("").to_string();
+            let collection_id = params["collection_id"].as_str().unwrap_or("").to_string();
+            require_id(&item_id, "媒体条目")?;
+            require_id(&collection_id, "集合")?;
+            // 先判集合存在：集合被删/传错时 get_media_collection_items 只会回空列表，
+            // 若不先判就会把「集合不存在」错报成「条目不存在」，排查时指向错误的对象。
+            ensure_media_collection_exists(&collection_id, "删除条目本地文件")?;
+            // 通过集合条目表定位 file_path：客户端只给条目 id，节点不能凭 id 猜路径。
+            // 条目已不在库里（重复点删除、或文件早被别的流程清掉）必须报错，
+            // 不能静默成功——否则用户看到「已删除」但列表里那一条还在。
+            let items = media_api::get_media_collection_items(collection_id.clone())
+                .map_err(|e| format!("删除条目本地文件失败: {}", e))?;
+            let Some(item) = items.iter().find(|item| item.id == item_id) else {
+                return Err(format!(
+                    "删除条目本地文件失败: 媒体条目不存在 {}",
+                    item_id
+                ));
+            };
+            let file_path = item.file_path.clone();
+            // 与 FFI 版 deleteMediaItemFile 用同一个底层函数：它负责删物理文件、
+            // 清缩略图任务记录、重扫「拥有该条目的集合根目录」（不是文件父目录，
+            // 否则会在中间层新建幽灵集合），最后把该路径从所有集合里摘掉。
+            //
+            // 与 delete_collection_local_files 的差别（后者刻意保留条目记录、
+            // 只重算聚合表的 live 值）：这里是单条目删除，客户端删完会立刻
+            // 重新拉列表，条目随重扫/purge 自然消失才符合「删掉了」的预期；
+            // 若强留条目记录，点开集合仍能看到一个指向已删路径的幽灵项。
+            // 返回的 bool 是「物理文件是否真被删掉」：文件早已不在时它回 false，
+            // 但条目记录同样已被清理，所以这里不当错误处理，只如实回给客户端。
+            let removed_file = media_api::delete_media_item_file(file_path.clone())
+                .map_err(|e| format!("删除条目本地文件失败: {}", e))?;
+            Ok(json!({
+                "ok": true,
+                "deleted_file": removed_file,
+                "file_path": file_path,
+            }))
         }
 
         // ── 目录扫描 ─────────────────────────────────────────────────────────
@@ -626,9 +804,123 @@ pub async fn dispatch_action(
             Ok(json!(content))
         }
 
+        // ── 小说文件夹（本机 FFI 的小说库文件夹能力在无头模式下的镜像）──────
+        // 客户端在远程模式下把文件夹操作分流到这里；合成 id
+        // `remote-folder:<nodeId>:<rawFolderId>` 的 rawId 就是这里的 folder_id。
+        "list_novel_folders" => {
+            let folders =
+                novel_api::get_all_folders().map_err(|e| format!("获取小说文件夹失败: {}", e))?;
+            // get_all_folders 已按 order 排好；逐项转 JSON 保持与 list_media_folders 同形
+            Ok(json!(folders
+                .into_iter()
+                .map(novel_folder_json)
+                .collect::<Vec<_>>()))
+        }
+
+        "create_novel_folder" => {
+            let name = params["name"].as_str().unwrap_or("").trim().to_string();
+            if name.is_empty() {
+                return Err("创建小说文件夹失败: 文件夹名称不能为空".to_string());
+            }
+            // 底层 create_folder 是顶级文件夹（parent_id = None）；子夹走 create_child_folder。
+            // 客户端若传了 parent_id 就按父子语义建，避免建出来却挂不到期望位置。
+            let parent_id = params["parent_id"]
+                .as_str()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+            let folder = match parent_id {
+                Some(parent_id) => {
+                    // ★ create_child_folder 不校验父夹：不先判会建出 parent_id
+                    //   指向幽灵夹的孤儿文件夹（UI 上永远看不见、也进不去）
+                    ensure_novel_folder_exists(&parent_id, "创建子小说文件夹")?;
+                    novel_api::create_child_folder(name, parent_id)
+                        .map_err(|e| format!("创建小说文件夹失败: {}", e))?
+                }
+                None => novel_api::create_folder(name)
+                    .map_err(|e| format!("创建小说文件夹失败: {}", e))?,
+            };
+            Ok(novel_folder_json(folder))
+        }
+
+        "rename_novel_folder" => {
+            let folder_id = params["folder_id"].as_str().unwrap_or("").to_string();
+            let name = params["name"].as_str().unwrap_or("").trim().to_string();
+            require_id(&folder_id, "小说文件夹")?;
+            if name.is_empty() {
+                return Err("重命名小说文件夹失败: 文件夹名称不能为空".to_string());
+            }
+            // rename_folder 回 Result<bool>：false = 夹不存在（底层已有正确语义）
+            require_changed(
+                novel_api::rename_folder(folder_id.clone(), name),
+                "重命名小说文件夹",
+                format!("小说文件夹不存在 {}", folder_id),
+            )?;
+            Ok(json!({"ok": true}))
+        }
+
+        "delete_novel_folder" => {
+            let folder_id = params["folder_id"].as_str().unwrap_or("").to_string();
+            require_id(&folder_id, "小说文件夹")?;
+            // 底层语义：删除文件夹本身，其中的书籍移回根目录（不是删书）
+            require_changed(
+                novel_api::delete_folder(folder_id.clone()),
+                "删除小说文件夹",
+                format!("小说文件夹不存在 {}", folder_id),
+            )?;
+            Ok(json!({"ok": true}))
+        }
+
+        "delete_novel_folder_with_novels" => {
+            let folder_id = params["folder_id"].as_str().unwrap_or("").to_string();
+            // 底层 delete_folder_with_novels 回 Result<()>：夹不存在时是静默 no-op
+            //（"没删掉任何东西"和"删成功了"同形），必须自己先判存在性
+            ensure_novel_folder_exists(&folder_id, "删除小说文件夹及书籍")?;
+            novel_api::delete_folder_with_novels(folder_id)
+                .map_err(|e| format!("删除小说文件夹及书籍失败: {}", e))?;
+            Ok(json!({"ok": true}))
+        }
+
+        "reorder_novel_folders" => {
+            // 客户端拖拽排序：folder_ids 是按新顺序排好的完整 id 列表。
+            // batch_update_folder_orders 回 Result<()>，对不存在的 id 静默跳过，
+            // 所以这里先校验——列表里出现不存在的夹说明客户端状态过期，
+            // 静默跳过会让「排序保存成功」与「顺序其实没变」同形。
+            let folder_ids: Vec<String> = params["folder_ids"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if folder_ids.is_empty() {
+                return Err("排序小说文件夹失败: folder_ids 不能为空".to_string());
+            }
+            // 一次性建存在性集合，避免逐个全表扫
+            let existing: std::collections::HashSet<String> = novel_api::get_all_folders()
+                .map_err(|e| format!("排序小说文件夹失败: {}", e))?
+                .into_iter()
+                .map(|f| f.id)
+                .collect();
+            for folder_id in &folder_ids {
+                if !existing.contains(folder_id) {
+                    return Err(format!("排序小说文件夹失败: 小说文件夹不存在 {}", folder_id));
+                }
+            }
+            novel_api::batch_update_folder_orders(folder_ids)
+                .map_err(|e| format!("排序小说文件夹失败: {}", e))?;
+            Ok(json!({"ok": true}))
+        }
+
         "delete_novel" => {
             let novel_id = params["novel_id"].as_str().unwrap_or("").to_string();
-            novel_api::remove_novel(novel_id).map_err(|e| format!("删除小说失败: {}", e))?;
+            // remove_novel 对不存在的 id 回 Ok(false)：那是「没这本书」，
+            // 不是「删成功了」，必须翻成错误否则书架一直报删除成功。
+            require_changed(
+                novel_api::remove_novel(novel_id.clone()),
+                "删除小说",
+                format!("小说不存在 {}", novel_id),
+            )?;
             Ok(json!({"ok": true}))
         }
 
@@ -642,16 +934,22 @@ pub async fn dispatch_action(
                         .collect()
                 })
                 .unwrap_or_default();
-            novel_api::update_novel_tags(novel_id, tags)
-                .map_err(|e| format!("更新小说标签失败: {}", e))?;
+            require_changed(
+                novel_api::update_novel_tags(novel_id.clone(), tags),
+                "更新小说标签",
+                format!("小说不存在 {}", novel_id),
+            )?;
             Ok(json!({"ok": true}))
         }
 
         "set_novel_favorite" => {
             let novel_id = params["novel_id"].as_str().unwrap_or("").to_string();
             let is_favorite = params["is_favorite"].as_bool().unwrap_or(false);
-            novel_api::set_novel_favorite(novel_id, is_favorite)
-                .map_err(|e| format!("设置收藏状态失败: {}", e))?;
+            require_changed(
+                novel_api::set_novel_favorite(novel_id.clone(), is_favorite),
+                "设置收藏状态",
+                format!("小说不存在 {}", novel_id),
+            )?;
             Ok(json!({"ok": true}))
         }
 
@@ -670,21 +968,49 @@ pub async fn dispatch_action(
                     .unwrap_or_default()
             });
 
-            // 如果有 is_favorite 字段则先更新收藏状态
-            if let Some(is_favorite) = params.get("is_favorite").and_then(|v| v.as_bool()) {
-                let _ = novel_api::set_novel_favorite(novel_id.clone(), is_favorite);
+            // 先查存在性：update_novel_info 本身返回 Result<()>，对不存在的 id
+            // 是静默 no-op，不先判就会把「书不存在」当成功回给客户端。
+            let novel_exists = novel_api::get_all_novels()
+                .map_err(|e| format!("更新小说信息失败: {}", e))?
+                .iter()
+                .any(|novel| novel.id == novel_id);
+            if !novel_exists {
+                return Err(format!("更新小说信息失败: 小说不存在 {}", novel_id));
             }
 
-            novel_api::update_novel_info(novel_id, title, author, notes, tags)
+            // 如果有 is_favorite 字段则先更新收藏状态
+            if let Some(is_favorite) = params.get("is_favorite").and_then(|v| v.as_bool()) {
+                // 不再 `let _ =` 吞错：写失败要让调用方知道这次更新没全成
+                require_changed(
+                    novel_api::set_novel_favorite(novel_id.clone(), is_favorite),
+                    "设置收藏状态",
+                    format!("小说不存在 {}", novel_id),
+                )?;
+            }
+
+            novel_api::update_novel_info(novel_id.clone(), title, author, notes, tags)
                 .map_err(|e| format!("更新小说信息失败: {}", e))?;
             Ok(json!({"ok": true}))
         }
 
         "move_novel_to_folder" => {
             let novel_id = params["novel_id"].as_str().unwrap_or("").to_string();
-            let folder_id = params["folder_id"].as_str().map(|s| s.to_string());
-            novel_api::move_novel_to_folder(novel_id, folder_id)
-                .map_err(|e| format!("移动小说到文件夹失败: {}", e))?;
+            // 空串等同于「移到未分组的根」，不当作一个要校验的 folder_id
+            let folder_id = params["folder_id"]
+                .as_str()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+            // 目标夹不存在时 move_novel_to_folder 只把 folder_id 写进书里就回 true：
+            // 书会挂到一个再也不会有卡片的幽灵夹上（正文还在，但用户在 UI 里"丢了"书）。
+            // 所以移入非根目录前先判目标夹存在。
+            if let Some(target) = folder_id.as_deref() {
+                ensure_novel_folder_exists(target, "移动小说到文件夹")?;
+            }
+            require_changed(
+                novel_api::move_novel_to_folder(novel_id.clone(), folder_id),
+                "移动小说到文件夹",
+                format!("小说不存在 {}", novel_id),
+            )?;
             Ok(json!({"ok": true}))
         }
 
@@ -831,8 +1157,13 @@ pub async fn dispatch_action(
 
         "delete_smart_folder" => {
             let target_id = params["id"].as_str().unwrap_or("").to_string();
-            media_api::delete_smart_folder(target_id)
-                .map_err(|e| format!("删除智能文件夹失败: {}", e))?;
+            // 与 A 组同一类缺陷：delete_smart_folder 回 Result<bool>，
+            // false = 没有这个智能文件夹，以前被 map_err 丢掉后照样回 ok:true。
+            require_changed(
+                media_api::delete_smart_folder(target_id.clone()),
+                "删除智能文件夹",
+                format!("智能文件夹不存在 {}", target_id),
+            )?;
             Ok(json!({"ok": true}))
         }
 
@@ -1480,8 +1811,11 @@ fn import_collections_with_structure(
             }
         }
         if let Some(pid) = parent_id {
-            media_api::move_media_collection_to_folder(collection.id.clone(), Some(pid))
-                .map_err(|e| format!("移动集合失败: {}", e))?;
+            require_changed(
+                media_api::move_media_collection_to_folder(collection.id.clone(), Some(pid)),
+                "移动集合",
+                format!("集合不存在 {}", collection.id),
+            )?;
         }
         imported.push(collection);
     }
@@ -1491,8 +1825,13 @@ fn import_collections_with_structure(
 /// 在指定父文件夹下无条件新建文件夹（同名允许共存）；返回文件夹 ID。
 fn create_folder(name: &str, parent_id: &Option<String>) -> Result<String, String> {
     let folder = match parent_id {
-        Some(pid) => media_api::create_child_media_folder(name.to_string(), pid.clone())
-            .map_err(|e| format!("创建文件夹失败: {}", e))?,
+        Some(pid) => {
+            // 导入树挂在 base_folder_id 之下：那个夹必须真存在，
+            // 否则整棵新树会挂到一个看不见的父 id 上（列表刷新后消失）
+            ensure_media_folder_exists(pid, "创建文件夹")?;
+            media_api::create_child_media_folder(name.to_string(), pid.clone())
+                .map_err(|e| format!("创建文件夹失败: {}", e))?
+        }
         None => media_api::create_media_folder(name.to_string())
             .map_err(|e| format!("创建文件夹失败: {}", e))?,
     };

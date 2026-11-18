@@ -173,6 +173,31 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
     if (name.isEmpty) return;
     try {
       final parentId = currentFolderId.value;
+      // 远程目录卡片是节点侧文件夹的镜像：在远程夹里再建夹必须发到节点，
+      // 否则合成 id 灌进本机 FFI 只会静默失败（或建出一个本地孤儿夹）。
+      // 同理，全局远程模式下的根目录也是节点库的根——建在本机等于建了个看不见的夹。
+      final activeNode = nodeSettingsService.activeNode;
+      if (parentId != null && isRemoteFolderId(parentId)) {
+        final nodeId = getRemoteFolderNodeId(parentId);
+        final rawParentId = getRemoteFolderRawId(parentId);
+        if (nodeId == null || rawParentId == null) {
+          throw StateError('远程节点映射不存在');
+        }
+        await nodeSettingsService.createNodeNovelFolder(
+          nodeId: nodeId,
+          name: name,
+          parentId: rawParentId,
+        );
+        await refreshRemoteNovels();
+        showSnack('成功', '已创建文件夹 "$name"');
+        return;
+      }
+      if (parentId == null && activeNode != null) {
+        await nodeSettingsService.createNodeNovelFolder(nodeId: activeNode.id, name: name);
+        await refreshRemoteNovels();
+        showSnack('成功', '已创建文件夹 "$name"');
+        return;
+      }
       if (parentId != null) {
         createChildFolder(name: name, parentId: parentId);
       } else {
@@ -189,6 +214,20 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   Future<void> renameFolder(String folderId, String name) async {
     if (name.isEmpty) return;
     try {
+      if (isRemoteFolderId(folderId)) {
+        final nodeId = getRemoteFolderNodeId(folderId);
+        final rawId = getRemoteFolderRawId(folderId);
+        if (nodeId == null || rawId == null) {
+          throw StateError('远程节点映射不存在');
+        }
+        await nodeSettingsService.renameNodeNovelFolder(
+          nodeId: nodeId,
+          folderId: rawId,
+          name: name,
+        );
+        await refreshRemoteNovels();
+        return;
+      }
       rust_api.renameFolder(folderId: folderId, name: name);
       await loadFolders();
     } catch (e) {
@@ -199,6 +238,19 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   /// 删除文件夹（书籍移至根目录）
   Future<void> deleteFolder(String folderId) async {
     try {
+      // ★ 远程目录必须发到节点：合成 id 灌进本机 FFI 只会报错或什么都没删，
+      //   而旧实现照旧走「已删除文件夹」成功路径 —— 用户看到的假成功就是这么来的
+      if (isRemoteFolderId(folderId)) {
+        final nodeId = getRemoteFolderNodeId(folderId);
+        final rawId = getRemoteFolderRawId(folderId);
+        if (nodeId == null || rawId == null) {
+          throw StateError('远程节点映射不存在');
+        }
+        await nodeSettingsService.deleteNodeNovelFolder(nodeId: nodeId, folderId: rawId);
+        await _afterRemoteFolderRemoved(folderId);
+        showSnack('成功', '已删除远程文件夹');
+        return;
+      }
       rust_api.deleteFolder(folderId: folderId);
       await loadData();
       showSnack('成功', '已删除文件夹');
@@ -210,6 +262,20 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   /// 删除文件夹及其中的所有书籍
   Future<void> deleteFolderWithNovels(String folderId) async {
     try {
+      if (isRemoteFolderId(folderId)) {
+        final nodeId = getRemoteFolderNodeId(folderId);
+        final rawId = getRemoteFolderRawId(folderId);
+        if (nodeId == null || rawId == null) {
+          throw StateError('远程节点映射不存在');
+        }
+        await nodeSettingsService.deleteNodeNovelFolderWithNovels(
+          nodeId: nodeId,
+          folderId: rawId,
+        );
+        await _afterRemoteFolderRemoved(folderId);
+        showSnack('成功', '已删除远程文件夹及其中所有书籍');
+        return;
+      }
       rust_api.deleteFolderWithNovels(folderId: folderId);
       await loadData();
       showSnack('成功', '已删除文件夹及其中所有书籍');
@@ -218,10 +284,27 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
     }
   }
 
+  /// 远程文件夹删除后的收尾：刷新远程书架；若正停在该夹里则退回根目录
+  ///（否则会留在「指向已消失文件夹」的空页面，用户会以为书全丢了）。
+  Future<void> _afterRemoteFolderRemoved(String folderId) async {
+    await refreshRemoteNovels();
+    if (currentFolderId.value == folderId) {
+      exitFolder();
+    }
+  }
+
   /// 获取当前文件夹的子文件夹列表
+  ///
+  /// 远程夹的子夹不在本机 folders 表里（那是节点侧层级），从远程卡片里筛；
+  /// 两者都按 order 排。父夹是远程时**只**返回远程子夹——本地夹不可能挂在远程夹下。
   List<NovelFolder> getChildFolders(String parentId) {
-    return folders.where((f) => f.parentId == parentId).toList()
-      ..sort((a, b) => a.order.compareTo(b.order));
+    final List<NovelFolder> source;
+    if (isRemoteFolderId(parentId)) {
+      source = _buildRemoteVirtualFolders().where((f) => f.parentId == parentId).toList();
+    } else {
+      source = folders.where((f) => f.parentId == parentId).toList();
+    }
+    return source..sort((a, b) => a.order.compareTo(b.order));
   }
 
   // ─────────────────────────────────────────
