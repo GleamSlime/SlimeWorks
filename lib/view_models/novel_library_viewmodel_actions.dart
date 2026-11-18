@@ -7,22 +7,59 @@ extension NovelLibraryActions on NovelLibraryViewModel {
   // ─────────────────────────────────────────
 
   /// 删除所有已选项目（书籍直接删除，文件夹只删除文件夹本身，书籍移至根目录）
+  ///
+  /// ★ 远程夹必须发到节点：合成 id 灌进本机 FFI 要么报错要么什么都没删，而旧实现
+  /// 无论成败最后都统一提示「已删除 N 个项目」—— 批量删远程夹时用户看到的假成功。
+  /// 现在按远程/本机分流，并逐项收集失败原因，有失败就明确告诉用户失败了几项。
   Future<void> deleteSelected() async {
     final ids = selectedIds.toList();
     final folderIds = ids.where((id) => folders.any((f) => f.id == id)).toList();
+    final remoteFolderIds = ids.where((id) => isRemoteFolderId(id)).toList();
     final novelIds = ids.where((id) => novels.any((n) => n.id == id) || isRemoteNovel(id)).toList();
 
-    for (final fid in folderIds) {
-      rust_api.deleteFolder(folderId: fid);
+    // 逐项收集失败：单项失败不该让整批中断，但也不能把失败算成成功
+    final failures = <String>[];
+    for (final fid in [...folderIds, ...remoteFolderIds]) {
+      try {
+        if (isRemoteFolderId(fid)) {
+          final nodeId = getRemoteFolderNodeId(fid);
+          final rawId = getRemoteFolderRawId(fid);
+          if (nodeId == null || rawId == null) {
+            throw StateError('远程节点映射不存在');
+          }
+          await nodeSettingsService.deleteNodeNovelFolder(nodeId: nodeId, folderId: rawId);
+        } else {
+          rust_api.deleteFolder(folderId: fid);
+        }
+      } catch (e) {
+        failures.add('$fid: $e');
+      }
     }
     for (final nid in novelIds) {
-      await deleteNovel(nid);
+      try {
+        await deleteNovel(nid);
+        // deleteNovel 自身吞异常并只弹提示，这里回查数据是否真的没了
+        // （远程书删除失败时列表不会被刷新掉）
+        if (isRemoteNovel(nid) && remoteNovels.any((n) => n.id == nid)) {
+          failures.add('$nid: 删除未生效');
+        }
+      } catch (e) {
+        failures.add('$nid: $e');
+      }
     }
 
     exitSelection();
     await loadData();
     await refreshRemoteNovels();
-    showSnack('成功', '已删除 ${ids.length} 个项目');
+    if (failures.isEmpty) {
+      showSnack('成功', '已删除 ${ids.length} 个项目');
+    } else {
+      // 让用户看见失败：不吞成「已删除 N 个项目」
+      showSnack(
+        '部分失败',
+        '成功 ${ids.length - failures.length} 项，失败 ${failures.length} 项：${failures.first}',
+      );
+    }
   }
 
   /// 批量收藏/取消收藏已选中的书籍
@@ -51,18 +88,48 @@ extension NovelLibraryActions on NovelLibraryViewModel {
   }
 
   /// 批量移动已选中书籍到指定文件夹（folderId 为 null 则移回根目录）
+  ///
+  /// 远程书（含选中远程夹作为目标）一律经节点：合成 id 灌进本机 FFI 是静默失败。
+  /// 走 `moveNovelToFolder`（它已按 isRemoteNovel 分流），目标夹是远程时先剥成 rawId。
   Future<void> moveSelectedToFolder(String? folderId) async {
-    final novelIds = selectedIds.where((id) => novels.any((n) => n.id == id)).toList();
+    final novelIds = selectedIds
+        .where((id) => novels.any((n) => n.id == id) || isRemoteNovel(id))
+        .toList();
     if (novelIds.isEmpty) return;
-    try {
-      for (final id in novelIds) {
-        rust_api.moveNovelToFolder(novelId: id, folderId: folderId);
+
+    // 目标夹：远程夹要先换算成节点侧 rawId（合成 id 传给节点是无效 id）
+    String? targetFolderId = folderId;
+    if (folderId != null && isRemoteFolderId(folderId)) {
+      final rawId = getRemoteFolderRawId(folderId);
+      if (rawId == null) {
+        showSnack('错误', '移动书籍失败: 无效的远程文件夹 ID');
+        return;
       }
-      exitSelection();
-      await loadNovels();
+      targetFolderId = rawId;
+    }
+
+    final failures = <String>[];
+    for (final id in novelIds) {
+      try {
+        // ★ 必须写 this.：本文件顶部无前缀 import 了 novel_api_seam，
+        //   它的顶层 moveNovelToFolder 会遮蔽 VM 上的同名 extension 方法。
+        await this.moveNovelToFolder(id, targetFolderId);
+        // moveNovelToFolder 内部吞异常只弹提示，这里回查数据确认这次移动真的生效
+        final remote = remoteNovels.firstWhereOrNull((n) => n.id == id);
+        if (remote != null && remote.folderId != targetFolderId) {
+          failures.add('$id: 移动未生效');
+        }
+      } catch (e) {
+        failures.add('$id: $e');
+      }
+    }
+    exitSelection();
+    await loadNovels();
+    await refreshRemoteNovels();
+    if (failures.isEmpty) {
       showSnack('成功', '已移动 ${novelIds.length} 本书籍');
-    } catch (e) {
-      showSnack('错误', '移动书籍失败: $e');
+    } else {
+      showSnack('部分失败', '成功 ${novelIds.length - failures.length} 本，失败 ${failures.length} 本');
     }
   }
 
@@ -89,8 +156,7 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       if (from == -1 || to == -1) return;
       final item = folderList.removeAt(from);
       folderList.insert(to, item);
-      rust_api.batchUpdateFolderOrders(folderIds: folderList.map((f) => f.id).toList());
-      await loadFolders();
+      await _persistFolderOrder(folderList.map((f) => f.id).toList());
     } else if (moved is LibraryBookItem && target is LibraryBookItem) {
       final bookList = items.whereType<LibraryBookItem>().map((b) => b.metadata).toList();
       final from = bookList.indexWhere((b) => b.id == moved.id);
@@ -168,8 +234,45 @@ extension NovelLibraryActions on NovelLibraryViewModel {
       final movedItem = folderList.removeAt(from);
       final insertAt = folderList.indexWhere((f) => f.id == targetId);
       folderList.insert(insertAt == -1 ? folderList.length : insertAt, movedItem);
-      rust_api.batchUpdateFolderOrders(folderIds: folderList.map((f) => f.id).toList());
+      await _persistFolderOrder(folderList.map((f) => f.id).toList());
       await loadFolders();
+    }
+  }
+
+  /// 持久化文件夹拖拽排序：远程夹必须发到节点，本机夹走 FFI。
+  ///
+  /// ★ 合成 id `remote-folder:<nodeId>:<rawId>` 灌进本机 FFI 是静默失败，
+  ///   而旧实现拖完照样 `loadFolders()` 重拉本机表 —— 顺序看着「没保存」。
+  ///   同一列表里混有本地夹与远程夹时，按各自的归属分别提交（顺序值互不相干）。
+  Future<void> _persistFolderOrder(List<String> orderedIds) async {
+    final localIds = <String>[];
+    // nodeId → 该节点上按新顺序排好的 rawId 列表
+    final remoteByNode = <String, List<String>>{};
+    for (final id in orderedIds) {
+      if (!isRemoteFolderId(id)) {
+        localIds.add(id);
+        continue;
+      }
+      final nodeId = getRemoteFolderNodeId(id);
+      final rawId = getRemoteFolderRawId(id);
+      if (nodeId == null || rawId == null) continue;
+      (remoteByNode[nodeId] ??= <String>[]).add(rawId);
+    }
+    if (localIds.isNotEmpty) {
+      rust_api.batchUpdateFolderOrders(folderIds: localIds);
+    }
+    for (final entry in remoteByNode.entries) {
+      try {
+        await nodeSettingsService.reorderNodeNovelFolders(
+          nodeId: entry.key,
+          folderIds: entry.value,
+        );
+      } catch (e) {
+        showSnack('错误', '保存远程文件夹排序失败: $e');
+      }
+    }
+    if (remoteByNode.isNotEmpty) {
+      await refreshRemoteNovels();
     }
   }
 

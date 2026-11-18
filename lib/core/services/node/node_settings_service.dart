@@ -1863,6 +1863,80 @@ class NodeSettingsService extends GetxService {
     );
   }
 
+  /// 列出节点上的小说文件夹（JSON 原样返回，字段见 `list_novel_folders`）。
+  Future<List<Map<String, dynamic>>> fetchNodeNovelFolders(NodeEndpoint node) async {
+    final response = await _callNode(
+      node: node,
+      action: 'list_novel_folders',
+      params: const <String, dynamic>{},
+    );
+    final data = response['data'];
+    if (data is! List) return <Map<String, dynamic>>[];
+    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  /// 在节点上新建小说文件夹；[parentId] 非空时建成该夹的子夹。
+  /// 返回节点回的文件夹 JSON（含 id）；节点侧对空名 / 父夹不存在一律报错。
+  Future<Map<String, dynamic>> createNodeNovelFolder({
+    required String nodeId,
+    required String name,
+    String? parentId,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    final response = await _callNode(
+      node: node,
+      action: 'create_novel_folder',
+      params: <String, dynamic>{
+        'name': name,
+        'parent_id': ?parentId,
+      },
+    );
+    final data = response['data'];
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  /// 重命名节点上的小说文件夹。
+  Future<void> renameNodeNovelFolder({
+    required String nodeId,
+    required String folderId,
+    required String name,
+  }) => callNodeAction(
+    nodeId: nodeId,
+    action: 'rename_novel_folder',
+    params: <String, dynamic>{'folder_id': folderId, 'name': name},
+  );
+
+  /// 删除节点上的小说文件夹（夹内书籍移回根目录，不删书）。
+  Future<void> deleteNodeNovelFolder({
+    required String nodeId,
+    required String folderId,
+  }) => callNodeAction(
+    nodeId: nodeId,
+    action: 'delete_novel_folder',
+    params: <String, dynamic>{'folder_id': folderId},
+  );
+
+  /// 删除节点上的小说文件夹 **及其中的所有书籍**。
+  Future<void> deleteNodeNovelFolderWithNovels({
+    required String nodeId,
+    required String folderId,
+  }) => callNodeAction(
+    nodeId: nodeId,
+    action: 'delete_novel_folder_with_novels',
+    params: <String, dynamic>{'folder_id': folderId},
+  );
+
+  /// 批量设置节点上小说文件夹的排序（[folderIds] 按新顺序排列，必须是 rawId）。
+  Future<void> reorderNodeNovelFolders({
+    required String nodeId,
+    required List<String> folderIds,
+  }) => callNodeAction(
+    nodeId: nodeId,
+    action: 'reorder_novel_folders',
+    params: <String, dynamic>{'folder_ids': folderIds},
+  );
+
   Future<void> updateNodeNovelInfo({
     required String nodeId,
     required String novelId,
