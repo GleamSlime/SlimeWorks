@@ -20,16 +20,34 @@ mixin PictureScreenDialogs
 
     final nodeService = viewModel.nodeSettingsService;
 
-    // 桌面端导入：与拖拽导入共用同一个弹窗与同一套落地流程
-    // （每个子目录一个集合 + 同名包裹文件夹，选项含义也完全一致）
+    // 桌面端导入：远程节点走节点目录弹窗（可直接导入节点根目录）；
+    // 本机导入与拖拽共用同一套选项弹窗与落地流程。
     if (!scanMode && !Platform.isAndroid && !Platform.isIOS) {
+      String? remoteNodeId;
       if (nodeService.isRemoteMode) {
-        // 远程模式下本机选择器不能落回本机库：必须有节点文件夹作为上传落点
-        final target = viewModel.effectiveFolderId;
-        if (target == null || !viewModel.isRemoteFolder(target)) {
-          viewModel.showSnack('提示', '请先进入节点上的文件夹再导入');
+        remoteNodeId = nodeService.activeNode?.id;
+        if (remoteNodeId == null) {
+          viewModel.showSnack('错误', '当前节点不可用，请在侧栏重新选择节点');
           return;
         }
+      } else if (activeRemoteFolderId != null &&
+          viewModel.isRemoteFolder(activeRemoteFolderId)) {
+        remoteNodeId = viewModel.getRemoteFolderNodeId(activeRemoteFolderId);
+        if (remoteNodeId == null) {
+          viewModel.showSnack('错误', '远程文件夹映射不存在');
+          return;
+        }
+      }
+      if (remoteNodeId != null) {
+        // 节点目录弹窗填/浏览的是节点上的路径，根目录也允许（rawFolderId 为空即节点根）
+        await _showNodeFolderDialog(
+          scanMode: false,
+          fixedNodeId: remoteNodeId,
+          targetRawFolderId: activeRemoteFolderId == null
+              ? null
+              : viewModel.getRemoteRawFolderId(activeRemoteFolderId),
+        );
+        return;
       }
       final options = await _showImportOptionsDialog();
       if (options == null) return;

@@ -998,7 +998,7 @@ extension CollectionsCrudExt on MediaLibraryViewModel {
     }
     // 远程模式下没有节点文件夹上下文时不能落回本机库：本机集合在远程模式不可见
     if (nodeSettingsService.isRemoteMode) {
-      showSnack('提示', '请先进入节点上的文件夹再导入');
+      showSnack('提示', '拖拽上传需要先进入节点上的文件夹；在节点根目录请点「导入文件夹」选择节点目录');
       return;
     }
 
