@@ -400,6 +400,9 @@ class LedgerService extends GetxService {
     );
     if (password.isNotEmpty) {
       await saveRulePassword(id, password);
+      // 这里的 `isLocal` 是对的，别照 setRulePassword 的改法去动它：
+      // 上面的 `_id` 已经把 password 一起发给节点了（upsert 自带口令参数），
+      // 再调一次 ledger_set_rule_password 只是重复写一遍。
       if (isLocal) rust_api.ledgerSetRulePassword(ruleId: id, password: password);
     }
     return id;
@@ -417,11 +420,18 @@ class LedgerService extends GetxService {
       );
 
   /// 改口令（规则编辑页走这里，upsert 不带口令时用）
+  ///
+  /// 必须走 `_run` 而不是直接调 FFI：旧实现只在 `isLocal` 时才同步给节点，
+  /// 远程模式下清口令会提示「已清除」而节点上的旧口令原封不动。
+  /// 口令本体仍存客户端 secure storage（`saveRulePassword`），
+  /// 这里同时同步一份给节点，收信调度才能在节点侧自己跑。
   Future<void> setRulePassword(int ruleId, String password) async {
     await saveRulePassword(ruleId, password);
-    if (isLocal && password.isNotEmpty) {
-      rust_api.ledgerSetRulePassword(ruleId: ruleId, password: password);
-    }
+    await _run(
+      'ledger_set_rule_password',
+      <String, dynamic>{'rule_id': ruleId, 'password': password},
+      () => rust_api.ledgerSetRulePassword(ruleId: ruleId, password: password),
+    );
   }
 
   Future<List<LedgerTemplate>> listTemplates() async =>

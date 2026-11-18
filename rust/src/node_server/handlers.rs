@@ -1755,6 +1755,37 @@ pub async fn dispatch_action(
             ledger_module::api::ledger_has_rule_password(i_field(&params, "rule_id")),
             "查询邮箱口令状态",
         ),
+        // 单独改/清口令。
+        //
+        // 「新建规则时顺手填口令」那条路是通的（upsert_rule 自带 password 参数），
+        // 但「规则编辑页里专门改口令」走的是客户端 setRulePassword，它此前只在
+        // `isLocal` 时调 FFI —— 远程模式下清口令会提示「已清除」，而节点上的
+        // 旧口令原封不动。补上这个 action 才能让那条链路真正落到节点。
+        "ledger_set_rule_password" => {
+            let rule_id = i_field(&params, "rule_id");
+            if rule_id <= 0 {
+                return Err("设置邮箱口令失败: 规则 ID 不能为空".to_string());
+            }
+            // 口令允许为空串 = 清除；但规则本身必须存在，否则是假成功
+            let exists = ledger_json(ledger_module::api::ledger_list_rules(), "获取邮箱规则")?
+                .as_array()
+                .map(|rules| {
+                    rules
+                        .iter()
+                        .any(|r| r.get("id").and_then(|v| v.as_i64()) == Some(rule_id))
+                })
+                .unwrap_or(false);
+            if !exists {
+                return Err(format!("设置邮箱口令失败: 邮箱规则不存在 {}", rule_id));
+            }
+            ledger_void(
+                ledger_module::api::ledger_set_rule_password(
+                    rule_id,
+                    s_field(&params, "password"),
+                ),
+                "设置邮箱口令",
+            )
+        }
         "ledger_templates" => ledger_json(ledger_module::api::ledger_templates(), "获取解析模板"),
         "ledger_parse_preview" => ledger_text(
             ledger_module::api::ledger_parse_preview(

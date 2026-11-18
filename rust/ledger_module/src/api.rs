@@ -293,6 +293,12 @@ pub fn ledger_set_rule_enabled(id: i64, enabled: bool) -> Result<(), String> {
 /// 密码只进内存与 Dart 侧安全存储，本函数不外泄任何回显
 pub fn ledger_set_rule_password(rule_id: i64, password: String) -> Result<(), String> {
     scheduler::set_secret(rule_id, &password);
+    // 清空口令（password 为空）时必须**删掉** secret_ref，而不是写一个非空
+    // 引用进去：`has_rule_password` 判的是「内存有口令 或 secret_ref 非空」，
+    // 写非空 ref 会让「已清除」变成假成功（实测过：清完仍回 has=true）。
+    if password.is_empty() {
+        return storage::clear_rule_secret_ref(rule_id).map_err(|e| e.to_string());
+    }
     storage::set_rule_secret_ref(rule_id, &format!("secure:ledger_rule_{}", rule_id))
         .map_err(|e| e.to_string())
 }

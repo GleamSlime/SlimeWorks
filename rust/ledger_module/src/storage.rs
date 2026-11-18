@@ -1350,6 +1350,22 @@ pub fn set_rule_secret_ref(rule_id: i64, secret_ref: &str) -> Result<()> {
     })
 }
 
+/// 清掉口令引用（用户在规则编辑页把口令清空时用）。
+///
+/// 与 [set_rule_secret_ref] 分开是必须的：`has_rule_password` 的判据是
+/// 「内存里有口令 **或** 库里 secret_ref 非空」。清口令时若仍走 set 写一个
+/// 非空 ref 进去，就会出现「清空返回成功、但 has_rule_password 依然是 true」
+/// —— 用户看到「已清除」，节点上却还认为有口令。
+pub fn clear_rule_secret_ref(rule_id: i64) -> Result<()> {
+    with_db(|conn| {
+        conn.execute(
+            "DELETE FROM email_rule_secrets WHERE rule_id = ?1",
+            params![rule_id],
+        )?;
+        Ok(())
+    })
+}
+
 pub fn rule_secret_ref(rule_id: i64) -> Result<String> {
     with_db(|conn| {
         Ok(conn.query_row(
