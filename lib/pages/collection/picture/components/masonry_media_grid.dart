@@ -72,8 +72,22 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   /// LayoutBuilder 的 layout 阶段中触发 setState，导致重复 key 等异常。
   Timer? _revealTimer;
 
-  /// 初始按行逐帧展开的最大行数；超过后一次性加载剩余全部。
+  /// 本帧是否已经安排过滚动补批（合并同一帧内的多条滚动通知）。
+  bool _revealPending = false;
+
+  /// 初始按行逐帧展开的最大行数；到这一层后停止自动展开，其余交给滚动补批。
   static const int _kInitialRevealRows = 12;
+
+  /// 滚动时每批补充的行数。
+  ///
+  /// 不能像旧实现那样「超过初始行数就一次性展开全部」：网格是
+  /// `SingleChildScrollView + Row(Column)` 的非懒加载结构，几千条的远程集合
+  /// （实测 2991 条）会在单帧内建出全部卡片（每张还带网络封面与隐私模糊层），
+  /// UI 线程与解码内存直接打满，表现就是打开集合瞬间卡死后崩溃。
+  static const int _kRevealRowsPerBatch = 6;
+
+  /// 距底部还剩多少像素时补下一批（约一屏半，滚动时不至于露白）。
+  static const double _kRevealPrefetchExtent = 1200;
 
   /// 高亮标记驻留时长：两条路径（首帧、外部换 ID）必须同一条，否则从 Viewer
   /// 返回的那次高亮会比直接进来看久十倍。
@@ -146,9 +160,13 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
         if (mounted) _revealNextBatch();
       });
     } else if (_visibleCount < widget.items.length) {
-      // 同一集合内条目增加（如分页加载）：继续展示，不重置
+      // 同一集合内条目增加：继续展示，不重置
       _revealTimer?.cancel();
       _scheduleReveal();
+      // 已经过了初始展开阶段（数量超过阈值）：直接补一批，否则新增条目永远不显示
+      if (_visibleCount >= widget.columnCount * _kInitialRevealRows) {
+        _revealMore();
+      }
       // 清理已不在列表中的 GlobalKey
       final currentIds = widget.items.map((i) => i.id).toSet();
       _itemKeys.removeWhere((id, _) => !currentIds.contains(id));
@@ -162,6 +180,15 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
   void _scrollToHighlighted() {
     final id = _highlightId;
     if (id == null) return;
+    // 目标条目可能还没展开（滚动补批结构下只建了前 N 条）：先补到它所在的批次
+    final index = widget.items.indexWhere((item) => item.id == id);
+    if (index >= _visibleCount) {
+      setState(() => _visibleCount = (index + 1).clamp(0, widget.items.length));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToHighlighted();
+      });
+      return;
+    }
     final key = _itemKeys[id];
     if (key == null) return;
     final ctx = key.currentContext;
@@ -187,15 +214,37 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
     if (_visibleCount >= total) return;
     final n = widget.columnCount;
     final threshold = n * _kInitialRevealRows;
-    if (_visibleCount < threshold) {
-      setState(() => _visibleCount = (_visibleCount + n).clamp(0, total));
-      if (_visibleCount < total) {
-        // 16ms ≈ 1 frame；Timer 在事件循环中触发，不会打断 build/layout pipeline
-        _revealTimer = Timer(const Duration(milliseconds: 16), _revealNextBatch);
-      }
-    } else {
-      setState(() => _visibleCount = total);
+    // 初始逐行展开只做到 [threshold]：之后由滚动接近底部时用 [_revealMore] 补批。
+    if (_visibleCount >= threshold) return;
+    setState(() => _visibleCount = (_visibleCount + n).clamp(0, total));
+    if (_visibleCount < total && _visibleCount < threshold) {
+      // 16ms ≈ 1 frame；Timer 在事件循环中触发，不会打断 build/layout pipeline
+      _revealTimer = Timer(const Duration(milliseconds: 16), _revealNextBatch);
     }
+  }
+
+  /// 再补一批可见条目（滚动接近底部时调用）。
+  void _revealMore() {
+    if (!mounted) return;
+    final total = widget.items.length;
+    if (_visibleCount >= total) return;
+    final step = widget.columnCount * _kRevealRowsPerBatch;
+    setState(() {
+      _visibleCount = (_visibleCount + step).clamp(0, total);
+    });
+  }
+
+  /// 滚动通知：剩余内容不足一屏半时补批，避免一次性建出全部卡片。
+  bool _onScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    if (_visibleCount >= widget.items.length) return false;
+    if (notification.metrics.extentAfter >= _kRevealPrefetchExtent) return false;
+    // 一帧内可能连收多条通知，指标还没更新：合并成一次补批
+    if (_revealPending) return false;
+    _revealPending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealPending = false);
+    _revealMore();
+    return false;
   }
 
   @override
@@ -442,27 +491,35 @@ class MasonryMediaGridState extends State<MasonryMediaGrid> {
             (constraints.maxWidth - 2 * padding - (crossAxisCount - 1) * spacing) / crossAxisCount;
         final columns = _distributeColumns(colWidth);
 
-        return SingleChildScrollView(
-          controller: _scrollController,
-          padding: EdgeInsets.all(padding),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (int c = 0; c < crossAxisCount; c++) ...[
-                if (c > 0) SizedBox(width: spacing),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (int i = 0; i < columns[c].length; i++) ...[
-                        if (i > 0) SizedBox(height: spacing),
-                        _buildAnimatedTile(widget.items[columns[c][i]], columns[c][i], colWidth),
+        return NotificationListener<ScrollNotification>(
+          // 非懒加载网格：滚动到底部附近时补下一批，绝不一次建出全部条目
+          onNotification: _onScrollNotification,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            padding: EdgeInsets.all(padding),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (int c = 0; c < crossAxisCount; c++) ...[
+                  if (c > 0) SizedBox(width: spacing),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (int i = 0; i < columns[c].length; i++) ...[
+                          if (i > 0) SizedBox(height: spacing),
+                          _buildAnimatedTile(
+                            widget.items[columns[c][i]],
+                            columns[c][i],
+                            colWidth,
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         );
       },
