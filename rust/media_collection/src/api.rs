@@ -2570,6 +2570,79 @@ fn pick_cover_path(items: &[MediaItem]) -> Option<String> {
         .map(|item| item.file_path.clone())
 }
 
+/// 把本次扫描出的新条目里「文件还是同一个」的那些，换回库里旧条目的 ID。
+///
+/// 为什么 ID 必须稳定：客户端（含远程节点模式）拿到的是一份条目快照，后续的
+/// 删除 / 改元数据 / 移动全部靠这份快照里的 ID 定位对象。upsert 是「整体删旧
+/// 插新」，若每次重扫都给同一文件发新 ID，删掉集合里一条文件就会让**其余所有
+/// 条目的 ID 同时失效**，客户端对它们逐个操作一律报「媒体条目不存在」——
+/// 用户看到的就是「批量操作只有第一条生效」。
+///
+/// 匹配口径按**文件路径**（`path_spelling_variants` 双向比对，兼容软链、
+/// `/var` vs `/private/var`、分隔符差异等历史写法）。路径变了（文件被改名或
+/// 移动）视为删除旧条目 + 新增条目，不复用 ID，这符合「它已经不是同一个文件」
+/// 的语义，同样不会影响其它条目的 ID。
+///
+/// 一个旧 ID 只认领一次（`used`）：若同一路径在库里存在多条重复记录，多出来的
+/// 那批仍拿新 ID，不会出现两条新条目抢同一个主键。
+fn reuse_existing_item_ids(collection_id: &str, items: &mut [MediaItem]) {
+    // 旧条目：优先走集合索引（一个读事务取本集合），旧库没索引才退整表过滤
+    let previous: Vec<MediaItem> = match load_collection_item_ids(collection_id) {
+        Some(ids) => db_module::db_get_many(item_table_name(), ids)
+            .unwrap_or_default()
+            .into_iter()
+            .flatten()
+            .filter_map(|value| serde_json::from_str::<MediaItem>(&value).ok())
+            .filter(|item| item.collection_id == collection_id)
+            .collect(),
+        None => {
+            let mut guard = lock_items();
+            if ensure_items_ready(&mut guard).is_err() {
+                return;
+            }
+            match items_or_err(&guard) {
+                Ok(stored) => stored
+                    .iter()
+                    .filter(|item| item.collection_id == collection_id)
+                    .cloned()
+                    .collect(),
+                Err(_) => return,
+            }
+        }
+    };
+    if previous.is_empty() {
+        return;
+    }
+
+    // 旧路径（规范化写法）→ 旧 ID。同一路径只有第一条生效，其余视为重复记录。
+    let mut by_path: HashMap<String, String> = HashMap::with_capacity(previous.len());
+    for item in &previous {
+        for variant in path_spelling_variants(&item.file_path) {
+            by_path.entry(variant).or_insert_with(|| item.id.clone());
+        }
+    }
+
+    let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut reused = 0usize;
+    for item in items.iter_mut() {
+        let hit = path_spelling_variants(&item.file_path)
+            .into_iter()
+            .find_map(|variant| by_path.get(&variant).cloned());
+        if let Some(old_id) = hit {
+            if used.insert(old_id.clone()) {
+                item.id = old_id;
+                reused += 1;
+            }
+        }
+    }
+    sw_debug!(
+        "[media_scan] 重扫条目 ID 复用: collection={} 复用 {} / 共 {} 条",
+        collection_id,
+        reused,
+        items.len()
+    );
+}
+
 fn upsert_collection_from_folder(
     folder: &Path,
     recursive: bool,
@@ -2607,13 +2680,26 @@ fn upsert_collection_from_folder(
         .map(|collection| collection.id.clone())
         .unwrap_or_else(|| format!("media_collection_{}", uuid::Uuid::new_v4()));
 
-    let items = MediaFolderScanner::collect_media_items(&collection_id, folder, recursive)
+    let mut items = MediaFolderScanner::collect_media_items(&collection_id, folder, recursive)
         .map_err(|error| error.to_string())?;
     sw_debug!(
         "[media_scan] collect_media_items returned {} items for {:?}",
         items.len(),
         folder
     );
+    // 条目 ID 必须在重扫后保持稳定：扫描器给每条新扫到的文件发的是随机 uuid
+    // （`build_media_item` 的 `Uuid::new_v4()`），而 upsert 是「整体删旧插新」。
+    // 两者叠加就会让**删掉集合里任意一条文件后，其余条目的 ID 全部换新**——
+    // 客户端手里那份快照立刻作废，接着对任何一条做删除/改名/移动都会报
+    // 「媒体条目不存在」；用户视角就是「批量删除只有第一条成功，剩下全失败」。
+    //
+    // 这里按「同一文件路径」把旧条目的 ID 认回来，让重扫对客户端透明：
+    // - 选这条修法而不是把 id 改成确定性哈希，是因为它对已有历史库零迁移成本
+    //   （旧 id 原样复用），也不必担心路径写法差异（见 `path_spelling_variants`）
+    //   在哈希方案里算出一个与旧库对不上的新 id。
+    // - 路径**变了**（文件被改名/移动）属于「删旧 + 加新」：旧路径查不到映射，
+    //   自然发新 id，这条语义保持不变；同时也不会波及其它条目的 ID。
+    reuse_existing_item_ids(&collection_id, &mut items);
     if items.is_empty() {
         let err = format!("No media found in {:?}", folder);
         sw_debug!("[media_scan] {}", err);
@@ -5284,6 +5370,169 @@ mod tests {
 
         assert!(delete_media_collection(collection.id).unwrap());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── 条目 ID 稳定性（删一条不能让其余 ID 全部换新）─────────────────────
+
+    /// 重扫同一个目录后，同一文件的条目 ID 必须原样保留。
+    ///
+    /// 缺陷形态：`build_media_item` 每次扫描都用 `Uuid::new_v4()` 生成新 ID，
+    /// upsert 又是「整体删旧插新」，于是任何一次重扫都会让整集合的 ID 换新。
+    /// 这条直接盯住 upsert 的 ID 复用逻辑：rescan 两次，ID 集合必须逐字相同。
+    ///
+    /// 同时钉住「文件改名 = 删旧 + 加新」：改名后的那条要拿到新 ID（它已不是
+    /// 同一个文件），但**其它条目的 ID 不能因此变化**。
+    #[test]
+    fn db_rescan_keeps_item_ids_stable() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("rescan_stable_ids");
+        for name in ["a.bmp", "b.bmp", "c.bmp"] {
+            write_test_image(&root.join(name));
+        }
+
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+        let before = sorted_ids(get_media_collection_items(collection.id.clone()).unwrap());
+        assert_eq!(before.len(), 3, "前提：三条条目");
+
+        // 重扫两次：ID 必须逐字相同（修复前这里每次都换一批新 UUID）
+        for round in 1..=2 {
+            rescan_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+            let after = sorted_ids(get_media_collection_items(collection.id.clone()).unwrap());
+            assert_eq!(
+                after, before,
+                "第 {} 次重扫后条目 ID 必须保持不变（否则客户端快照全部失效）",
+                round
+            );
+        }
+
+        // 改名 a.bmp → renamed.bmp：改名的那条拿新 ID，其余两条 ID 不动
+        // 先把改名前的「路径 → ID」记下来当对照基准
+        let before_map: HashMap<String, String> = get_media_collection_items(collection.id.clone())
+            .unwrap()
+            .into_iter()
+            .map(|item| (item.file_path.clone(), item.id))
+            .collect();
+        std::fs::rename(root.join("a.bmp"), root.join("renamed.bmp")).unwrap();
+        rescan_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+        let items = get_media_collection_items(collection.id.clone()).unwrap();
+        assert_eq!(items.len(), 3, "改名后条数不变");
+        let id_by_name = |items: &[MediaItem], name: &str| {
+            items
+                .iter()
+                .find(|item| item.file_path.ends_with(name))
+                .map(|item| item.id.clone())
+                .unwrap_or_else(|| panic!("找不到 {} 的条目", name))
+        };
+        assert!(
+            !before.contains(&id_by_name(&items, "renamed.bmp")),
+            "改名后的文件应视为新条目（新 ID），不复用旧 ID"
+        );
+        for name in ["b.bmp", "c.bmp"] {
+            let old_id = items
+                .iter()
+                .find(|item| item.file_path.ends_with(name))
+                .and_then(|item| before_map.get(&item.file_path).cloned())
+                .unwrap_or_else(|| panic!("对照基准里找不到 {}", name));
+            assert_eq!(
+                id_by_name(&items, name),
+                old_id,
+                "{} 没被改名，ID 必须保持不变（不能被别的文件的增删波及）",
+                name
+            );
+        }
+
+        assert!(delete_media_collection(collection.id.clone()).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 删掉集合里**一条**之后，其余条目的 ID 必须逐一不变；并且拿删除前那份
+    /// 快照里的 ID 逐个串行删除，每一步都要成功直到删空。
+    ///
+    /// 这正是用户撞到的场景：集合里 3 条，逐条点删除 → 只有第一条成功，后两条
+    /// 报「媒体条目不存在」。根因是删第一条触发重扫，把剩下两条的 ID 换掉了。
+    /// 修复后同一批快照 ID 必须能一路用到空，且聚合值归零不回归。
+    #[test]
+    fn db_delete_one_item_keeps_other_ids() {
+        let _serial = lock_db_test_serial();
+        let root = fake_media_root("delete_one_keeps_ids");
+        for name in ["a.bmp", "b.bmp", "c.bmp"] {
+            write_test_image(&root.join(name));
+        }
+
+        let folder_path = std::fs::canonicalize(&root).unwrap();
+        let collection = import_media_folder(folder_path.to_string_lossy().into_owned()).unwrap();
+
+        // 客户端手里那份快照：id + 路径，顺序按列表展示（order）
+        let snapshot: Vec<(String, String)> = get_media_collection_items(collection.id.clone())
+            .unwrap()
+            .into_iter()
+            .map(|item| (item.id, item.file_path))
+            .collect();
+        assert_eq!(snapshot.len(), 3, "前提：三条条目");
+
+        // 用户逐条点删除：每次都用**快照里的旧 ID** 去定位条目（节点/FFI 就是
+        // 按 ID 反查路径的），任何一步 ID 失效都会在这里暴露。
+        for (step, (snapshot_id, expected_path)) in snapshot.iter().enumerate() {
+            let items = get_media_collection_items(collection.id.clone()).unwrap();
+            let target = items
+                .iter()
+                .find(|item| &item.id == snapshot_id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "第 {} 次删除失败：快照 ID {} 已失效（其余条目 ID 被重生成）",
+                        step + 1,
+                        snapshot_id
+                    )
+                });
+            assert_eq!(&target.file_path, expected_path, "同一条 ID 必须指向同一个文件");
+            // 与节点 delete_media_item_local_file 走同一个底层函数
+            assert!(delete_media_item_file(target.file_path.clone()).unwrap());
+
+            // 其余未被删除的条目，ID 必须仍与快照一致
+            let remain = get_media_collection_items(collection.id.clone()).unwrap();
+            for (other_id, _) in snapshot.iter().skip(step + 1) {
+                assert!(
+                    remain.iter().any(|item| &item.id == other_id),
+                    "第 {} 次删除后，其余条目 ID {} 必须保持不变",
+                    step + 1,
+                    other_id
+                );
+            }
+        }
+
+        // 删到空：条目清空、聚合值归零、集合记录保留
+        assert!(
+            get_media_collection_items(collection.id.clone())
+                .unwrap()
+                .is_empty(),
+            "三步删完必须一条不剩"
+        );
+        let stored: CollectionAggregate = serde_json::from_str(
+            &db_row(collection_stats_table_name(), &collection.id)
+                .expect("删到空集合后必须仍有聚合行"),
+        )
+        .unwrap();
+        assert_eq!(stored.live_size, Some(0), "现存体积必须归零");
+        assert_eq!(stored.live_count, Some(0), "现存条数必须归零");
+        assert_eq!(stored.display_size(), 0, "展示口径必须归零");
+        let counts = get_all_collection_counts().unwrap();
+        let count = counts
+            .iter()
+            .find(|c| c.collection_id == collection.id)
+            .expect("集合应仍在统计里");
+        assert_eq!(count.item_count, 0, "节点回报条数必须为 0");
+        assert_eq!(count.total_size, 0, "节点回报体积必须为 0");
+
+        assert!(delete_media_collection(collection.id.clone()).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 取条目 ID 列表并排序，便于逐字比较（顺序本身由 order/标题决定，不比）。
+    fn sorted_ids(items: Vec<MediaItem>) -> Vec<String> {
+        let mut ids = items.into_iter().map(|item| item.id).collect::<Vec<_>>();
+        ids.sort();
+        ids
     }
 
     /// purge 直接清空某个集合时（不走 delete_media_item_file，例如文件被外部
