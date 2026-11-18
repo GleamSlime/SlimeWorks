@@ -12,6 +12,15 @@ fn get_instance() -> Result<&'static Arc<SentryLogStorage>, String> {
         .ok_or("Sentry日志存储未初始化".to_string())
 }
 
+/// 存储是否已初始化。
+///
+/// 给「桌面端没人打开过日志页 / 无头节点刚起来」的场景用：调用方据此决定
+/// 要不要先 init 一次。单独暴露 rather than 让调用方去 match 错误文案——
+/// 文案一改就成了隐式契约。
+pub fn sentry_log_is_ready() -> bool {
+    SENTRY_LOG_INSTANCE.get().is_some()
+}
+
 pub fn sentry_log_init(db_path: String) -> Result<String, String> {
     let storage =
         SentryLogStorage::new(&db_path).map_err(|e| format!("初始化Sentry日志存储失败: {}", e))?;

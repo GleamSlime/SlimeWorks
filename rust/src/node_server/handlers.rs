@@ -49,6 +49,75 @@ fn ensure_ledger_ready() -> Result<(), String> {
     Ok(())
 }
 
+// ── 其它全局模块的惰性兜底 ───────────────────────────────────────────────────
+// 这几家的单例都由「桌面端页面打开时」初始化，而无头节点从来不跑 Flutter，
+// 于是全新 `--data-dir` 起一个节点后它们的 action 全部回「模块未初始化」：
+// 客户端 `checkNodeXxxAvailable` 探测失败 → 页面显示「该节点不支持此功能」，
+// 功能在远程模式下彻底不可用，且没有任何操作能让它跑起来。
+//
+// 这里一律仿 `ensure_ledger_ready`：第一次被调用时用本节点数据目录自己开一份。
+// 惰性而不是启动时全量 init 的理由：节点可能只用来存媒体，没必要为三个从没被
+// 用过的模块各建一套库；真要用时再付这一次开销。
+//
+// ★ 验收必须用**全新空 data-dir** 起的节点跑，否则模块单例是热的，症状会被
+//   完全掩盖 —— 这正是这条缺陷长期没被发现的原因。
+
+/// 阿里云 DDNS 兜底：无配置时用一份关闭态的空配置初始化。
+/// 用户未配置 DDNS 时也应当能「打开页面看到空状态」，而不是看到「不支持」。
+fn ensure_aliyun_ready() -> Result<(), String> {
+    // 没有 is_ready 探针，用 get_status 的返回判断：未初始化会直接 Err。
+    match aliyun_module::api::aliyun_ddns_get_status() {
+        Ok(_) => return Ok(()),
+        // 只有「未初始化」才兜底；其它错误（配置损坏等）要原样透出，
+        // 不要在兜底里把它盖成一句成功。
+        Err(e) if !e.contains("未初始化") => return Ok(()),
+        Err(_) => {}
+    }
+    let cfg = json!({
+        // 必填字段必须给全：DdnsConfig 的 access_key_id/secret 没有 serde default，
+        // 少给一个就变成「解析DDNS配置失败」，等于又一次「功能不可用」。
+        "access_key_id": "",
+        "access_key_secret": "",
+        "watch_domains": [],
+        "interval_secs": 300,
+        "enabled": false,
+    });
+    aliyun_module::api::aliyun_ddns_init(cfg.to_string())?;
+    Ok(())
+}
+
+/// 电力统计兜底：节点是无头常驻的，理应持久化（persist=true + 独立 db_path），
+/// 否则每次重启节点历史读数全丢。
+fn ensure_power_stats_ready() -> Result<(), String> {
+    match power_stats::api::power_stats_get_status() {
+        Ok(_) => return Ok(()),
+        Err(e) if !e.contains("未初始化") => return Ok(()),
+        Err(_) => {}
+    }
+    let db_path = get_app_data_path("power_stats/power_stats.db");
+    let cfg = json!({
+        // meter_id 是必填（无 serde default），给空串表示「还没配置电表」，
+        // 页面据此显示空状态，而不是报「解析配置失败」。
+        "meter_id": "",
+        "persist": true,
+        "db_path": db_path.to_string_lossy().to_string(),
+        "enabled": false,
+        "interval_secs": 60,
+    });
+    power_stats::api::power_stats_init(cfg.to_string())?;
+    Ok(())
+}
+
+/// Sentry 日志存储兜底：节点侧自建一份，供客户端远程查看。
+fn ensure_sentry_ready() -> Result<(), String> {
+    if sentry_log::api::sentry_log_is_ready() {
+        return Ok(());
+    }
+    let db_path = get_app_data_path("sentry_log/sentry_log.redb");
+    sentry_log::api::sentry_log_init(db_path.to_string_lossy().to_string())?;
+    Ok(())
+}
+
 /// ledger 的 FFI 面统一是 JSON 文本，这里集中解码并把错误文案包好
 fn ledger_json(raw: Result<String, String>, what: &str) -> Result<Value, String> {
     let text = raw.map_err(|e| format!("{}失败: {}", what, e))?;
@@ -170,6 +239,18 @@ pub async fn dispatch_action(
     // 账本动作统一先确保库已打开：移动端不会替节点做初始化，兜底见 ensure_ledger_ready
     if action.starts_with("ledger_") {
         ensure_ledger_ready()?;
+    }
+    // 其它全局模块同理：无头节点不跑 Flutter，这些单例没人初始化。
+    // 不兜底的话，全新 data-dir 起的节点上这些功能一律「模块未初始化」，
+    // 客户端探测后会把整块功能判成「该节点不支持」（见各 ensure_* 的注释）。
+    if action.starts_with("aliyun_") {
+        ensure_aliyun_ready()?;
+    }
+    if action.starts_with("power_stats_") {
+        ensure_power_stats_ready()?;
+    }
+    if action.starts_with("sentry_") {
+        ensure_sentry_ready()?;
     }
     match action {
         // ── 状态查询 ─────────────────────────────────────────────────────────
