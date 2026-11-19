@@ -828,16 +828,24 @@ void main() {
       expect(await service.readRulePassword(3), kFakeSecret);
     });
 
-    test('setRulePassword：非空口令才推进 Rust，清空时只动安全存储', () async {
+    test('setRulePassword：设置与清空都要推进后端（远程模式靠它同步到节点）', () async {
       mock.stubVoid('ledgerSetRulePassword');
       await service.setRulePassword(2, kFakeSecret);
       expect(await service.readRulePassword(2), kFakeSecret);
       expect(mock.lastCall('ledgerSetRulePassword').arg('ruleId'), 2);
+      expect(mock.lastCall('ledgerSetRulePassword').arg('password'), kFakeSecret);
 
       mock.calls.clear();
       await service.setRulePassword(2, '');
       expect(await service.readRulePassword(2), '');
-      expect(mock.callsOf('ledgerSetRulePassword'), isEmpty);
+      // ★ 清空**必须**也推给后端。
+      // 旧实现是 `if (isLocal && password.isNotEmpty)`：远程模式下清口令只动了
+      // 客户端安全存储、节点上的旧口令还在（提示「已清除」而实际没清）。
+      // 现在统一走 _run —— 远程发 ledger_set_rule_password、本机调 FFI，
+      // 空串即「清除」语义（节点侧据此删掉 secret_ref，见 storage::clear_rule_secret_ref）。
+      final clearCall = mock.lastCall('ledgerSetRulePassword');
+      expect(clearCall.arg('ruleId'), 2);
+      expect(clearCall.arg('password'), '');
     });
 
     test('checkRule：不显式给口令就用安全存储里的那份', () async {

@@ -197,18 +197,39 @@ void main() {
     });
   });
 
-  // ── 媒体上传（multipart） ────────────────────────────────────────────────
+  // ── 媒体上传（原始字节流） ──────────────────────────────────────────────
+  //
+  // 上传协议从 multipart 改成了原始字节流 + query 参数，理由见
+  // `uploadMediaToNode` 与节点侧 `upload_handler::handle_file_upload`：
+  // 节点是一条流式落盘通道（通用 body 读取会按 Content-Length 直接
+  // 分配内存，几百 MB 的媒体文件会打爆节点；且其上限只有 8MB）。
+  // multipart 还要在节点侧内存里攒边界帧，对单文件毫无意义。
+  // 所以这里的断言也跟着换成「字节流 + query」的形状。
 
   group('uploadMediaToNode', () {
-    test('multipart 上传：文件字节与字段都到达节点，返回 data 字段', () async {
+    test('原始字节流上传：文件字节、dest/filename 查询参数都到达节点', () async {
       final service = await createService();
       mountNode(service, apiBaseUrl: server.baseUrl);
-      server.responder = (req) => req.path == _kUploadPath
-          ? FakeNodeReply.successData(<String, dynamic>{
-              'saved_path': '/node/uploads/a.png',
-              'size': 6,
-            })
-          : FakeNodeReply.successData(<String, dynamic>{});
+      // 上传前会先反查集合的 folder_path 作为落盘目录（见 uploadMediaToNode），
+      // 所以这里要把该集合报出来，否则会在发请求之前就被拦下。
+      server.responder = (req) {
+        if (req.action == 'list_media_collections') {
+          return FakeNodeReply.successData(<dynamic>[
+            <String, dynamic>{
+              'id': 'col-1',
+              'title': '上传目标',
+              'folder_path': '/node/media/col-1',
+            },
+          ]);
+        }
+        if (req.path == _kUploadPath) {
+          return FakeNodeReply.successData(<String, dynamic>{
+            'saved_path': '/node/uploads/a.png',
+            'size': 6,
+          });
+        }
+        return FakeNodeReply.successData(<String, dynamic>{});
+      };
       final imagePath = '${tempDir.path}/a.png';
       final imageBytes = Uint8List.fromList(<int>[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A]);
       await File(imagePath).writeAsBytes(imageBytes);
@@ -224,27 +245,57 @@ void main() {
 
       final request = server.requests.firstWhere((r) => r.path == _kUploadPath);
       expect(request.method, 'POST');
-      expect(request.header('content-type'), startsWith('multipart/form-data'));
-      final bodyText = request.bodyText;
-      expect(bodyText, contains('name="file"'));
-      expect(bodyText, contains('filename="a.png"'));
-      expect(bodyText, contains('name="collection_id"'));
-      expect(bodyText, contains('col-1'));
-      // 文件原始字节完整出现在 multipart body 中
-      expect(_containsSequence(request.bodyBytes, imageBytes), isTrue);
+      // 不再有 multipart 边界：整个 body 就是文件原始字节
+      expect(request.bodyBytes, equals(imageBytes));
+      expect(request.header('content-length'), '${imageBytes.length}');
+      // 文件名与集合 id 走 query（dest 由集合反查，这里集合不在库里故不校验）
+      expect(request.query?['filename'], 'a.png');
+      expect(request.query?['collection_id'], 'col-1');
     });
 
     test('success:false 抛出 error 文案', () async {
       final service = await createService();
       mountNode(service, apiBaseUrl: server.baseUrl);
-      server.responder = (req) => FakeNodeReply.businessError('目标集合只读');
+      // 上传必须有明确的落盘目录（见 uploadMediaToNode 的检查），
+      // 所以这里让 list_media_collections 返回一个带 folder_path 的集合，
+      // 才能走到真正的上传请求、拿到节点的业务错误。
+      server.responder = (req) {
+        if (req.action == 'list_media_collections') {
+          return FakeNodeReply.successData(<dynamic>[
+            <String, dynamic>{
+              'id': 'col-1',
+              'title': '只读集合',
+              'folder_path': '/node/media/col-1',
+            },
+          ]);
+        }
+        return FakeNodeReply.businessError('目标集合只读');
+      };
       final path = '${tempDir.path}/c.txt';
+      await File(path).writeAsString('hello');
+
+      await expectLater(
+        service.uploadMediaToNode(nodeId: 'node-a', localPath: path, collectionId: 'col-1'),
+        throwsA(
+          isA<Exception>().having((e) => e.toString(), 'message', contains('目标集合只读')),
+        ),
+      );
+    });
+
+    test('未指定集合时明确拒绝（不猜落盘目录）', () async {
+      final service = await createService();
+      mountNode(service, apiBaseUrl: server.baseUrl);
+      final path = '${tempDir.path}/e.txt';
       await File(path).writeAsString('hello');
 
       await expectLater(
         service.uploadMediaToNode(nodeId: 'node-a', localPath: path),
         throwsA(
-          isA<Exception>().having((e) => e.toString(), 'message', contains('目标集合只读')),
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('需要指定目标集合'),
+          ),
         ),
       );
     });

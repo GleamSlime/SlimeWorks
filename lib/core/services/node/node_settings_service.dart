@@ -1823,8 +1823,15 @@ class NodeSettingsService extends GetxService {
       // multipart 会让节点还得在内存里攒边界帧，对几百 MB 的文件毫无意义。
       // 目标目录与文件名都放 query：客户端已明确知道落哪个集合、叫什么名字。
       final destDir = await _resolveNodeUploadDir(nodeId, uploadUrl, collectionId);
+      // dest 必须是明确的目标目录：节点侧 `handle_file_upload` 只往已存在的
+      // 绝对目录落盘（刻意不接受「猜一个暂存目录」，否则用户不知道文件去哪了）。
+      // 所以「没指定集合」或「集合反查不到目录」都是真错误，必须拦下并说清原因。
       if (destDir == null || destDir.isEmpty) {
-        throw Exception('无法确定节点落盘目录（集合不存在或文件夹路径缺失）');
+        throw Exception(
+          collectionId == null || collectionId.isEmpty
+              ? '上传需要指定目标集合（未给出 collection_id，无法确定节点落盘目录）'
+              : '无法确定节点落盘目录（集合 $collectionId 不存在或缺少文件夹路径）',
+        );
       }
       final query = <String, String>{
         'dest': destDir,
