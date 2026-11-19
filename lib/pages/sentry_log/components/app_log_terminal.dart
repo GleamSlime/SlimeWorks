@@ -616,6 +616,14 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
   }
 
   Widget _buildEmptyState(BuildContext context, AppSemantic s, ThemeMetrics m) {
+    // 加载失败时必须把错误说出来。
+    //
+    // 此前空列表一律渲染「暂无应用日志 / 点击「实时」按钮开始收集」，
+    // 而 ViewModel 里的 errorMessage（`加载数据失败: ...`）全仓无人渲染。
+    // 于是远程节点连不上、模块未初始化、授权码错误……在用户眼里全变成
+    // 「还没有日志」，被误导成「功能还没接好」，实际上是真的失败了。
+    final error = widget.viewModel.errorMessage.value;
+    final hasError = error.trim().isNotEmpty;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -626,35 +634,45 @@ class _AppLogTerminalState extends State<AppLogTerminal> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
-                colors: [s.accent.withAlpha(15), s.accent.withAlpha(4), Colors.transparent],
+                colors: hasError
+                    ? [
+                        s.danger.color.withAlpha(15),
+                        s.danger.color.withAlpha(4),
+                        Colors.transparent,
+                      ]
+                    : [s.accent.withAlpha(15), s.accent.withAlpha(4), Colors.transparent],
                 stops: const [0.0, 0.5, 1.0],
               ),
             ),
             child: DrawIcon(
-              StrokeIcons.terminal,
+              hasError ? StrokeIcons.errorOutline : StrokeIcons.terminal,
               size: scaleW(36),
-              color: s.accent.withAlpha(60),
+              color: hasError ? s.danger.color.withAlpha(80) : s.accent.withAlpha(60),
             ),
           ),
           SizedBox(height: m.kSpace16),
           Text(
-            '暂无应用日志',
+            hasError ? '加载日志失败' : '暂无应用日志',
             style: AppTextStyles.role(
               context,
               fontSize: m.fontSize15,
-              color: s.textPrimary,
+              color: hasError ? s.danger.color : s.textPrimary,
               weight: FontWeight.w600,
               height: 1.5,
             ),
           ),
           SizedBox(height: m.kSpace4),
-          Text(
-            '点击「实时」按钮开始收集',
-            style: AppTextStyles.role(
-              context,
-              fontSize: m.fontSize13,
-              color: s.textSecondary,
-              height: 1.5,
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: m.kSpace32),
+            child: Text(
+              hasError ? error : '点击「实时」按钮开始收集',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.role(
+                context,
+                fontSize: m.fontSize13,
+                color: s.textSecondary,
+                height: 1.5,
+              ),
             ),
           ),
         ],

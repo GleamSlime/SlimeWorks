@@ -32,6 +32,14 @@ class AppLogViewModel extends GetxController {
   final RxBool autoScroll = true.obs;
   final RxBool isWatching = false.obs;
 
+  /// 最近一次加载失败的原因；空串表示没有错误。
+  ///
+  /// 此前这里只有 `catch (e) { logger.error(...) }`，错误只进日志，界面
+  /// 拿不到任何「为什么空」，于是把失败渲染成「暂无应用日志 / 点击「实时」
+  /// 按钮开始收集」—— 用户以为功能没接好，实际是加载失败（节点连不上、
+  /// 授权码错、模块未初始化……）。空态必须区分这两件事。
+  final RxString errorMessage = ''.obs;
+
   ScrollController? scrollController;
 
   List<AppLogEntry> _allEntries = [];
@@ -63,8 +71,12 @@ class AppLogViewModel extends GetxController {
       _allEntries.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
       entries.value = _applyFilter(_allEntries);
+      // 成功即清错误：否则修好一次之后空态还会一直挂着上一条失败原因
+      errorMessage.value = '';
     } catch (e) {
       logger.error('加载应用日志失败: $e');
+      // 界面要把这条显示出来，不能只落日志（见 errorMessage 的注释）
+      errorMessage.value = '加载数据失败: $e';
     } finally {
       isLoading.value = false;
     }
