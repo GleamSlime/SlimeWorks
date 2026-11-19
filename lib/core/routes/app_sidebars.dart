@@ -53,6 +53,11 @@ const Set<String> kRemoteUnsupportedPathPrefixes = {
   '/motion-lab',
   '/interaction-lab',
   '/surface-lab',
+  // 这两个此前「恰好」点不到（唯一入口挂在已隐藏的 /tools 下），但那是巧合：
+  // 任何人加一条直达链接/深链，用户就能进到一个**只读写本机**的页面。
+  // 无头节点模式下这两块都没有节点侧实现，显式登记，别靠入口位置碰巧挡住。
+  '/ncm-decrypt',
+  '/module-management',
 };
 
 /// [location] 是否命中远程模式不支持的前缀（参数化路径同样算命中）。
