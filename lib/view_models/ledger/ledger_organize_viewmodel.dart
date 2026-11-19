@@ -31,6 +31,18 @@ class LedgerOrganizeViewModel extends BaseViewModel {
     super.onInitAsync();
   }
 
+  /// 远程节点模式下，标签/分组还没有节点侧 action。
+  ///
+  /// 必须**显式拒绝**写操作：这些数据目前只存在客户端本机（内存 + prefs），
+  /// 静默写进去再提示「已添加」，就是用户报的「提示成功、实际没变」——
+  /// 而且切回本机模式才看得到，等于写到了另一个世界。
+  /// 返回 true 表示已被拦截（调用方直接 return false）。
+  bool _blockedInRemoteMode(String what) {
+    if (!_service.isRemoteNodeMode) return false;
+    setError('$what暂不支持远程节点：该功能还没有节点侧实现，请切换到「本机」后再操作');
+    return true;
+  }
+
   Future<void> reload() async {
     setLoading(true);
     try {
@@ -130,6 +142,7 @@ class LedgerOrganizeViewModel extends BaseViewModel {
   int get tagsInUse => tags.fold<int>(0, (sum, t) => sum + t.useCount);
 
   Future<bool> saveTagGroup(LedgerTagGroup group) async {
+    if (_blockedInRemoteMode('标签分组')) return false;
     try {
       await _tags.upsertTagGroup(group);
       lastMessage.value = group.id > 0 ? '分组「${group.name}」已更新' : '分组「${group.name}」已添加';
@@ -142,6 +155,7 @@ class LedgerOrganizeViewModel extends BaseViewModel {
   }
 
   Future<bool> deleteTagGroup(LedgerTagGroup group) async {
+    if (_blockedInRemoteMode('删除标签分组')) return false;
     try {
       await _tags.deleteTagGroup(group.id);
       lastMessage.value = '分组「${group.name}」和组里的 ${tagsOf(group.id).length} 个标签已删除';
@@ -154,6 +168,7 @@ class LedgerOrganizeViewModel extends BaseViewModel {
   }
 
   Future<bool> saveTag(LedgerTag tag) async {
+    if (_blockedInRemoteMode('标签')) return false;
     try {
       await _tags.upsertTag(tag);
       lastMessage.value = tag.id > 0 ? '标签「${tag.name}」已更新' : '标签「${tag.name}」已添加';
@@ -166,6 +181,7 @@ class LedgerOrganizeViewModel extends BaseViewModel {
   }
 
   Future<bool> deleteTag(LedgerTag tag) async {
+    if (_blockedInRemoteMode('删除标签')) return false;
     try {
       await _tags.deleteTag(tag.id);
       lastMessage.value = '标签「${tag.name}」已删除';

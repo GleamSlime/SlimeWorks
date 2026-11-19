@@ -32,6 +32,14 @@ class LedgerTemplatesViewModel extends BaseViewModel {
     super.onInitAsync();
   }
 
+  /// 远程节点模式下模板/定时规则还没有节点侧 action，写操作必须显式拒绝。
+  /// 静默写本机再提示「已保存」就是假成功（用户切回本机才看得到）。
+  bool _blockedInRemoteMode(String what) {
+    if (!_service.isRemoteNodeMode) return false;
+    setError('$what暂不支持远程节点：该功能还没有节点侧实现，请切换到「本机」后再操作');
+    return true;
+  }
+
   Future<void> reload() async {
     setLoading(true);
     try {
@@ -91,6 +99,7 @@ class LedgerTemplatesViewModel extends BaseViewModel {
   bool canUse(LedgerTxTemplate t) => t.accountId == 0 || accountOfTemplate(t) != null;
 
   Future<bool> deleteTemplate(LedgerTxTemplate template) async {
+    if (_blockedInRemoteMode('删除模板')) return false;
     try {
       final tied = schedulesOf(template.id).length;
       await _store.deleteTxTemplate(template.id);
@@ -116,6 +125,7 @@ class LedgerTemplatesViewModel extends BaseViewModel {
   }
 
   Future<void> markUsed(LedgerTxTemplate template) async {
+    if (_blockedInRemoteMode('标记模板使用')) return;
     await _store.markTemplateUsed(template.id);
     await reload();
   }
@@ -139,6 +149,7 @@ class LedgerTemplatesViewModel extends BaseViewModel {
   int get runningSchedules => schedules.where((s) => s.enabled).length;
 
   Future<bool> saveSchedule(LedgerSchedule schedule) async {
+    if (_blockedInRemoteMode('定时规则')) return false;
     try {
       await _store.upsertSchedule(schedule);
       lastMessage.value = schedule.id > 0
@@ -153,6 +164,7 @@ class LedgerTemplatesViewModel extends BaseViewModel {
   }
 
   Future<bool> toggleSchedule(LedgerSchedule schedule) async {
+    if (_blockedInRemoteMode('切换定时规则')) return false;
     try {
       await _store.setScheduleEnabled(schedule.id, !schedule.enabled);
       lastMessage.value = schedule.enabled
@@ -167,6 +179,7 @@ class LedgerTemplatesViewModel extends BaseViewModel {
   }
 
   Future<bool> deleteSchedule(LedgerSchedule schedule) async {
+    if (_blockedInRemoteMode('删除定时规则')) return false;
     try {
       await _store.deleteSchedule(schedule.id);
       lastMessage.value = '规则「${schedule.name}」已删除';

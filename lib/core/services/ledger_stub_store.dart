@@ -22,6 +22,18 @@ class LedgerStubStore {
 
   static const String _keyEnabled = 'ledger_stub_enabled';
 
+  /// 业务数据的持久化键。
+  ///
+  /// 这些数据此前**只在内存里**（`_groups` / `_tags` / `_templates` /
+  /// `_schedules` / `_backups` / `_attachments` 都是普通 List，只有开关
+  /// 进了 prefs），意味着：本机模式下用户加的标签、存的模板、定的定时规则
+  /// 重启 App 全部丢失，而且**没有任何提示**。
+  ///
+  /// 现在每次写操作后整份落盘（数据量小，无需增量）。远程模式下这些模块
+  /// 还没有节点 action，所以至少保证「本机模式重启不丢」，并在远程模式
+  /// 由上层拦截写入口（见 LedgerStubStore.isRemoteBlocked）。
+  static const String _keyData = 'ledger_stub_data';
+
   SharedPreferences? _prefs;
 
   /// 界面文案里也要出现这个词，用户才不会把自己的演示数据当成真账
@@ -42,11 +54,105 @@ class LedgerStubStore {
 
   Future<void> init() async {
     if (_groups.isNotEmpty) return;
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      _enabled = _prefs?.getBool(_keyEnabled) ?? true;
+    } catch (e) {
+      await _logger.e('桩数据开关读取失败，按默认开启处理', e);
+    }
+    // 先尝试恢复上次落盘的数据；没有再播种演示数据
+    if (await _restore()) return;
     await _reseed();
   }
 
+  /// 从 prefs 恢复业务数据；没有存档或解析失败返回 false（由调用方播种）。
+  Future<bool> _restore() async {
+    final raw = _prefs?.getString(_keyData);
+    if (raw == null || raw.isEmpty) return false;
+    try {
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      _groups
+        ..clear()
+        ..addAll(_mapList(j['groups']).map(LedgerTagGroup.fromJson));
+      _tags
+        ..clear()
+        ..addAll(_mapList(j['tags']).map(LedgerTag.fromJson));
+      _templates
+        ..clear()
+        ..addAll(_mapList(j['templates']).map(LedgerTxTemplate.fromJson));
+      _schedules
+        ..clear()
+        ..addAll(_mapList(j['schedules']).map(LedgerSchedule.fromJson));
+      _backups
+        ..clear()
+        ..addAll(_mapList(j['backups']).map(LedgerBackup.fromJson));
+      _attachments
+        ..clear()
+        ..addAll(_mapList(j['attachments']).map(LedgerAttachment.fromJson));
+      _nextId = (j['next_id'] as num?)?.toInt() ?? 1000;
+      return true;
+    } catch (e) {
+      // 存档格式不兼容（例如模型加了字段）：退回播种，不要让整个账本页打不开
+      await _logger.e('桩数据恢复失败，退回演示播种', e);
+      return false;
+    }
+  }
+
+  static List<Map<String, dynamic>> _mapList(Object? v) {
+    if (v is! List) return const <Map<String, dynamic>>[];
+    return v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  /// 整份落盘。写操作后调用；失败只记日志，不打断用户操作。
+  Future<void> _persist() async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    try {
+      await prefs.setString(
+        _keyData,
+        jsonEncode(<String, dynamic>{
+          'groups': _groups.map((e) => e.toJson()).toList(),
+          'tags': _tags.map((e) => e.toJson()).toList(),
+          'templates': _templates.map((e) => e.toJson()).toList(),
+          'schedules': _schedules.map((e) => e.toJson()).toList(),
+          'backups': _backups.map((e) => e.toJson()).toList(),
+          'attachments': _attachments.map((e) => e.toJson()).toList(),
+          'next_id': _nextId,
+        }),
+      );
+    } catch (e) {
+      await _logger.e('桩数据落盘失败', e);
+    }
+  }
+
+  /// 远程节点模式下这些增强功能还没有节点侧 action。
+  ///
+  /// 上层（ViewModel）在写之前用它挡一下，给出「该功能暂不支持远程节点」
+  /// 的明确提示——绝不能静默写进本机内存然后提示成功（那就是假成功）。
+  /// 由 [LedgerService] 在初始化时注入：用来判断当前数据源是不是远程节点。
+  ///
+  /// 不用读 prefs 猜（之前那版读一个根本不存在的 `node_remote_mode_active`
+  /// 键，等于永远返回 false）。真实的判定源只有 `LedgerService.isRemoteNodeMode`
+  /// 一处，注入进来才能和它保持一致。
+  bool Function()? remoteModeProbe;
+
+  bool get isRemoteBlocked => remoteModeProbe?.call() ?? false;
+
   /// 把仓库倒回刚播种的状态，给测试用（单例是进程级的，用例之间必须能清零）
   Future<void> resetForTest() async => _reseed();
+
+  /// 只清空内存态、**不**重新播种，用来模拟「进程重启」：
+  /// 之后调 [init] 应当从磁盘恢复上次落盘的数据。
+  /// （[resetForTest] 是「丢弃 + 重播」，与重启语义不同，两者别混用。）
+  void debugClearMemoryForTest() {
+    _groups.clear();
+    _tags.clear();
+    _templates.clear();
+    _schedules.clear();
+    _backups.clear();
+    _attachments.clear();
+    _nextId = 1000;
+  }
 
   Future<void> _reseed() async {
     _groups.clear();
@@ -102,16 +208,19 @@ class LedgerStubStore {
           sortOrder: t.sortOrder,
         ));
       }
+      await _persist();
       return created.id;
     }
     final index = _groups.indexWhere((g) => g.id == group.id);
     if (index >= 0) _groups[index] = group;
+    await _persist();
     return group.id;
   }
 
   Future<void> deleteTagGroup(int id) async {
     _groups.removeWhere((g) => g.id == id);
     _tags.removeWhere((t) => t.groupId == id);
+    await _persist();
   }
 
   /// 就地新建标签用：名字重复就直接复用已有那条，不造两个一样的标签
@@ -143,17 +252,20 @@ class LedgerStubStore {
       if (index >= 0) {
         _groups[index] = _groups[index].copyWith(tags: <LedgerTag>[..._groups[index].tags, created]);
       }
+      await _persist();
       return created.id;
     }
     final index = _tags.indexWhere((t) => t.id == tag.id);
     if (index >= 0) _tags[index] = tag;
     _rebuildGroupTags();
+    await _persist();
     return tag.id;
   }
 
   Future<void> deleteTag(int id) async {
     _tags.removeWhere((t) => t.id == id);
     _rebuildGroupTags();
+    await _persist();
   }
 
   void _rebuildGroupTags() {
@@ -197,16 +309,19 @@ class LedgerStubStore {
         tagNames: template.tagNames,
       );
       _templates.add(created);
+      await _persist();
       return created.id;
     }
     final index = _templates.indexWhere((t) => t.id == template.id);
     if (index >= 0) _templates[index] = template;
+    await _persist();
     return template.id;
   }
 
   Future<void> deleteTxTemplate(int id) async {
     _templates.removeWhere((t) => t.id == id);
     _schedules.removeWhere((s) => s.templateId == id);
+    await _persist();
   }
 
   /// 用一次：计数 +1，界面上"常用模板"就靠这个排序
@@ -218,6 +333,7 @@ class LedgerStubStore {
       ...t.toJson(),
       'use_count': t.useCount + 1,
     });
+    await _persist();
   }
 
   /// 流水存成模板：只带走重复要填的那几样，日期与 id 一律丢掉。
@@ -281,10 +397,12 @@ class LedgerStubStore {
         templateTitle: schedule.templateTitle,
       );
       _schedules.add(created);
+      await _persist();
       return created.id;
     }
     final index = _schedules.indexWhere((s) => s.id == schedule.id);
     if (index >= 0) _schedules[index] = schedule;
+    await _persist();
     return schedule.id;
   }
 
@@ -292,10 +410,12 @@ class LedgerStubStore {
     final index = _schedules.indexWhere((s) => s.id == id);
     if (index < 0) return;
     _schedules[index] = _schedules[index].copyWith(enabled: enabled);
+    await _persist();
   }
 
   Future<void> deleteSchedule(int id) async {
     _schedules.removeWhere((s) => s.id == id);
+    await _persist();
   }
 
   /// 只给个"下一次"的近似值撑住界面：真正的调度归 Rust 侧的调度器
@@ -329,11 +449,13 @@ class LedgerStubStore {
       sizeBytes: sizeBytes > 0 ? sizeBytes : 40960 + seq * 900,
     );
     _attachments.add(att);
+    await _persist();
     return att;
   }
 
   Future<void> deleteAttachment(int id) async {
     _attachments.removeWhere((a) => a.id == id);
+    await _persist();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -345,10 +467,12 @@ class LedgerStubStore {
   Future<void> addBackup(LedgerBackup backup) async {
     _backups.insert(0, backup);
     if (_backups.length > 20) _backups.removeLast();
+    await _persist();
   }
 
   Future<void> deleteBackup(int id) async {
     _backups.removeWhere((b) => b.id == id);
+    await _persist();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -646,6 +770,22 @@ class LedgerBackup {
     if (sizeBytes < 1024 * 1024) return '${(sizeBytes / 1024).toStringAsFixed(1)} KB';
     return '${(sizeBytes / 1024 / 1024).toStringAsFixed(1)} MB';
   }
+
+  /// 备份记录要能落盘（`_persist` 统一序列化全部增强数据），
+  /// 否则重启后「备份历史」清空、用户以为备份文件丢了。
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'id': id,
+    'file_name': fileName,
+    'size_bytes': sizeBytes,
+    'created_at': createdAt,
+  };
+
+  factory LedgerBackup.fromJson(Map<String, dynamic> j) => LedgerBackup(
+    id: (j['id'] as num?)?.toInt() ?? 0,
+    fileName: (j['file_name'] ?? '').toString(),
+    sizeBytes: (j['size_bytes'] as num?)?.toInt() ?? 0,
+    createdAt: (j['created_at'] ?? '').toString(),
+  );
 }
 
 String ledgerTxTypeName(String txType) => switch (txType) {

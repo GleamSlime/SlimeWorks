@@ -60,6 +60,12 @@ class LedgerService extends GetxService {
   bool get isInitialized => _isInitialized;
   bool get isLocal => selectedNodeId.value.isEmpty;
 
+  /// 当前数据源是否指向远程节点。
+  ///
+  /// 给「本机桩数据」那批功能（标签/模板/定时规则/附件/备份）判断用：
+  /// 它们还没有节点侧 action，远程模式下必须显式拒绝写，而不是静默写本机。
+  bool get isRemoteNodeMode => !isLocal;
+
   /// 初始化时是否顺手拉起后台收信调度
   bool get autoOpenScheduler => _prefs?.getBool(_keyAutoOpen) ?? true;
 
@@ -98,6 +104,9 @@ class LedgerService extends GetxService {
       await _loadPrefs();
       // 增强部分（标签/模板/定时/附件）现在还是本机桩数据，但和账本共用同一次初始化：
       // 分两处加载就会出现"页面先建、数据后到"的空白帧。
+      // 注入远程模式探针：桩数据的写操作在远程模式下必须被拒绝，不能静默
+      // 写本机（那些数据还没有节点侧 action）。
+      LedgerStubStore.instance.remoteModeProbe = () => isRemoteNodeMode;
       await LedgerStubStore.instance.init();
       if (isLocal) await _initLocal();
       _isInitialized = true;
