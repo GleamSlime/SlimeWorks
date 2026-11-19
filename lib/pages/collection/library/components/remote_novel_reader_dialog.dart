@@ -55,7 +55,10 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
       setState(() {
         _chapters = chapters;
         _loading = false;
-        _selected = 0;
+        // 恢复到上次读到的章节。
+        // metadata.progress 是 0~1 的归一化进度（节点侧持久化），
+        // 之前远程阅读路径完全不用它，所以永远是第 1 章。
+        _selected = _chapterIndexForProgress(chapters.length, widget.metadata.progress);
       });
     } catch (e) {
       if (!mounted) return;
@@ -64,6 +67,38 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
         _loading = false;
       });
     }
+  }
+
+  /// 把 0~1 的进度换算成章节下标（夹在合法范围内）。
+  int _chapterIndexForProgress(int count, double progress) {
+    if (count <= 0) return 0;
+    final raw = (progress.clamp(0.0, 1.0) * count).floor();
+    return raw.clamp(0, count - 1);
+  }
+
+  /// 把当前章节位置写回节点。
+  ///
+  /// 只在「章节真的切过」或关闭时保存——翻页（同一章内滚动）不必每次写节点。
+  Future<void> _persistProgress() async {
+    if (_chapters.isEmpty) return;
+    final progress = (_selected + 1) / _chapters.length;
+    try {
+      await _service.updateNodeNovelProgress(
+        nodeId: widget.nodeId,
+        novelId: widget.metadata.id,
+        progress: progress.clamp(0.0, 1.0),
+      );
+    } catch (e) {
+      // 进度保存失败不该打断阅读，但要留痕（这是「下次打开还在原处」的保证）
+      debugPrint('保存远程阅读进度失败: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    // 关闭对话框时补存一次：用户往往是读完直接关
+    _persistProgress();
+    super.dispose();
   }
 
   @override
@@ -122,7 +157,12 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                               return ListTile(
                                 selected: index == _selected,
                                 title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                onTap: () => setState(() => _selected = index),
+                                onTap: () {
+                                  setState(() => _selected = index);
+                                  // 切章即保存：用户读完一章往往直接关掉，
+                                  // 只在 dispose 存会让「读完没关」那一下丢失
+                                  _persistProgress();
+                                },
                               );
                             },
                           ),

@@ -1062,6 +1062,100 @@ pub async fn dispatch_action(
             Ok(json!({"ok": true}))
         }
 
+        // ── 小说导入（远程/无头模式）────────────────────────────────────────
+        // 之前节点侧**没有任何导入 action**，客户端 `scanFolder()` 也是纯本机
+        // FFI：远程模式下点「扫描」会把书导进**本机库**（远程模式不可见），
+        // 提示「已导入 N 本」但书库里没有——典型的假成功。
+        "scan_novel_folder" => {
+            let folder_path = params["folder_path"].as_str().unwrap_or("").to_string();
+            if folder_path.trim().is_empty() {
+                return Err("扫描小说文件夹失败: folder_path 不能为空".to_string());
+            }
+            if !std::path::Path::new(&folder_path).is_dir() {
+                return Err(format!("扫描小说文件夹失败: 目录不存在 {}", folder_path));
+            }
+            // 先记下「扫之前库里有什么」：batched 接口会在扫描过程中就入库，
+            // 所以必须在调用**之前**取快照，否则拿返回的 novels 去和入库后的
+            // 库比对，会把本次新增的全算成「已存在」（实测首扫就报「未新增」）。
+            let existing: std::collections::HashSet<String> = novel_api::get_all_novels()
+                .map_err(|e| format!("扫描小说文件夹失败: {}", e))?
+                .into_iter()
+                .map(|n| n.file_path)
+                .collect();
+
+            // batched 接口是给桌面端做进度用的；节点一次调完即可
+            // （batch_size 给大值，让它一趟返回全部）。
+            let batches = novel_api::scan_novels_folder_batched(folder_path.clone(), 100_000)
+                .map_err(|e| format!("扫描小说文件夹失败: {}", e))?;
+            if batches.is_empty() {
+                return Err(format!("扫描小说文件夹失败: 目录下没有可导入的书 {}", folder_path));
+            }
+            let mut fresh = 0usize;
+            let mut total = 0usize;
+            let mut seen = std::collections::HashSet::new();
+            for batch in &batches {
+                for n in &batch.novels {
+                    // 同一文件在一趟扫描里可能出现在多个 batch，先按 return 去重
+                    if !seen.insert(n.file_path.clone()) {
+                        continue;
+                    }
+                    total += 1;
+                    if !existing.contains(&n.file_path) {
+                        fresh += 1;
+                    }
+                }
+            }
+            Ok(json!({
+                "imported": fresh.to_string(),
+                "found": total.to_string(),
+                // 重复扫描时不报错、但如实说清「一本都没新增」
+                "message": if fresh == 0 {
+                    format!("{} 本已在库中，未新增", total)
+                } else {
+                    format!("新增 {} 本", fresh)
+                },
+            }))
+        }
+
+        // 按文件路径导入（客户端「导入文件」那条路）
+        "import_novels" => {
+            let paths: Vec<String> = params["file_paths"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if paths.is_empty() {
+                return Err("导入小说失败: file_paths 不能为空".to_string());
+            }
+            let novels = novel_api::add_novel(paths.clone())
+                .map_err(|e| format!("导入小说失败: {}", e))?;
+            Ok(json!({
+                "imported": novels.len().to_string(),
+                "ids": novels.iter().map(|n| n.id.clone()).collect::<Vec<_>>(),
+            }))
+        }
+
+        // 远程书阅读进度。
+        //
+        // 之前节点侧**没有**这个 action，客户端远程阅读路径也从不保存进度：
+        // 用户读到第 20 章、关掉、再打开还是第 1 章，且没有任何提示。
+        // 底层 `novel_reader::api::update_reading_progress` 一直是有的。
+        "update_reading_progress" => {
+            let novel_id = params["novel_id"].as_str().unwrap_or("").to_string();
+            // 0.0~1.0 的归一化进度；越界钳一下而不是报错（前端偶尔算不准）
+            let raw = params["progress"].as_f64().unwrap_or(0.0);
+            let progress = if raw.is_finite() { raw.clamp(0.0, 1.0) } else { 0.0 } as f32;
+            require_changed(
+                novel_api::update_reading_progress(novel_id.clone(), progress),
+                "更新阅读进度",
+                format!("小说不存在 {}", novel_id),
+            )?;
+            Ok(json!({"ok": true, "progress": progress}))
+        }
+
         "set_novel_favorite" => {
             let novel_id = params["novel_id"].as_str().unwrap_or("").to_string();
             let is_favorite = params["is_favorite"].as_bool().unwrap_or(false);

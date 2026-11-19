@@ -72,7 +72,7 @@ while [ $# -gt 0 ]; do
     --with-full-test) WITH_FULL_TEST=1 ;;
     --all)            WITH_APP=1; WITH_FULL_TEST=1 ;;
     --keep)           KEEP=1 ;;
-    --list)           echo "小节：A 环境自检 | B Rust 构建 | C 节点冷启动模块 | D 假成功契约 | E 条目ID稳定 | F 幽灵体积 | G 重新扫描 | H 文件上传 | I 账本口令 | J Sentry清空 | K 真App | L 全量测试 | M 真实测试数据"; exit 0 ;;
+    --list)           echo "小节：A 环境自检 | B Rust 构建 | C 节点冷启动模块 | D 假成功契约 | E 条目ID稳定 | F 幽灵体积 | G 重新扫描 | H 文件上传 | I 账本口令 | J Sentry清空 | M 真实数据 | N 小说导入/进度 | K 真App | L 全量测试"; exit 0 ;;
     --only)           shift; [ $# -gt 0 ] || { echo "--only 需要一个值，例如 --only B,E"; exit 2; }; ONLY="$1" ;;
     --only=*)         ONLY="${1#--only=}" ;;
     --port)           shift; [ $# -gt 0 ] || { echo "--port 需要一个值"; exit 2; }; PORT="$1" ;;
@@ -670,6 +670,63 @@ if want M; then
           bad "真实素材导入失败：$(printf '%s' "$j" | head -c 240)"
         fi
       fi
+    fi
+  fi
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# N. 小说导入 + 阅读进度（节点侧都曾是缺口）
+#    客户端「扫描导入」此前是纯本机 FFI：远程模式下书导进本机库，
+#    提示「已导入 N 本」但远程书库空着。阅读进度则从不保存。
+# ═══════════════════════════════════════════════════════════════════════════
+if want N; then
+  sec "N 小说导入 + 阅读进度"
+  if start_node; then
+    bdir="$WORK_DIR/n-books"; rm -rf "$bdir"; mkdir -p "$bdir"
+    printf '第一章\n内容一\n' > "$bdir/回归书A.txt"
+    printf '内容内容\n' > "$bdir/回归书B.txt"
+
+    j="$(call scan_novel_folder "{\"folder_path\":\"$bdir\"}")"
+    if is_ok "$j" && [ "$(jget "$j" "d['data']['imported']")" = "2" ]; then
+      ok "首次扫描导入 2 本"
+    else
+      bad "首次扫描导入失败：$(printf '%s' "$j" | head -c 200)"
+    fi
+
+    j="$(call scan_novel_folder "{\"folder_path\":\"$bdir\"}")"
+    if is_ok "$j" && [ "$(jget "$j" "d['data']['imported']")" = "0" ]; then
+      ok "重复扫描不重复入库（如实报「未新增」）"
+    else
+      bad "重复扫描计数不对：$(printf '%s' "$j" | head -c 200)"
+    fi
+
+    j="$(call scan_novel_folder '{"folder_path":"/no/such/books"}')"
+    must_fail_with "$j" "小说" && ok "不存在的目录会报错" || bad "不存在目录未报错"
+
+    # 阅读进度：写进去要能读回来，越界要钳制
+    NID="$(call list_novels '{"with_cover":false}' \
+      | python3 -c 'import json,sys
+d=json.load(sys.stdin)["data"]
+print(d[0]["id"] if d else "")' 2>/dev/null)"
+    if [ -z "$NID" ]; then
+      bad "list_novels 里没有书，无法验证进度"
+    else
+      j="$(call update_reading_progress "{\"novel_id\":\"$NID\",\"progress\":0.42}")"
+      ok_prog="$(call list_novels '{"with_cover":false}' \
+        | python3 -c "
+import json,sys
+for n in json.load(sys.stdin)['data']:
+    if n['id']=='$NID': print(round(n['progress'],2))" 2>/dev/null)"
+      if is_ok "$j" && [ "$ok_prog" = "0.42" ]; then
+        ok "阅读进度写入并读回（0.42）"
+      else
+        bad "阅读进度未持久化：读回=$ok_prog"
+      fi
+      j="$(call update_reading_progress "{\"novel_id\":\"$NID\",\"progress\":5.0}")"
+      [ "$(jget "$j" "d['data']['progress']")" = "1.0" ] \
+        && ok "越界进度被钳制到 1.0" || bad "越界进度未钳制"
+      j="$(call update_reading_progress '{"novel_id":"novel_ghost","progress":0.5}')"
+      must_fail_with "$j" "不存在" && ok "幽灵书更新进度会报错" || bad "幽灵书更新进度未报错"
     fi
   fi
 fi

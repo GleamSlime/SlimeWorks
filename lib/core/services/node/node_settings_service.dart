@@ -2089,6 +2089,26 @@ class NodeSettingsService extends GetxService {
     }
   }
 
+  /// 把远程书的阅读进度写回节点（0.0~1.0 归一化）。
+  ///
+  /// 之前这条链路完全不存在：客户端远程阅读路径从不保存进度，节点侧也没有
+  /// 写 action，于是「读到第 20 章 → 关掉 → 再打开还是第 1 章」且无任何提示。
+  Future<void> updateNodeNovelProgress({
+    required String nodeId,
+    required String novelId,
+    required double progress,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) {
+      throw StateError('节点不存在: $nodeId');
+    }
+    await _callNode(
+      node: node,
+      action: 'update_reading_progress',
+      params: <String, dynamic>{'novel_id': novelId, 'progress': progress},
+    );
+  }
+
   Future<List<Map<String, dynamic>>> fetchNodeNovelContent({
     required String nodeId,
     required String filePath,
