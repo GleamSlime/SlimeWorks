@@ -26,12 +26,35 @@ export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
 - `flutter test` 一律加 `--no-pub`；任何不带 `--no-pub` 的 flutter 命令都会按当前 `PUB_HOSTED_URL` 重写 `pubspec.lock`。`pubspec.yaml` 未改时 HEAD 那份 lock 就是对的，`git checkout -- pubspec.lock` 可回退。
 - 缺镜像 env 时 `flutter build` / `precache` **不报错，静默卡在下载引擎产物**，出包命令同样要带两个镜像变量。
 - cargo 需要 `LIBCLANG_PATH`（bindgen），否则 `Unable to find libclang`。
+  **装了完整 Xcode 之后不要再设 `CXXFLAGS` / `CFLAGS`**：那套
+  `-I.../CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1` 是「只有 CLT」时的变通，
+  现在会让 CLT 与 Xcode 26 的 libc++ 混用，炸 `cstdint using_if_exists` /
+  `unknown type name 'uint64_t'` 满屏 error。正确姿势：
+  ```bash
+  export LIBCLANG_PATH=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib
+  # CXXFLAGS / CFLAGS 都不设
+  ```
+- **镜像源 pub cache 有两个残缺包**（本机「macOS 打不出来」的另一半原因）：
+  `~/.pub-cache/hosted/pub.flutter-io.cn/` 下
+  `media_kit_video-2.0.1/macos/Headers/mpv/`（缺 4 个头）与
+  `media_kit_libs_macos_video-1.1.4/macos/Frameworks/`（缺 18 个 mpv xcframework）
+  相对 pub.dev 原版是空的。症状是 Swift 报 `cannot find type 'mpv_node_list' in scope`。
+  修法：`rm -rf` 镜像那份 + `cp -R ~/.pub-cache/hosted/pub.dev/<同名>` 覆盖，diff 确认一致。
+  ★ 别把 4 个头直接摊到 `Headers/` 顶层——会和 `Headers/mpv/` 重名，报
+  `Multiple commands produce ... client.h`，必须保持原版 `Headers/mpv/*.h` 结构。
 - `pod install` 需要 UTF-8 locale，否则崩在 `Unicode Normalization`，且会被 flutter 静默吞掉。
+- **`flutter test -d macos` 每次都会重跑 pod install**：`macos/Pods/Manifest.lock`
+  与 `Podfile.lock` 不同步时直接 `error: The sandbox is not in sync with the Podfile.lock`。
+  所以**别随手 `git checkout -- macos/Podfile.lock`**（它会弄坏同步）；需要还原时
+  先 `pod install` 补回 `Manifest.lock`。网络不通时 pod install 会失败
+  （`CDN: trunk URL couldn't be downloaded`），出包/跑测一律走上面那条代理。
 - 海外下载慢时可走用户代理：`export https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 all_proxy=socks5://127.0.0.1:7897`。
 
 ## Xcode 与 macOS 打包
 
-- 本机已装完整 **Xcode 27.0（27A266a）**，`xcode-select -p` = `/Applications/Xcode.app/Contents/Developer` → macOS 打包本机可验（旧文档「本机无 Xcode.app、打包不可验证」的说法已作废）。
+- 本机已装完整 **Xcode 26.3（17C529）**，`xcode-select -p` = `/Applications/Xcode.app/Contents/Developer` → macOS 打包本机可验（旧文档「本机无 Xcode.app、打包不可验证」的说法已作废）。
+- **本机版本天花板是 26.3**：macOS 15.6.1 上 Xcode 26.4+ / 27.x 全部要求 macOS 26.2+，装不上；App Store 只给最新版，同样装不了（必须走 developer.apple.com 手动下 xip）。Apple Silicon 单架构 xip 约 **2.1 GB**（不是老版本的 10GB+，别按体积误判下载不完整），校验 sha1 才对。
+- iOS 模拟器 runtime 是独立包（`xcodebuild -downloadPlatform iOS`，约 8.4 GB），Xcode 本体装完仍为空，需单独拉。
 - 打包门：`fastforge package --platform macos --target dmg`；`PATH` 补 `~/.pub-cache/bin` 与 flutter bin。
 - **SDK 升级后全局 fastforge 会失效**（报 cannot resolve to the same set of dependencies），先 `dart pub global activate fastforge` 重新激活再跑。
 - **`FLUTTER_SWIFT_PACKAGE_MANAGER=false`**：iOS/macOS 钉死 CocoaPods 路线（部分插件无 SPM 支持，iOS 工程不做 SPM 迁移）。Flutter 3.50 起关闭 SPM 每次命令会告警；CocoaPods Trunk 2026-12 进入只读，SPM 迁移是后续专项。
@@ -63,6 +86,39 @@ flutter test                                   # Flutter 测试
 
 - FRB codegen 不在全局激活列表时用 `dart pub global activate flutter_rust_bridge_codegen <与 pubspec 一致的版本>`。
 - Rust 格式化只碰自己改过的文件；主 crate `rust/src` 在 HEAD 上不是 fmt-clean，不要全仓 `cargo fmt`。
+
+## 真 App 集成测试（`flutter test -d macos`）
+
+在**真 macOS App**里跑测试（真 Cocoa 窗口、真插件、真 Rust framework），
+用来复现只在真机出现的缺陷——widget test 里平台通道是测试实现，测不到这一层。
+
+```bash
+mkdir -p /tmp/sw_real_app_home
+HOME=/tmp/sw_real_app_home \
+CFFIXED_USER_HOME=/tmp/sw_real_app_home \
+SLIME_E2E_HOME=/tmp/sw_real_app_home \
+CARGO_HOME=$HOME/.cargo RUSTUP_HOME=$HOME/.rustup \
+FLUTTER_SWIFT_PACKAGE_MANAGER=false \
+/private/tmp/fl/flutter/bin/flutter test integration_test/<文件>.dart -d macos --no-pub
+```
+
+- **`CFFIXED_USER_HOME` 才是 macOS 的真隔离开关**。只设 `HOME` 时 `NSHomeDirectory()`
+  仍是 `/Users/<你>`，`path_provider` 的 `getApplicationSupportDirectory()` 与
+  `UserDefaults`（shared_preferences）照样写开发者真实目录（ledger.db 会落到
+  `~/Library/Application Support/com.gleamslime.works/`）。
+  → `shared_preferences` **连 CFFIXED_USER_HOME 也拦不住**，测试里要用
+  `SharedPreferences.setMockInitialValues({})` 隔离，否则会读到上一次跑留下的陈旧节点。
+- **`HOME` 一改会打死 cargokit**：`flutter test -d macos` 会先尝试重建 Rust，
+  cargokit 用 `$HOME/.cargo` 找 rustup，报 `rustup is not installed at '/tmp/...'`
+  构建直接失败 → 必须显式透传 `CARGO_HOME` / `RUSTUP_HOME`。
+- **必须逐文件跑**：`flutter test integration_test/`（整个目录）会把多个文件放**同一进程**
+  串跑，而 `RustLib.init()` / `getItInit()` / `runApp()` 都不可重入，加载阶段就崩
+  （症状是 `build/test/listener_N.dart` not found 或一堆 loading error）。
+- `testWidgets` 默认跑在 **fake-async 区**：真实 socket / FFI 的完成回调永远不会被推进，
+  直接 `await` 真实网络会挂到超时且**没有任何日志**。真 I/O 一律放进 `tester.runAsync()`，
+  再与 `tester.pump` 交替推进。
+- 排障：报 `Failed to foreground app; open returned 1` 通常是已有同名 .app 实例在跑，
+  先 `pkill -f 史莱姆工坊`；报 `build.db is locked` 是有并发构建，等另一路结束再跑。
 
 ## golden 基线与 worktree 对照
 
