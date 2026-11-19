@@ -249,8 +249,8 @@ void main() {
       expect(request.bodyBytes, equals(imageBytes));
       expect(request.header('content-length'), '${imageBytes.length}');
       // 文件名与集合 id 走 query（dest 由集合反查，这里集合不在库里故不校验）
-      expect(request.query?['filename'], 'a.png');
-      expect(request.query?['collection_id'], 'col-1');
+      expect(request.query['filename'], 'a.png');
+      expect(request.query['collection_id'], 'col-1');
     });
 
     test('success:false 抛出 error 文案', () async {
@@ -428,19 +428,3 @@ void main() {
   });
 }
 
-/// 在 [haystack] 中查找连续子序列 [needle]
-bool _containsSequence(List<int> haystack, List<int> needle) {
-  if (needle.isEmpty || needle.length > haystack.length) {
-    return false;
-  }
-  outer:
-  for (int i = 0; i <= haystack.length - needle.length; i++) {
-    for (int j = 0; j < needle.length; j++) {
-      if (haystack[i + j] != needle[j]) {
-        continue outer;
-      }
-    }
-    return true;
-  }
-  return false;
-}
