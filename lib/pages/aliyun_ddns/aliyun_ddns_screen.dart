@@ -17,6 +17,7 @@ import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/widgets/app_text_field.dart';
 import 'package:slime_works/core/widgets/app_card.dart';
+import 'package:slime_works/components/common/error_banner.dart';
 
 class AliyunDdnsScreen extends StatefulWidget {
   const AliyunDdnsScreen({super.key});
@@ -97,6 +98,15 @@ class _AliyunDdnsScreenState extends State<AliyunDdnsScreen> with TickerProvider
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 读取失败要说出来：远程节点连不上 / 授权码错 / 模块未初始化
+              // 此前都被 `catch (_) {}` 吞掉，页面只剩空列表和全 0，
+              // 用户会误以为「功能还没接好」。
+              Obx(
+                () => ErrorBanner(
+                  message: _viewModel.errorMessage.value,
+                  onRetry: () => _viewModel.refreshAll(),
+                ),
+              ),
               _buildEnableBanner(context, s, m),
               SizedBox(height: m.kSpace16),
               _buildIpStatusCard(context, s, m),

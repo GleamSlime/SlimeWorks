@@ -25,6 +25,13 @@ class AliyunDdnsViewModel extends GetxController {
 
   final RxString currentNodeId = ''.obs;
 
+  /// 最近一次读取失败的原因；空串表示没有错误。
+  ///
+  /// 此前三处远程读取全是 `catch (_) {}`，错误只被丢掉：节点连不上、
+  /// 授权码错、模块未初始化……在用户眼里一律变成「空列表 + 全 0」，
+  /// 被误导成「功能还没接好」。页面据此显示原因。
+  final RxString errorMessage = ''.obs;
+
   bool get isLocal => currentNodeId.value.isEmpty;
 
   StreamSubscription? _enabledSub;
@@ -160,7 +167,11 @@ class AliyunDdnsViewModel extends GetxController {
         domainStatuses.value = ds.map((e) => e as Map<String, dynamic>).toList();
         isEnabled.value = status['enabled'] as bool? ?? false;
       }
-    } catch (_) {}
+      // 成功即清错误，否则页面会一直挂着上一次的失败原因
+      errorMessage.value = '';
+    } catch (e) {
+      errorMessage.value = '读取 DDNS 状态失败: $e';
+    }
   }
 
   Future<void> refreshLogs() async {
@@ -171,7 +182,10 @@ class AliyunDdnsViewModel extends GetxController {
         final remoteLogs = await _service.fetchRemoteLogs();
         logs.value = remoteLogs;
       }
-    } catch (_) {}
+      errorMessage.value = '';
+    } catch (e) {
+      errorMessage.value = '读取 DDNS 日志失败: $e';
+    }
   }
 
   Future<void> refreshWatchDomains() async {
@@ -179,7 +193,9 @@ class AliyunDdnsViewModel extends GetxController {
       if (isLocal) return;
       final remoteDomains = await _service.fetchRemoteWatchDomains();
       watchDomains.value = remoteDomains;
-    } catch (_) {}
+    } catch (e) {
+      errorMessage.value = '读取监控域名失败: $e';
+    }
   }
 
   Future<void> clearLogs() async {

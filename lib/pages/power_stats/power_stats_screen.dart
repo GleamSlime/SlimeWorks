@@ -23,6 +23,7 @@ import 'package:slime_works/pages/power_stats/components/power_stats_chart.dart'
 import 'package:slime_works/pages/power_stats/components/power_stats_hero.dart';
 import 'package:slime_works/pages/power_stats/components/power_stats_live_card.dart';
 import 'package:slime_works/pages/power_stats/components/power_stats_tape.dart';
+import 'package:slime_works/components/common/error_banner.dart';
 
 /// 电力统计页
 ///
@@ -145,6 +146,13 @@ class _PowerStatsScreenState extends State<PowerStatsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // 读取失败要说出来：节点连不上 / 模块未初始化此前都被
+                // `catch (_) {}` 吞掉，页面只剩全 0 的空图表，
+                // 用户会误以为「还没有数据」。
+                ErrorBanner(
+                  message: _viewModel.errorMessage.value,
+                  onRetry: () => _viewModel.refreshAll(),
+                ),
                 PsStagger(
                   index: 0,
                   child: PsGlassCard(child: _buildHero(context)),

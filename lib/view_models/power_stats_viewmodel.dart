@@ -85,6 +85,12 @@ class PowerStatsViewModel extends GetxController {
   final RxInt intervalSecs = 60.obs;
   final RxString currentNodeId = ''.obs;
 
+  /// 最近一次读取失败的原因；空串表示没有错误。
+  ///
+  /// 此前四处读取全是 `catch (_) {}`：节点连不上 / 模块未初始化 / 授权码错，
+  /// 用户在页面上只看到「全 0 的空图表」，被误导成「还没有数据」。
+  final RxString errorMessage = ''.obs;
+
   // 运行时状态
   final RxString meterName = ''.obs;
   final RxDouble currentKwh = 0.0.obs;
@@ -236,7 +242,10 @@ class PowerStatsViewModel extends GetxController {
     if (!_service.isInitialized) return;
     try {
       await _service.refreshStatus();
-    } catch (_) {}
+      errorMessage.value = '';
+    } catch (e) {
+      errorMessage.value = '读取电力统计状态失败: $e';
+    }
   }
 
   Future<void> refreshSummary() async {
@@ -244,7 +253,10 @@ class PowerStatsViewModel extends GetxController {
     try {
       await _service.refreshSummary();
       summary.value = Map<String, dynamic>.from(_service.summary);
-    } catch (_) {}
+      errorMessage.value = '';
+    } catch (e) {
+      errorMessage.value = '读取电力统计汇总失败: $e';
+    }
   }
 
   Future<void> refreshAggregated() async {
@@ -263,7 +275,10 @@ class PowerStatsViewModel extends GetxController {
       totalCost.value = (data['total_cost'] as num?)?.toDouble() ?? 0.0;
       avgBalance.value = (data['avg_balance'] as num?)?.toDouble() ?? 0.0;
       aggregatedSampleCount.value = (data['sample_count'] as num?)?.toInt() ?? 0;
-    } catch (_) {}
+      errorMessage.value = '';
+    } catch (e) {
+      errorMessage.value = '读取电力统计图表失败: $e';
+    }
   }
 
   Future<void> refreshLogs() async {
@@ -271,7 +286,10 @@ class PowerStatsViewModel extends GetxController {
     try {
       await _service.refreshLogs();
       logs.value = List<Map<String, dynamic>>.from(_service.logs);
-    } catch (_) {}
+      errorMessage.value = '';
+    } catch (e) {
+      errorMessage.value = '读取电力统计日志失败: $e';
+    }
   }
 
   /// 手动抓取一次
