@@ -109,7 +109,13 @@ fn ensure_power_stats_ready() -> Result<(), String> {
 }
 
 /// Sentry 日志存储兜底：节点侧自建一份，供客户端远程查看。
-fn ensure_sentry_ready() -> Result<(), String> {
+///
+/// **pub 是必要的**：Sentry 走的是独立 HTTP 路由（`/sentry/*`、`/api/*/store/`），
+/// 那些分支在 `mod.rs` 里直接调 `sentry_log::api::*`，根本不经过
+/// `dispatch_action`，所以只在 action 前缀里兜底是漏的 —— 实测全新节点的
+/// `/sentry/stats` 会回 `{"error":"Sentry日志存储未初始化"}`，
+/// 客户端看到的就是「日志中心一片空白」。
+pub(crate) fn ensure_sentry_ready() -> Result<(), String> {
     if sentry_log::api::sentry_log_is_ready() {
         return Ok(());
     }

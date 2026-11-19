@@ -52,6 +52,34 @@ UI：Flutter/Dart、GetX、GoRouter、ScreenUtil ｜ FFI：flutter_rust_bridge �
 
 ---
 
+## 全量模拟回归测试（按需触发）
+
+无头节点 / 远程节点模式的**行为回归**，与上面的提交门是两回事：提交门验「能不能编、测试过不过」，这个脚本验「用户在远程模式下点按钮，数据到底变没变」。
+
+**什么时候跑**：用户明确要求时；或 Agent 判断改动碰了以下任一区域时**应当主动跑**——
+`rust/src/node_server/**`、`rust/media_collection/**`、`rust/ledger_module/**`、
+`lib/core/services/node/**`、`lib/view_models/media_library_**`、
+`lib/view_models/novel_library**`、`lib/view_models/ledger/**`。
+
+```bash
+bash scripts/full_regression.sh                  # 核心回归，约 40s
+bash scripts/full_regression.sh --with-app       # 再加真 macOS App 集成测试
+bash scripts/full_regression.sh --all            # 全量（含 flutter test 基线对照）
+bash scripts/full_regression.sh --only C,E,F     # 只跑指定小节
+bash scripts/full_regression.sh --list           # 列出小节
+```
+
+它起一个**全新空 `--data-dir`** 的真 `slime_node`（这是关键：热进程会掩盖「模块未初始化」这类缺陷），
+然后逐条验证：冷启动模块初始化、对幽灵 id 的写操作必须报错（不能假成功）、
+条目 ID 稳定性、幽灵体积、重新扫描、单文件上传（含同名唯一化/路径穿越/越界拒绝）、
+账本口令清空、Sentry 清空事件。
+
+**输出只有结论表**（每条 PASS/FAIL 一行，失败时附一句现场），细节全在
+`$TMPDIR/slime_works_regress/<时间戳>/` 的日志里——**不要把整个日志贴进上下文**，
+需要哪条就只读对应文件。退出码非 0 即视为回归。
+
+设计依据（为什么这么测）与各小节的判据写在脚本头部注释里。
+
 ## 校验与提交（硬性门槛）
 
 任何一次 `git commit` 之前，必须先完整跑一遍校验脚本，它把三道门固定在同一套环境里（SDK 读 `.dart_tool/version`、补镜像变量、`--no-pub`、打包前清旧产物），只输出结论摘要，完整日志落在 `$TMPDIR/slime_works_gate/<时间戳>/`：

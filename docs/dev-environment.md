@@ -87,6 +87,44 @@ flutter test                                   # Flutter 测试
 - FRB codegen 不在全局激活列表时用 `dart pub global activate flutter_rust_bridge_codegen <与 pubspec 一致的版本>`。
 - Rust 格式化只碰自己改过的文件；主 crate `rust/src` 在 HEAD 上不是 fmt-clean，不要全仓 `cargo fmt`。
 
+## 全量模拟回归测试（`scripts/full_regression.sh`）
+
+无头节点/远程模式的**行为回归**。与 `precommit_gate.sh` 分工不同：那个验「能不能编、
+测试过不过」，这个验「用户在远程模式下点按钮，节点数据到底变没变」。
+
+```bash
+bash scripts/full_regression.sh                  # 核心 11 个小节，约 11s
+bash scripts/full_regression.sh --with-app       # 追加真 macOS App 集成测试（+10min）
+bash scripts/full_regression.sh --with-full-test # 追加全量 flutter test + 基线对照（+15min）
+bash scripts/full_regression.sh --all            # 两个都加
+bash scripts/full_regression.sh --only C,E,F     # 只跑指定小节
+bash scripts/full_regression.sh --keep           # 保留临时目录便于排查
+```
+
+小节：A 环境自检 / B Rust 构建 / C 冷启动模块 / D 假成功契约 / E 条目 ID 稳定 /
+F 幽灵体积 / G 重新扫描 / H 文件上传 / I 账本口令 / J Sentry 清空 / M 真实测试数据 /
+K 真 App（可选）/ L 全量测试（可选）。
+
+**关键设计**（都是踩过坑才这么写的，别随手改）：
+
+1. **用全新空 `--data-dir` 起节点**。用热进程测，「模块未初始化」这类缺陷会被
+   完全掩盖——上一轮就是这么漏掉阿里云/电力统计/Sentry 全部挂掉的。
+2. **真实数据只读**。M 小节把 `$DATA_ROOT`（默认 `/Volumes/T22/测试数据`）里的
+   素材**复制**到临时目录再导入，并断言源目录没被写入 `.SlimeWorks`。
+3. **输出只有结论表**，细节进 `$TMPDIR/slime_works_regress/<时间戳>/` 的日志。
+   排查时只读对应文件，别把整份日志贴进上下文。
+4. **Sentry 走独立 HTTP 路由**（`/sentry/*`、`/api/*/store|envelope`），
+   不经过 `dispatch_action`，所以惰性初始化兜底必须在路由分发前单独做一次——
+   否则全新节点上 `/sentry/stats` 回「未初始化」，脚本的 C 小节会立刻抓到。
+5. `--list` 只列小节；`--only` 支持逗号分隔多选。
+
+**验证脚本本身有效**：把 `reuse_existing_item_ids` 的调用注释掉（复现条目 ID 抖动的
+历史 bug），E 小节会报 `FAIL 删掉 1 条后其余条目 id 变了` 并打印删前/删后 id 与
+「用快照 id 删除失败」——修复后恢复全绿。改动脚本后建议这样自证一次。
+
+★ bash 3.2/5.x 通用坑：`"$VAR（"` 这种变量紧邻全角字符的写法会把多字节字符的
+首字节并进变量名，报 `unbound variable`。脚本里一律写 `"${VAR}（"`。
+
 ## 真 App 集成测试（`flutter test -d macos`）
 
 在**真 macOS App**里跑测试（真 Cocoa 窗口、真插件、真 Rust framework），

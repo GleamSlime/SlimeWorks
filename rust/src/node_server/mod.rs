@@ -419,6 +419,31 @@ fn handle_connection(mut stream: TcpStream, config: Arc<NodeServerConfig>) {
     }
 
     // ── 路由分发 ─────────────────────────────────────────────────────────────
+
+    // Sentry 的 HTTP 路由（`/sentry/*` 与 `/api/*/store|envelope`）在下面的
+    // match 里直接调 `sentry_log::api::*`，**不经过 dispatch_action**，
+    // 所以它的惰性初始化兜底必须在这里先做一次。少了这一步，全新空 data-dir
+    // 起的节点上 `/sentry/stats` 会回「Sentry日志存储未初始化」，客户端
+    // 日志中心表现为一片空白（全量回归脚本的 C 小节就是这么抓到的）。
+    //
+    // 只对这几个前缀生效，其它路由零额外开销（一次字符串前缀比较）。
+    let route_before_query = path.split('?').next().unwrap_or(&path);
+    if route_before_query.starts_with("/sentry/")
+        || (route_before_query.starts_with("/api/")
+            && (route_before_query.contains("/store") || route_before_query.contains("/envelope")))
+    {
+        if let Err(e) = handlers::ensure_sentry_ready() {
+            let body = serde_json::json!({"error": e}).to_string();
+            let header = format!(
+                "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(header.as_bytes());
+            let _ = stream.write_all(body.as_bytes());
+            return;
+        }
+    }
+
     let (status, body_str) = match (method.as_str(), path.split('?').next().unwrap_or(&path)) {
         ("GET", "/health") => {
             let data = serde_json::json!({
