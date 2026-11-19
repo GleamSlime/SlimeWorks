@@ -190,7 +190,14 @@ class AliyunDdnsService extends GetxService {
 
   Future<void> setSelectedNodeId(String nodeId) async {
     selectedNodeId.value = nodeId;
-    await _prefs?.setString(_keySelectedNodeId, nodeId);
+    // 远程模式下 selectedNodeId 是全局节点的投影，**不能**覆盖本页自己的记忆值。
+    //
+    // 少这个保护会出现：顶栏提示「设置均作用于该节点」，用户却在设置页把
+    // 阿里云切回「本机」，于是这一块静默脱离全局节点、读写的还是本机数据——
+    // 与电力统计 / 流水账 / Sentry 三家（都已有同样判断）行为不一致。
+    if (_nodeSettingsService?.isRemoteMode != true) {
+      await _prefs?.setString(_keySelectedNodeId, nodeId);
+    }
   }
 
   Future<void> addWatchDomain(WatchDomain domain) async {
