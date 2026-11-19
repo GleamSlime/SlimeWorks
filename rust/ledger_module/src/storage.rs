@@ -478,10 +478,18 @@ pub fn delete_account(id: i64) -> Result<String> {
             |r| r.get(0),
         )?;
         if used > 0 {
-            conn.execute("UPDATE accounts SET enabled = 0 WHERE id = ?1", params![id])?;
+            let affected = conn.execute("UPDATE accounts SET enabled = 0 WHERE id = ?1", params![id])?;
+            if affected == 0 {
+                return Err(anyhow!("账户不存在: {}", id));
+            }
             Ok(format!("该账户已有 {} 笔流水，已改为停用（保留历史账目）", used))
         } else {
-            conn.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
+            let affected = conn.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
+            // 没有流水且没删到行 = 这个账户本来就不存在。
+            // 之前无条件回「账户已删除」，界面上就是一次干净的假成功。
+            if affected == 0 {
+                return Err(anyhow!("账户不存在: {}", id));
+            }
             Ok("账户已删除".to_string())
         }
     })
@@ -882,17 +890,22 @@ pub fn list_merchant_memory() -> Result<Vec<(String, i64)>> {
 
 pub fn forget_merchant(merchant_key: &str) -> Result<()> {
     with_db(|conn| {
-        conn.execute(
+        // 影响行数为 0 说明这条记忆根本不存在。静默 Ok 会让「忘记这个商户」
+        // 的按钮变成假成功（用户点完、刷新一下它还在，因为压根没删到）。
+        let affected = conn.execute(
             "DELETE FROM merchant_memory WHERE merchant_key = ?1",
             params![merchant_key],
         )?;
+        if affected == 0 {
+            return Err(anyhow!("商户记忆不存在: {}", merchant_key));
+        }
         Ok(())
     })
 }
 
 pub fn update_transaction(tx: &Transaction) -> Result<()> {
     with_db(|conn| {
-        conn.execute(
+        let affected = conn.execute(
             "UPDATE transactions SET occurred_at=?1, bill_date=?2, direction=?3, amount=?4, currency=?5, \
              account_id=?6, category_id=?7, merchant=?8, note=?9, status=?10, updated_at=?11 WHERE id=?12",
             params![
@@ -914,6 +927,11 @@ pub fn update_transaction(tx: &Transaction) -> Result<()> {
                 tx.id
             ],
         )?;
+        // 0 行 = 这笔流水不存在（或 id 传错）。静默 Ok 会让「保存修改」
+        // 在远程模式下变成假成功：界面刷新后看着没变，用户以为是缓存问题。
+        if affected == 0 {
+            return Err(anyhow!("流水不存在: {}", tx.id));
+        }
         Ok(())
     })
 }
@@ -1319,17 +1337,27 @@ pub fn upsert_email_rule(rule: &EmailRule) -> Result<i64> {
 
 pub fn set_email_rule_enabled(id: i64, enabled: bool) -> Result<()> {
     with_db(|conn| {
-        conn.execute(
+        // 0 行 = 规则不存在。之前无条件 Ok，远程模式下点「启用」会提示成功、
+        // 而节点上什么都没改（这条纪律和节点 action 的 require_changed 同源）。
+        let affected = conn.execute(
             "UPDATE email_rules SET enabled = ?1 WHERE id = ?2",
             params![enabled as i64, id],
         )?;
+        if affected == 0 {
+            return Err(anyhow!("邮箱规则不存在: {}", id));
+        }
         Ok(())
     })
 }
 
 pub fn delete_email_rule(id: i64) -> Result<()> {
     with_db(|conn| {
-        conn.execute("DELETE FROM email_rules WHERE id = ?1", params![id])?;
+        // 先看规则本身删掉几行：0 行就是不存在。不看的话「删除规则」在
+        // 远程模式下提示成功、刷新还在（旧口令那份也早被一起清了）。
+        let affected = conn.execute("DELETE FROM email_rules WHERE id = ?1", params![id])?;
+        if affected == 0 {
+            return Err(anyhow!("邮箱规则不存在: {}", id));
+        }
         conn.execute(
             "DELETE FROM email_rule_secrets WHERE rule_id = ?1",
             params![id],
