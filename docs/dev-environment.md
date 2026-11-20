@@ -125,6 +125,31 @@ K 真 App（可选）/ L 全量测试（可选）。
 ★ bash 3.2/5.x 通用坑：`"$VAR（"` 这种变量紧邻全角字符的写法会把多字节字符的
 首字节并进变量名，报 `unbound variable`。脚本里一律写 `"${VAR}（"`。
 
+## ★ `flutter test` 会拦截真实 HTTP（排查时最容易误判的坑）
+
+**`flutter test`（只要调了 `TestWidgetsFlutterBinding.ensureInitialized()`）
+会注入 HTTP mock，把所有真实网络请求返回 `400`，且响应体为空。**
+
+症状极具迷惑性：
+- 同一个节点，`curl` 打返回 200；
+- 同一个 Dio 配置，在纯 `dart:io`（不加 Flutter binding）里返回 200；
+- 唯独在带 binding 的测试里 400，而且**连 `ServerSocket` 都收不到请求**
+  （因为根本没建立连接，Dio 拿到的是 mock 的伪造响应）。
+
+所以任何「用 flutter test / integration_test 打真实节点」的验证，
+都必须在 `setUpAll` 里清掉注入：
+
+```dart
+setUpAll(() => HttpOverrides.global = null);
+```
+
+本仓库 `test/ledger_service_test.dart`、`test/node_auth_code_test.dart`、
+`test/novel_library_remote_fetch_test.dart` 都是这么做的。
+
+★ 这条曾经让人误判成「节点侧协议坏了」，实际节点一直是好的。
+遇到「curl 通、测试里 400」先查这个，不要急着改业务代码。
+（真 App 集成测试 `-d macos` 跑在真引擎上，不受这个 mock 影响。）
+
 ## 真 App 集成测试（`flutter test -d macos`）
 
 在**真 macOS App**里跑测试（真 Cocoa 窗口、真插件、真 Rust framework），
