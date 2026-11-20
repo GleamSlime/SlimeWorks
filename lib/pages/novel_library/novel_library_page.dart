@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -17,8 +18,39 @@ import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/widgets/app_text_field.dart';
 
 /// 书籍库页面
-class NovelLibraryPage extends StatelessWidget {
+///
+/// ★ 必须是 StatefulWidget：`NovelLibraryViewModel.onInitAsync()` 只在
+/// `BasePage.onPageInit` 里被调用，而本页不是 BasePage 子类。之前它是
+/// StatelessWidget，**从不触发初始化**——于是 `refreshRemoteNovels()` 一次都
+/// 没跑过，远程模式下书库永远是空的（本机模式靠 `loadNovels` 直接读 FFI 看
+/// 不出异常，只有切到远程节点才暴露）。这里照 game_hub_screen 等页面的做法，
+/// 在 initState 里显式触发一次。
+class NovelLibraryPage extends StatefulWidget {
   const NovelLibraryPage({super.key});
+
+  @override
+  State<NovelLibraryPage> createState() => _NovelLibraryPageState();
+}
+
+class _NovelLibraryPageState extends State<NovelLibraryPage> {
+  late final NovelLibraryViewModel _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Get.put 在 build 里也行，但放这里能保证 initState 与 controller 同一实例
+    _controller = Get.put(NovelLibraryViewModel());
+    // 触发异步初始化（本机读 FFI、远程拉节点）。失败不该白屏，
+    // 由 VM 内部的 showSnack 报出来。
+    // 必须 await（用 unawaited 显式表达"故意不等"，并且要把异常捞出来）——
+    // onInitAsync 里是真实 IO（本机 FFI / 远程 HTTP），直接丢弃 Future
+    // 会让失败静默消失，也会让初始化看起来"从没发生"。
+    unawaited(
+      _controller.onInitAsync().catchError((Object e) {
+        debugPrint('书籍库初始化失败: $e');
+      }),
+    );
+  }
 
   /// 显示书籍右键菜单
   void _showNovelContextMenu(BuildContext context, NovelMetadata novel, Offset position) {
@@ -63,7 +95,7 @@ class NovelLibraryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
-    final controller = Get.put(NovelLibraryViewModel());
+    final controller = _controller;
     final isNarrow = MediaQuery.of(context).size.width < 600;
 
     return ScreenChrome(
