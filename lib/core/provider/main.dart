@@ -28,10 +28,23 @@ import 'package:slime_works/core/services/transcription_task_queue.dart';
 
 final getIt = GetIt.instance;
 
-bool isInitialized = false;
+/// 依赖注入是否已注册过（`getItInit` 的幂等守卫）。
+///
+/// ★ 这个名字必须区别于 `BaseViewModel.isInitialized`！
+/// 之前它叫顶层变量 `isInitialized`，而 ViewModel 文件普遍
+/// `import 'package:slime_works/core/provider/main.dart'`。Dart 的作用域规则下，
+/// 子类方法体里裸写 `isInitialized` 会解析到这个**顶层变量**而不是基类 getter，
+/// 于是：
+///   - `NovelLibraryViewModel.onInitAsync()` 打开那个 `if (isInitialized) return;`
+///     永远是 true（main 里 getItInit 后即置 true）→ **初始化整段从不执行**
+///     → `refreshRemoteNovels()` 一次都没跑 → 远程书库永远空；
+///   - 本机模式靠别处直接读 FFI 照样有数据，把这个坑完全盖住；
+///   - `MediaLibraryViewModel` 同款写法，也受影响。
+/// 这是个不报错、只静默跑错分支的隐式遮蔽，改名是最省事的根治办法。
+bool diRegistryInitialized = false;
 
 void getItInit() {
-  if (isInitialized) {
+  if (diRegistryInitialized) {
     return;
   }
 
@@ -117,5 +130,5 @@ void getItInit() {
     () => AsrSettingsService(getIt<AsrService>(), getIt<SubtitleTranslateService>()),
   );
 
-  isInitialized = true;
+  diRegistryInitialized = true;
 }
