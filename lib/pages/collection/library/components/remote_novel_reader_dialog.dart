@@ -38,6 +38,10 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
   String? _error;
   List<Map<String, dynamic>> _chapters = <Map<String, dynamic>>[];
   int _selected = 0;
+  // 当前章节正文：必须单独向节点请求（EPUB 的 content 恒为 None）
+  bool _chapterLoading = false;
+  String? _chapterError;
+  String _chapterText = '';
 
   @override
   void initState() {
@@ -60,11 +64,48 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
         // 之前远程阅读路径完全不用它，所以永远是第 1 章。
         _selected = _chapterIndexForProgress(chapters.length, widget.metadata.progress);
       });
+      // 列表到手后再取正文（EPUB 的 content 是延迟加载的）
+      if (chapters.isNotEmpty) {
+        await _loadChapter(_selected);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
+      });
+    }
+  }
+
+  /// 加载指定章节的正文。
+  ///
+  /// 必须单独请求：EPUB 解析器把每章标成 `content: None`（延迟加载），
+  /// 正文只能靠 `get_chapter_content` 按 index 取。桌面对话框此前直接用
+  /// payload 里的 content，导致 **EPUB 书正文永远空白**（TXT 内联全文所以看不出来）。
+  Future<void> _loadChapter(int index) async {
+    if (index < 0 || index >= _chapters.length) return;
+    setState(() {
+      _selected = index;
+      _chapterLoading = true;
+      _chapterError = null;
+    });
+    try {
+      final content = await _service.fetchNodeChapterContent(
+        nodeId: widget.nodeId,
+        filePath: widget.metadata.filePath,
+        chapterIndex: index,
+      );
+      if (!mounted) return;
+      setState(() {
+        _chapterText = content;
+        _chapterLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _chapterText = '';
+        _chapterError = e.toString();
+        _chapterLoading = false;
       });
     }
   }
@@ -103,8 +144,12 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final chapter = _chapters.isEmpty ? null : _chapters[_selected];
-    final chapterText = (chapter?['content'] ?? '').toString();
+    // ★ 正文一律取 `_chapterText`，不要用 `_chapters[_selected]['content']`：
+    // EPUB 解析器把每章标成 `content: None`（延迟加载，见 parser_epub.rs 里
+    // `content: None, // 延迟加载，由 get_chapter_content 提供`）。
+    // 用 payload 里的 content 会让 **EPUB 书正文永远空白**——TXT 因为内联了
+    // 全文才看不出问题，所以这个 bug 只在 epub 上暴露。
+    final chapterText = _chapterText;
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
@@ -158,7 +203,10 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                                 selected: index == _selected,
                                 title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
                                 onTap: () {
-                                  setState(() => _selected = index);
+                                  // 必须走 _loadChapter：它负责取正文 + 置加载态。
+                                  // 旧实现只 setState(_selected)，正文压根不跟着变
+                                  // （EPUB 尤其明显：content 恒 null，永远是空白）
+                                  _loadChapter(index);
                                   // 切章即保存：用户读完一章往往直接关掉，
                                   // 只在 dispose 存会让「读完没关」那一下丢失
                                   _persistProgress();
@@ -171,7 +219,11 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                         Expanded(
                           child: Padding(
                             padding: EdgeInsets.all(appMetrics.kSpace12),
-                            child: _buildChapterContent(context, chapterText),
+                            child: _chapterLoading
+                                ? const Center(child: CircularProgressIndicator())
+                                : _chapterError != null
+                                ? Center(child: Text('加载章节失败: $_chapterError'))
+                                : _buildChapterContent(context, chapterText),
                           ),
                         ),
                       ],
