@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:get/get.dart';
@@ -442,7 +444,12 @@ class _NovelLibraryPageState extends State<NovelLibraryPage> {
                 child: Obx(() {
                   final displayNovels = controller.filteredNovels;
 
-                  if (controller.novels.isEmpty) {
+                  // ★ 不能判 `controller.novels.isEmpty`：那是**本机书**，
+                  // 远程模式下恒为空（loadNovels 在远程模式直接 clear）。
+                  // 用它会把"已取到一批节点书"的界面渲染成空状态，
+                  // 用户看到的就是"远程书库读不到"。
+                  // 空状态应看合并后的渲染源 filteredItems。
+                  if (controller.filteredItems.isEmpty) {
                     return _buildEmptyView(context, isNarrow);
                   }
 
@@ -560,6 +567,17 @@ class _NovelLibraryPageState extends State<NovelLibraryPage> {
   Widget _buildEmptyView(BuildContext context, bool isNarrow) {
     final s = AppSemantic.of(context);
     final m = AppTheme.metrics;
+    // 移动端没有本机书库：空著的真实原因通常是「没连节点」或「节点上没书」，
+    // 而不是「还没添加书籍」——直接说清该做什么，别让用户去本机找文件。
+    final mobile = PlatformUtil.isMobile;
+    final nodeService = getIt<NodeSettingsService>();
+    final mobileNoNode = mobile && nodeService.enabledRemoteNodes.isEmpty;
+    final title = mobileNoNode
+        ? '还没有连接节点'
+        : (mobile ? '节点上还没有书籍' : '还没有添加书籍');
+    final hint = mobileNoNode
+        ? '移动端只能读取远程节点：请到「设置 → 节点」添加一个节点'
+        : (mobile ? '书籍保存在节点上，请到节点机器上导入' : '点击右上角按钮添加书籍');
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -570,7 +588,7 @@ class _NovelLibraryPageState extends State<NovelLibraryPage> {
           ),
           SizedBox(height: m.kSpace24),
           Text(
-            '还没有添加书籍',
+            title,
             style: AppTextStyles.role(
               context,
               fontSize: isNarrow ? m.fontSize18 : m.fontSize20,
@@ -580,7 +598,8 @@ class _NovelLibraryPageState extends State<NovelLibraryPage> {
           ),
           SizedBox(height: m.kSpace12),
           Text(
-            '点击右上角按钮添加书籍',
+            hint,
+            textAlign: TextAlign.center,
             style: AppTextStyles.role(
               context,
               fontSize: isNarrow ? m.fontSize14 : m.fontSize16,

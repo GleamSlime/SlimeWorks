@@ -10,6 +10,7 @@ import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/theme/app_motion.dart';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/core/utils/size_utils.dart';
 
 /// 侧栏「节点」菜单：显示当前全局节点，点开后切换「本机」或任一启用节点。
 ///
@@ -63,7 +64,13 @@ class SidebarNodeSelector extends StatelessWidget {
             }
           },
           itemBuilder: (context) => <PopupMenuEntry<String>>[
-            _buildOption(context, id: '', name: '本机', selected: !isRemote),
+            // 移动端没有本机媒体库/书库（Rust 侧数据目录在 iOS/Android 上
+            // 没有可用落点，业务侧也明确写着「移动端没有本机媒体库」）。
+            // 之前仍然把「本机」列出来，用户选它 → 切到 activeNodeId='' →
+            // 所有数据页全空、且看起来像"功能坏了"。
+            // 这里不给这个入口，移动端只能选具体节点。
+            if (!PlatformUtil.isMobile)
+              _buildOption(context, id: '', name: '本机', selected: !isRemote),
             for (final node in nodes)
               _buildOption(
                 context,

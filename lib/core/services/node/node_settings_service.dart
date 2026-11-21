@@ -425,6 +425,18 @@ class NodeSettingsService extends GetxService {
     return getNodeById(id);
   }
 
+  /// 当前是否运行在没有本机数据源的移动端（iOS/Android）。
+  ///
+  /// 做成可覆盖的字段而不是到处直接写 `Platform.isIOS || Platform.isAndroid`：
+  /// 移动端专属的节点语义（不允许切「本机」、失效节点自动落到另一个节点）
+  /// 否则只能靠真机验证，单测跑在 macOS 上永远测不到那条分支。
+  @visibleForTesting
+  bool Function() mobilePlatformProbe =
+      () => Platform.isIOS || Platform.isAndroid;
+
+  /// 移动端判据（走可覆盖探针）
+  bool get isMobilePlatform => mobilePlatformProbe();
+
   /// 是否处于全局远程节点模式。
   bool get isRemoteMode => activeNode != null;
 
@@ -442,6 +454,11 @@ class NodeSettingsService extends GetxService {
     if (nodeId.isNotEmpty && getNodeById(nodeId) == null) {
       return;
     }
+    // 移动端没有本机数据源，不允许切到「本机」——选它只会得到一个全空界面。
+    // UI 已经不提供这个入口，这里再兜一层（深链/旧逻辑/程序化调用都可能绕过 UI）。
+    if (nodeId.isEmpty && isMobilePlatform) {
+      return;
+    }
     if (activeNodeId.value == nodeId) {
       return;
     }
@@ -453,13 +470,27 @@ class NodeSettingsService extends GetxService {
 
   /// 当前节点被删除或禁用时回落到本机，避免所有数据请求指向不存在的节点。
   void _validateActiveNode() {
+    final mobile = isMobilePlatform;
     final id = activeNodeId.value;
     if (id.isEmpty) {
+      // 移动端没有本机数据源：停在「本机」等于所有页面全空。
+      // 常见于两种情况——旧版本把 activeNodeId 存成空串、或当前节点被删后
+      // 回落到本机。这里自动落到第一个启用节点，别让用户看到一片空白
+      // 还以为功能坏了。
+      if (mobile) {
+        final fallback = enabledRemoteNodes.firstOrNull;
+        if (fallback != null) {
+          activeNodeId.value = fallback.id;
+          _emitLibraryMutation();
+        }
+      }
       return;
     }
     final node = getNodeById(id);
     if (node == null || !node.enabled) {
-      activeNodeId.value = '';
+      // 节点失效：桌面端回落到本机（仍有本机数据）；移动端落到另一个启用节点
+      final fallback = mobile ? enabledRemoteNodes.firstOrNull : null;
+      activeNodeId.value = fallback?.id ?? '';
       _emitLibraryMutation();
     }
   }
