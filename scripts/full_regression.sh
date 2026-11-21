@@ -99,7 +99,15 @@ PATH="$HOME/.pub-cache/bin:$PATH"
 # SDK 以 .dart_tool/version 为准；本机常见位置兜底
 SDK_VERSION="$(tr -d '[:space:]' < .dart_tool/version 2>/dev/null || true)"
 FLUTTER_BIN=""
-for cand in "/private/tmp/fl/flutter/bin/flutter" "$HOME/fvm/versions/$SDK_VERSION/bin/flutter"; do
+# 候选顺序：持久安装位置优先。
+# ★ 别再把 SDK 放 /private/tmp：那是系统会定期清理的目录，实测被清掉后
+#   连 `bin/internal/shared.sh`、`engine.version` 都会消失，flutter 直接跑不起来
+#   （表现为 `line 62: .../shared.sh: No such file or directory`）。
+for cand in \
+  "$HOME/flutter_sdk/flutter/bin/flutter" \
+  "$HOME/fvm/versions/$SDK_VERSION/bin/flutter" \
+  "/opt/homebrew/Caskroom/flutter/$SDK_VERSION/flutter/bin/flutter" \
+  "/private/tmp/fl/flutter/bin/flutter"; do
   [ -x "$cand" ] && { FLUTTER_BIN="$cand"; break; }
 done
 [ -z "$FLUTTER_BIN" ] && FLUTTER_BIN="$(command -v flutter 2>/dev/null || true)"

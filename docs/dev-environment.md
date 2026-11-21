@@ -150,6 +150,23 @@ setUpAll(() => HttpOverrides.global = null);
 遇到「curl 通、测试里 400」先查这个，不要急着改业务代码。
 （真 App 集成测试 `-d macos` 跑在真引擎上，不受这个 mock 影响。）
 
+## ★ SDK 不要放在 /private/tmp
+
+`/private/tmp` 是系统会定期清理的目录。实测某次启动后 `/private/tmp/fl/flutter`
+里的 `bin/internal/shared.sh`、`engine.version`、`engine.stamp` 全被清掉，
+`flutter` 直接报：
+
+```
+.../flutter/bin/flutter: line 62: .../bin/internal/shared.sh: No such file or directory
+```
+
+此时 `bin/cache/dart-sdk` 和 `flutter_tools.snapshot` 可能还在，看起来"没坏"，
+但引导脚本缺失就没法正常调用，且 `bin/internal` 不是 git 仓库，无法自身修复。
+
+**正确做法**：SDK 放持久位置（本机用 `~/flutter_sdk/flutter`），
+`scripts/full_regression.sh` 的候选顺序已按此调整，
+`/private/tmp/fl` 只作最后兜底。
+
 ## 真 App 集成测试（`flutter test -d macos`）
 
 在**真 macOS App**里跑测试（真 Cocoa 窗口、真插件、真 Rust framework），
@@ -162,7 +179,7 @@ CFFIXED_USER_HOME=/tmp/sw_real_app_home \
 SLIME_E2E_HOME=/tmp/sw_real_app_home \
 CARGO_HOME=$HOME/.cargo RUSTUP_HOME=$HOME/.rustup \
 FLUTTER_SWIFT_PACKAGE_MANAGER=false \
-/private/tmp/fl/flutter/bin/flutter test integration_test/<文件>.dart -d macos --no-pub
+$HOME/flutter_sdk/flutter/bin/flutter test integration_test/<文件>.dart -d macos --no-pub
 ```
 
 - **`CFFIXED_USER_HOME` 才是 macOS 的真隔离开关**。只设 `HOME` 时 `NSHomeDirectory()`
