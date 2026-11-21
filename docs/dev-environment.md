@@ -177,6 +177,21 @@ FLUTTER_SWIFT_PACKAGE_MANAGER=false \
 - **必须逐文件跑**：`flutter test integration_test/`（整个目录）会把多个文件放**同一进程**
   串跑，而 `RustLib.init()` / `getItInit()` / `runApp()` 都不可重入，加载阶段就崩
   （症状是 `build/test/listener_N.dart` not found 或一堆 loading error）。
+- ★★ **写任何临时探针/一次性真 App 测试，第一行必须
+  `SharedPreferences.setMockInitialValues(<String, Object>{})`**。
+  `HOME` + `CFFIXED_USER_HOME` 拦不住 `shared_preferences`——它走 CFPreferences
+  的**真实用户域**，会直接写 `~/Library/Preferences/com.gleamslime.works.plist`。
+  2026-11-21 就因为探针没加这一行，把 **36 个假节点**（`真机测试`/`移动测试`，
+  指向已关闭的临时端口）写进了开发者真实配置：
+  - 真 App 一启动就加载这些死节点 → 全都连接被拒；
+  - 书库/媒体库读到的是**上一次测试遗留的陈旧节点**，而不是刚注入的那个；
+  - 表现成「明明选了节点却没数据」，排查方向被带偏了好几轮。
+  清理办法（先备份！`cp ~/Library/Preferences/com.gleamslime.works.plist /tmp/`）：
+  ```bash
+  killall cfprefsd          # 必须，否则内存缓存会把旧值写回去
+  # 用 plutil -p 看清 flutter.node_remote_nodes，确认全是测试残留后再改
+  ```
+  记忆里那条「`flutter test` 会拦截真实 HTTP」是另一回事（那个是 400 空 body）。
 - `testWidgets` 默认跑在 **fake-async 区**：真实 socket / FFI 的完成回调永远不会被推进，
   直接 `await` 真实网络会挂到超时且**没有任何日志**。真 I/O 一律放进 `tester.runAsync()`，
   再与 `tester.pump` 交替推进。

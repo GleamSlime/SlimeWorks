@@ -58,6 +58,13 @@ class NovelLibraryViewModel extends BaseViewModel {
   // 书库 数据
   final novels = <NovelMetadata>[].obs;
   final remoteNovels = <NovelMetadata>[].obs;
+
+  /// 最近一次远程取书失败的原因；空串表示没有错误。
+  ///
+  /// 之前这里失败只 `_logger.log(...)`，界面拿不到任何信息：节点离线 /
+  /// 地址填错 / 授权码不对，用户看到的都只是「书库是空的」，
+  /// 完全分不清是「节点上真没书」还是「根本没连上」。
+  final RxString remoteErrorMessage = ''.obs;
   final isScanning = false.obs;
   final scanStatusText = ''.obs;
   final scanProgressText = ''.obs;
@@ -730,6 +737,7 @@ class NovelLibraryViewModel extends BaseViewModel {
 
     // 审计 #3：节点间由串行 for-await 改并发（失败熔断由 _callNode 内部负责）
     final nodes = nodeSettingsService.dataRemoteNodes;
+    final failures = <String>[];
     await Future.wait(nodes.map((node) async {
       try {
         // 文件夹列表与书籍列表互不依赖：并行取，文件夹失败不影响书架显示
@@ -776,6 +784,8 @@ class NovelLibraryViewModel extends BaseViewModel {
         }
       } catch (e) {
         _logger.log('拉取远程节点书籍失败: ${node.name} -> $e', name: '书库');
+        // 让用户看见：节点离线/地址错/授权码错，不该只表现成「空书库」
+        failures.add('${node.name}: $e');
       }
     }));
 
@@ -793,6 +803,10 @@ class NovelLibraryViewModel extends BaseViewModel {
       }
     });
 
+    // 全部节点都失败、且一条书都没拿到 → 把原因摆在界面上
+    remoteErrorMessage.value = (failures.isNotEmpty && allRemote.isEmpty)
+        ? failures.first
+        : '';
     remoteNovels.assignAll(allRemote);
     remoteNovelNodeId.assignAll(nodeIdMap);
     remoteNovelNodeName.assignAll(nodeNameMap);

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
+import 'package:slime_works/components/common/error_banner.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
@@ -50,6 +51,16 @@ class _NovelLibraryPageState extends State<NovelLibraryPage> {
     unawaited(
       _controller.onInitAsync().catchError((Object e) {
         debugPrint('书籍库初始化失败: $e');
+      }),
+    );
+    // 兜底：`onInitAsync` 内部有 `if (isInitialized) return;` 的提前返回，
+    // 而 VM 是 permanent 单例、可能被别处先初始化过一次（那时节点还没选）。
+    // 此时页面进来不会再走刷新，界面就停在上一次的空结果上。
+    // `refreshRemoteNovels()` 本身幂等且带代际号防覆盖，这里显式再拉一轮，
+    // 保证「选了远程节点进入书库」一定能拿到数据。
+    unawaited(
+      _controller.refreshRemoteNovels().catchError((Object e) {
+        debugPrint('书籍库远程刷新失败: $e');
       }),
     );
   }
@@ -437,6 +448,15 @@ class _NovelLibraryPageState extends State<NovelLibraryPage> {
                         ),
                       )
                     : const SizedBox.shrink(),
+              ),
+
+              // 远程取书失败提示：节点离线 / 地址错 / 授权码错
+              // 以前只打日志，用户只看到「空书库」，分不清是没书还是没连上。
+              Obx(
+                () => ErrorBanner(
+                  message: controller.remoteErrorMessage.value,
+                  onRetry: () => controller.refreshRemoteNovels(),
+                ),
               ),
 
               // 书籍列表
