@@ -291,20 +291,21 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     return scaleW(64);
   }
 
+  /// 正文区的内边距。
+  ///
+  /// ★ 不要再叠加 `MediaQuery.padding` 与底栏高度：本页交给 `ScreenChrome` 的
+  /// `Scaffold`（appBar + bottomNavigationBar）已经占位并处理安全区，
+  /// 这里再加一次会把正文整体上推、底栏压在屏幕中间（移动端实测的错位）。
+  /// 沉浸模式下 AppBar 不在 Scaffold 里，才需要自己让开顶部空间。
   EdgeInsets _mobileReaderContentPadding(BuildContext context) {
-    final mediaPadding = MediaQuery.paddingOf(context);
-    final immersivePadding = _mobileReaderImmersivePadding();
     final isImmersiveMode = _desktopScreen.mobileImmersiveMode.value;
 
     return EdgeInsets.fromLTRB(
       appMetrics.kSpace12,
-      mediaPadding.top +
-          immersivePadding.top +
-          (isImmersiveMode ? 0 : AppTheme.metrics.kSpace48 + AppTheme.metrics.kSpace24),
+      AppTheme.metrics.kSpace16 +
+          (isImmersiveMode ? MediaQuery.paddingOf(context).top : 0),
       appMetrics.kSpace12,
-      mediaPadding.bottom +
-          immersivePadding.bottom +
-          (isImmersiveMode ? 0 : _mobileReaderBottomBarHeight()),
+      AppTheme.metrics.kSpace24,
     );
   }
 
