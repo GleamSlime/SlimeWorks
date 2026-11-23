@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:material_ui/material_ui.dart';
 import 'package:get/get.dart';
+import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/node/node_log_reporter.dart';
 import 'package:get_it/get_it.dart';
 import 'package:slime_works/components/node/node_switcher_button.dart';
 import 'package:slime_works/components/window/screen_chrome.dart';
@@ -131,6 +133,16 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
               tooltip: '导出',
               onPressed: () => _exportLogs(context),
             ),
+            // 远程节点模式下：把本地日志一键推到节点，节点落到
+            // logs/client_<日期>.log。用户报「没数据」时，这样能在节点
+            // 机器上直接看到客户端当时的请求与异常，不用让用户导日志。
+            if (getIt<NodeSettingsService>().isRemoteMode)
+              _buildActionButton(
+                context: context,
+                icon: StrokeIcons.upload,
+                tooltip: '上报到节点',
+                onPressed: () => _reportLogsToNode(context),
+              ),
           ],
         ],
       ),
@@ -359,6 +371,33 @@ class _SentryLogScreenState extends State<SentryLogScreen> with TickerProviderSt
     required VoidCallback onPressed,
   }) {
     return _ActionButtonWidget(icon: icon, tooltip: tooltip, onPressed: onPressed);
+  }
+
+  /// 把当前日志上报到远程节点（节点侧落盘到 logs/client_<日期>.log）
+  Future<void> _reportLogsToNode(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final reporter = getIt<NodeLogReporter>();
+    // 手动上报不受出错限流影响：用户主动点的就应该发出去
+    reporter.resetThrottle();
+    final ok = await reporter.reportFailure(
+      'manual-report',
+      extra: <String, Object?>{
+        'source': '设置页手动上报',
+        'node': getIt<NodeSettingsService>().activeNode?.name ?? '',
+      },
+    );
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? '日志已上报到节点，可在节点的 logs/client_<日期>.log 查看'
+              : '上报失败：当前没有可用的远程节点或网络不通',
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius8),
+      ),
+    );
   }
 
   /// 导出日志到本地文件

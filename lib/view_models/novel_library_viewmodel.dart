@@ -12,6 +12,7 @@ import 'package:slime_works/core/utils/logger.dart';
 import 'package:slime_works/core/viewmodels/base_viewmodel.dart';
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/provider/main.dart';
+import 'package:slime_works/core/services/node/node_log_reporter.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
 import 'package:file_picker/file_picker.dart';
@@ -782,10 +783,28 @@ class NovelLibraryViewModel extends BaseViewModel {
             remoteChapterCounts[syntheticId] = chapterCount;
           }
         }
-      } catch (e) {
+      } catch (e, st) {
         _logger.log('拉取远程节点书籍失败: ${node.name} -> $e', name: '书库');
         // 让用户看见：节点离线/地址错/授权码错，不该只表现成「空书库」
         failures.add('${node.name}: $e');
+        // 同时把现场上报到节点：用户报「没数据」时，节点侧能直接查到
+        // 当时请求了哪个地址、返回了什么（限流在 reporter 内部处理）。
+        // ★ 必须容错：上报是旁路能力，未注册（单测/精简环境）时不能反过来
+        // 把取数流程炸掉——那会让"取数失败"变成"抛异常"。
+        if (getIt.isRegistered<NodeLogReporter>()) {
+          unawaited(
+            getIt<NodeLogReporter>().reportFailure(
+              'novel-list-fetch',
+              error: e,
+              stackTrace: st,
+              extra: <String, Object?>{
+                'node': node.name,
+                'baseUrl': node.apiBaseUrl,
+                'lanUrl': node.lanApiBaseUrl ?? '',
+              },
+            ),
+          );
+        }
       }
     }));
 

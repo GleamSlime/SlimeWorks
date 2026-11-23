@@ -112,6 +112,50 @@ pub fn log_debug(message: &str) {
     println!("{}", log_msg);
 }
 
+/// 追加一批**客户端上报**的日志到独立文件 `logs/client_YYYY-MM-DD.log`。
+///
+/// 为什么不复用节点自己的 `slime_works_<日期>.log`：那是节点自身的运行日志，
+/// 混进客户端日志会让两边都难读（排查时第一件事就是分清楚"这是节点的还是
+/// 客户端说的"）。独立文件也方便直接 `tail -f` 客户端那一份。
+///
+/// 返回写入的文件路径，便于客户端/用户在节点上直接定位。
+pub fn append_client_log(header: &str, lines: &[String]) -> Result<String, String> {
+    let log_dir = {
+        let dir = LOG_DIR.lock().unwrap();
+        dir.clone()
+    };
+    let log_dir = log_dir.ok_or_else(|| "日志目录未初始化".to_string())?;
+
+    create_dir_all(&log_dir).map_err(|e| format!("创建日志目录失败: {}", e))?;
+    let date = Local::now().format("%Y-%m-%d").to_string();
+    let path = log_dir.join(format!("client_{}.log", date));
+
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
+    let mut buf = String::with_capacity((lines.len() + 2) * 96);
+    buf.push_str("────────────────────────────────────────\n");
+    buf.push('[');
+    buf.push_str(&timestamp.to_string());
+    buf.push_str("] ");
+    buf.push_str(header);
+    buf.push('\n');
+    for line in lines {
+        buf.push_str(line);
+        buf.push('\n');
+    }
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|e| format!("打开客户端日志失败: {}", e))?;
+    file.write_all(buf.as_bytes())
+        .map_err(|e| format!("写入客户端日志失败: {}", e))?;
+    file.flush()
+        .map_err(|e| format!("刷新客户端日志失败: {}", e))?;
+
+    Ok(path.to_string_lossy().to_string())
+}
+
 pub fn get_log_dir() -> Option<String> {
     let dir = LOG_DIR.lock().unwrap();
     dir.as_ref().map(|p| p.to_string_lossy().to_string())

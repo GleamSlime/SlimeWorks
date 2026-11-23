@@ -20,6 +20,11 @@ pub fn log_debug(message: &str) {
     slime_logger::log_debug(message);
 }
 
+/// 追加一批客户端上报的日志到 logs/client_<日期>.log（节点侧专用）
+pub fn append_client_log(header: &str, lines: &[String]) -> Result<String, String> {
+    slime_logger::append_client_log(header, lines)
+}
+
 pub fn get_log_dir() -> Option<String> {
     slime_logger::get_log_dir()
 }

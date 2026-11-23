@@ -8,6 +8,7 @@ import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:slime_works/core/services/ollama/ollama_settings_service.dart';
 import 'package:slime_works/core/services/lan_transfer_service.dart';
 import 'package:slime_works/core/services/game_library_metadata_api.dart';
+import 'package:slime_works/core/services/node/node_log_reporter.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/game_library_service.dart';
 import 'package:slime_works/core/services/game_process_tracker.dart';
@@ -63,6 +64,10 @@ void getItInit() {
 
   // 节点设置服务
   getIt.registerLazySingleton<NodeSettingsService>(() => NodeSettingsService());
+  // 客户端日志上报：远程节点模式下出错时把现场推给节点（见 NodeLogReporter 注释）
+  getIt.registerLazySingleton<NodeLogReporter>(
+    () => NodeLogReporter(getIt<NodeSettingsService>()),
+  );
 
   // 媒体偏好设置服务
   getIt.registerLazySingleton<MediaPrefsService>(() => MediaPrefsService());

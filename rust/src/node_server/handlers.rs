@@ -901,6 +901,46 @@ pub async fn dispatch_action(
             Ok(json!(result))
         }
 
+        // ── 客户端日志上报 ─────────────────────────────────────────────────
+        // 客户端（尤其移动端）出问题时，界面上往往只剩"没数据"，而排查需要的
+        // 上下文全在客户端本地日志里。让客户端把本地日志批次推到节点，
+        // 节点落盘到 logs/client_YYYY-MM-DD.log，之后可以直接在节点机器上
+        // grep / tail，不用远程连客户端。
+        //
+        // params: { client: "android", app_version: "1.0.0", lines: ["..."] }
+        "report_client_log" => {
+            let client = s_field(&params, "client");
+            let app_version = s_field(&params, "app_version");
+            let lines: Vec<String> = params["lines"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            if lines.is_empty() {
+                return Err("lines 不能为空".to_string());
+            }
+            // 单批上限：防止异常客户端把整库日志一次灌进来撑爆磁盘
+            let accepted = lines.len().min(2000);
+            let header = format!(
+                "[客户端 {} / v{}] 上报 {} 行",
+                if client.is_empty() { "未知" } else { &client },
+                if app_version.is_empty() { "?" } else { &app_version },
+                accepted
+            );
+            match crate::api::logger::append_client_log(&header, &lines[..accepted]) {
+                Ok(path) => Ok(json!({
+                    "accepted": accepted,
+                    "path": path,
+                    "message": format!("已接收 {} 行", accepted),
+                })),
+                Err(e) => Err(format!("写入客户端日志失败: {}", e)),
+            }
+        }
+
         "get_novel_content" => {
             let file_path = params["file_path"].as_str().unwrap_or("").to_string();
             let content = novel_api::get_novel_content(file_path)
