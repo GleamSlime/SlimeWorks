@@ -38,6 +38,10 @@ class NovelCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
+  /// 长按回调：移动端没有右键菜单，长按是唯一的「更多操作」入口
+  ///（删除/移动到文件夹都挂在它上面）。
+  final VoidCallback? onLongPress;
+
   const NovelCard({
     super.key,
     required this.title,
@@ -47,6 +51,7 @@ class NovelCard extends StatelessWidget {
     required this.progress,
     required this.onTap,
     required this.onDelete,
+    this.onLongPress,
   });
 
   @override
@@ -59,6 +64,7 @@ class NovelCard extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: AppTheme.metrics.radius12),
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Column(
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.start,

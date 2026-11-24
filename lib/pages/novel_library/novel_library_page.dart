@@ -13,6 +13,7 @@ import 'package:slime_works/core/provider/screen_chrome.dart';
 
 import 'package:slime_works/core/routes/app_routes.dart';
 import 'package:slime_works/core/widgets/glass_menu.dart';
+import 'package:slime_works/pages/collection/library/components/remote_novel_reader_dialog.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/pages/novel_library/components/novel_card.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
@@ -347,8 +348,12 @@ class _NovelLibraryPageState extends State<NovelLibraryPage> {
               ),
 
               // 搜索栏
+              // ★ 不能用 `controller.novels`（本机书）判断是否显示：
+              // 远程模式下 novels 恒为空（loadNovels 会直接 clear），
+              // 搜索框就永远不渲染——用户看到的就是「远程书库不能搜索」。
+              // 判据应与列表同源：有书可搜（本机 + 远程合并后的 filteredItems）。
               Obx(
-                () => controller.novels.isNotEmpty
+                () => controller.filteredItems.isNotEmpty || controller.searchQuery.value.isNotEmpty
                     ? Padding(
                         padding: EdgeInsets.only(bottom: m.kSpace16),
                         child: Column(
@@ -564,10 +569,37 @@ class _NovelLibraryPageState extends State<NovelLibraryPage> {
                                 format: novel.format.toString().split('.').last.toUpperCase(),
                                 progress: novel.progress,
                                 onTap: () async {
+                                  // 远程书走远程阅读页（本机路由读的是本地 FFI，
+                                  // 打开远程书只会得到空内容）
+                                  if (controller.isRemoteNovel(novel.id)) {
+                                    final nodeId = controller.getRemoteNodeId(novel.id);
+                                    final nodeName = controller.getNovelNodeName(novel.id);
+                                    if (nodeId != null) {
+                                      await Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => RemoteNovelReaderPage(
+                                            metadata: novel,
+                                            nodeId: nodeId,
+                                            nodeName: nodeName ?? '',
+                                          ),
+                                        ),
+                                      );
+                                      controller.loadNovels();
+                                      return;
+                                    }
+                                  }
                                   NovelReaderRoute($extra: novel).go(context);
                                   controller.loadNovels();
                                 },
                                 onDelete: () => controller.deleteNovel(novel.id),
+                                // 移动端没有右键：长按弹操作菜单（删除/移动）
+                                onLongPress: () {
+                                  final box = context.findRenderObject() as RenderBox?;
+                                  final origin = box == null
+                                      ? Offset.zero
+                                      : box.localToGlobal(box.size.center(Offset.zero));
+                                  _showNovelContextMenu(context, novel, origin);
+                                },
                               ),
                             );
                           },

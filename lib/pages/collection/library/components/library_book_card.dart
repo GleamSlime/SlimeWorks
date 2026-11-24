@@ -292,17 +292,12 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
       return;
     }
 
-    if (PlatformUtil.isMobile) {
-      _pushBookOpenRoute(
-        RemoteNovelReaderPage(metadata: widget.metadata, nodeId: nodeId, nodeName: nodeName),
-      );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (dlgCtx) =>
-          RemoteNovelReaderDialog(metadata: widget.metadata, nodeId: nodeId, nodeName: nodeName),
+    // 桌面端与移动端统一走**全屏页面**。
+    // 旧实现桌面端用 showDialog 弹窗，导致同一本书「本机打开是全屏阅读器、
+    // 远程打开是个弹窗」，功能与观感都不一致（用户明确要求无感）。
+    // 弹窗里还缺目录/沉浸/侧滑等能力，长期看只能废弃。
+    _pushBookOpenRoute(
+      RemoteNovelReaderPage(metadata: widget.metadata, nodeId: nodeId, nodeName: nodeName),
     );
   }
 

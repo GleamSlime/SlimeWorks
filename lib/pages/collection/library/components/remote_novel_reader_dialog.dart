@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -7,7 +9,6 @@ import 'package:slime_works/components/window/screen_chrome.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
-import 'package:slime_works/core/provider/screen_provider.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/pages/collection/library/components/library_book_info_dialog.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
@@ -123,16 +124,31 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
   Future<void> _persistProgress() async {
     if (_chapters.isEmpty) return;
     final progress = (_selected + 1) / _chapters.length;
+    // ★ 必须用节点侧的原始 id。
+    // `metadata.id` 是客户端合成的 `remote:<nodeId>:<rawId>`，直接发过去节点
+    // 按 id 精确查库必然查不到 → require_changed 报错 → 被 catch 吞掉 →
+    // **进度永远存不进去**，表现就是「退出后又是从头读」。
+    final novelId = _rawNovelIdFor(widget.metadata.id);
     try {
       await _service.updateNodeNovelProgress(
         nodeId: widget.nodeId,
-        novelId: widget.metadata.id,
+        novelId: novelId,
         progress: progress.clamp(0.0, 1.0),
       );
     } catch (e) {
       // 进度保存失败不该打断阅读，但要留痕（这是「下次打开还在原处」的保证）
       debugPrint('保存远程阅读进度失败: $e');
     }
+  }
+
+  /// 从合成 id 取节点侧原始 novel id：`remote:<nodeId>:<rawId>` → `<rawId>`。
+  /// 不是合成格式时原样返回（兼容本机/旧数据）。
+  String _rawNovelIdFor(String id) {
+    const prefix = 'remote:';
+    if (!id.startsWith(prefix)) return id;
+    final rest = id.substring(prefix.length);
+    final sep = rest.indexOf(':');
+    return sep < 0 ? rest : rest.substring(sep + 1);
   }
 
   @override
@@ -254,7 +270,6 @@ class RemoteNovelReaderPage extends StatefulWidget {
 
 class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   final NodeSettingsService _service = getIt<NodeSettingsService>();
-  final DesktopScreenProvider _desktopScreen = getIt<DesktopScreenProvider>();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   static const double _kChapterSwipeTrigger = 72;
 
@@ -272,6 +287,17 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   double _trailingOverscroll = 0;
   bool _chapterSwipeLocked = false;
 
+  /// 本地沉浸模式状态。
+  ///
+  /// ★ 不要用全局 `DesktopScreenProvider.mobileImmersiveMode`：实测
+  /// `ScreenChromeData.enableMobileImmersiveMode` 在 ScreenChrome 里**从未被消费**
+  /// （是个死参数），所以走全局状态不会有任何视觉变化。
+  /// 本地阅读器 `novel_reader_page.dart` 早就改成"自己画覆盖层 + AnimatedSlide"，
+  /// 远程阅读页照同一套做，两边观感才一致。
+  final RxBool _isImmersive = false.obs;
+  Timer? _immersiveTimer;
+  static const Duration _kOverlayAnim = AppMotion.fast;
+
   String _chapterTitleAt(int index) {
     if (index < 0 || index >= _chapters.length) {
       return widget.metadata.title;
@@ -283,30 +309,40 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     return title;
   }
 
-  EdgeInsets _mobileReaderImmersivePadding() {
-    return EdgeInsets.only(top: AppTheme.metrics.kSpace16, bottom: AppTheme.metrics.kSpace24);
-  }
-
   double _mobileReaderBottomBarHeight() {
     return scaleW(64);
   }
 
   /// 正文区的内边距。
   ///
-  /// ★ 不要再叠加 `MediaQuery.padding` 与底栏高度：本页交给 `ScreenChrome` 的
-  /// `Scaffold`（appBar + bottomNavigationBar）已经占位并处理安全区，
-  /// 这里再加一次会把正文整体上推、底栏压在屏幕中间（移动端实测的错位）。
-  /// 沉浸模式下 AppBar 不在 Scaffold 里，才需要自己让开顶部空间。
+  /// 本页的顶栏/底栏是 `Stack` 里的覆盖层（为了做沉浸滑动动画），
+  /// 它们**不占布局空间**，所以正文要自己把顶上那一条和底下那一条让出来。
+  /// 沉浸模式下两者都滑走，正文就能占满整屏。
   EdgeInsets _mobileReaderContentPadding(BuildContext context) {
-    final isImmersiveMode = _desktopScreen.mobileImmersiveMode.value;
-
+    final insets = MediaQuery.paddingOf(context);
+    final isImmersive = _isImmersive.value;
     return EdgeInsets.fromLTRB(
+      appMetrics.kSpace12, // 左右呼吸
+      insets.top + AppTheme.metrics.kSpace48 + (isImmersive ? 0 : AppTheme.metrics.kSpace8),
       appMetrics.kSpace12,
-      AppTheme.metrics.kSpace16 +
-          (isImmersiveMode ? MediaQuery.paddingOf(context).top : 0),
-      appMetrics.kSpace12,
-      AppTheme.metrics.kSpace24,
+      insets.bottom + (isImmersive ? AppTheme.metrics.kSpace16 : _mobileReaderBottomBarHeight()),
     );
+  }
+
+  void _setImmersive(bool on) {
+    if (!mounted) return;
+    if (_isImmersive.value == on) return;
+    _isImmersive.value = on;
+    if (!on) _scheduleImmersiveIdle();
+  }
+
+  /// 停留一段时间无操作后自动进入沉浸（把屏幕还给文字）
+  void _scheduleImmersiveIdle() {
+    _immersiveTimer?.cancel();
+    _immersiveTimer = Timer(const Duration(seconds: 30), () {
+      if (!mounted) return;
+      _setImmersive(true);
+    });
   }
 
   void _resetChapterSwipe() {
@@ -326,6 +362,17 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
       if (metrics.pixels > metrics.minScrollExtent && metrics.pixels < metrics.maxScrollExtent) {
         _leadingOverscroll = 0;
         _trailingOverscroll = 0;
+      }
+      // ── 沉浸模式联动 ────────────────────────────────────────────────
+      // 向下滚动（阅读正文，scrollDelta > 0）→ 隐藏顶部 AppBar 与底栏，
+      // 把屏幕还给文字；向上滚动 → 立即恢复。
+      // 只有阅读页会开着这个开关（enableMobileImmersiveMode），
+      // 其它页面不受影响。
+      final delta = notification.scrollDelta ?? 0;
+      if (delta > 2) {
+        _setImmersive(true);
+      } else if (delta < -2) {
+        _setImmersive(false);
       }
       return false;
     }
@@ -475,6 +522,47 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   void initState() {
     super.initState();
     _load();
+    _scheduleImmersiveIdle();
+  }
+
+  /// 把 0~1 的进度换算成章节下标（夹在合法范围内）。
+  int _chapterIndexForProgress(int count, double progress) {
+    if (count <= 0) return 0;
+    final raw = (progress.clamp(0.0, 1.0) * count).floor();
+    return raw.clamp(0, count - 1);
+  }
+
+  /// 合成 id → 节点侧原始 id（`remote:<node>:<raw>` → `<raw>`）。
+  String _rawNovelIdFor(String id) {
+    const prefix = 'remote:';
+    if (!id.startsWith(prefix)) return id;
+    final rest = id.substring(prefix.length);
+    final sep = rest.indexOf(':');
+    return sep < 0 ? rest : rest.substring(sep + 1);
+  }
+
+  /// 把当前章节位置写回节点（下次打开能续读）。
+  Future<void> _persistProgress() async {
+    if (_chapters.isEmpty) return;
+    final progress = (_selected + 1) / _chapters.length;
+    try {
+      await _service.updateNodeNovelProgress(
+        nodeId: widget.nodeId,
+        novelId: _rawNovelIdFor(widget.metadata.id),
+        progress: progress.clamp(0.0, 1.0),
+      );
+    } catch (e) {
+      debugPrint('保存远程阅读进度失败: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    // 关页补存一次：用户往往读完直接退
+    _persistProgress();
+    _immersiveTimer?.cancel();
+    _isImmersive.close();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -484,13 +572,19 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
         filePath: widget.metadata.filePath,
       );
       if (!mounted) return;
+      // 恢复到上次读到的章节。此前这里硬编码 _selected = 0，
+      // 于是每次打开都从头开始（用户报的「没有阅读历史」）。
+      final resume = _chapterIndexForProgress(
+        chapters.length,
+        widget.metadata.progress,
+      );
       setState(() {
         _chapters = chapters;
         _loading = false;
-        _selected = 0;
+        _selected = resume;
       });
       if (chapters.isNotEmpty) {
-        await _loadChapter(0);
+        await _loadChapter(resume);
       }
     } catch (e) {
       if (!mounted) return;
@@ -533,32 +627,14 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     }
   }
 
-  ScreenChromeData _buildMobileScreenChromeData() {
-    return ScreenChromeData(
-      title: widget.metadata.title,
-      enableMobileImmersiveMode: true,
-      mobileBodyHandlesInsets: true,
-      mobileImmersivePadding: _mobileReaderImmersivePadding(),
-      leading: appBarBackButton(context, prevRoutePath: '/collection/library'),
-      toolbarHeight: AppTheme.metrics.kSpace24,
-      toolbar: Text(_chapterTitleAt(_selected), maxLines: 1, overflow: TextOverflow.ellipsis),
-      bottomBarHeight: _mobileReaderBottomBarHeight(),
-      bottomBar: _RemoteReaderBottomBar(
-        canGoPrevious: _selected > 0,
-        canGoNext: _selected < _chapters.length - 1,
-        onPrevious: _selected > 0 ? () => _loadChapter(_selected - 1) : null,
-        onNext: _selected < _chapters.length - 1 ? () => _loadChapter(_selected + 1) : null,
-        onOpenCatalog: () => _scaffoldKey.currentState?.openDrawer(),
-        onShowBookInfo: _showBookInfoDialog,
-        onShowReaderSettings: _showReaderSettingsSheet,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    // ★ 本页自己画顶栏/底栏覆盖层，不走 ScreenChrome 的 appBar/bottomNavigationBar：
+    // 沉浸模式需要"滑动隐藏 + 动画"，而 Scaffold 的 appBar/bottomNav 一旦换 widget
+    // 高度就会跳变，做不出平滑滑动。本地阅读器 nl_reader_page 也是这么做的，
+    // 两边观感才能一致。
     return ScreenChrome(
-      data: _buildMobileScreenChromeData(),
+      data: ScreenChromeData.empty,
       child: Scaffold(
         key: _scaffoldKey,
         drawer: Drawer(
@@ -625,27 +701,138 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
             ),
           ),
         ),
-        body: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-            ? Center(child: Text('加载失败: $_error'))
-            : _chapterLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _chapterError != null
-            ? Center(child: Text('加载章节失败: $_chapterError'))
-            : Container(
-                color: _readerBgColor,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: _handleChapterSwipeNotification,
-                  child: _buildChapterContent(
-                    context,
-                    _chapterText,
-                    contentPadding: _mobileReaderContentPadding(context),
-                    fontSize: _readerFontSize,
-                    lineHeight: _readerLineHeight,
+        body: Obx(() {
+          final isImmersive = _isImmersive.value;
+          final s2 = AppSemantic.of(context);
+          final insets = MediaQuery.paddingOf(context);
+          return Stack(
+            children: [
+              // ── 正文（最底层）───────────────────────────────────────
+              Positioned.fill(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                    ? Center(child: Text('加载失败: $_error'))
+                    : _chapterLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _chapterError != null
+                    ? Center(child: Text('加载章节失败: $_chapterError'))
+                    : Container(
+                        color: _readerBgColor,
+                        child: GestureDetector(
+                          // 点正文：沉浸中就退出沉浸，否则重新计时
+                          behavior: HitTestBehavior.translucent,
+                          onTap: () {
+                            if (isImmersive) {
+                              _setImmersive(false);
+                            } else {
+                              _scheduleImmersiveIdle();
+                            }
+                          },
+                          child: NotificationListener<ScrollNotification>(
+                            onNotification: _handleChapterSwipeNotification,
+                            child: _buildChapterContent(
+                              context,
+                              _chapterText,
+                              contentPadding: _mobileReaderContentPadding(context),
+                              fontSize: _readerFontSize,
+                              lineHeight: _readerLineHeight,
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+
+              // ── 顶部 AppBar 覆盖层（沉浸时上滑隐藏）─────────────────
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  ignoring: isImmersive,
+                  child: AnimatedSlide(
+                    duration: _kOverlayAnim,
+                    curve: AppMotion.decelerate,
+                    offset: isImmersive ? const Offset(0, -1) : Offset.zero,
+                    child: Material(
+                      color: s2.surface,
+                      elevation: 4,
+                      child: SafeArea(
+                        bottom: false,
+                        child: SizedBox(
+                          height: AppTheme.metrics.kSpace48,
+                          child: Row(
+                            children: [
+                              IconButton(
+                                tooltip: '返回',
+                                icon: DrawIcon(StrokeIcons.arrowBack),
+                                onPressed: () => Navigator.of(context).maybePop(),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  _chapterTitleAt(_selected),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.role(
+                                    context,
+                                    fontSize: appMetrics.fontSize14,
+                                    color: s2.textPrimary,
+                                    weight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: '设置',
+                                icon: DrawIcon(StrokeIcons.settings),
+                                onPressed: _showReaderSettingsSheet,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
+
+              // ── 底部 BottomBar 覆盖层（沉浸时下滑隐藏）──────────────
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  ignoring: isImmersive,
+                  child: AnimatedSlide(
+                    duration: _kOverlayAnim,
+                    curve: AppMotion.decelerate,
+                    offset: isImmersive ? const Offset(0, 1) : Offset.zero,
+                    child: Material(
+                      color: s2.surface.withAlpha(245),
+                      elevation: 8,
+                      child: SafeArea(
+                        top: false,
+                        child: SizedBox(
+                          height: _mobileReaderBottomBarHeight(),
+                          child: _RemoteReaderBottomBar(
+                            canGoPrevious: _selected > 0,
+                            canGoNext: _selected < _chapters.length - 1,
+                            onPrevious: _selected > 0 ? () => _loadChapter(_selected - 1) : null,
+                            onNext: _selected < _chapters.length - 1 ? () => _loadChapter(_selected + 1) : null,
+                            onOpenCatalog: () => _scaffoldKey.currentState?.openDrawer(),
+                            onShowBookInfo: _showBookInfoDialog,
+                            onShowReaderSettings: _showReaderSettingsSheet,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // insets 仅用于让底栏覆盖层在与系统手势区共存时不至于贴边
+              if (insets.bottom > 0) const SizedBox.shrink(),
+            ],
+          );
+        }),
       ),
     );
   }
