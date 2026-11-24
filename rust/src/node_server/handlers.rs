@@ -945,12 +945,23 @@ pub async fn dispatch_action(
             let file_path = params["file_path"].as_str().unwrap_or("").to_string();
             let content = novel_api::get_novel_content(file_path)
                 .map_err(|e| format!("获取小说内容失败: {}", e))?;
+            // ★ 默认**不下发正文**，只给章节骨架（id/title/index）。
+            // 正文一律由 `get_chapter_content` 按章取。
+            //
+            // 之前把每章 content 一并塞进响应：TXT 解析器给每章都填了
+            // `Some(全文片段)`，一本 5MB 的 txt 就是 5MB 全量下载后才渲染第一屏，
+            // 移动端/弱网下表现为"打开书一直转圈、很久才出字"。
+            // 客户端现在按章懒加载，这里就不该再背着全书体积。
+            //
+            // `with_content=true` 保留全量语义（调试/离线导出用），
+            // 但默认路径必须是轻的。
+            let with_content = params["with_content"].as_bool().unwrap_or(false);
             Ok(json!({
                 "novel_id": content.novel_id,
                 "chapters": content.chapters.into_iter().map(|c| json!({
                     "id": c.id,
                     "title": c.title,
-                    "content": c.content,
+                    "content": if with_content { c.content } else { None },
                     "index": c.index.to_string(),
                 })).collect::<Vec<_>>(),
             }))
