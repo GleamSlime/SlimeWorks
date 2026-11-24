@@ -120,9 +120,22 @@ class _ScreenChromeState extends State<ScreenChrome> {
       );
     }
 
+    // ★ 必须按 bottomBarHeight 给底栏一个确定高度。
+    // 直接把 bottomBar 丢进 bottomNavigationBar，高度由 child 自身撑开；
+    // 阅读页那种「Row + IconButton」的底栏没有内在高度约束，
+    // 结果底栏被压成很矮一条、并浮在屏幕中上部（移动端实测：屏幕高 874，
+    // 按钮却落在 y≈302）。这里统一用 SizedBox 定高，页面就不必各自处理。
+    Widget? bottomBar;
+    if (data.hasBottomBar) {
+      final h = data.bottomBarHeight;
+      bottomBar = h != null && h > 0
+          ? SizedBox(height: h, child: data.bottomBar)
+          : data.bottomBar;
+    }
+
     return Scaffold(
       appBar: appBar,
-      bottomNavigationBar: data.hasBottomBar ? data.bottomBar : null,
+      bottomNavigationBar: bottomBar,
       body: widget.child,
     );
   }
