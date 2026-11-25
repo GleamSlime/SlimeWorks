@@ -704,8 +704,11 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
         body: Obx(() {
           final isImmersive = _isImmersive.value;
           final s2 = AppSemantic.of(context);
-          final insets = MediaQuery.paddingOf(context);
           return Stack(
+            // ★ 必须 expand：Stack 默认 loose，会用「非 Positioned 子元素」定尺寸；
+            // 一旦没有这样的子元素（本页全 Positioned），就会塌成 0 尺寸，
+            // 表现为「文字在 widget 树里、但屏幕上一片空白」（实测正文宽度算成 0）。
+            fit: StackFit.expand,
             children: [
               // ── 正文（最底层）───────────────────────────────────────
               Positioned.fill(
@@ -828,8 +831,6 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                   ),
                 ),
               ),
-              // insets 仅用于让底栏覆盖层在与系统手势区共存时不至于贴边
-              if (insets.bottom > 0) const SizedBox.shrink(),
             ],
           );
         }),
