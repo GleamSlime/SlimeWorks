@@ -502,6 +502,10 @@ class _NovelLibraryPageState extends State<NovelLibraryPage> {
                   }
 
                   return GridView.builder(
+                    // ★ 记住滚动位置：进书阅读后返回列表，应停留在原来的位置，
+                    // 而不是弹回顶部重新滚。PageStorage 随路由栈保存，
+                    // 页面重建（返回）时会自动还原。
+                    key: const PageStorageKey<String>('novel-library-grid'),
                     gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: isNarrow ? scaleW(150) : scaleW(200),
                       childAspectRatio: 0.65,

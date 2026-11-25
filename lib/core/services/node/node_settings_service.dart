@@ -1978,6 +1978,35 @@ class NodeSettingsService extends GetxService {
     return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
+  /// 在**一本书内部**搜索关键词（全书章节内匹配）。
+  ///
+  /// 与 [searchNodeNovels]（跨书库按书名/作者搜）是两回事。
+  /// 节点侧 action 是 `search_in_novel`；此前客户端从未调用过它，
+  /// 所以「阅读页里搜不到东西」——不是搜索没生效，是压根没发请求。
+  ///
+  /// 返回每项形如：
+  /// `{chapter_index, chapter_title, position, snippet}`
+  Future<List<Map<String, dynamic>>> searchInNodeNovel({
+    required String nodeId,
+    required String filePath,
+    required String keyword,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) {
+      throw StateError('节点不存在: $nodeId');
+    }
+    final response = await _callNode(
+      node: node,
+      action: 'search_in_novel',
+      params: <String, dynamic>{'file_path': filePath, 'keyword': keyword},
+    );
+    final data = response['data'];
+    if (data is! List) {
+      return <Map<String, dynamic>>[];
+    }
+    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
   Future<void> deleteNodeNovel({required String nodeId, required String novelId}) async {
     final node = getNodeById(nodeId);
     if (node == null) {

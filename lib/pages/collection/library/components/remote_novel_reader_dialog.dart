@@ -295,6 +295,9 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   /// 本地阅读器 `novel_reader_page.dart` 早就改成"自己画覆盖层 + AnimatedSlide"，
   /// 远程阅读页照同一套做，两边观感才一致。
   final RxBool _isImmersive = false.obs;
+
+  /// 收藏状态：初值取列表传进来的 metadata，切换后本地先反馈再写节点。
+  late bool _isFavorite = widget.metadata.isFavorite;
   Timer? _immersiveTimer;
   static const Duration _kOverlayAnim = AppMotion.fast;
 
@@ -419,6 +422,147 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     );
   }
 
+  /// 书中搜索：在本书全部章节里找关键词，点结果直接跳到那一章。
+  ///
+  /// 节点侧 `search_in_novel` 早就实现了，缺的一直是这个入口。
+  void _showInBookSearch() {
+    _setImmersive(false);
+    final controller = TextEditingController();
+    var searching = false;
+    var queried = false;
+    List<Map<String, dynamic>> results = <Map<String, dynamic>>[];
+    String? err;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            Future<void> runSearch() async {
+              final kw = controller.text.trim();
+              if (kw.isEmpty) return;
+              setModal(() {
+                searching = true;
+                err = null;
+              });
+              try {
+                final found = await _service.searchInNodeNovel(
+                  nodeId: widget.nodeId,
+                  filePath: widget.metadata.filePath,
+                  keyword: kw,
+                );
+                if (!ctx.mounted) return;
+                setModal(() {
+                  results = found;
+                  queried = true;
+                  searching = false;
+                });
+              } catch (e) {
+                if (!ctx.mounted) return;
+                setModal(() {
+                  err = e.toString();
+                  searching = false;
+                  queried = true;
+                });
+              }
+            }
+
+            return Padding(
+              // 键盘弹起时把内容顶上去，否则输入框被遮住
+              padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+              child: SafeArea(
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(ctx).height * 0.72,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          AppTheme.metrics.kSpace16,
+                          0,
+                          AppTheme.metrics.kSpace16,
+                          AppTheme.metrics.kSpace8,
+                        ),
+                        child: Text('在本书中搜索', style: AppTextStyles.sectionTitle(ctx)),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: controller,
+                                autofocus: true,
+                                textInputAction: TextInputAction.search,
+                                onSubmitted: (_) => runSearch(),
+                                decoration: const InputDecoration(
+                                  hintText: '输入关键词',
+                                  isDense: true,
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: AppTheme.metrics.kSpace8),
+                            FilledButton(
+                              onPressed: searching ? null : runSearch,
+                              child: searching
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Text('搜索'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: AppTheme.metrics.kSpace12),
+                      Expanded(
+                        child: err != null
+                            ? Center(child: Text('搜索失败: $err'))
+                            : !queried
+                            ? const Center(child: Text('输入关键词后点搜索'))
+                            : results.isEmpty
+                            ? const Center(child: Text('没有找到匹配内容'))
+                            : ListView.separated(
+                                itemCount: results.length,
+                                separatorBuilder: (_, _) => const Divider(height: 1),
+                                itemBuilder: (_, i) {
+                                  final r = results[i];
+                                  final idx =
+                                      int.tryParse('${r['chapter_index'] ?? 0}') ?? 0;
+                                  return ListTile(
+                                    title: Text(
+                                      '${r['chapter_title'] ?? '第 ${idx + 1} 章'}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      '${r['snippet'] ?? ''}'.trim(),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    onTap: () {
+                                      Navigator.of(ctx).pop();
+                                      _loadChapter(idx);
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(controller.dispose);
+  }
+
   void _showReaderSettingsSheet() {
     showModalBottomSheet<void>(
       context: context,
@@ -539,6 +683,25 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     final rest = id.substring(prefix.length);
     final sep = rest.indexOf(':');
     return sep < 0 ? rest : rest.substring(sep + 1);
+  }
+
+  /// 切换收藏：先本地乐观更新（按钮立刻响应），再落节点。
+  /// 失败则回滚并提示，避免"看起来收藏了其实没存"。
+  Future<void> _toggleFavorite() async {
+    final next = !_isFavorite;
+    setState(() => _isFavorite = next);
+    try {
+      final raw = _rawNovelIdFor(widget.metadata.id);
+      await _service.setNodeNovelFavorite(
+        nodeId: widget.nodeId,
+        novelId: raw,
+        isFavorite: next,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isFavorite = !next);
+      debugPrint('切换远程收藏失败: $e');
+    }
   }
 
   /// 把当前章节位置写回节点（下次打开能续读）。
@@ -774,6 +937,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                               Expanded(
                                 child: Text(
                                   _chapterTitleAt(_selected),
+                                  textAlign: TextAlign.center,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTextStyles.role(
@@ -783,6 +947,20 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                                     weight: FontWeight.w500,
                                   ),
                                 ),
+                              ),
+                              // 与本地阅读器对齐：章节列表 / 书中搜索 / 设置
+                              IconButton(
+                                tooltip: '章节列表',
+                                icon: DrawIcon(StrokeIcons.list),
+                                onPressed: () {
+                                  _setImmersive(false);
+                                  _scaffoldKey.currentState?.openDrawer();
+                                },
+                              ),
+                              IconButton(
+                                tooltip: '搜索',
+                                icon: DrawIcon(StrokeIcons.search),
+                                onPressed: _showInBookSearch,
                               ),
                               IconButton(
                                 tooltip: '设置',
@@ -824,6 +1002,10 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                             onOpenCatalog: () => _scaffoldKey.currentState?.openDrawer(),
                             onShowBookInfo: _showBookInfoDialog,
                             onShowReaderSettings: _showReaderSettingsSheet,
+                            currentIndex: _selected,
+                            totalChapters: _chapters.length,
+                            isFavorite: _isFavorite,
+                            onToggleFavorite: _toggleFavorite,
                           ),
                         ),
                       ),
@@ -902,6 +1084,12 @@ class _RemoteReaderBottomBar extends StatelessWidget {
   final VoidCallback onOpenCatalog;
   final VoidCallback onShowBookInfo;
   final VoidCallback onShowReaderSettings;
+  /// 当前章节序号（0 起）与总章数：与本地阅读器一致显示「1/12」
+  final int currentIndex;
+  final int totalChapters;
+  /// 收藏状态与切换（远程书收藏状态同样落节点）
+  final bool isFavorite;
+  final VoidCallback onToggleFavorite;
 
   const _RemoteReaderBottomBar({
     required this.canGoPrevious,
@@ -911,6 +1099,10 @@ class _RemoteReaderBottomBar extends StatelessWidget {
     required this.onOpenCatalog,
     required this.onShowBookInfo,
     required this.onShowReaderSettings,
+    required this.currentIndex,
+    required this.totalChapters,
+    required this.isFavorite,
+    required this.onToggleFavorite,
   });
 
   @override
@@ -937,7 +1129,9 @@ class _RemoteReaderBottomBar extends StatelessWidget {
             Expanded(
               child: Center(
                 child: Text(
-                  '章节',
+                  totalChapters <= 0 ? '0/0' : '${currentIndex + 1}/$totalChapters',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.role(
                     context,
                     fontSize: appMetrics.fontSize13,
@@ -953,6 +1147,12 @@ class _RemoteReaderBottomBar extends StatelessWidget {
               tooltip: '下一章',
               onPressed: canGoNext ? onNext : null,
               icon: DrawIcon(StrokeIcons.chevronRight),
+            ),
+            // 收藏：与本地阅读器对齐
+            IconButton(
+              tooltip: isFavorite ? '取消收藏' : '收藏',
+              onPressed: onToggleFavorite,
+              icon: DrawIcon(isFavorite ? StrokeIcons.favorite : StrokeIcons.favoriteBorder),
             ),
             IconButton(
               tooltip: '书籍详情',
