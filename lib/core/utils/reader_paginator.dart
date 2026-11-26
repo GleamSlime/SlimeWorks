@@ -37,6 +37,7 @@ class ReaderPaginator {
     required Size size,
     required TextStyle style,
     double textScale = 1.0,
+    TextScaler? scaler,
   }) {
     final normalized = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     if (normalized.isEmpty) return <String>[''];
@@ -45,7 +46,7 @@ class ReaderPaginator {
     final painter = TextPainter(
       text: TextSpan(text: normalized, style: style),
       textDirection: TextDirection.ltr,
-      textScaler: TextScaler.linear(textScale),
+      textScaler: scaler ?? TextScaler.linear(textScale),
     )..layout(maxWidth: size.width);
 
     final metrics = painter.computeLineMetrics();
