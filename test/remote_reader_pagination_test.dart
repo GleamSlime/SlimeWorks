@@ -81,6 +81,17 @@ Future<void> _tapReader(WidgetTester tester, double x) async {
   await tester.pumpAndSettle();
 }
 
+List<Offset> _toolbarOffsets(WidgetTester tester) {
+  return tester
+      .widgetList<AnimatedSlide>(find.byType(AnimatedSlide))
+      .map((slide) => slide.offset)
+      .toList();
+}
+
+final _readerGestures = find.byKey(
+  const ValueKey<String>('remote-reader-gestures'),
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -123,19 +134,91 @@ void main() {
         .data;
     expect(secondText, isNot(firstText));
 
-    await tester.drag(
-      find.byKey(const ValueKey<String>('remote-reader-gestures')),
-      const Offset(-140, 0),
-    );
+    await tester.drag(_readerGestures, const Offset(-220, 0));
     await tester.pumpAndSettle();
     expect(_currentPage(tester), 3);
 
-    await tester.drag(
-      find.byKey(const ValueKey<String>('remote-reader-gestures')),
-      const Offset(140, 0),
-    );
+    await tester.drag(_readerGestures, const Offset(220, 0));
     await tester.pumpAndSettle();
     expect(_currentPage(tester), 2);
+  });
+
+  testWidgets('上下滑动不切换沉浸工具栏，也不翻页', (tester) async {
+    await _mountReader(tester);
+    final offsets = _toolbarOffsets(tester);
+    final page = _currentPage(tester);
+
+    await tester.drag(_readerGestures, const Offset(0, -180));
+    await tester.pumpAndSettle();
+    expect(_toolbarOffsets(tester), offsets);
+    expect(_currentPage(tester), page);
+
+    await tester.drag(_readerGestures, const Offset(0, 180));
+    await tester.pumpAndSettle();
+    expect(_toolbarOffsets(tester), offsets);
+    expect(_currentPage(tester), page);
+  });
+
+  testWidgets('沉浸工具栏切换不改变分页、当前页与正文', (tester) async {
+    await _mountReader(tester);
+    final totalPages = _totalPages(tester);
+    final currentPage = _currentPage(tester);
+    final text = tester
+        .widget<SelectableText>(find.byType(SelectableText).first)
+        .data;
+
+    await _tapReader(tester, _phoneSize.width / 2);
+    expect(_toolbarOffsets(tester).any((offset) => offset.dy != 0), isTrue);
+    expect(_totalPages(tester), totalPages);
+    expect(_currentPage(tester), currentPage);
+    expect(
+      tester.widget<SelectableText>(find.byType(SelectableText).first).data,
+      text,
+    );
+
+    await _tapReader(tester, _phoneSize.width / 2);
+    expect(_toolbarOffsets(tester), everyElement(Offset.zero));
+    expect(_totalPages(tester), totalPages);
+    expect(_currentPage(tester), currentPage);
+  });
+
+  testWidgets('拖动时页面跟手位移，末页继续滑动切下一章', (tester) async {
+    final service = await _mountReader(tester);
+    final pageView = tester.widget<PageView>(
+      find.byKey(const ValueKey<String>('remote-reader-pages')),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(_readerGestures),
+    );
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump();
+    final controller = pageView.controller!;
+    expect(controller.page, greaterThan(0.0));
+    expect(controller.page, lessThan(1.0));
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(_currentPage(tester), 2);
+
+    final pages = _totalPages(tester);
+    for (var i = _currentPage(tester); i < pages; i++) {
+      await _tapReader(tester, _phoneSize.width * 0.9);
+    }
+    expect(_currentPage(tester), pages);
+
+    await tester.drag(_readerGestures, const Offset(-140, 0));
+    await tester.pumpAndSettle();
+    expect(service.chapterRequests.last, 1);
+    expect(find.text('第二章'), findsOneWidget);
+    expect(_currentPage(tester), 1);
+
+    await tester.drag(_readerGestures, const Offset(140, 0));
+    await tester.pumpAndSettle();
+    expect(service.chapterRequests.last, 0);
+    expect(find.text('第一章'), findsOneWidget);
+    expect(_currentPage(tester), pages);
   });
 
   testWidgets('首末页继续滑动会切章，进入上一章时落在末页', (tester) async {

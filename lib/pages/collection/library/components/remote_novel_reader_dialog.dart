@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
@@ -30,7 +31,8 @@ class RemoteNovelReaderDialog extends StatefulWidget {
   });
 
   @override
-  State<RemoteNovelReaderDialog> createState() => _RemoteNovelReaderDialogState();
+  State<RemoteNovelReaderDialog> createState() =>
+      _RemoteNovelReaderDialogState();
 }
 
 class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
@@ -64,7 +66,10 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
         // 恢复到上次读到的章节。
         // metadata.progress 是 0~1 的归一化进度（节点侧持久化），
         // 之前远程阅读路径完全不用它，所以永远是第 1 章。
-        _selected = _chapterIndexForProgress(chapters.length, widget.metadata.progress);
+        _selected = _chapterIndexForProgress(
+          chapters.length,
+          widget.metadata.progress,
+        );
       });
       // 列表到手后再取正文（EPUB 的 content 是延迟加载的）
       if (chapters.isNotEmpty) {
@@ -212,13 +217,20 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                           width: scaleW(280),
                           child: ListView.separated(
                             itemCount: _chapters.length,
-                            separatorBuilder: (_, _) => const Divider(height: 1),
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, index) {
-                              final title = (_chapters[index]['title'] ?? '章节 ${index + 1}')
-                                  .toString();
+                              final title =
+                                  (_chapters[index]['title'] ??
+                                          '章节 ${index + 1}')
+                                      .toString();
                               return ListTile(
                                 selected: index == _selected,
-                                title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                title: Text(
+                                  title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 onTap: () {
                                   // 必须走 _loadChapter：它负责取正文 + 置加载态。
                                   // 旧实现只 setState(_selected)，正文压根不跟着变
@@ -237,7 +249,9 @@ class _RemoteNovelReaderDialogState extends State<RemoteNovelReaderDialog> {
                           child: Padding(
                             padding: EdgeInsets.all(appMetrics.kSpace12),
                             child: _chapterLoading
-                                ? const Center(child: CircularProgressIndicator())
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
                                 : _chapterError != null
                                 ? Center(child: Text('加载章节失败: $_chapterError'))
                                 : _buildChapterContent(context, chapterText),
@@ -294,6 +308,10 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   Offset? _pointerDown;
   Offset? _pointerLast;
   bool _pointerStartedWithSelection = false;
+  double? _pageDragStartPixels;
+  int? _pageDragStartPage;
+  double _pageDragDelta = 0;
+  bool _pageDragSuppressed = false;
   Color _readerBgColor = AppReaderPaper.parchment;
   double _readerFontSize = 16;
   double _readerLineHeight = 1.8;
@@ -310,7 +328,8 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   /// 收藏状态：初值取列表传进来的 metadata，切换后本地先反馈再写节点。
   late bool _isFavorite = widget.metadata.isFavorite;
   Timer? _immersiveTimer;
-  static const Duration _kOverlayAnim = AppMotion.fast;
+  static const Duration _kOverlayAnim = AppMotion.base;
+  static const Curve _kOverlayCurve = Curves.easeOutCubic;
 
   String _chapterTitleAt(int index) {
     if (index < 0 || index >= _chapters.length) {
@@ -329,22 +348,16 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
 
   /// 正文区的内边距。
   ///
-  /// 本页的顶栏/底栏是 `Stack` 里的覆盖层（为了做沉浸滑动动画），
-  /// 它们**不占布局空间**，所以正文要自己把顶上那一条和底下那一条让出来。
-  /// 沉浸模式下两者都滑走，正文就能占满整屏。
+  /// 顶栏/底栏是覆盖层，不占布局空间，但这里仍按“常驻工具栏”预留固定区域：
+  /// 沉浸切换只做覆盖层动画，绝不能让排版尺寸变化。否则每次点屏幕中央都会
+  /// 重新分页、页码跳变，阅读位置也跟着漂。
   EdgeInsets _mobileReaderContentPadding(BuildContext context) {
     final insets = MediaQuery.paddingOf(context);
-    final isImmersive = _isImmersive.value;
     return EdgeInsets.fromLTRB(
       appMetrics.kSpace12, // 左右呼吸
-      insets.top +
-          AppTheme.metrics.kSpace48 +
-          (isImmersive ? 0 : AppTheme.metrics.kSpace8),
+      insets.top + AppTheme.metrics.kSpace48 + AppTheme.metrics.kSpace8,
       appMetrics.kSpace12,
-      insets.bottom +
-          (isImmersive
-              ? AppTheme.metrics.kSpace16
-              : _mobileReaderBottomBarHeight()),
+      insets.bottom + _mobileReaderBottomBarHeight(),
     );
   }
 
@@ -478,19 +491,9 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
       return;
     }
 
+    // 横向拖动由浮层里的 GestureDetector 驱动，这里只处理点按。
     final delta = last - down;
-    final tapSlop = scaleW(12);
-    final swipeSlop = scaleW(48);
-    if (delta.dx.abs() >= swipeSlop && delta.dx.abs() > delta.dy.abs()) {
-      _turnPage(delta.dx < 0 ? 1 : -1);
-      return;
-    }
-    if (delta.dy.abs() >= swipeSlop && delta.dy.abs() > delta.dx.abs()) {
-      _setImmersive(delta.dy > 0);
-      return;
-    }
-    if (delta.distance > tapSlop) return;
-
+    if (delta.distance > scaleW(12)) return;
     final width = MediaQuery.sizeOf(context).width;
     if (width <= 0) return;
     if (down.dx < width / 3) {
@@ -510,7 +513,93 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     _pointerStartedWithSelection = false;
   }
 
-  void _handleReaderSelectionChanged(TextSelection selection, SelectionChangedCause? cause) {
+  void _handlePageDragStart(DragStartDetails details) {
+    if (_chapterLoading || _selectionActive || !_pageController.hasClients) {
+      _pageDragSuppressed = true;
+      return;
+    }
+    _pageDragSuppressed = false;
+    final position = _pageController.position;
+    _pageDragStartPixels = position.pixels;
+    _pageDragStartPage = _pageIndex;
+    _pageDragDelta = 0;
+    _immersiveTimer?.cancel();
+  }
+
+  void _handlePageDragUpdate(DragUpdateDetails details) {
+    if (_pageDragSuppressed || _pageDragStartPixels == null) return;
+    _pageDragDelta += details.primaryDelta ?? 0;
+    final position = _pageController.position;
+    final target = (_pageDragStartPixels! - _pageDragDelta).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((position.pixels - target).abs() < 0.5) return;
+    position.jumpTo(target);
+  }
+
+  void _handlePageDragEnd(DragEndDetails details) {
+    _settlePageDrag(details.velocity.pixelsPerSecond.dx);
+  }
+
+  void _handlePageDragCancel() {
+    _settlePageDrag(0);
+  }
+
+  /// 松手后按位移/速度吸附到目标页；在首末页继续外拖则切章。
+  void _settlePageDrag(double velocity) {
+    final suppressed = _pageDragSuppressed;
+    final startPage = _pageDragStartPage;
+    final delta = _pageDragDelta;
+    _pageDragSuppressed = false;
+    _pageDragStartPage = null;
+    _pageDragStartPixels = null;
+    _pageDragDelta = 0;
+    if (suppressed || startPage == null || !_pageController.hasClients) return;
+
+    final position = _pageController.position;
+    final viewport = position.viewportDimension;
+    if (viewport <= 0) return;
+    final boundarySlop = math.max(scaleW(48), viewport * 0.18);
+    if (startPage <= 0 &&
+        _selected > 0 &&
+        (delta > boundarySlop || velocity > 600)) {
+      HapticFeedback.selectionClick();
+      _loadChapter(_selected - 1, initialPage: -1);
+      return;
+    }
+    if (startPage >= _pages.length - 1 &&
+        _selected < _chapters.length - 1 &&
+        (delta < -boundarySlop || velocity < -600)) {
+      HapticFeedback.selectionClick();
+      _loadChapter(_selected + 1, initialPage: 0);
+      return;
+    }
+
+    final page = position.pixels / viewport;
+    var target = page.round();
+    if (velocity <= -300) {
+      target = page.floor() + 1;
+    } else if (velocity >= 300) {
+      target = page.ceil() - 1;
+    }
+    target = target.clamp(0, _pages.length - 1);
+    _pageController.animateToPage(
+      target,
+      duration: Duration(
+        milliseconds: (170 + (target - page).abs() * 120).round().clamp(
+          170,
+          320,
+        ),
+      ),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _handleReaderSelectionChanged(
+    TextSelection selection,
+    SelectionChangedCause? cause,
+  ) {
     final active = !selection.isCollapsed;
     if (_selectionActive == active) return;
     setState(() => _selectionActive = active);
@@ -949,11 +1038,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     }
   }
 
-  Widget _buildPagedReader(
-    BuildContext context,
-    BoxConstraints constraints,
-    bool isImmersive,
-  ) {
+  Widget _buildPagedReader(BuildContext context, BoxConstraints constraints) {
     final contentPadding = _mobileReaderContentPadding(context);
     final width = constraints.maxWidth - contentPadding.horizontal;
     final height = constraints.maxHeight - contentPadding.vertical;
@@ -988,7 +1073,6 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
       fontSize: _readerFontSize,
       lineHeight: _readerLineHeight,
       textScale: textScaler.scale(_readerFontSize),
-      immersive: isImmersive,
       hasImages: hasImages,
     );
     _syncPagination(paginationKey, pages);
@@ -1000,41 +1084,59 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
       onPointerMove: _handleReaderPointerMove,
       onPointerUp: _handleReaderPointerUp,
       onPointerCancel: _handleReaderPointerCancel,
-      child: PageView.builder(
-        key: const ValueKey<String>('remote-reader-pages'),
-        controller: _pageController,
-        physics: const NeverScrollableScrollPhysics(),
-        allowImplicitScrolling: false,
-        itemCount: _pages.length,
-        onPageChanged: _onPageChanged,
-        itemBuilder: (context, index) {
-          final page = _pages[index];
-          if (hasImages) {
-            return _buildChapterContent(
-              context,
-              page,
-              contentPadding: contentPadding,
-              fontSize: _readerFontSize,
-              lineHeight: _readerLineHeight,
-            );
-          }
-          if (page.trim().isEmpty) {
-            return const Center(child: Text('正文为空'));
-          }
-          return Padding(
-            padding: contentPadding,
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: SelectableText(
-                page,
-                style: textStyle,
-                textScaler: textScaler,
-                contextMenuBuilder: _readerTextContextMenu,
-                onSelectionChanged: _handleReaderSelectionChanged,
-              ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: PageView.builder(
+              key: const ValueKey<String>('remote-reader-pages'),
+              controller: _pageController,
+              // 翻页手势由上方浮层接管，避免 SelectableText 抢先吃掉横向拖动。
+              physics: const NeverScrollableScrollPhysics(),
+              allowImplicitScrolling: false,
+              itemCount: _pages.length,
+              onPageChanged: _onPageChanged,
+              itemBuilder: (context, index) {
+                final page = _pages[index];
+                if (hasImages) {
+                  return _buildChapterContent(
+                    context,
+                    page,
+                    contentPadding: contentPadding,
+                    fontSize: _readerFontSize,
+                    lineHeight: _readerLineHeight,
+                  );
+                }
+                if (page.trim().isEmpty) {
+                  return const Center(child: Text('正文为空'));
+                }
+                return Padding(
+                  padding: contentPadding,
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: SelectableText(
+                      page,
+                      style: textStyle,
+                      textScaler: textScaler,
+                      contextMenuBuilder: _readerTextContextMenu,
+                      onSelectionChanged: _handleReaderSelectionChanged,
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+          // 透明浮层只认横向拖动：点按/长按仍落到正文，选中文字时自动让位。
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              dragStartBehavior: DragStartBehavior.down,
+              onHorizontalDragStart: _handlePageDragStart,
+              onHorizontalDragUpdate: _handlePageDragUpdate,
+              onHorizontalDragEnd: _handlePageDragEnd,
+              onHorizontalDragCancel: _handlePageDragCancel,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1194,11 +1296,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                         ? Center(child: Text('加载章节失败: $_chapterError'))
                         : Container(
                             color: _readerBgColor,
-                            child: _buildPagedReader(
-                              context,
-                              constraints,
-                              isImmersive,
-                            ),
+                            child: _buildPagedReader(context, constraints),
                           ),
                   ),
 
@@ -1211,54 +1309,59 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                       ignoring: isImmersive,
                       child: AnimatedSlide(
                         duration: _kOverlayAnim,
-                        curve: AppMotion.decelerate,
+                        curve: _kOverlayCurve,
                         offset: isImmersive ? const Offset(0, -1) : Offset.zero,
-                        child: Material(
-                          color: s2.surface,
-                          elevation: 4,
-                          child: SafeArea(
-                            bottom: false,
-                            child: SizedBox(
-                              height: AppTheme.metrics.kSpace48,
-                              child: Row(
-                                children: [
-                                  IconButton(
-                                    tooltip: '返回',
-                                    icon: DrawIcon(StrokeIcons.arrowBack),
-                                    onPressed: () =>
-                                        Navigator.of(context).maybePop(),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      _chapterTitleAt(_selected),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTextStyles.role(
-                                        context,
-                                        fontSize: appMetrics.fontSize14,
-                                        color: s2.textPrimary,
-                                        weight: FontWeight.w500,
+                        child: AnimatedOpacity(
+                          opacity: isImmersive ? 0 : 1,
+                          duration: _kOverlayAnim,
+                          curve: _kOverlayCurve,
+                          child: Material(
+                            color: s2.surface,
+                            elevation: 4,
+                            child: SafeArea(
+                              bottom: false,
+                              child: SizedBox(
+                                height: AppTheme.metrics.kSpace48,
+                                child: Row(
+                                  children: [
+                                    IconButton(
+                                      tooltip: '返回',
+                                      icon: DrawIcon(StrokeIcons.arrowBack),
+                                      onPressed: () =>
+                                          Navigator.of(context).maybePop(),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        _chapterTitleAt(_selected),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTextStyles.role(
+                                          context,
+                                          fontSize: appMetrics.fontSize14,
+                                          color: s2.textPrimary,
+                                          weight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  // 与本地阅读器对齐：章节列表 / 书中搜索 / 设置
-                                  IconButton(
-                                    tooltip: '章节列表',
-                                    icon: DrawIcon(StrokeIcons.list),
-                                    onPressed: _openCatalog,
-                                  ),
-                                  IconButton(
-                                    tooltip: '搜索',
-                                    icon: DrawIcon(StrokeIcons.search),
-                                    onPressed: _showInBookSearch,
-                                  ),
-                                  IconButton(
-                                    tooltip: '设置',
-                                    icon: DrawIcon(StrokeIcons.settings),
-                                    onPressed: _showReaderSettingsSheet,
-                                  ),
-                                ],
+                                    // 与本地阅读器对齐：章节列表 / 书中搜索 / 设置
+                                    IconButton(
+                                      tooltip: '章节列表',
+                                      icon: DrawIcon(StrokeIcons.list),
+                                      onPressed: _openCatalog,
+                                    ),
+                                    IconButton(
+                                      tooltip: '搜索',
+                                      icon: DrawIcon(StrokeIcons.search),
+                                      onPressed: _showInBookSearch,
+                                    ),
+                                    IconButton(
+                                      tooltip: '设置',
+                                      icon: DrawIcon(StrokeIcons.settings),
+                                      onPressed: _showReaderSettingsSheet,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -1276,31 +1379,38 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                       ignoring: isImmersive,
                       child: AnimatedSlide(
                         duration: _kOverlayAnim,
-                        curve: AppMotion.decelerate,
+                        curve: _kOverlayCurve,
                         offset: isImmersive ? const Offset(0, 1) : Offset.zero,
-                        child: Material(
-                          color: s2.surface.withAlpha(245),
-                          elevation: 8,
-                          child: SafeArea(
-                            top: false,
-                            child: SizedBox(
-                              height: _mobileReaderBottomBarHeight(),
-                              child: _RemoteReaderBottomBar(
-                                canGoPrevious: _pageIndex > 0 || _selected > 0,
-                                canGoNext:
-                                    _pageIndex < _pages.length - 1 ||
-                                    _selected < _chapters.length - 1,
-                                onPrevious: () => _turnPage(-1),
-                                onNext: () => _turnPage(1),
-                                onOpenCatalog: _openCatalog,
-                                onShowBookInfo: _showBookInfoDialog,
-                                onShowReaderSettings: _showReaderSettingsSheet,
-                                currentIndex: _selected,
-                                totalChapters: _chapters.length,
-                                currentPage: _pageIndex,
-                                totalPages: _pages.length,
-                                isFavorite: _isFavorite,
-                                onToggleFavorite: _toggleFavorite,
+                        child: AnimatedOpacity(
+                          opacity: isImmersive ? 0 : 1,
+                          duration: _kOverlayAnim,
+                          curve: _kOverlayCurve,
+                          child: Material(
+                            color: s2.surface.withAlpha(245),
+                            elevation: 8,
+                            child: SafeArea(
+                              top: false,
+                              child: SizedBox(
+                                height: _mobileReaderBottomBarHeight(),
+                                child: _RemoteReaderBottomBar(
+                                  canGoPrevious:
+                                      _pageIndex > 0 || _selected > 0,
+                                  canGoNext:
+                                      _pageIndex < _pages.length - 1 ||
+                                      _selected < _chapters.length - 1,
+                                  onPrevious: () => _turnPage(-1),
+                                  onNext: () => _turnPage(1),
+                                  onOpenCatalog: _openCatalog,
+                                  onShowBookInfo: _showBookInfoDialog,
+                                  onShowReaderSettings:
+                                      _showReaderSettingsSheet,
+                                  currentIndex: _selected,
+                                  totalChapters: _chapters.length,
+                                  currentPage: _pageIndex,
+                                  totalPages: _pages.length,
+                                  isFavorite: _isFavorite,
+                                  onToggleFavorite: _toggleFavorite,
+                                ),
                               ),
                             ),
                           ),
