@@ -4,6 +4,7 @@ import 'package:slime_works/src/rust/api/novel_reader.dart'
     show
         KeywordApplyBatchResult,
         KeywordRuleInput,
+        NovelDetectionDocument,
         NovelContent,
         NovelFolder,
         NovelMetadata,
@@ -92,6 +93,32 @@ Future<NovelContent> getNovelContent({required String filePath}) async {
   return rust.getNovelContent(filePath: filePath);
 }
 
+Future<NovelDetectionDocument> sampleNovelForDetection({
+  required String filePath,
+  required String title,
+  String? author,
+  required BigInt maxSampleChars,
+  required BigInt maxSamples,
+}) async {
+  if (MockMode.enabled) {
+    final content = _m.contents[filePath];
+    return NovelDetectionDocument(
+      title: title,
+      author: author,
+      totalChapters: BigInt.from(content?.chapters.length ?? 0),
+      sampledChapters: BigInt.zero,
+      samples: [],
+    );
+  }
+  return rust.sampleNovelForDetection(
+    filePath: filePath,
+    title: title,
+    author: author,
+    maxSampleChars: maxSampleChars,
+    maxSamples: maxSamples,
+  );
+}
+
 Future<String> getChapterContent({
   required String filePath,
   required BigInt chapterIndex,
@@ -103,10 +130,7 @@ Future<String> getChapterContent({
     if (i < 0 || i >= content.chapters.length) return '';
     return content.chapters[i].content ?? '';
   }
-  return rust.getChapterContent(
-    filePath: filePath,
-    chapterIndex: chapterIndex,
-  );
+  return rust.getChapterContent(filePath: filePath, chapterIndex: chapterIndex);
 }
 
 Future<List<SearchMatch>> searchInNovel({
@@ -315,7 +339,9 @@ Future<List<SearchBatchResult>> searchInAllNovelsBatched({
   return rust.searchInAllNovelsBatched(keyword: keyword, batchSize: batchSize);
 }
 
-Future<List<NovelSearchResult>> searchInAllNovels({required String keyword}) async {
+Future<List<NovelSearchResult>> searchInAllNovels({
+  required String keyword,
+}) async {
   if (MockMode.enabled) {
     return _m.novels
         .where((n) => _m.searchIn(n, keyword).isNotEmpty)
@@ -335,9 +361,7 @@ Future<List<ScanBatchResult>> scanNovelsFolderBatched({
   required BigInt batchSize,
 }) async {
   if (MockMode.enabled) {
-    final added = <NovelMetadata>[
-      _m.addFromPath('$folderPath/演示书籍.epub'),
-    ];
+    final added = <NovelMetadata>[_m.addFromPath('$folderPath/演示书籍.epub')];
     return <ScanBatchResult>[
       ScanBatchResult(
         novels: added,
@@ -350,6 +374,36 @@ Future<List<ScanBatchResult>> scanNovelsFolderBatched({
   return rust.scanNovelsFolderBatched(
     folderPath: folderPath,
     batchSize: batchSize,
+  );
+}
+
+Future<List<String>> organizeNovelsBySourcePath({
+  required List<String> filePaths,
+  required String scanRoot,
+  String? targetFolderId,
+}) async {
+  if (MockMode.enabled) {
+    final parts = scanRoot.replaceAll('\\', '/').split('/');
+    var parentId = targetFolderId;
+    for (final part in parts.where((part) => part.isNotEmpty)) {
+      final existing = _m.folders
+          .where((folder) => folder.parentId == parentId && folder.name == part)
+          .firstOrNull;
+      final folder = existing ?? _m.createFolder(part, parentId: parentId);
+      parentId = folder.id;
+    }
+    for (final novel in _m.novels) {
+      if (filePaths.contains(novel.filePath)) _m.moveNovel(novel.id, parentId);
+    }
+    return _m.novels
+        .where((novel) => filePaths.contains(novel.filePath))
+        .map((novel) => novel.id)
+        .toList();
+  }
+  return await rust.organizeNovelsBySourcePath(
+    filePaths: filePaths,
+    scanRoot: scanRoot,
+    targetFolderId: targetFolderId,
   );
 }
 

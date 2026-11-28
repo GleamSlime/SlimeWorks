@@ -146,20 +146,6 @@ impl TxtParser {
             chapter_positions.len()
         );
 
-        // 限制章节数量，避免过度拆分（提高到5000，支持超长小说）
-        if deduplicated.len() > 5000 {
-            println!(
-                "[TxtParser] Too many chapters detected ({}), using full text",
-                deduplicated.len()
-            );
-            return vec![NovelChapter {
-                id: format!("{}_chapter_0", novel_id),
-                title: "全文".to_string(),
-                index: 0,
-                content: Some(content.to_string()),
-            }];
-        }
-
         let chapter_positions = deduplicated;
 
         let mut chapters = Vec::new();
@@ -464,6 +450,16 @@ mod tests {
         let chapters = TxtParser::detect_chapters("id", text);
         assert_eq!(chapters.len(), 2, "同行重复匹配应去重为 2 章");
         assert!(chapters[0].title.starts_with('第'));
+    }
+
+    #[test]
+    fn test_detect_chapters_preserves_more_than_five_thousand_chapters() {
+        let mut text = String::new();
+        for index in 1..=5001 {
+            text.push_str(&format!("第{}章 标题\n正文。\n", index));
+        }
+        let chapters = TxtParser::detect_chapters("id", &text);
+        assert_eq!(chapters.len(), 5001, "超过五千章时仍应保留全部分章");
     }
 
     #[test]

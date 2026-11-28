@@ -1,13 +1,13 @@
 # 开发环境与构建姿势（本机）
 
 > 本文件记录随机器/SDK 版本变化的环境事实，**按需读取**，不常驻注入上下文。
-> 最近核实：2026-11-13。
+> 最近核实：2026-11-28。
 
 ---
 
 ## SDK 布局与选择
 
-- 本机多套 SDK：`~/development/flutter`（官方 git 检出，旧版 Dart 3.13.4，**PATH 默认的 `dart`/`flutter` 指它**）与 `~/fvm/versions/`（fvm 管理，含 3.41.5 / 3.50.0）。
+- 本机 SDK：`~/flutter_sdk/flutter`（Flutter 3.50.0 / Dart 3.14.0）。旧 `~/fvm/versions/` 路径已不存在，**PATH 默认的 `dart`/`flutter` 可能指向其他版本，不要直接用**。
 - **项目当前解析到哪个 SDK，唯一权威来源是 `.dart_tool/version`**（谁最后跑 pub get 就写谁的版本，`package_config.json` 同步跟着换）。`.fvm/` 配置与 `flutter_sdk` 软链已对齐 3.50.0（供 `.mcp.json` 取项目内 dart），但仍非权威来源——升级后先现读 `.dart_tool/version`。
 - 命令必须用与 `.dart_tool/version` 一致的 SDK 二进制。混用时 framework 源码与引擎 platform dill 分属两套 SDK，报 `HitTestResponse not found` / `displayCornerRadii` 一类类型错误。
 - CI 钉的版本见 `.github/workflows/release.yml` 的 `FLUTTER_VERSION`。
@@ -93,7 +93,7 @@ flutter test                                   # Flutter 测试
 测试过不过」，这个验「用户在远程模式下点按钮，节点数据到底变没变」。
 
 ```bash
-bash scripts/full_regression.sh                  # 核心 11 个小节，约 11s
+bash scripts/full_regression.sh                  # 核心 12 个小节，约 40s
 bash scripts/full_regression.sh --with-app       # 追加真 macOS App 集成测试（+10min）
 bash scripts/full_regression.sh --with-full-test # 追加全量 flutter test + 基线对照（+15min）
 bash scripts/full_regression.sh --all            # 两个都加
@@ -103,7 +103,7 @@ bash scripts/full_regression.sh --keep           # 保留临时目录便于排�
 
 小节：A 环境自检 / B Rust 构建 / C 冷启动模块 / D 假成功契约 / E 条目 ID 稳定 /
 F 幽灵体积 / G 重新扫描 / H 文件上传 / I 账本口令 / J Sentry 清空 / M 真实测试数据 /
-K 真 App（可选）/ L 全量测试（可选）。
+N 小说导入与分层抽样 / K 真 App（可选）/ L 全量测试（可选）。
 
 **关键设计**（都是踩过坑才这么写的，别随手改）：
 

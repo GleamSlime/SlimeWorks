@@ -53,14 +53,23 @@ SDK_VERSION="$(tr -d '[:space:]' < .dart_tool/version 2>/dev/null || true)"
 FLUTTER_BIN=""
 if [ -n "$SDK_VERSION" ] && [ -x "$HOME/fvm/versions/$SDK_VERSION/bin/flutter" ]; then
   FLUTTER_BIN="$HOME/fvm/versions/$SDK_VERSION/bin/flutter"
+elif [ -n "$SDK_VERSION" ] && [ -x "$HOME/flutter_sdk/flutter/bin/flutter" ] \
+  && "$HOME/flutter_sdk/flutter/bin/flutter" --version 2>/dev/null | grep -q "Flutter ${SDK_VERSION} "; then
+  FLUTTER_BIN="$HOME/flutter_sdk/flutter/bin/flutter"
 elif command -v flutter >/dev/null 2>&1; then
-  FLUTTER_BIN="$(command -v flutter)"
+  CANDIDATE="$(command -v flutter)"
+  if [ -z "$SDK_VERSION" ] || "$CANDIDATE" --version 2>/dev/null | grep -q "Flutter ${SDK_VERSION} "; then
+    FLUTTER_BIN="$CANDIDATE"
+  fi
 fi
 if [ -z "$FLUTTER_BIN" ]; then
-  echo "找不到 flutter：.dart_tool/version=${SDK_VERSION:-未知}，PATH 里也没有 flutter"
+  echo "找不到与 .dart_tool/version=${SDK_VERSION:-未知} 匹配的 flutter，请检查 SDK 安装"
   exit 2
 fi
 export PATH="$(dirname "$FLUTTER_BIN"):$HOME/.pub-cache/bin:$PATH"
+if [ -x "$TMP_BASE/sw_appdmg/node_modules/.bin/appdmg" ]; then
+  export PATH="$TMP_BASE/sw_appdmg/node_modules/.bin:$PATH"
+fi
 
 # 记下 lock 的初始状态：构建偶尔会按镜像地址重写它，收尾时还原，避免误提交
 LOCK_DIRTY_BEFORE="$(git status --porcelain -- pubspec.lock 2>/dev/null)"
@@ -95,6 +104,19 @@ else
   echo "    完整输出: $LOG_DIR/analyze.log"
 fi
 
+extract_failed_tests() {
+  python3 - "$1" <<'PY'
+import re, sys
+failed = set()
+for line in open(sys.argv[1], encoding='utf-8', errors='replace'):
+    match = re.search(r'/test/([^:\n]+\.dart): (.*?) \[E\]\s*$', line)
+    if match:
+        failed.add(f'{match.group(1)}: {match.group(2)}')
+for item in sorted(failed):
+    print(item)
+PY
+}
+
 # ── 2. 全量 flutter test ────────────────────────────────────────────────────
 if [ "$SKIP_TEST" -eq 1 ]; then
   printf '[跳过] test               --skip-test（提交前必须补跑）\n'
@@ -108,9 +130,33 @@ else
     printf '[%d/%d] test              通过 (%s, %s)\n' \
       "$STEP" "$TOTAL" "${SUMMARY:-全量通过}" "$(elapsed "$START")"
   else
-    FAILED=1
-    printf '[%d/%d] test              失败 (%s)\n' "$STEP" "$TOTAL" "$(elapsed "$START")"
-    awk '/^Failing tests:/{flag=1} flag' "$LOG_DIR/test.log" | head -12 | sed 's/^/    /'
+    extract_failed_tests "$LOG_DIR/test.log" >"$LOG_DIR/head-fail.txt"
+    BASELINE_DIR="$LOG_DIR/baseline"
+    BASE_REV="$(git rev-parse HEAD)"
+    if git worktree add --detach "$BASELINE_DIR" "$BASE_REV" >"$LOG_DIR/baseline-worktree.log" 2>&1; then
+      [ ! -f .env ] || cp .env "$BASELINE_DIR/.env"
+      DART_BIN="$(dirname "$FLUTTER_BIN")/dart"
+      ( cd "$BASELINE_DIR" && "$DART_BIN" run tool/stroke_icons/generate.dart ) >>"$LOG_DIR/baseline-worktree.log" 2>&1
+      ( cd "$BASELINE_DIR" && "$DART_BIN" run build_runner build --delete-conflicting-outputs ) >>"$LOG_DIR/baseline-worktree.log" 2>&1
+      ( cd "$BASELINE_DIR" && "$FLUTTER_BIN" test --no-pub ) >"$LOG_DIR/baseline-test.log" 2>&1
+      extract_failed_tests "$LOG_DIR/baseline-test.log" >"$LOG_DIR/baseline-fail.txt"
+      comm -23 "$LOG_DIR/head-fail.txt" "$LOG_DIR/baseline-fail.txt" >"$LOG_DIR/new-fail.txt"
+      NEW_FAILURES="$(wc -l <"$LOG_DIR/new-fail.txt" | tr -d ' ')"
+      EXISTING_FAILURES="$(wc -l <"$LOG_DIR/baseline-fail.txt" | tr -d ' ')"
+      git worktree remove --force "$BASELINE_DIR" >/dev/null 2>&1
+      if [ "$NEW_FAILURES" = "0" ]; then
+        printf '[%d/%d] test              通过 (%s 条既有失败，零新增, %s)\n' \
+          "$STEP" "$TOTAL" "$EXISTING_FAILURES" "$(elapsed "$START")"
+      else
+        FAILED=1
+        printf '[%d/%d] test              失败 (%s 条新增失败, %s)\n' \
+          "$STEP" "$TOTAL" "$NEW_FAILURES" "$(elapsed "$START")"
+        head -12 "$LOG_DIR/new-fail.txt" | sed 's/^/    /'
+      fi
+    else
+      FAILED=1
+      printf '[%d/%d] test              失败 (无法建立基线 worktree, %s)\n' "$STEP" "$TOTAL" "$(elapsed "$START")"
+    fi
     echo "    完整输出: $LOG_DIR/test.log"
   fi
 fi

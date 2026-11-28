@@ -15,6 +15,9 @@ import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/node/node_log_reporter.dart';
 import 'package:slime_works/core/services/node/node_settings_service.dart';
 import 'package:slime_works/core/services/node/node_models.dart';
+import 'package:slime_works/core/services/novel_detection_service.dart';
+import 'package:slime_works/core/services/ollama/ollama_models.dart';
+import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:slime_works/pages/collection/library/components/library_item.dart';
 import 'package:slime_works/mock/seams/novel_api_seam.dart';
@@ -22,6 +25,7 @@ import 'package:slime_works/mock/seams/novel_api_seam.dart' as rust_api;
 
 part 'novel_library_viewmodel_novel.dart';
 part 'novel_library_viewmodel_actions.dart';
+
 const Loggers _logger = Loggers(name: '书库');
 
 /// 后台封面存在性检查的 isolate 入口（顶层函数）。
@@ -38,7 +42,6 @@ Map<String, bool> _checkCoverFilesExist(Set<String> paths) {
   }
   return map;
 }
-
 
 /// 书库 ViewModel
 class NovelLibraryViewModel extends BaseViewModel {
@@ -67,6 +70,10 @@ class NovelLibraryViewModel extends BaseViewModel {
   /// 完全分不清是「节点上真没书」还是「根本没连上」。
   final RxString remoteErrorMessage = ''.obs;
   final isScanning = false.obs;
+  final isDetecting = false.obs;
+  final detectionCompleted = 0.obs;
+  final detectionTotal = 0.obs;
+  final detectionFailed = 0.obs;
   final scanStatusText = ''.obs;
   final scanProgressText = ''.obs;
   final searchQuery = ''.obs;
@@ -233,10 +240,12 @@ class NovelLibraryViewModel extends BaseViewModel {
   }
 
   /// 远程文件夹的节点 ID（本地文件夹返回 null）
-  String? getRemoteFolderNodeId(String folderId) => parseRemoteFolderSyntheticId(folderId)?.$1;
+  String? getRemoteFolderNodeId(String folderId) =>
+      parseRemoteFolderSyntheticId(folderId)?.$1;
 
   /// 远程文件夹在节点侧的原始 ID（本地文件夹返回 null）
-  String? getRemoteFolderRawId(String folderId) => parseRemoteFolderSyntheticId(folderId)?.$2;
+  String? getRemoteFolderRawId(String folderId) =>
+      parseRemoteFolderSyntheticId(folderId)?.$2;
 
   List<NovelMetadata> _getBooksInFolder(String folderId) {
     _ensureFolderBooksCache();
@@ -344,7 +353,9 @@ class NovelLibraryViewModel extends BaseViewModel {
     for (final n in novels) {
       final p = n.coverPath;
       if (p == null || p.isEmpty) continue;
-      if (p.startsWith('data:') || p.startsWith('http://') || p.startsWith('https://')) {
+      if (p.startsWith('data:') ||
+          p.startsWith('http://') ||
+          p.startsWith('https://')) {
         continue;
       }
       paths.add(p);
@@ -367,10 +378,12 @@ class NovelLibraryViewModel extends BaseViewModel {
   /// 禁止 spawn isolate（会报 unsendable/_Future），测试里注入同步实现即可——
   /// 「检查不在 build 期执行、结果经缓存+epoch 通知」的语义不变。
   @visibleForTesting
-  static Future<Map<String, bool>> Function(Set<String> paths) coverExistenceChecker =
-      _defaultCoverExistenceChecker;
+  static Future<Map<String, bool>> Function(Set<String> paths)
+  coverExistenceChecker = _defaultCoverExistenceChecker;
 
-  static Future<Map<String, bool>> _defaultCoverExistenceChecker(Set<String> paths) {
+  static Future<Map<String, bool>> _defaultCoverExistenceChecker(
+    Set<String> paths,
+  ) {
     // 只传纯数据进 isolate：闭包捕获 VM 实例会报 unsendable
     return Isolate.run(() => _checkCoverFilesExist(paths));
   }
@@ -428,13 +441,19 @@ class NovelLibraryViewModel extends BaseViewModel {
       final parsed = parseRemoteFolderSyntheticId(syntheticId);
       map[syntheticId] = NovelFolder(
         id: syntheticId,
-        name: remoteFolderDisplayNames[syntheticId] ??
-            ((row['name'] ?? '').toString().isEmpty ? '远程目录' : row['name'].toString()),
+        name:
+            remoteFolderDisplayNames[syntheticId] ??
+            ((row['name'] ?? '').toString().isEmpty
+                ? '远程目录'
+                : row['name'].toString()),
         createdAt: (row['created_at'] as num?)?.toInt() ?? 0,
         order: (row['order'] as num?)?.toInt() ?? 999999,
         parentId: parsed == null
             ? null
-            : _buildRemoteParentSyntheticId(parsed.$1, row['parent_id']?.toString()),
+            : _buildRemoteParentSyntheticId(
+                parsed.$1,
+                row['parent_id']?.toString(),
+              ),
       );
     }
 
@@ -483,10 +502,14 @@ class NovelLibraryViewModel extends BaseViewModel {
       } else {
         final lq = query.toLowerCase();
         final merged = <NovelMetadata>[...novels, ...remoteNovels];
-        results = merged.where((n) => n.title.toLowerCase().contains(lq)).toList();
+        results = merged
+            .where((n) => n.title.toLowerCase().contains(lq))
+            .toList();
       }
       if (filterTags.isNotEmpty) {
-        results = results.where((n) => n.tags.any((t) => filterTags.contains(t))).toList();
+        results = results
+            .where((n) => n.tags.any((t) => filterTags.contains(t)))
+            .toList();
       }
       if (favoritesOnly) {
         results = results.where((n) => n.isFavorite).toList();
@@ -497,7 +520,9 @@ class NovelLibraryViewModel extends BaseViewModel {
     if (fid != null) {
       var folderBooks = _getBooksInFolder(fid);
       if (filterTags.isNotEmpty) {
-        folderBooks = folderBooks.where((n) => n.tags.any((t) => filterTags.contains(t))).toList();
+        folderBooks = folderBooks
+            .where((n) => n.tags.any((t) => filterTags.contains(t)))
+            .toList();
       }
       if (favoritesOnly) {
         folderBooks = folderBooks.where((n) => n.isFavorite).toList();
@@ -505,7 +530,9 @@ class NovelLibraryViewModel extends BaseViewModel {
       _sortBooks(folderBooks);
       // 远程夹里的子夹也要能进（节点支持父子层级；本地夹走 folders 表那一套）
       final childFolders = filterTags.isEmpty
-          ? _buildRemoteVirtualFolders().where((f) => f.parentId == fid).toList()
+          ? _buildRemoteVirtualFolders()
+                .where((f) => f.parentId == fid)
+                .toList()
           : <NovelFolder>[];
       return [
         ...childFolders.map<LibraryItem>((f) => LibraryFolderItem(f)),
@@ -525,9 +552,13 @@ class NovelLibraryViewModel extends BaseViewModel {
         .toList();
 
     var rootBooks = novels.where((n) => n.folderId == null).toList();
-    rootBooks.addAll(remoteNovels.where((n) => n.folderId == null || n.folderId!.isEmpty));
+    rootBooks.addAll(
+      remoteNovels.where((n) => n.folderId == null || n.folderId!.isEmpty),
+    );
     if (filterTags.isNotEmpty) {
-      rootBooks = rootBooks.where((n) => n.tags.any((t) => filterTags.contains(t))).toList();
+      rootBooks = rootBooks
+          .where((n) => n.tags.any((t) => filterTags.contains(t)))
+          .toList();
     }
     if (favoritesOnly) {
       rootBooks = rootBooks.where((n) => n.isFavorite).toList();
@@ -535,8 +566,10 @@ class NovelLibraryViewModel extends BaseViewModel {
     _sortBooks(rootBooks);
 
     return [
-      if (filterTags.isEmpty) ...sortedFolders.map<LibraryItem>((f) => LibraryFolderItem(f)),
-      if (filterTags.isEmpty) ...remoteFolders.map<LibraryItem>((f) => LibraryFolderItem(f)),
+      if (filterTags.isEmpty)
+        ...sortedFolders.map<LibraryItem>((f) => LibraryFolderItem(f)),
+      if (filterTags.isEmpty)
+        ...remoteFolders.map<LibraryItem>((f) => LibraryFolderItem(f)),
       ...rootBooks.map<LibraryItem>((n) => LibraryBookItem(n)),
     ];
   }
@@ -558,7 +591,10 @@ class NovelLibraryViewModel extends BaseViewModel {
   void loadMoreItems() {
     if (!canLoadMore) return;
     final allCount = filteredItems.length;
-    final newCount = (displayedItemCount.value + itemsPerPage).clamp(0, allCount);
+    final newCount = (displayedItemCount.value + itemsPerPage).clamp(
+      0,
+      allCount,
+    );
     displayedItemCount.value = newCount;
     _logger.info('加载更多：当前显示 $newCount / $allCount');
   }
@@ -642,8 +678,14 @@ class NovelLibraryViewModel extends BaseViewModel {
   /// 过滤后的书籍列表
   List<NovelMetadata> get filteredNovels {
     final sortTest = TimeConsumptionTest()..start(log: false);
-    final result = filteredItems.whereType<LibraryBookItem>().map((i) => i.metadata).toList();
-    _logger.log('书库 ${result.length} 本，耗时 +${sortTest.end(log: false)}ms', name: '书库');
+    final result = filteredItems
+        .whereType<LibraryBookItem>()
+        .map((i) => i.metadata)
+        .toList();
+    _logger.log(
+      '书库 ${result.length} 本，耗时 +${sortTest.end(log: false)}ms',
+      name: '书库',
+    );
     return result;
   }
 
@@ -661,8 +703,14 @@ class NovelLibraryViewModel extends BaseViewModel {
     // 派生缓存失效挂数据源：novels/remoteNovels/节点映射任何变更都置脏，
     // 下一次读取一次性重算（worker 回调不在 build 期，无 Obx 依赖收集问题）
     ever<List<NovelMetadata>>(novels, (_) => _invalidateFolderDerivedCache());
-    ever<List<NovelMetadata>>(remoteNovels, (_) => _invalidateFolderDerivedCache());
-    ever<Map<String, String>>(remoteNovelNodeId, (_) => _invalidateFolderDerivedCache());
+    ever<List<NovelMetadata>>(
+      remoteNovels,
+      (_) => _invalidateFolderDerivedCache(),
+    );
+    ever<Map<String, String>>(
+      remoteNovelNodeId,
+      (_) => _invalidateFolderDerivedCache(),
+    );
     // 本地书列表变更时安排一轮后台封面存在性检查（existsSync 不进 build）
     ever<List<NovelMetadata>>(novels, (_) => _scheduleCoverExistenceCheck());
   }
@@ -681,7 +729,9 @@ class NovelLibraryViewModel extends BaseViewModel {
     await super.onInitAsync();
     _installDataHooks();
     await nodeSettingsService.init();
-    _nodeMutationWorker ??= ever<int>(nodeSettingsService.libraryMutationTick, (_) {
+    _nodeMutationWorker ??= ever<int>(nodeSettingsService.libraryMutationTick, (
+      _,
+    ) {
       // 本地数据轻量重拉照旧；远程整轮重拉走 2s 防抖合并
       //（一次导入/批量操作会连发多个 tick，避免 N 事件 × N 节点整轮重付）
       unawaited(loadNovels());
@@ -739,74 +789,85 @@ class NovelLibraryViewModel extends BaseViewModel {
     // 审计 #3：节点间由串行 for-await 改并发（失败熔断由 _callNode 内部负责）
     final nodes = nodeSettingsService.dataRemoteNodes;
     final failures = <String>[];
-    await Future.wait(nodes.map((node) async {
-      try {
-        // 文件夹列表与书籍列表互不依赖：并行取，文件夹失败不影响书架显示
-        //（旧节点没有该 action 会报「不支持的动作」，此时退回归结到书籍反推）
-        final results = await Future.wait<Object>([
-          nodeSettingsService.fetchNodeNovels(node),
-          fetchRemoteFolderRowsOrEmpty(node),
-        ]);
-        final payloads = results[0] as List<Map<String, dynamic>>;
-        final folderRows = results[1] as List<Map<String, dynamic>>;
-        _logger.log(
-          '[RemoteDebug] 节点 ${node.name} 返回书籍数: ${payloads.length}, 文件夹数: ${folderRows.length}',
-          name: '书库',
-        );
-        for (final row in folderRows) {
-          final rawFolderId = (row['id'] ?? '').toString();
-          if (rawFolderId.isEmpty) continue;
-          nextFolderRows[_buildRemoteFolderSyntheticId(node.id, rawFolderId)] = row;
-        }
-        for (final payload in payloads) {
-          final remoteId = (payload['id'] ?? '').toString();
-          if (remoteId.isEmpty) continue;
-
-          final syntheticId = 'remote:${node.id}:$remoteId';
-          final model = _buildRemoteNovelModel(payload, syntheticId, node);
-          allRemote.add(model);
-          nodeIdMap[syntheticId] = node.id;
-          nodeNameMap[syntheticId] = node.name;
-          rawIdMap[syntheticId] = remoteId;
-
-          final folderIdRaw = payload['folder_id'];
-          final folderId = folderIdRaw?.toString();
-          if (folderId != null && folderId.isNotEmpty) {
-            final syntheticFolderId = _buildRemoteFolderSyntheticId(node.id, folderId);
-            final folderName =
-                payload['folder_name']?.toString() ?? payload['folder_title']?.toString() ?? '远程目录';
-            remoteFolderNames[syntheticFolderId] = folderName;
-          }
-
-          final chapterCount = _parseChapterCount(payload);
-          if (chapterCount != null) {
-            remoteChapterCounts[syntheticId] = chapterCount;
-          }
-        }
-      } catch (e, st) {
-        _logger.log('拉取远程节点书籍失败: ${node.name} -> $e', name: '书库');
-        // 让用户看见：节点离线/地址错/授权码错，不该只表现成「空书库」
-        failures.add('${node.name}: $e');
-        // 同时把现场上报到节点：用户报「没数据」时，节点侧能直接查到
-        // 当时请求了哪个地址、返回了什么（限流在 reporter 内部处理）。
-        // ★ 必须容错：上报是旁路能力，未注册（单测/精简环境）时不能反过来
-        // 把取数流程炸掉——那会让"取数失败"变成"抛异常"。
-        if (getIt.isRegistered<NodeLogReporter>()) {
-          unawaited(
-            getIt<NodeLogReporter>().reportFailure(
-              'novel-list-fetch',
-              error: e,
-              stackTrace: st,
-              extra: <String, Object?>{
-                'node': node.name,
-                'baseUrl': node.apiBaseUrl,
-                'lanUrl': node.lanApiBaseUrl ?? '',
-              },
-            ),
+    await Future.wait(
+      nodes.map((node) async {
+        try {
+          // 文件夹列表与书籍列表互不依赖：并行取，文件夹失败不影响书架显示
+          //（旧节点没有该 action 会报「不支持的动作」，此时退回归结到书籍反推）
+          final results = await Future.wait<Object>([
+            nodeSettingsService.fetchNodeNovels(node),
+            fetchRemoteFolderRowsOrEmpty(node),
+          ]);
+          final payloads = results[0] as List<Map<String, dynamic>>;
+          final folderRows = results[1] as List<Map<String, dynamic>>;
+          _logger.log(
+            '[RemoteDebug] 节点 ${node.name} 返回书籍数: ${payloads.length}, 文件夹数: ${folderRows.length}',
+            name: '书库',
           );
+          for (final row in folderRows) {
+            final rawFolderId = (row['id'] ?? '').toString();
+            if (rawFolderId.isEmpty) continue;
+            nextFolderRows[_buildRemoteFolderSyntheticId(
+                  node.id,
+                  rawFolderId,
+                )] =
+                row;
+          }
+          for (final payload in payloads) {
+            final remoteId = (payload['id'] ?? '').toString();
+            if (remoteId.isEmpty) continue;
+
+            final syntheticId = 'remote:${node.id}:$remoteId';
+            final model = _buildRemoteNovelModel(payload, syntheticId, node);
+            allRemote.add(model);
+            nodeIdMap[syntheticId] = node.id;
+            nodeNameMap[syntheticId] = node.name;
+            rawIdMap[syntheticId] = remoteId;
+
+            final folderIdRaw = payload['folder_id'];
+            final folderId = folderIdRaw?.toString();
+            if (folderId != null && folderId.isNotEmpty) {
+              final syntheticFolderId = _buildRemoteFolderSyntheticId(
+                node.id,
+                folderId,
+              );
+              final folderName =
+                  payload['folder_name']?.toString() ??
+                  payload['folder_title']?.toString() ??
+                  '远程目录';
+              remoteFolderNames[syntheticFolderId] = folderName;
+            }
+
+            final chapterCount = _parseChapterCount(payload);
+            if (chapterCount != null) {
+              remoteChapterCounts[syntheticId] = chapterCount;
+            }
+          }
+        } catch (e, st) {
+          _logger.log('拉取远程节点书籍失败: ${node.name} -> $e', name: '书库');
+          // 让用户看见：节点离线/地址错/授权码错，不该只表现成「空书库」
+          failures.add('${node.name}: $e');
+          // 同时把现场上报到节点：用户报「没数据」时，节点侧能直接查到
+          // 当时请求了哪个地址、返回了什么（限流在 reporter 内部处理）。
+          // ★ 必须容错：上报是旁路能力，未注册（单测/精简环境）时不能反过来
+          // 把取数流程炸掉——那会让"取数失败"变成"抛异常"。
+          if (getIt.isRegistered<NodeLogReporter>()) {
+            unawaited(
+              getIt<NodeLogReporter>().reportFailure(
+                'novel-list-fetch',
+                error: e,
+                stackTrace: st,
+                extra: <String, Object?>{
+                  'node': node.name,
+                  'baseUrl': node.apiBaseUrl,
+                  'lanUrl': node.lanApiBaseUrl ?? '',
+                },
+              ),
+            );
+          }
         }
-      }
-    }));
+      }),
+    );
 
     if (generation != _remoteRefreshGeneration || isClosed) {
       // 已有更新一轮在跑/完成，本轮结果作废
@@ -838,7 +899,9 @@ class NovelLibraryViewModel extends BaseViewModel {
     );
 
     chapterCountMap.removeWhere(
-      (novelId, _) => previousRemoteIds.contains(novelId) && !nodeIdMap.containsKey(novelId),
+      (novelId, _) =>
+          previousRemoteIds.contains(novelId) &&
+          !nodeIdMap.containsKey(novelId),
     );
     chapterCountMap.addAll(remoteChapterCounts);
   }
@@ -849,7 +912,9 @@ class NovelLibraryViewModel extends BaseViewModel {
   /// 它挂了不该连带整个书架刷新失败（旧节点的书架本来就没有空夹概念）。
   /// `@protected` 之外还标 `@visibleForTesting`——测试用桩子类覆写它注入文件夹。
   @visibleForTesting
-  Future<List<Map<String, dynamic>>> fetchRemoteFolderRowsOrEmpty(NodeEndpoint node) async {
+  Future<List<Map<String, dynamic>>> fetchRemoteFolderRowsOrEmpty(
+    NodeEndpoint node,
+  ) async {
     try {
       return await nodeSettingsService.fetchNodeNovelFolders(node);
     } catch (e) {
@@ -899,11 +964,16 @@ class NovelLibraryViewModel extends BaseViewModel {
   ]) {
     final formatRaw = (payload['format'] ?? 'txt').toString().toLowerCase();
     final format = formatRaw == 'epub' ? NovelFormat.epub : NovelFormat.txt;
-    final fileSize = BigInt.tryParse((payload['file_size'] ?? '0').toString()) ?? BigInt.zero;
-    final modifiedAt = int.tryParse((payload['modified_at'] ?? '0').toString()) ?? 0;
+    final fileSize =
+        BigInt.tryParse((payload['file_size'] ?? '0').toString()) ??
+        BigInt.zero;
+    final modifiedAt =
+        int.tryParse((payload['modified_at'] ?? '0').toString()) ?? 0;
     final addedAt = int.tryParse((payload['added_at'] ?? '0').toString()) ?? 0;
     final lastReadAtRaw = payload['last_read_at'];
-    final lastReadAt = lastReadAtRaw == null ? null : int.tryParse(lastReadAtRaw.toString());
+    final lastReadAt = lastReadAtRaw == null
+        ? null
+        : int.tryParse(lastReadAtRaw.toString());
     final tags = (payload['tags'] as List<dynamic>? ?? <dynamic>[])
         .map((e) => e.toString())
         .where((e) => e.trim().isNotEmpty)
@@ -948,11 +1018,15 @@ class NovelLibraryViewModel extends BaseViewModel {
       fileSize: fileSize,
       modifiedAt: modifiedAt,
       addedAt: addedAt,
-      progress: (payload['progress'] is num) ? (payload['progress'] as num).toDouble() : 0,
+      progress: (payload['progress'] is num)
+          ? (payload['progress'] as num).toDouble()
+          : 0,
       lastReadAt: lastReadAt,
       coverPath: coverPath,
       folderId: folderId,
-      customOrder: payload['custom_order'] is int ? payload['custom_order'] as int : null,
+      customOrder: payload['custom_order'] is int
+          ? payload['custom_order'] as int
+          : null,
       isFavorite: payload['is_favorite'] == true,
       tags: tags,
       notes: payload['notes']?.toString(),
@@ -1005,7 +1079,10 @@ class NovelLibraryViewModel extends BaseViewModel {
     final t = TimeConsumptionTest()..start(log: false);
     try {
       novels.value = getAllNovels();
-      _logger.log('加载书籍 ${novels.length} 本(+${t.end(log: false)}ms)', name: '书库');
+      _logger.log(
+        '加载书籍 ${novels.length} 本(+${t.end(log: false)}ms)',
+        name: '书库',
+      );
     } catch (e) {
       showSnack('错误', '加载书籍列表失败: $e');
     }

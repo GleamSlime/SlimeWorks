@@ -711,6 +711,75 @@ if want N; then
     j="$(call scan_novel_folder '{"folder_path":"/no/such/books"}')"
     must_fail_with "$j" "小说" && ok "不存在的目录会报错" || bad "不存在目录未报错"
 
+    mkdir -p "$WORK_DIR/n-target"
+    python3 - "$WORK_DIR/n-target/回归书A.txt" <<'PY'
+import sys
+with open(sys.argv[1], 'w', encoding='utf-8') as f:
+    for i in range(5001):
+        f.write(f'第{i + 1}章 合成测试\n' + f'第{i + 1}段用于校验分层抽样的合成文本。\n' * 3)
+PY
+    j="$(call create_novel_folder '{"name":"检测目标夹"}')"
+    TID="$(jget "$j" "d['data']['id']")"
+    j="$(call scan_novel_folder "{\"folder_path\":\"$WORK_DIR/n-target\",\"target_folder_id\":\"$TID\"}")"
+    if is_ok "$j" && [ "$(jget "$j" "d['data']['imported']")" = "1" ] \
+      && [ "$(jget "$j" "d['data']['ids'][0]")" != "" ]; then
+      ok "节点扫描返回新增 ID 并支持目标文件夹"
+    else
+      bad "节点目标夹扫描失败：$(printf '%s' "$j" | head -c 200)"
+    fi
+    if is_ok "$(call list_novels '{"with_cover":false}')"; then
+      j="$(call list_novels '{"with_cover":false}')"
+      if [ "$(printf '%s' "$j" | python3 -c 'import json,sys;d=json.load(sys.stdin)["data"];print(sum(n.get("folder_id")=="'$TID'" for n in d))')" = "1" ]; then
+        ok "目标夹书籍确实写入指定文件夹"
+      else
+        bad "目标夹书籍未落夹"
+      fi
+    fi
+    mkdir -p "$WORK_DIR/n-tree/奇幻/第二卷"
+    printf '第一章\n目录归档正文\n' > "$WORK_DIR/n-tree/奇幻/第二卷/层级书.txt"
+    TREE_ID="$(call scan_novel_folder "{\"folder_path\":\"$WORK_DIR/n-tree\",\"preserve_directory_structure\":true}" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["data"]["ids"][0] if d.get("success") and d["data"]["ids"] else "")')"
+    if [ -n "$TREE_ID" ]; then
+      j="$(call list_novels '{"with_cover":false}')"
+      f="$(call list_novel_folders '{}')"
+      if printf '%s' "$j" | python3 -c 'import json,sys;d=json.load(sys.stdin)["data"];n=next((x for x in d if x["id"]==sys.argv[1]),None);assert n and n.get("folder_id"),(sys.argv[1],n)' "$TREE_ID" \
+        && printf '%s' "$f" | python3 -c 'import json,sys;d=json.load(sys.stdin)["data"];by={x["id"]:x for x in d};n=next(x for x in json.loads(sys.argv[1])["data"] if x["id"]==sys.argv[2]);f=by[n["folder_id"]];assert f["name"]=="第二卷",f;f=by[f["parent_id"]];assert f["name"]=="奇幻",f;f=by[f["parent_id"]];assert f["name"]=="n-tree" and f.get("parent_id") is None,f' "$j" "$TREE_ID"; then
+        ok "节点按原目录创建多级文件夹并归档书籍"
+      else
+        bad "节点目录镜像层级不正确"
+      fi
+    else
+      bad "节点目录镜像扫描失败"
+    fi
+
+    j="$(call sample_novel_for_detection "{\"file_path\":\"$WORK_DIR/n-target/回归书A.txt\",\"title\":\"合成长书\",\"max_samples\":4,\"max_sample_chars\":400}")"
+    if is_ok "$j" && [ "$(jget "$j" "d['data']['sampled_chapters']")" = "4" ] \
+      && [ "$(jget "$j" "d['data']['total_chapters']")" -ge 5001 ]; then
+      ok "超过五千章的长书分层抽样返回有界样本"
+    else
+      bad "长书分层抽样失败：$(printf '%s' "$j" | head -c 200)"
+    fi
+    mkdir -p "$WORK_DIR/n-epub"
+    python3 - "$WORK_DIR/n-epub/回归.epub" <<'PY'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1], 'w') as z:
+    z.writestr('mimetype', 'application/epub+zip')
+    z.writestr('META-INF/container.xml', '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>')
+    z.writestr('OEBPS/content.opf', '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>回归EPUB</dc:title><dc:identifier id="id">urn:test</dc:identifier><dc:language>zh</dc:language></metadata><manifest><item id="cover" href="cover.png" media-type="image/png"/><item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/><item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="cover"/><itemref idref="ch1"/><itemref idref="ch2"/></spine></package>')
+    z.writestr('OEBPS/cover.png', b'not-an-image')
+    z.writestr('OEBPS/ch1.xhtml', '<html><body><p>甲&amp;乙</p><script>hidden()</script></body></html>')
+    z.writestr('OEBPS/ch2.xhtml', '<html><body><p>丙</p></body></html>')
+PY
+    j="$(call scan_novel_folder "{\"folder_path\":\"$WORK_DIR/n-epub\",\"preserve_directory_structure\":true}")"
+    j="$(call sample_novel_for_detection "{\"file_path\":\"$WORK_DIR/n-epub/回归.epub\",\"title\":\"回归EPUB\",\"max_samples\":4,\"max_sample_chars\":400}")"
+    if is_ok "$j" && [ "$(jget "$j" "d['data']['total_chapters']")" = "2" ] \
+      && printf '%s' "$j" | python3 -c 'import json,sys; samples=json.load(sys.stdin)["data"]["samples"]; assert "甲&乙" in samples[0]["content"] and "丙" in samples[1]["content"]; assert all("<p>" not in x["content"] and "hidden" not in x["content"] for x in samples)'; then
+      ok "节点 EPUB 检测返回去标签后的有界正文样本"
+    else
+      bad "节点 EPUB 检测失败：$(printf '%s' "$j" | head -c 200)"
+    fi
+    j="$(call sample_novel_for_detection '{"file_path":"/no/such/book.txt","title":"幽灵"}')"
+    must_fail_with "$j" "检测样本" && ok "幽灵文件抽样会报错" || bad "幽灵文件抽样未报错"
+
     # 阅读进度：写进去要能读回来，越界要钳制
     NID="$(call list_novels '{"with_cover":false}' \
       | python3 -c 'import json,sys

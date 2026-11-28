@@ -361,6 +361,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<NovelChapter> dco_decode_list_novel_chapter(dynamic raw);
 
   @protected
+  List<NovelDetectionSample> dco_decode_list_novel_detection_sample(
+    dynamic raw,
+  );
+
+  @protected
   List<NovelFolder> dco_decode_list_novel_folder(dynamic raw);
 
   @protected
@@ -450,6 +455,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NovelContent dco_decode_novel_content(dynamic raw);
+
+  @protected
+  NovelDetectionDocument dco_decode_novel_detection_document(dynamic raw);
+
+  @protected
+  NovelDetectionSample dco_decode_novel_detection_sample(dynamic raw);
 
   @protected
   NovelFolder dco_decode_novel_folder(dynamic raw);
@@ -910,6 +921,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<NovelDetectionSample> sse_decode_list_novel_detection_sample(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<NovelFolder> sse_decode_list_novel_folder(SseDeserializer deserializer);
 
   @protected
@@ -1019,6 +1035,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NovelContent sse_decode_novel_content(SseDeserializer deserializer);
+
+  @protected
+  NovelDetectionDocument sse_decode_novel_detection_document(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NovelDetectionSample sse_decode_novel_detection_sample(
+    SseDeserializer deserializer,
+  );
 
   @protected
   NovelFolder sse_decode_novel_folder(SseDeserializer deserializer);
@@ -1584,6 +1610,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_novel_detection_sample(
+    List<NovelDetectionSample> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_novel_folder(
     List<NovelFolder> self,
     SseSerializer serializer,
@@ -1729,6 +1761,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_novel_content(NovelContent self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_novel_detection_document(
+    NovelDetectionDocument self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_novel_detection_sample(
+    NovelDetectionSample self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_novel_folder(NovelFolder self, SseSerializer serializer);

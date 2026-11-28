@@ -32,6 +32,7 @@ class NodeSettingsService extends GetxService {
   static const String _keyLocalEnabled = 'node_local_enabled';
   static const String _keyLocalName = 'node_local_name';
   static const String _keyLocalPort = 'node_local_port';
+
   /// 本机节点授权码（明文存本地偏好，只把 sha256 摘要发给节点）
   static const String _keyLocalAuthCode = 'node_local_auth_code';
   static const int _defaultRemoteNodePort = 17888;
@@ -76,13 +77,14 @@ class NodeSettingsService extends GetxService {
   /// 节点专用 Dio：绕过系统代理直连。iOS/Android 设备上的代理（如 MITM）会
   /// 掐断 keep-alive 长连接，导致 "Connection closed while receiving data"。
   static Dio _createNodeDio(BaseOptions options) =>
-      Dio(options)..httpClientAdapter = IOHttpClientAdapter(
-            createHttpClient: () {
-              final client = HttpClient();
-              client.findProxy = (_) => 'DIRECT';
-              return client;
-            },
-          );
+      Dio(options)
+        ..httpClientAdapter = IOHttpClientAdapter(
+          createHttpClient: () {
+            final client = HttpClient();
+            client.findProxy = (_) => 'DIRECT';
+            return client;
+          },
+        );
 
   /// 常规连通性探测的超时档：图快，启动阶段多个节点并发探测也不拖慢页面。
   static const Duration _probeFastTimeout = Duration(milliseconds: 200);
@@ -192,7 +194,8 @@ class NodeSettingsService extends GetxService {
   final Set<String> _circuitBreakedNodes = <String>{};
 
   /// 熔断解除复探的进行中Future（按节点去重），避免一屏请求各自打一次 ping。
-  final Map<String, Future<_ProbeResult>> _nodeBreakChecks = <String, Future<_ProbeResult>>{};
+  final Map<String, Future<_ProbeResult>> _nodeBreakChecks =
+      <String, Future<_ProbeResult>>{};
 
   /// nodeId → 最近一次真正应答过的 base。
   ///
@@ -202,7 +205,8 @@ class NodeSettingsService extends GetxService {
   final Map<String, String> _nodeAnsweredBase = <String, String>{};
 
   /// 该节点当前该用的 base：有应答记录用记录，没有就按 LAN 优先的默认口径。
-  String _baseUrlFor(NodeEndpoint node) => _nodeAnsweredBase[node.id] ?? node.effectiveApiBaseUrl;
+  String _baseUrlFor(NodeEndpoint node) =>
+      _nodeAnsweredBase[node.id] ?? node.effectiveApiBaseUrl;
 
   /// 调用候选地址：先应答过的那一路，再 LAN、再 WAN（去重保序）。
   /// 只给一个地址时，`_shouldTryFallbackUrl` 想回退也没有下一个地址可换。
@@ -213,9 +217,7 @@ class NodeSettingsService extends GetxService {
       node.lanApiBaseUrl ?? '',
       node.apiBaseUrl,
     }.where((b) => b.isNotEmpty).toList(growable: false);
-    return <String>[
-      for (final base in bases) ..._candidateNodeCallUrls(base),
-    ];
+    return <String>[for (final base in bases) ..._candidateNodeCallUrls(base)];
   }
 
   /// 已缩放图片的内存缓存（key = cacheKey，LRU 淘汰，总字节上限 80MB）。
@@ -281,7 +283,8 @@ class NodeSettingsService extends GetxService {
         .where(
           (n) =>
               n.enabled &&
-              (_circuitBreakedNodes.contains(n.id) || nodeConnectivity[n.id] != true),
+              (_circuitBreakedNodes.contains(n.id) ||
+                  nodeConnectivity[n.id] != true),
         )
         .toList(growable: false);
     if (stale.isEmpty) {
@@ -305,7 +308,9 @@ class NodeSettingsService extends GetxService {
   /// 发起某节点远程媒体元数据的后台预热（幂等：已在途或已备好则跳过）。
   void requestNodeMediaMetadataWarmup(String nodeId) {
     final node = getNodeById(nodeId);
-    if (node == null || !node.enabled || _remoteMetaWarmups.containsKey(nodeId)) {
+    if (node == null ||
+        !node.enabled ||
+        _remoteMetaWarmups.containsKey(nodeId)) {
       return;
     }
     // 预热失败不能留下没人 await 的 error Future：就地吞掉，把「没预热上」表达为 null。
@@ -340,7 +345,8 @@ class NodeSettingsService extends GetxService {
       final trace = TimingTrace('复用远程元数据预热', scope: node.name);
       final result = await warmup;
       // 预热结果只在很短的时间内算新鲜：放久了再复用，等于把首屏换成一份过期快照。
-      final fresh = result != null &&
+      final fresh =
+          result != null &&
           DateTime.now().difference(result.takenAt) <= _remoteMetaMaxAge;
       trace.end(note: fresh ? null : '未命中，改为实时拉取');
       if (result != null && fresh) {
@@ -380,7 +386,9 @@ class NodeSettingsService extends GetxService {
       final r = results[index];
       if (r is List) {
         ok.add(index);
-        return r.map((e) => Map<String, dynamic>.from(e as Map)).toList(growable: false);
+        return r
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(growable: false);
       }
       failed.add('$name: $r');
       return const <Map<String, dynamic>>[];
@@ -396,7 +404,8 @@ class NodeSettingsService extends GetxService {
       smartFoldersOk: ok.contains(2),
     );
     trace.end(
-      note: '文件夹=${meta.folders.length} 集合=${meta.collections.length}'
+      note:
+          '文件夹=${meta.folders.length} 集合=${meta.collections.length}'
           ' 智能文件夹=${meta.smartFolders.length}'
           '${failed.isEmpty ? '' : ' 失败: ${failed.join(' | ')}'}',
     );
@@ -404,7 +413,8 @@ class NodeSettingsService extends GetxService {
   }
 
   /// 是否已熔断（本次运行期间不再自动请求）
-  bool isNodeCircuitBreaked(String nodeId) => _circuitBreakedNodes.contains(nodeId);
+  bool isNodeCircuitBreaked(String nodeId) =>
+      _circuitBreakedNodes.contains(nodeId);
 
   /// 重置熔断状态，供用户在设置页面手动重试。
   void resetNodeCircuitBreaker(String nodeId) {
@@ -431,8 +441,8 @@ class NodeSettingsService extends GetxService {
   /// 移动端专属的节点语义（不允许切「本机」、失效节点自动落到另一个节点）
   /// 否则只能靠真机验证，单测跑在 macOS 上永远测不到那条分支。
   @visibleForTesting
-  bool Function() mobilePlatformProbe =
-      () => Platform.isIOS || Platform.isAndroid;
+  bool Function() mobilePlatformProbe = () =>
+      Platform.isIOS || Platform.isAndroid;
 
   /// 移动端判据（走可覆盖探针）
   bool get isMobilePlatform => mobilePlatformProbe();
@@ -516,7 +526,8 @@ class NodeSettingsService extends GetxService {
     String? authCode,
   }) async {
     final normalized = _normalizeBaseUrl(apiBaseUrl);
-    final normalizedLan = lanApiBaseUrl != null && lanApiBaseUrl.trim().isNotEmpty
+    final normalizedLan =
+        lanApiBaseUrl != null && lanApiBaseUrl.trim().isNotEmpty
         ? _normalizeBaseUrl(lanApiBaseUrl)
         : null;
     final endpoint = NodeEndpoint(
@@ -542,7 +553,8 @@ class NodeSettingsService extends GetxService {
     }
 
     final normalizedLan =
-        endpoint.lanApiBaseUrl != null && endpoint.lanApiBaseUrl!.trim().isNotEmpty
+        endpoint.lanApiBaseUrl != null &&
+            endpoint.lanApiBaseUrl!.trim().isNotEmpty
         ? _normalizeBaseUrl(endpoint.lanApiBaseUrl!)
         : null;
     remoteNodes[index] = endpoint.copyWith(
@@ -643,8 +655,14 @@ class NodeSettingsService extends GetxService {
     // Mock 模式不发真实网络包，也不探测节点
     if (MockMode.enabled) {
       await Future<void>.delayed(const Duration(milliseconds: 600));
-      wakeStatus[id] = device.probeNodeId.isEmpty ? WakeStatus.sent : WakeStatus.online;
-      return WakeReport(targets: ['${device.target.isEmpty ? '255.255.255.255' : device.target}:${device.port}']);
+      wakeStatus[id] = device.probeNodeId.isEmpty
+          ? WakeStatus.sent
+          : WakeStatus.online;
+      return WakeReport(
+        targets: [
+          '${device.target.isEmpty ? '255.255.255.255' : device.target}:${device.port}',
+        ],
+      );
     }
 
     WakeReport report;
@@ -710,7 +728,10 @@ class NodeSettingsService extends GetxService {
     );
   }
 
-  Future<WakeReport> _sendViaRelay(WakeDevice device, NodeEndpoint relay) async {
+  Future<WakeReport> _sendViaRelay(
+    WakeDevice device,
+    NodeEndpoint relay,
+  ) async {
     final data = await callNodeAction(
       nodeId: relay.id,
       action: 'wake_host',
@@ -723,7 +744,9 @@ class NodeSettingsService extends GetxService {
     );
     final target = (data['target'] ?? '').toString();
     return WakeReport(
-      targets: ['${target.isEmpty ? '广播' : target}:${device.port}（经 ${relay.name}）'],
+      targets: [
+        '${target.isEmpty ? '广播' : target}:${device.port}（经 ${relay.name}）',
+      ],
     );
   }
 
@@ -765,7 +788,11 @@ class NodeSettingsService extends GetxService {
     final errors = <String>[];
 
     Future<void> dispatch(InternetAddress source) async {
-      final socket = await RawDatagramSocket.bind(source, 0, reuseAddress: true);
+      final socket = await RawDatagramSocket.bind(
+        source,
+        0,
+        reuseAddress: true,
+      );
       try {
         socket.broadcastEnabled = true;
         for (final address in _wakeTargets(configured, source)) {
@@ -893,7 +920,10 @@ class NodeSettingsService extends GetxService {
   }
 
   /// 收集下发地址：显式配置的地址优先，另外必须带上本机网段的定向广播
-  List<InternetAddress> _wakeTargets(String configured, InternetAddress source) {
+  List<InternetAddress> _wakeTargets(
+    String configured,
+    InternetAddress source,
+  ) {
     final targets = <String>[];
     void add(String value) {
       final trimmed = value.trim();
@@ -932,7 +962,8 @@ class NodeSettingsService extends GetxService {
 
   Uint8List _parseMacBytes(String input) {
     final cleaned = input.replaceAll(RegExp(r'[:\-.\s]'), '');
-    if (cleaned.length != 12 || !RegExp(r'^[0-9a-fA-F]{12}$').hasMatch(cleaned)) {
+    if (cleaned.length != 12 ||
+        !RegExp(r'^[0-9a-fA-F]{12}$').hasMatch(cleaned)) {
       throw FormatException('MAC 地址格式不正确: $input');
     }
     return Uint8List.fromList(
@@ -972,7 +1003,9 @@ class NodeSettingsService extends GetxService {
       nodeConnectivityError[node.id] = '节点已禁用';
     }
     // 并发探：串行时 N 个节点的超时是累加的
-    await Future.wait(enabledNodes.map((node) => checkNodeConnectivity(node.id)));
+    await Future.wait(
+      enabledNodes.map((node) => checkNodeConnectivity(node.id)),
+    );
     trace.end(note: '节点数=${enabledNodes.length}');
   }
 
@@ -993,7 +1026,8 @@ class NodeSettingsService extends GetxService {
     // LAN 与 WAN 并发探：串行时「LAN 地址已失效」这一最常见的场景要把快速档超时
     // 完整付一遍才轮到 WAN，节点看起来就是慢半拍。
     final bases = <String>{
-      if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty) node.lanApiBaseUrl!,
+      if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty)
+        node.lanApiBaseUrl!,
       node.apiBaseUrl,
     }.toList(growable: false);
     final results = await Future.wait(
@@ -1046,7 +1080,10 @@ class NodeSettingsService extends GetxService {
     );
   }
 
-  Future<_ProbeResult> _probeNodeUrl(String? baseUrl, {required Duration timeout}) async {
+  Future<_ProbeResult> _probeNodeUrl(
+    String? baseUrl, {
+    required Duration timeout,
+  }) async {
     if (baseUrl == null || baseUrl.isEmpty) return _ProbeResult.unreachable;
     final urls = _candidateNodeCallUrls(baseUrl);
     for (final url in urls) {
@@ -1057,7 +1094,10 @@ class NodeSettingsService extends GetxService {
       try {
         await _probeDio.post<dynamic>(
           url,
-          data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
+          data: <String, dynamic>{
+            'action': 'ping',
+            'params': <String, dynamic>{},
+          },
           options: Options(
             connectTimeout: timeout,
             receiveTimeout: timeout,
@@ -1093,9 +1133,11 @@ class NodeSettingsService extends GetxService {
   /// 只要不是全部无响应就给出结论。串行会让「一个地址已失效」的节点
   /// 把每个候选地址的超时都付一遍。
   Future<_ProbeResult> _reprobeNode(NodeEndpoint node) async {
-    final bases = <String>{node.effectiveApiBaseUrl, node.lanApiBaseUrl ?? '', node.apiBaseUrl}
-        .where((b) => b.isNotEmpty)
-        .toList(growable: false);
+    final bases = <String>{
+      node.effectiveApiBaseUrl,
+      node.lanApiBaseUrl ?? '',
+      node.apiBaseUrl,
+    }.where((b) => b.isNotEmpty).toList(growable: false);
     final results = await Future.wait(
       bases.map((base) => _probeNodeUrl(base, timeout: probeConfirmTimeout)),
     );
@@ -1103,7 +1145,9 @@ class NodeSettingsService extends GetxService {
       _nodeAnsweredBase[node.id] = bases[results.indexOf(_ProbeResult.ok)];
       return _ProbeResult.ok;
     }
-    if (results.contains(_ProbeResult.unauthorized)) return _ProbeResult.unauthorized;
+    if (results.contains(_ProbeResult.unauthorized)) {
+      return _ProbeResult.unauthorized;
+    }
     return _ProbeResult.unreachable;
   }
 
@@ -1115,14 +1159,13 @@ class NodeSettingsService extends GetxService {
     // 复探已经单飞，打点不能再单飞：跟着等的请求各自 end 一次，
     // 同一条判定会在同一毫秒刷出 N 行（N = 本屏并发请求数）。
     final isOwner = _nodeBreakChecks[node.id] == null;
-    final trace = isOwner
-        ? TimingTrace('熔断节点业务请求前复探', scope: node.name)
-        : null;
-    final alive = await (_nodeBreakChecks[node.id] ??= _reprobeNode(node).whenComplete(() {
-      // 必须用块体：箭头写法会把 remove() 返回的那个 Future（正是本 Future）
-      // 当成 whenComplete 的后续去等，自锁后永不完成。
-      _nodeBreakChecks.remove(node.id);
-    }));
+    final trace = isOwner ? TimingTrace('熔断节点业务请求前复探', scope: node.name) : null;
+    final alive = await (_nodeBreakChecks[node.id] ??= _reprobeNode(node)
+        .whenComplete(() {
+          // 必须用块体：箭头写法会把 remove() 返回的那个 Future（正是本 Future）
+          // 当成 whenComplete 的后续去等，自锁后永不完成。
+          _nodeBreakChecks.remove(node.id);
+        }));
     trace?.end(note: '结果=$alive');
     if (alive == _ProbeResult.ok) {
       _circuitBreakedNodes.remove(node.id);
@@ -1248,16 +1291,125 @@ class NodeSettingsService extends GetxService {
   ///
   /// 只探测 127.0.0.1：判断的是"这个端口还能不能给内置服务用"，不需要外网可达性。
   Future<bool> _isPortServingNode(int port) async {
-    final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 300);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(milliseconds: 300);
     try {
-      final request = await client.getUrl(Uri.parse('http://127.0.0.1:$port/health'));
-      final response = await request.close().timeout(const Duration(milliseconds: 600));
+      final request = await client.getUrl(
+        Uri.parse('http://127.0.0.1:$port/health'),
+      );
+      final response = await request.close().timeout(
+        const Duration(milliseconds: 600),
+      );
       await response.drain<void>();
       return response.statusCode == 200;
     } catch (_) {
       return false;
     } finally {
       client.close(force: true);
+    }
+  }
+
+  Future<Map<String, dynamic>> sampleNodeNovelForDetection({
+    required String nodeId,
+    required String filePath,
+    required String title,
+    String? author,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    final response = await _callNode(
+      node: node,
+      action: 'sample_novel_for_detection',
+      params: <String, dynamic>{
+        'file_path': filePath,
+        'title': title,
+        'author': ?author,
+        'max_sample_chars': 1200,
+        'max_samples': 24,
+      },
+    );
+    final data = response['data'];
+    if (data is! Map) throw StateError('节点返回的小说检测样本格式错误');
+    return Map<String, dynamic>.from(data);
+  }
+
+  Future<Map<String, dynamic>> scanNodeNovelFolder({
+    required String nodeId,
+    required String folderPath,
+    String? targetFolderId,
+    bool preserveDirectoryStructure = true,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    return _callNode(
+      node: node,
+      action: 'scan_novel_folder',
+      params: <String, dynamic>{
+        'folder_path': folderPath,
+        'target_folder_id': ?targetFolderId,
+        'preserve_directory_structure': preserveDirectoryStructure,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> importNodeNovels({
+    required String nodeId,
+    required List<String> filePaths,
+    String? targetFolderId,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    return _callNode(
+      node: node,
+      action: 'import_novels',
+      params: <String, dynamic>{
+        'file_paths': filePaths,
+        'target_folder_id': ?targetFolderId,
+      },
+    );
+  }
+
+  Future<String> uploadNovelToNode({
+    required String nodeId,
+    required String localPath,
+    required String destDir,
+  }) async {
+    final node = getNodeById(nodeId);
+    if (node == null) throw StateError('节点不存在: $nodeId');
+    await _ensureNodeReachable(node);
+    final file = File(localPath);
+    final length = await file.length();
+    final filename = localPath.split(RegExp(r'[/\\]')).last;
+    final uri = Uri.parse(buildNodeUploadUrl(nodeId)).replace(
+      queryParameters: <String, String>{'dest': destDir, 'filename': filename},
+    );
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        uri.toString(),
+        data: file.openRead(),
+        options: Options(
+          headers: <String, Object>{
+            Headers.contentLengthHeader: length,
+            Headers.contentTypeHeader: 'application/octet-stream',
+          },
+          sendTimeout: const Duration(minutes: 10),
+          receiveTimeout: const Duration(minutes: 2),
+        ),
+      );
+      final body = response.data ?? <String, dynamic>{};
+      _recordAppTraffic(txBytes: length, rxBytes: 256);
+      if (body['success'] != true) {
+        throw Exception((body['error'] ?? '小说上传失败').toString());
+      }
+      final data = body['data'];
+      if (data is! Map || (data['path'] ?? '').toString().isEmpty) {
+        throw StateError('节点未返回小说上传路径');
+      }
+      return (data['path'] ?? '').toString();
+    } on DioException catch (error) {
+      final business = _nodeBusinessError(error);
+      _logger.error('小说上传失败: $nodeId | $filename', error: business ?? error);
+      throw business ?? error;
     }
   }
 
@@ -1277,7 +1429,10 @@ class NodeSettingsService extends GetxService {
       return <Map<String, dynamic>>[];
     }
 
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   /// 构造远程小说封面的按需 URL（GET /node/novel_cover）。
@@ -1307,11 +1462,15 @@ class NodeSettingsService extends GetxService {
     if (digest != null) {
       params[_authQueryParamName] = digest;
     }
-    final uri = Uri.parse('$normalized/node/novel_cover').replace(queryParameters: params);
+    final uri = Uri.parse(
+      '$normalized/node/novel_cover',
+    ).replace(queryParameters: params);
     return uri.toString();
   }
 
-  Future<List<Map<String, dynamic>>> fetchNodeMediaCollections(NodeEndpoint node) async {
+  Future<List<Map<String, dynamic>>> fetchNodeMediaCollections(
+    NodeEndpoint node,
+  ) async {
     final response = await _callNode(
       node: node,
       action: 'list_media_collections',
@@ -1322,10 +1481,15 @@ class NodeSettingsService extends GetxService {
     if (data is! List) {
       return <Map<String, dynamic>>[];
     }
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
-  Future<List<Map<String, dynamic>>> fetchNodeMediaFolders(NodeEndpoint node) async {
+  Future<List<Map<String, dynamic>>> fetchNodeMediaFolders(
+    NodeEndpoint node,
+  ) async {
     final response = await _callNode(
       node: node,
       action: 'list_media_folders',
@@ -1336,10 +1500,15 @@ class NodeSettingsService extends GetxService {
     if (data is! List) {
       return <Map<String, dynamic>>[];
     }
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
-  Future<List<Map<String, dynamic>>> fetchNodeSmartFolders(NodeEndpoint node) async {
+  Future<List<Map<String, dynamic>>> fetchNodeSmartFolders(
+    NodeEndpoint node,
+  ) async {
     final response = await _callNode(
       node: node,
       action: 'list_smart_folders',
@@ -1350,7 +1519,10 @@ class NodeSettingsService extends GetxService {
     if (data is! List) {
       return <Map<String, dynamic>>[];
     }
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> fetchNodeMediaCollectionItems({
@@ -1368,7 +1540,9 @@ class NodeSettingsService extends GetxService {
       // 需要报告进度时直接走 _performNodeCall，绕过去重缓存
       final payload = <String, dynamic>{
         'action': 'get_media_collection_items',
-        'params': _sanitizeJsonMap(<String, dynamic>{'collection_id': collectionId}),
+        'params': _sanitizeJsonMap(<String, dynamic>{
+          'collection_id': collectionId,
+        }),
       };
       response = await _performNodeCall(
         node: node,
@@ -1388,7 +1562,10 @@ class NodeSettingsService extends GetxService {
     if (data is! List) {
       return <Map<String, dynamic>>[];
     }
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> scanNodeMediaFolders({
@@ -1410,7 +1587,10 @@ class NodeSettingsService extends GetxService {
     if (data is! List) {
       return <Map<String, dynamic>>[];
     }
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   /// 让节点重新扫描**已被导入过**的媒体目录，返回与导入同形状的集合 JSON。
@@ -1455,7 +1635,10 @@ class NodeSettingsService extends GetxService {
   }
 
   /// 列举节点上 [path] 目录下的一级子目录路径列表。
-  Future<List<String>> listNodeDirectories({required String nodeId, required String path}) async {
+  Future<List<String>> listNodeDirectories({
+    required String nodeId,
+    required String path,
+  }) async {
     final node = getNodeById(nodeId);
     if (node == null) throw StateError('节点不存在: $nodeId');
     final response = await _callNode(
@@ -1469,7 +1652,10 @@ class NodeSettingsService extends GetxService {
   }
 
   /// 在节点 [path] 创建物理目录，成功返回 true。
-  Future<bool> createNodeDirectory({required String nodeId, required String path}) async {
+  Future<bool> createNodeDirectory({
+    required String nodeId,
+    required String path,
+  }) async {
     final node = getNodeById(nodeId);
     if (node == null) throw StateError('节点不存在: $nodeId');
     final response = await _callNode(
@@ -1668,7 +1854,10 @@ class NodeSettingsService extends GetxService {
     await _callNode(
       node: node,
       action: 'move_media_collection_to_folder',
-      params: <String, dynamic>{'collection_id': collectionId, 'folder_id': folderId},
+      params: <String, dynamic>{
+        'collection_id': collectionId,
+        'folder_id': folderId,
+      },
     );
   }
 
@@ -1684,7 +1873,9 @@ class NodeSettingsService extends GetxService {
 
     final response = await _callNode(
       node: node,
-      action: parentId == null ? 'create_media_folder' : 'create_child_media_folder',
+      action: parentId == null
+          ? 'create_media_folder'
+          : 'create_child_media_folder',
       params: <String, dynamic>{'name': name, 'parent_id': ?parentId},
     );
     return Map<String, dynamic>.from(response['data'] as Map<dynamic, dynamic>);
@@ -1707,7 +1898,10 @@ class NodeSettingsService extends GetxService {
     );
   }
 
-  Future<void> deleteNodeMediaFolder({required String nodeId, required String folderId}) async {
+  Future<void> deleteNodeMediaFolder({
+    required String nodeId,
+    required String folderId,
+  }) async {
     final node = getNodeById(nodeId);
     if (node == null) {
       throw StateError('节点不存在: $nodeId');
@@ -1749,7 +1943,9 @@ class NodeSettingsService extends GetxService {
     if (digest != null) {
       params[_authQueryParamName] = digest;
     }
-    final uri = Uri.parse('$normalized/node/media').replace(queryParameters: params);
+    final uri = Uri.parse(
+      '$normalized/node/media',
+    ).replace(queryParameters: params);
     return uri.toString();
   }
 
@@ -1766,7 +1962,8 @@ class NodeSettingsService extends GetxService {
   /// 已有集合的目录反推。返回 `(targetDir, candidates)`：
   /// - `targetDir` 非空 = 唯一确定，可直接上传；
   /// - `targetDir` 为空 = 文件夹还没集合或跨多个目录，`candidates` 供目录浏览器兜底。
-  Future<({String targetDir, List<String> candidates})> resolveNodeUploadTarget({
+  Future<({String targetDir, List<String> candidates})>
+  resolveNodeUploadTarget({
     required String nodeId,
     required String folderId,
   }) async {
@@ -1781,9 +1978,13 @@ class NodeSettingsService extends GetxService {
     if (data is! Map) {
       return (targetDir: '', candidates: const <String>[]);
     }
-    final candidates = (data['candidates'] as List?)?.map((e) => e.toString()).toList() ??
+    final candidates =
+        (data['candidates'] as List?)?.map((e) => e.toString()).toList() ??
         const <String>[];
-    return (targetDir: (data['target_dir'] ?? '').toString(), candidates: candidates);
+    return (
+      targetDir: (data['target_dir'] ?? '').toString(),
+      candidates: candidates,
+    );
   }
 
   /// 把本地 zip 归档上传到节点的 [destDir] 并在节点侧解压。
@@ -1816,7 +2017,9 @@ class NodeSettingsService extends GetxService {
           receiveTimeout: const Duration(minutes: 5),
         ),
       );
-      final body = resp.data is Map ? Map<String, dynamic>.from(resp.data as Map) : <String, dynamic>{};
+      final body = resp.data is Map
+          ? Map<String, dynamic>.from(resp.data as Map)
+          : <String, dynamic>{};
       _recordAppTraffic(txBytes: txBytes, rxBytes: 256);
       if (body['success'] != true) {
         throw Exception((body['error'] ?? '归档上传失败').toString());
@@ -1853,7 +2056,11 @@ class NodeSettingsService extends GetxService {
       // 通用 body 读取是 vec![0u8; content_length]，大媒体文件会打爆内存）。
       // multipart 会让节点还得在内存里攒边界帧，对几百 MB 的文件毫无意义。
       // 目标目录与文件名都放 query：客户端已明确知道落哪个集合、叫什么名字。
-      final destDir = await _resolveNodeUploadDir(nodeId, uploadUrl, collectionId);
+      final destDir = await _resolveNodeUploadDir(
+        nodeId,
+        uploadUrl,
+        collectionId,
+      );
       // dest 必须是明确的目标目录：节点侧 `handle_file_upload` 只往已存在的
       // 绝对目录落盘（刻意不接受「猜一个暂存目录」，否则用户不知道文件去哪了）。
       // 所以「没指定集合」或「集合反查不到目录」都是真错误，必须拦下并说清原因。
@@ -1867,11 +2074,10 @@ class NodeSettingsService extends GetxService {
       final query = <String, String>{
         'dest': destDir,
         'filename': filename,
-        if (collectionId != null && collectionId.isNotEmpty) 'collection_id': collectionId,
+        if (collectionId != null && collectionId.isNotEmpty)
+          'collection_id': collectionId,
       };
-      final uri = Uri.parse(
-        uploadUrl,
-      ).replace(queryParameters: query);
+      final uri = Uri.parse(uploadUrl).replace(queryParameters: query);
       final resp = await _dio.post<Map<String, dynamic>>(
         uri.toString(),
         data: file.openRead(),
@@ -1887,7 +2093,9 @@ class NodeSettingsService extends GetxService {
       final body = resp.data ?? <String, dynamic>{};
       _recordAppTraffic(txBytes: txBytes, rxBytes: 256);
       if (body['success'] == true) {
-        return Map<String, dynamic>.from(body['data'] as Map? ?? <String, dynamic>{});
+        return Map<String, dynamic>.from(
+          body['data'] as Map? ?? <String, dynamic>{},
+        );
       }
       throw Exception((body['error'] ?? '上传失败').toString());
     } on DioException catch (e) {
@@ -1963,7 +2171,10 @@ class NodeSettingsService extends GetxService {
     );
   }
 
-  Future<List<Map<String, dynamic>>> searchNodeNovels(NodeEndpoint node, String keyword) async {
+  Future<List<Map<String, dynamic>>> searchNodeNovels(
+    NodeEndpoint node,
+    String keyword,
+  ) async {
     final response = await _callNode(
       node: node,
       action: 'search_all_novels',
@@ -1975,7 +2186,10 @@ class NodeSettingsService extends GetxService {
       return <Map<String, dynamic>>[];
     }
 
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   /// 在**一本书内部**搜索关键词（全书章节内匹配）。
@@ -2004,10 +2218,16 @@ class NodeSettingsService extends GetxService {
     if (data is! List) {
       return <Map<String, dynamic>>[];
     }
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
-  Future<void> deleteNodeNovel({required String nodeId, required String novelId}) async {
+  Future<void> deleteNodeNovel({
+    required String nodeId,
+    required String novelId,
+  }) async {
     final node = getNodeById(nodeId);
     if (node == null) {
       throw StateError('节点不存在: $nodeId');
@@ -2021,7 +2241,9 @@ class NodeSettingsService extends GetxService {
   }
 
   /// 列出节点上的小说文件夹（JSON 原样返回，字段见 `list_novel_folders`）。
-  Future<List<Map<String, dynamic>>> fetchNodeNovelFolders(NodeEndpoint node) async {
+  Future<List<Map<String, dynamic>>> fetchNodeNovelFolders(
+    NodeEndpoint node,
+  ) async {
     final response = await _callNode(
       node: node,
       action: 'list_novel_folders',
@@ -2029,7 +2251,10 @@ class NodeSettingsService extends GetxService {
     );
     final data = response['data'];
     if (data is! List) return <Map<String, dynamic>>[];
-    return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return data
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   /// 在节点上新建小说文件夹；[parentId] 非空时建成该夹的子夹。
@@ -2044,10 +2269,7 @@ class NodeSettingsService extends GetxService {
     final response = await _callNode(
       node: node,
       action: 'create_novel_folder',
-      params: <String, dynamic>{
-        'name': name,
-        'parent_id': ?parentId,
-      },
+      params: <String, dynamic>{'name': name, 'parent_id': ?parentId},
     );
     final data = response['data'];
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
@@ -2115,7 +2337,7 @@ class NodeSettingsService extends GetxService {
         // ignore: use_null_aware_elements
         if (title != null) 'title': title,
         // ignore: use_null_aware_elements
-        if (author != null) 'author': author,
+        'author': ?author,
         // ignore: use_null_aware_elements
         if (notes != null) 'notes': notes,
         // ignore: use_null_aware_elements
@@ -2138,13 +2360,19 @@ class NodeSettingsService extends GetxService {
       await _callNode(
         node: node,
         action: 'set_novel_favorite',
-        params: <String, dynamic>{'novel_id': novelId, 'is_favorite': isFavorite},
+        params: <String, dynamic>{
+          'novel_id': novelId,
+          'is_favorite': isFavorite,
+        },
       );
     } catch (_) {
       await _callNode(
         node: node,
         action: 'update_novel_info',
-        params: <String, dynamic>{'novel_id': novelId, 'is_favorite': isFavorite},
+        params: <String, dynamic>{
+          'novel_id': novelId,
+          'is_favorite': isFavorite,
+        },
       );
     }
   }
@@ -2194,7 +2422,10 @@ class NodeSettingsService extends GetxService {
     if (chapters is! List) {
       return <Map<String, dynamic>>[];
     }
-    return chapters.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return chapters
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   Future<String> fetchNodeChapterContent({
@@ -2210,7 +2441,10 @@ class NodeSettingsService extends GetxService {
     final response = await _callNode(
       node: node,
       action: 'get_chapter_content',
-      params: <String, dynamic>{'file_path': filePath, 'chapter_index': chapterIndex},
+      params: <String, dynamic>{
+        'file_path': filePath,
+        'chapter_index': chapterIndex,
+      },
     );
 
     final data = response['data'];
@@ -2251,7 +2485,11 @@ class NodeSettingsService extends GetxService {
     await _callNode(
       node: node,
       action: 'update_novel_cover_base64',
-      params: <String, dynamic>{'novel_id': novelId, 'image_base64': encoded, 'image_ext': ext},
+      params: <String, dynamic>{
+        'novel_id': novelId,
+        'image_base64': encoded,
+        'image_ext': ext,
+      },
     );
   }
 
@@ -2278,14 +2516,21 @@ class NodeSettingsService extends GetxService {
     // 熔断检查：本次运行期间不再自动请求已熔断节点
     await _ensureNodeReachable(node);
     final sanitizedParams = _sanitizeJsonMap(params);
-    final requestPayload = <String, dynamic>{'action': action, 'params': sanitizedParams};
+    final requestPayload = <String, dynamic>{
+      'action': action,
+      'params': sanitizedParams,
+    };
     final callKey = _buildNodeCallKey(node.id, action, sanitizedParams);
     final inFlight = _inFlightNodeCalls[callKey];
     if (inFlight != null) {
       return inFlight;
     }
 
-    final future = _performNodeCall(node: node, action: action, requestPayload: requestPayload);
+    final future = _performNodeCall(
+      node: node,
+      action: action,
+      requestPayload: requestPayload,
+    );
     _inFlightNodeCalls[callKey] = future;
     future.whenComplete(() {
       if (identical(_inFlightNodeCalls[callKey], future)) {
@@ -2345,9 +2590,13 @@ class NodeSettingsService extends GetxService {
         if (e is DioException && e.response != null) nodeAnswered = true;
         // 节点回「并发已满」（503/429）说明连接是通的，只是服务端在背压：
         // 等一小会儿重来一次，否则一次偶发的并发峰值就变成用户可见的失败。
-        if (e is DioException && _isNodeBusyError(e) && busyRetries < _nodeBusyRetries) {
+        if (e is DioException &&
+            _isNodeBusyError(e) &&
+            busyRetries < _nodeBusyRetries) {
           busyRetries++;
-          _logger.info('节点繁忙(HTTP ${e.response?.statusCode})，第 $busyRetries 次重试: ${node.name} $action');
+          _logger.info(
+            '节点繁忙(HTTP ${e.response?.statusCode})，第 $busyRetries 次重试: ${node.name} $action',
+          );
           await Future<void>.delayed(Duration(milliseconds: 150 * busyRetries));
           index--; // 重试同一地址
           continue;
@@ -2365,7 +2614,9 @@ class NodeSettingsService extends GetxService {
     final error = rawError is DioException
         ? (_nodeBusinessError(rawError) ?? rawError)
         : rawError;
-    nodeConnectivityError[node.id] = _isUnauthorizedError(rawError) ? '授权码错误，请核对节点授权码' : error.toString();
+    nodeConnectivityError[node.id] = _isUnauthorizedError(rawError)
+        ? '授权码错误，请核对节点授权码'
+        : error.toString();
     _logger.error(
       '节点请求失败: ${node.name} $action | URLs=${candidateUrls.join(' , ')}',
       error: error,
@@ -2407,13 +2658,16 @@ class NodeSettingsService extends GetxService {
   /// 返回 true 表示节点有响应（无论业务是否成功），并把应答的那一路记成后续首选地址。
   Future<bool> _quickProbeNode(NodeEndpoint node) async {
     final bases = <String>{
-      if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty) node.lanApiBaseUrl!,
+      if (node.lanApiBaseUrl != null && node.lanApiBaseUrl!.isNotEmpty)
+        node.lanApiBaseUrl!,
       node.apiBaseUrl,
     };
     final probeUrls = <String, List<String>>{
       for (final base in bases) base: _candidateNodeCallUrls(base),
     };
-    final total = probeUrls.values.map((l) => l.length).fold(0, (a, b) => a + b);
+    final total = probeUrls.values
+        .map((l) => l.length)
+        .fold(0, (a, b) => a + b);
     if (total == 0) return false;
     const timeout = probeConfirmTimeout;
     for (final entry in probeUrls.entries) {
@@ -2421,7 +2675,10 @@ class NodeSettingsService extends GetxService {
         try {
           await _probeDio.post<dynamic>(
             url,
-            data: <String, dynamic>{'action': 'ping', 'params': <String, dynamic>{}},
+            data: <String, dynamic>{
+              'action': 'ping',
+              'params': <String, dynamic>{},
+            },
             options: Options(
               connectTimeout: timeout,
               receiveTimeout: timeout,
@@ -2448,7 +2705,11 @@ class NodeSettingsService extends GetxService {
     return false;
   }
 
-  String _buildNodeCallKey(String nodeId, String action, Map<String, dynamic> params) {
+  String _buildNodeCallKey(
+    String nodeId,
+    String action,
+    Map<String, dynamic> params,
+  ) {
     return '$nodeId|$action|${jsonEncode(params)}';
   }
 
@@ -2465,7 +2726,9 @@ class NodeSettingsService extends GetxService {
 
     final candidates = <String>{_nodeCallUrl(uri.toString())};
     if (!uri.hasPort) {
-      candidates.add(_nodeCallUrl(uri.replace(port: _defaultRemoteNodePort).toString()));
+      candidates.add(
+        _nodeCallUrl(uri.replace(port: _defaultRemoteNodePort).toString()),
+      );
     }
     return candidates.toList(growable: false);
   }
@@ -2498,7 +2761,9 @@ class NodeSettingsService extends GetxService {
   Exception? _nodeBusinessError(DioException e) {
     final response = e.response;
     final status = response?.statusCode;
-    if (status == null || status < 500 || status == HttpStatus.serviceUnavailable) {
+    if (status == null ||
+        status < 500 ||
+        status == HttpStatus.serviceUnavailable) {
       return null;
     }
     final data = response!.data;
@@ -2509,7 +2774,9 @@ class NodeSettingsService extends GetxService {
   }
 
   String _baseUrlFromNodeCallUrl(String url) {
-    return url.endsWith('/node/call') ? url.substring(0, url.length - '/node/call'.length) : url;
+    return url.endsWith('/node/call')
+        ? url.substring(0, url.length - '/node/call'.length)
+        : url;
   }
 
   /// 把「应答成功的那一路地址」回写到节点配置。
@@ -2518,7 +2785,10 @@ class NodeSettingsService extends GetxService {
   /// 实际节点在 `192.168.1.5:17888`）。候选地址里 LAN 优先，如果连 host 不同也回写，
   /// 在家时 LAN 先应答就会把用户配置的外网地址永久覆盖成内网地址，
   /// 之后出门两路都是内网地址、节点彻底失联，只能手工重填。
-  Future<void> _persistResolvedNodeBaseUrl(NodeEndpoint node, String resolvedBaseUrl) async {
+  Future<void> _persistResolvedNodeBaseUrl(
+    NodeEndpoint node,
+    String resolvedBaseUrl,
+  ) async {
     final normalizedResolved = _normalizeBaseUrl(resolvedBaseUrl);
     final normalizedConfigured = _normalizeBaseUrl(node.apiBaseUrl);
     if (normalizedResolved.isEmpty ||
@@ -2535,7 +2805,9 @@ class NodeSettingsService extends GetxService {
       return;
     }
 
-    remoteNodes[index] = remoteNodes[index].copyWith(apiBaseUrl: normalizedResolved);
+    remoteNodes[index] = remoteNodes[index].copyWith(
+      apiBaseUrl: normalizedResolved,
+    );
     remoteNodes.refresh();
     await _save();
     _logger.info('节点地址已自动修正: ${node.name} -> $normalizedResolved');
@@ -2592,7 +2864,8 @@ class NodeSettingsService extends GetxService {
 
   /// 单测入口：直接量估算口径（生产方法是私有的）。
   @visibleForTesting
-  int estimatePayloadBytesForTest(dynamic payload) => _estimatePayloadBytes(payload);
+  int estimatePayloadBytesForTest(dynamic payload) =>
+      _estimatePayloadBytes(payload);
 
   int _estimateValueBytes(dynamic value) {
     if (value == null) return 4; // null
@@ -2681,7 +2954,8 @@ class NodeSettingsService extends GetxService {
       return;
     }
 
-    final idleSeconds = DateTime.now().difference(lastTrafficAt).inMilliseconds / 1000.0;
+    final idleSeconds =
+        DateTime.now().difference(lastTrafficAt).inMilliseconds / 1000.0;
     if (idleSeconds >= 1.5) {
       appTxKbps.value = 0;
       appRxKbps.value = 0;
@@ -2766,7 +3040,10 @@ class NodeSettingsService extends GetxService {
     await prefs.setInt(_keyLocalPort, localNodePort.value);
     await prefs.setString(_keyLocalAuthCode, localNodeAuthCode.value);
     await prefs.setString(_keyActiveNodeId, activeNodeId.value);
-    await prefs.setString(_keyRemoteNodes, jsonEncode(remoteNodes.map((n) => n.toJson()).toList()));
+    await prefs.setString(
+      _keyRemoteNodes,
+      jsonEncode(remoteNodes.map((n) => n.toJson()).toList()),
+    );
     await prefs.setString(
       _keyWakeDevices,
       jsonEncode(wakeDevices.map((d) => d.toJson()).toList()),
@@ -2803,19 +3080,28 @@ class NodeSettingsService extends GetxService {
       return '';
     }
 
-    String withScheme = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+    String withScheme =
+        trimmed.startsWith('http://') || trimmed.startsWith('https://')
         ? trimmed
         : 'http://$trimmed';
     if (withScheme.endsWith('/node/call')) {
-      withScheme = withScheme.substring(0, withScheme.length - '/node/call'.length);
+      withScheme = withScheme.substring(
+        0,
+        withScheme.length - '/node/call'.length,
+      );
     }
     if (withScheme.endsWith('/health')) {
-      withScheme = withScheme.substring(0, withScheme.length - '/health'.length);
+      withScheme = withScheme.substring(
+        0,
+        withScheme.length - '/health'.length,
+      );
     }
     if (withScheme.endsWith('/node')) {
       withScheme = withScheme.substring(0, withScheme.length - '/node'.length);
     }
-    return withScheme.endsWith('/') ? withScheme.substring(0, withScheme.length - 1) : withScheme;
+    return withScheme.endsWith('/')
+        ? withScheme.substring(0, withScheme.length - 1)
+        : withScheme;
   }
 
   String _nodeCallUrl(String baseUrl) {
@@ -2839,7 +3125,9 @@ class NodeSettingsService extends GetxService {
     final values = <String>[];
 
     try {
-      final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+      );
       for (final interface in interfaces) {
         for (final address in interface.addresses) {
           final ip = address.address;
@@ -2862,6 +3150,14 @@ class NodeSettingsService extends GetxService {
       return Options(
         sendTimeout: const Duration(seconds: 20),
         receiveTimeout: const Duration(seconds: 45),
+      );
+    }
+    if (action == 'scan_novel_folder' ||
+        action == 'import_novels' ||
+        action == 'sample_novel_for_detection') {
+      return Options(
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(minutes: 10),
       );
     }
     if (action.startsWith('manga_')) {
@@ -2920,11 +3216,12 @@ class _NodeAuthInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     final digest = _digestForUrl(options.uri.toString());
-    final alreadySet = options.headers.keys.any((k) => k.toLowerCase() == 'x-sw-auth');
+    final alreadySet = options.headers.keys.any(
+      (k) => k.toLowerCase() == 'x-sw-auth',
+    );
     if (digest != null && !alreadySet) {
       options.headers[NodeSettingsService._authHeaderName] = digest;
     }
     handler.next(options);
   }
 }
-

@@ -50,6 +50,23 @@ pub struct SearchMatch {
     pub snippet: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct NovelDetectionSample {
+    pub chapter_index: usize,
+    pub chapter_title: String,
+    pub position: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct NovelDetectionDocument {
+    pub title: String,
+    pub author: Option<String>,
+    pub total_chapters: usize,
+    pub sampled_chapters: usize,
+    pub samples: Vec<NovelDetectionSample>,
+}
+
 // 转换辅助函数
 fn convert_metadata(meta: novel_reader::types::NovelMetadata) -> NovelMetadata {
     NovelMetadata {
@@ -151,6 +168,41 @@ pub fn get_novel_content(file_path: String) -> anyhow::Result<NovelContent> {
 /// 获取特定章节的内容
 pub fn get_chapter_content(file_path: String, chapter_index: usize) -> anyhow::Result<String> {
     novel_reader::get_chapter_content(file_path, chapter_index).map_err(|e| anyhow::anyhow!(e))
+}
+
+/// 提取有界正文样本，供本地模型执行分类检测。
+pub async fn sample_novel_for_detection(
+    file_path: String,
+    title: String,
+    author: Option<String>,
+    max_sample_chars: usize,
+    max_samples: usize,
+) -> anyhow::Result<NovelDetectionDocument> {
+    let document = novel_reader::sample_novel_for_detection(
+        file_path,
+        title,
+        author,
+        max_sample_chars,
+        max_samples,
+    )
+    .await
+    .map_err(|error| anyhow::anyhow!(error))?;
+    Ok(NovelDetectionDocument {
+        title: document.title,
+        author: document.author,
+        total_chapters: document.total_chapters,
+        sampled_chapters: document.sampled_chapters,
+        samples: document
+            .samples
+            .into_iter()
+            .map(|sample| NovelDetectionSample {
+                chapter_index: sample.chapter_index,
+                chapter_title: sample.chapter_title,
+                position: sample.position,
+                content: sample.content,
+            })
+            .collect(),
+    })
 }
 
 /// 在书籍中搜索关键词
@@ -400,6 +452,19 @@ pub fn scan_novels_folder_batched(
     let results = novel_reader::scan_novels_folder_batched(folder_path, batch_size)
         .map_err(|e| anyhow::anyhow!(e))?;
     Ok(results.into_iter().map(convert_scan_batch_result).collect())
+}
+
+pub async fn organize_novels_by_source_path(
+    file_paths: Vec<String>,
+    scan_root: String,
+    target_folder_id: Option<String>,
+) -> anyhow::Result<Vec<String>> {
+    tokio::task::spawn_blocking(move || {
+        novel_reader::organize_novels_by_source_path(file_paths, scan_root, target_folder_id)
+            .map_err(|error| anyhow::anyhow!(error))
+    })
+    .await
+    .map_err(|error| anyhow::anyhow!(error))?
 }
 
 /// 对所有书籍分批应用关键词规则（Rust 并发执行，返回进度）

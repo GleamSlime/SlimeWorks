@@ -53,12 +53,16 @@ class OllamaService {
       final response = await _dio.get(
         '${server.url}/api/tags',
         options: Options(
-          headers: server.apiKey != null ? {'Authorization': 'Bearer ${server.apiKey}'} : null,
+          headers: server.apiKey != null
+              ? {'Authorization': 'Bearer ${server.apiKey}'}
+              : null,
         ),
       );
       return response.statusCode == 200;
     } catch (e) {
-      const Loggers(name: 'Ollama').error('测试 Ollama 服务器失败: ${server.url}', error: e);
+      const Loggers(
+        name: 'Ollama',
+      ).error('测试 Ollama 服务器失败: ${server.url}', error: e);
       return false;
     }
   }
@@ -79,7 +83,10 @@ class OllamaService {
 
     // 先尝试当前服务器
     if (_currentServer != null && await testServer(_currentServer!)) {
-      _currentServer = _currentServer!.copyWith(isAvailable: true, lastChecked: DateTime.now());
+      _currentServer = _currentServer!.copyWith(
+        isAvailable: true,
+        lastChecked: DateTime.now(),
+      );
       _updateServerInList(_currentServer!);
       return _currentServer;
     }
@@ -87,9 +94,14 @@ class OllamaService {
     // 轮询所有服务器
     for (final server in _servers) {
       if (await testServer(server)) {
-        _currentServer = server.copyWith(isAvailable: true, lastChecked: DateTime.now());
+        _currentServer = server.copyWith(
+          isAvailable: true,
+          lastChecked: DateTime.now(),
+        );
         _updateServerInList(_currentServer!);
-        const Loggers(name: 'Ollama').info('找到可用 Ollama 服务器: ${_currentServer!.url}');
+        const Loggers(
+          name: 'Ollama',
+        ).info('找到可用 Ollama 服务器: ${_currentServer!.url}');
         return _currentServer;
       }
     }
@@ -106,7 +118,7 @@ class OllamaService {
     }
   }
 
-  /// 获取可用模型列表
+  /// 获取当前可用服务器上的模型列表。
   Future<List<OllamaModel>> getModels() async {
     if (MockMode.enabled) {
       return <OllamaModel>[
@@ -119,26 +131,103 @@ class OllamaService {
     if (server == null) {
       throw Exception('没有可用的 Ollama 服务器');
     }
+    try {
+      return await _fetchModels(server);
+    } catch (_) {
+      _currentServer = null;
+      rethrow;
+    }
+  }
 
+  Future<List<OllamaModel>> _fetchModels(OllamaServer server) async {
     try {
       final response = await _dio.get(
         '${server.url}/api/tags',
         options: Options(
-          headers: server.apiKey != null ? {'Authorization': 'Bearer ${server.apiKey}'} : null,
+          headers: server.apiKey != null
+              ? {'Authorization': 'Bearer ${server.apiKey}'}
+              : null,
         ),
       );
-
       final data = response.data as Map<String, dynamic>;
-      final models =
-          (data['models'] as List?)
+      return (data['models'] as List?)
               ?.map((m) => OllamaModel.fromJson(m as Map<String, dynamic>))
               .toList() ??
-          [];
-
-      return models;
+          <OllamaModel>[];
     } catch (e) {
       const Loggers(name: 'Ollama').error('获取 Ollama 模型列表失败', error: e);
-      _currentServer = null; // 标记当前服务器不可用
+      rethrow;
+    }
+  }
+
+  /// 汇总所有已配置服务器中的模型；单台服务器离线不影响其他服务器。
+  Future<List<OllamaModelOption>> getModelOptions() async {
+    if (MockMode.enabled) {
+      final server = OllamaServer(url: 'http://mock-ollama.local');
+      return (await getModels())
+          .map((model) => OllamaModelOption(model: model, server: server))
+          .toList();
+    }
+    final options = <OllamaModelOption>[];
+    for (final server in _servers) {
+      try {
+        final models = await _fetchModels(server);
+        options.addAll(
+          models.map(
+            (model) => OllamaModelOption(model: model, server: server),
+          ),
+        );
+      } catch (_) {}
+    }
+    if (options.isEmpty) {
+      throw Exception('没有可用的 Ollama 服务器或可用模型');
+    }
+    return options;
+  }
+
+  /// 结构化分类调用，固定使用模型所属服务器并限制输出长度。
+  Future<String> generateStructured({
+    required OllamaModelOption model,
+    required String systemPrompt,
+    required String userPrompt,
+    CancelToken? cancelToken,
+  }) async {
+    if (MockMode.enabled) {
+      return '{"genres":["科幻"],"explicit_content":false,"confidence":0.9}';
+    }
+    final server = model.server;
+    try {
+      final response = await _dio.post(
+        '${server.url}/api/chat',
+        data: {
+          'model': model.model.name,
+          'messages': [
+            {'role': 'system', 'content': systemPrompt},
+            {'role': 'user', 'content': userPrompt},
+          ],
+          'stream': false,
+          'format': 'json',
+          'think': false,
+          'options': {
+            'temperature': 0,
+            'top_k': 20,
+            'top_p': 0.6,
+            'repeat_penalty': 1.05,
+            'num_ctx': 4096,
+            'num_predict': 160,
+          },
+        },
+        options: Options(
+          headers: server.apiKey != null
+              ? {'Authorization': 'Bearer ${server.apiKey}'}
+              : null,
+          responseType: ResponseType.json,
+        ),
+        cancelToken: cancelToken,
+      );
+      return _cleanupResponse(OllamaResponse.fromJson(response.data).content);
+    } catch (e) {
+      const Loggers(name: 'Ollama').error('Ollama 结构化检测失败', error: e);
       rethrow;
     }
   }
@@ -155,7 +244,9 @@ class OllamaService {
     CancelToken? cancelToken,
   }) async {
     if (MockMode.enabled) {
-      final text = prompt.length > 200 ? '${prompt.substring(0, 200)}…' : prompt;
+      final text = prompt.length > 200
+          ? '${prompt.substring(0, 200)}…'
+          : prompt;
       final result = '（演示译文）$text';
       if (onChunk != null) {
         for (var i = 0; i < result.length; i += 12) {
@@ -180,7 +271,8 @@ class OllamaService {
           'messages': [
             {
               'role': 'system',
-              'content': '你是一个专业的翻译工具。你的任务是将用户提供的文本翻译成目标语言。只输出翻译结果一次，立即结束。禁止重复输出、禁止添加任何解释或注释。',
+              'content':
+                  '你是一个专业的翻译工具。你的任务是将用户提供的文本翻译成目标语言。只输出翻译结果一次，立即结束。禁止重复输出、禁止添加任何解释或注释。',
             },
             {'role': 'user', 'content': prompt},
           ],
@@ -197,11 +289,20 @@ class OllamaService {
             "<note>",
           ],
           // 推理控制参数（使用推荐值以降低重复和幻觉）
-          'options': {'top_k': 20, 'top_p': 0.6, 'repetition_penalty': 1.05, 'temperature': 0},
+          'options': {
+            'top_k': 20,
+            'top_p': 0.6,
+            'repetition_penalty': 1.05,
+            'temperature': 0,
+          },
         },
         options: Options(
-          headers: server.apiKey != null ? {'Authorization': 'Bearer ${server.apiKey}'} : null,
-          responseType: onChunk != null ? ResponseType.stream : ResponseType.json,
+          headers: server.apiKey != null
+              ? {'Authorization': 'Bearer ${server.apiKey}'}
+              : null,
+          responseType: onChunk != null
+              ? ResponseType.stream
+              : ResponseType.json,
         ),
         cancelToken: cancelToken,
       );
@@ -211,7 +312,9 @@ class OllamaService {
         final stream = response.data as ResponseBody;
         final buffer = StringBuffer();
 
-        const Loggers(name: 'Ollama').info('开始流式生成, url=${server.url}/api/chat');
+        const Loggers(
+          name: 'Ollama',
+        ).info('开始流式生成, url=${server.url}/api/chat');
 
         // socket chunk 边界是任意的：直接 utf8.decode(chunk) 会把多字节汉字劈开抛
         // FormatException，按 chunk 内换行切分又会把一行 JSON 劈成两半（两半都解析
@@ -238,22 +341,30 @@ class OllamaService {
               buffer.write(ollamaResponse.content);
               onChunk(ollamaResponse.content);
             } else {
-              const Loggers(name: 'Ollama').info('流响应 content 为空, done=${ollamaResponse.done}');
+              const Loggers(
+                name: 'Ollama',
+              ).info('流响应 content 为空, done=${ollamaResponse.done}');
             }
 
             if (ollamaResponse.done) {
               break;
             }
           } catch (e, st) {
-            const Loggers(name: 'Ollama').info('解析流式响应失败', error: e, stackTrace: st);
+            const Loggers(
+              name: 'Ollama',
+            ).info('解析流式响应失败', error: e, stackTrace: st);
           }
         }
 
-        const Loggers(name: 'Ollama').info('流式生成结束, total length=${buffer.length}');
+        const Loggers(
+          name: 'Ollama',
+        ).info('流式生成结束, total length=${buffer.length}');
         return _cleanupResponse(buffer.toString());
       } else {
         // 非流式响应
-        const Loggers(name: 'Ollama').info('非流式响应: status=${response.statusCode} data=${response.data}');
+        const Loggers(
+          name: 'Ollama',
+        ).info('非流式响应: status=${response.statusCode} data=${response.data}');
         final ollamaResponse = OllamaResponse.fromJson(response.data);
         return _cleanupResponse(ollamaResponse.content);
       }
@@ -302,7 +413,12 @@ class OllamaService {
     const Loggers(name: 'Ollama').info(
       '开始翻译, model=$model, languagePair=${languagePair.displayName}, prompt=${prompt.replaceAll('\n', '\\n')}',
     );
-    return generate(model: model, prompt: prompt, onChunk: onChunk, cancelToken: cancelToken);
+    return generate(
+      model: model,
+      prompt: prompt,
+      onChunk: onChunk,
+      cancelToken: cancelToken,
+    );
   }
 
   /// 批量翻译多个段落
@@ -326,7 +442,9 @@ class OllamaService {
         continue;
       }
       try {
-        const Loggers(name: 'Ollama').info('正在翻译段落 ${i + 1}/${paragraphs.length}');
+        const Loggers(
+          name: 'Ollama',
+        ).info('正在翻译段落 ${i + 1}/${paragraphs.length}');
         // 使用非流式响应，避免结构重复
         final translated = await translate(
           model: model,
@@ -336,7 +454,9 @@ class OllamaService {
         );
         results.add(translated.trim());
         onProgress?.call(i + 1, paragraphs.length);
-        const Loggers(name: 'Ollama').info('段落 ${i + 1} 翻译完成, length=${translated.length}');
+        const Loggers(
+          name: 'Ollama',
+        ).info('段落 ${i + 1} 翻译完成, length=${translated.length}');
       } catch (e) {
         const Loggers(name: 'Ollama').error('翻译段落 ${i + 1} 失败', error: e);
         results.add(paragraph); // 失败时保留原文

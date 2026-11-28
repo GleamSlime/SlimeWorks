@@ -814,6 +814,24 @@ pub fn move_novel_to_folder(novel_id: String, folder_id: Option<String>) -> Resu
     }
 }
 
+/// 为本地模型检测提取有界正文样本，避免整本进入模型上下文。
+pub async fn sample_novel_for_detection(
+    file_path: String,
+    title: String,
+    author: Option<String>,
+    max_sample_chars: usize,
+    max_samples: usize,
+) -> Result<crate::detection::NovelDetectionDocument, String> {
+    crate::detection::sample_novel_for_detection_impl(
+        file_path,
+        title,
+        author,
+        max_sample_chars,
+        max_samples,
+    )
+    .await
+}
+
 /// 扫描进度回调结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanBatchResult {
@@ -1146,7 +1164,9 @@ pub(crate) mod test_env {
             "检测到 DB 路径逃逸出隔离 HOME: {now}"
         );
         assert!(
-            std::env::var("HOME").map(|h| h == env.home.to_string_lossy()) .unwrap_or(false),
+            std::env::var("HOME")
+                .map(|h| h == env.home.to_string_lossy())
+                .unwrap_or(false),
             "检测到 HOME 环境变量被改回真实用户目录"
         );
     }
@@ -1181,7 +1201,8 @@ pub(crate) mod test_env {
             let _ = std::fs::create_dir_all(parent);
         }
         let mut f = std::fs::File::create(path).expect("写入测试文件失败");
-        f.write_all(content.as_bytes()).expect("写入测试文件内容失败");
+        f.write_all(content.as_bytes())
+            .expect("写入测试文件内容失败");
         f.flush().ok();
     }
 
@@ -1215,7 +1236,12 @@ pub(crate) mod test_env {
     }
 
     /// 用 zip 写入库构造一个最小合法 EPUB2（含 NCX 目录 + 两章 XHTML）
-    pub fn write_minimal_epub(dir: &Path, file_stem: &str, ch1_body: &str, ch2_body: &str) -> PathBuf {
+    pub fn write_minimal_epub(
+        dir: &Path,
+        file_stem: &str,
+        ch1_body: &str,
+        ch2_body: &str,
+    ) -> PathBuf {
         use zip::write::FileOptions;
         use zip::CompressionMethod;
 
@@ -1228,9 +1254,7 @@ pub(crate) mod test_env {
         writer.start_file("mimetype", stored).unwrap();
         writer.write_all(b"application/epub+zip").unwrap();
 
-        writer
-            .start_file("META-INF/container.xml", stored)
-            .unwrap();
+        writer.start_file("META-INF/container.xml", stored).unwrap();
         writer
             .write_all(
                 br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1299,13 +1323,9 @@ pub(crate) mod test_env {
 <body><h1>第二章 结局</h1><p>{}</p></body></html>"#,
             ch2_body
         );
-        writer
-            .start_file("OEBPS/chapter1.xhtml", stored)
-            .unwrap();
+        writer.start_file("OEBPS/chapter1.xhtml", stored).unwrap();
         writer.write_all(ch1.as_bytes()).unwrap();
-        writer
-            .start_file("OEBPS/chapter2.xhtml", stored)
-            .unwrap();
+        writer.start_file("OEBPS/chapter2.xhtml", stored).unwrap();
         writer.write_all(ch2.as_bytes()).unwrap();
 
         writer.finish().expect("写入 epub zip 失败");
@@ -1348,13 +1368,15 @@ pub(crate) mod test_env {
     }
 
     fn get_all_novels_is_empty_after_reset() -> bool {
-        super::get_all_novels().map(|v| v.is_empty()).unwrap_or(false)
+        super::get_all_novels()
+            .map(|v| v.is_empty())
+            .unwrap_or(false)
     }
 
     /// 添加单个文件并断言成功，返回其元数据
     pub fn add_single_novel(path: &Path) -> NovelMetadata {
-        let added = add_novel(vec![path.to_string_lossy().into_owned()])
-            .expect("add_novel 调用应成功");
+        let added =
+            add_novel(vec![path.to_string_lossy().into_owned()]).expect("add_novel 调用应成功");
         assert_eq!(added.len(), 1, "单文件添加应返回 1 条记录");
         added.into_iter().next().expect("刚才已断言长度为 1")
     }
@@ -1375,13 +1397,11 @@ mod tests {
         assert_db_isolated();
         let env = db_test_env();
         // 隔离 HOME 必须在系统临时目录下，且真实用户库文件不应被打开
-        assert!(env
-            .home
-            .starts_with(std::env::temp_dir()));
+        assert!(env.home.starts_with(std::env::temp_dir()));
         assert!(env.db_path.ends_with("db.redb"));
         // novel_meta 里的一次性迁移标记应写在隔离库内
-        let flag = db_module::db_get("novel_meta".to_string(), "scatter_merged_v1".to_string())
-            .unwrap();
+        let flag =
+            db_module::db_get("novel_meta".to_string(), "scatter_merged_v1".to_string()).unwrap();
         assert_eq!(flag.as_deref(), Some("1"), "迁移标记应落在隔离库");
     }
 
@@ -1394,7 +1414,12 @@ mod tests {
         reset_library_state();
 
         let dir = case_dir("scan");
-        write_novel_txt(&dir, "剑影江湖", "少年踏入山城，雨落无声。", "刀光过后，长街归寂。");
+        write_novel_txt(
+            &dir,
+            "剑影江湖",
+            "少年踏入山城，雨落无声。",
+            "刀光过后，长街归寂。",
+        );
         write_novel_txt(&dir.join("sub"), "嵌套书", "山一程。", "水一程。");
         write_text(&dir.join("说明.pdf"), "%PDF-1.4 伪装文件");
         write_text(&dir.join(".隐藏.txt"), "隐藏文件应被跳过");
@@ -1415,7 +1440,11 @@ mod tests {
         // 再次扫描走「已存在则覆盖」分支，不产生重复记录
         let again = scan_novels_folder(dir.to_string_lossy().into_owned()).unwrap();
         assert_eq!(again.len(), 2);
-        assert_eq!(get_all_novels().unwrap().len(), 2, "重复扫描不应产生重复条目");
+        assert_eq!(
+            get_all_novels().unwrap().len(),
+            2,
+            "重复扫描不应产生重复条目"
+        );
         assert_eq!(db_rows("novels").len(), 2);
     }
 
@@ -1428,7 +1457,9 @@ mod tests {
         let dir = case_dir("scan_err");
         let p = write_novel_txt(&dir, "正常书", "一句。", "两句。");
         // 不存在的目录
-        assert!(scan_novels_folder(dir.join("不存在的路径").to_string_lossy().into_owned()).is_err());
+        assert!(
+            scan_novels_folder(dir.join("不存在的路径").to_string_lossy().into_owned()).is_err()
+        );
         // 传文件而非目录
         assert!(scan_novels_folder(p.to_string_lossy().into_owned()).is_err());
     }
@@ -1442,7 +1473,12 @@ mod tests {
         reset_library_state();
 
         let dir = case_dir("batched");
-        write_novel_txt(&dir, "武侠一", "他习武多年，一朝行走武侠世界。", "刀再快，也快不过人心。");
+        write_novel_txt(
+            &dir,
+            "武侠一",
+            "他习武多年，一朝行走武侠世界。",
+            "刀再快，也快不过人心。",
+        );
         write_novel_txt(&dir, "武侠二", "武侠之路无绝期。", "归来仍是少年。");
         write_novel_txt(&dir, "闲书", "市井烟火气。", "柴米油盐。");
 
@@ -1459,9 +1495,15 @@ mod tests {
         // 新书走 apply_tag_keywords：含「武侠」的应被打上内置规则标签
         let lib = get_all_novels().unwrap();
         let wuxia = lib.iter().find(|n| n.title == "武侠一").unwrap();
-        assert!(wuxia.tags.iter().any(|t| t == "武侠"), "内置关键词规则应命中");
+        assert!(
+            wuxia.tags.iter().any(|t| t == "武侠"),
+            "内置关键词规则应命中"
+        );
         let plain = lib.iter().find(|n| n.title == "闲书").unwrap();
-        assert!(!plain.tags.contains(&"武侠".to_string()), "未命中关键词不应带该标签");
+        assert!(
+            !plain.tags.contains(&"武侠".to_string()),
+            "未命中关键词不应带该标签"
+        );
     }
 
     #[test]
@@ -1485,7 +1527,10 @@ mod tests {
         assert!(rescan.is_favorite);
         assert!((rescan.progress - 0.42).abs() < 1e-6);
         assert_eq!(rescan.tags, vec!["我的标签".to_string()]);
-        assert_eq!(rescan.added_at, novel.added_at, "已收录书籍的加入时间不应被刷新");
+        assert_eq!(
+            rescan.added_at, novel.added_at,
+            "已收录书籍的加入时间不应被刷新"
+        );
         // 已知行为缺陷：批量重扫只回填 tags/favorite/progress 等字段，
         // title 仍取解析器结果（文件名），自定义标题会被冲掉。此处按实际行为断言并留档。
         assert_eq!(rescan.title, "原名书");
@@ -1510,7 +1555,10 @@ mod tests {
         assert_eq!(batches[0].total, 0);
         assert!(batches[0].is_finished);
         // 不存在的目录仍应报错
-        assert!(scan_novels_folder_batched(dir.join("没有这层").to_string_lossy().into_owned(), 3).is_err());
+        assert!(
+            scan_novels_folder_batched(dir.join("没有这层").to_string_lossy().into_owned(), 3)
+                .is_err()
+        );
     }
 
     // ── add_novel + 内容往返 ───────────────────────────────────────────────
@@ -1526,7 +1574,10 @@ mod tests {
 
         let novel = add_single_novel(&p);
         assert_eq!(novel.title, "往返测试", "标题取文件名去扩展名");
-        assert_eq!(novel.id, format!("{:x}", md5::compute(p.to_string_lossy().as_bytes())));
+        assert_eq!(
+            novel.id,
+            format!("{:x}", md5::compute(p.to_string_lossy().as_bytes()))
+        );
         assert_eq!(novel.file_path, p.to_string_lossy().to_string());
         assert_eq!(novel.file_size, std::fs::metadata(&p).unwrap().len());
         assert!(get_all_novels().unwrap().iter().any(|n| n.id == novel.id));
@@ -1563,7 +1614,10 @@ mod tests {
         let miss = write_plain_txt(&dir, "无规则书", "市井之间，烟火日常。");
 
         let hit_novel = add_single_novel(&hit);
-        assert!(hit_novel.tags.iter().any(|t| t == "玄幻"), "命中关键词应自动打标签");
+        assert!(
+            hit_novel.tags.iter().any(|t| t == "玄幻"),
+            "命中关键词应自动打标签"
+        );
         let miss_novel = add_single_novel(&miss);
         assert!(!miss_novel.tags.contains(&"玄幻".to_string()));
         assert!(!miss_novel.tags.contains(&"武侠".to_string()));
@@ -1598,7 +1652,9 @@ mod tests {
         assert_eq!(db_rows("novels").len(), 1);
 
         // 全部路径无效 → Ok 且返回空
-        assert!(add_novel(vec![missing.to_string_lossy().into_owned()]).unwrap().is_empty());
+        assert!(add_novel(vec![missing.to_string_lossy().into_owned()])
+            .unwrap()
+            .is_empty());
     }
 
     // ── get_novel_content / get_chapter_content 错误分支 ───────────────────
@@ -1611,13 +1667,20 @@ mod tests {
 
         let dir = case_dir("content_err");
         // 1) 文件不存在
-        let err = get_novel_content(dir.join("查无此书.txt").to_string_lossy().into_owned()).unwrap_err();
-        assert!(err.contains("metadata"), "错误信息应说明读元数据失败: {err}");
+        let err =
+            get_novel_content(dir.join("查无此书.txt").to_string_lossy().into_owned()).unwrap_err();
+        assert!(
+            err.contains("metadata"),
+            "错误信息应说明读元数据失败: {err}"
+        );
         // 2) 不支持的扩展名
         let pdf = dir.join("假书.pdf");
         write_text(&pdf, "%PDF-1.4");
         let err = get_novel_content(pdf.to_string_lossy().into_owned()).unwrap_err();
-        assert!(err.contains("Unsupported file format"), "应报不支持格式: {err}");
+        assert!(
+            err.contains("Unsupported file format"),
+            "应报不支持格式: {err}"
+        );
         // 3) 无扩展名
         let noext = dir.join("无扩展名");
         write_text(&noext, "随便一些文字");
@@ -1664,21 +1727,33 @@ mod tests {
         write_text(&p, "第一版：内容甲");
         set_mtime(&p, stamp);
         let first = get_novel_content(p.to_string_lossy().into_owned()).unwrap();
-        assert!(first.chapters[0].content.as_ref().unwrap().contains("内容甲"));
+        assert!(first.chapters[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .contains("内容甲"));
 
         // 内容变了但 mtime 复位成同一时刻 → 命中缓存拿到旧内容
         write_text(&p, "第二版：内容乙");
         set_mtime(&p, stamp);
         let cached = get_novel_content(p.to_string_lossy().into_owned()).unwrap();
         assert!(
-            cached.chapters[0].content.as_ref().unwrap().contains("内容甲"),
+            cached.chapters[0]
+                .content
+                .as_ref()
+                .unwrap()
+                .contains("内容甲"),
             "缓存未被判过期时应返回旧内容"
         );
 
         // 显式清缓存 → 强制重解析拿到新内容
         clear_novel_cache(p.to_string_lossy().into_owned()).unwrap();
         let fresh = get_novel_content(p.to_string_lossy().into_owned()).unwrap();
-        assert!(fresh.chapters[0].content.as_ref().unwrap().contains("内容乙"));
+        assert!(fresh.chapters[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .contains("内容乙"));
 
         // 清理未知路径不应报错
         assert!(clear_novel_cache(dir.join("没缓存.txt").to_string_lossy().into_owned()).is_ok());
@@ -1704,12 +1779,13 @@ mod tests {
 
         // 把 mtime 往前推一小时 → 缓存时间早于文件时间，判过期并重解析
         write_text(&p, "新版：乙");
-        set_mtime(
-            &p,
-            fixed_mtime() + Duration::from_secs(3600),
-        );
+        set_mtime(&p, fixed_mtime() + Duration::from_secs(3600));
         let content = get_novel_content(p.to_string_lossy().into_owned()).unwrap();
-        assert!(content.chapters[0].content.as_ref().unwrap().contains("新版"));
+        assert!(content.chapters[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .contains("新版"));
     }
 
     /// 内容缓存必须有 LRU 上限：连开 8 本书后只常驻最近访问的 5 本，
@@ -1892,7 +1968,11 @@ mod tests {
         let folder = create_folder("我的书架".to_string()).unwrap();
 
         assert!(move_novel_to_folder(novel.id.clone(), Some(folder.id.clone())).unwrap());
-        let moved = get_all_novels().unwrap().into_iter().find(|n| n.id == novel.id).unwrap();
+        let moved = get_all_novels()
+            .unwrap()
+            .into_iter()
+            .find(|n| n.id == novel.id)
+            .unwrap();
         assert_eq!(moved.folder_id.as_deref(), Some(folder.id.as_str()));
         let raw = db_row("novels", &novel.id).unwrap();
         assert!(raw.contains(&folder.id), "folder_id 必须写入 DB JSON");
@@ -1965,12 +2045,21 @@ mod tests {
         let lib = get_all_novels().unwrap();
         let ta = lib.iter().find(|n| n.id == na.id).unwrap();
         assert!(ta.tags.contains(&"星辰类".to_string()));
-        assert!(ta.tags.contains(&"漫天".to_string()), "空白 tag 应回退成关键词");
+        assert!(
+            ta.tags.contains(&"漫天".to_string()),
+            "空白 tag 应回退成关键词"
+        );
         assert!(!ta.tags.contains(&"不该出现".to_string()));
         assert!(!ta.tags.contains(&"也不该出现".to_string()));
         let tb = lib.iter().find(|n| n.id == nb.id).unwrap();
-        assert!(!tb.tags.contains(&"星辰类".to_string()), "正文未命中的书不应被打该标签");
-        assert!(db_row("novels", &na.id).unwrap().contains("星辰类"), "标签更新要落库");
+        assert!(
+            !tb.tags.contains(&"星辰类".to_string()),
+            "正文未命中的书不应被打该标签"
+        );
+        assert!(
+            db_row("novels", &na.id).unwrap().contains("星辰类"),
+            "标签更新要落库"
+        );
         assert!(db_row("novels", &nc.id).is_some(), "解析失败的书仍在库里");
 
         // 幂等：再跑一遍不应有新更新
@@ -1997,17 +2086,27 @@ mod tests {
             "batch_size must be > 0"
         );
         // 规则为空 / 全部无效 → 直接完成
-        assert!(apply_keyword_rules_to_all_novels_batch(vec![], 0, 5).unwrap().is_finished);
+        assert!(
+            apply_keyword_rules_to_all_novels_batch(vec![], 0, 5)
+                .unwrap()
+                .is_finished
+        );
         let only_blank = vec![KeywordRuleInput {
             keyword: " ".to_string(),
             tag: "x".to_string(),
         }];
         let r = apply_keyword_rules_to_all_novels_batch(only_blank, 0, 5).unwrap();
-        assert_eq!((r.completed, r.total, r.updated, r.is_finished), (0, 0, 0, true));
+        assert_eq!(
+            (r.completed, r.total, r.updated, r.is_finished),
+            (0, 0, 0, true)
+        );
 
         // 空库 + 有效规则 → total 0
         let r = apply_keyword_rules_to_all_novels_batch(one_rule.clone(), 0, 5).unwrap();
-        assert_eq!((r.completed, r.total, r.updated, r.is_finished), (0, 0, 0, true));
+        assert_eq!(
+            (r.completed, r.total, r.updated, r.is_finished),
+            (0, 0, 0, true)
+        );
 
         // 起始下标越界 → 直接返回完成
         let dir = case_dir("kw_edge");
@@ -2018,7 +2117,174 @@ mod tests {
         assert!(r.is_finished);
     }
 
+    #[test]
+    fn source_directory_structure_is_mirrored_and_reused() {
+        let _serial = lock_db_test_serial();
+        assert_db_isolated();
+        reset_library_state();
+
+        let dir = case_dir("source_structure");
+        let root = dir.join("系列小说");
+        let first = write_novel_txt(&root.join("奇幻"), "甲", "第一段。", "第二段。");
+        let second = write_novel_txt(
+            &root.join("玄幻").join("完结"),
+            "乙",
+            "第三段。",
+            "第四段。",
+        );
+        let target = create_folder("书架".to_string()).unwrap();
+        let added = add_novel(vec![
+            first.to_string_lossy().into_owned(),
+            second.to_string_lossy().into_owned(),
+        ])
+        .unwrap();
+        let moved = organize_novels_by_source_path(
+            added.iter().map(|novel| novel.file_path.clone()).collect(),
+            root.to_string_lossy().into_owned(),
+            Some(target.id.clone()),
+        )
+        .unwrap();
+        assert_eq!(moved.len(), 2);
+        let folders = get_all_folders().unwrap();
+        let series = folders
+            .iter()
+            .find(|folder| folder.name == "系列小说")
+            .unwrap();
+        assert_eq!(series.parent_id.as_deref(), Some(target.id.as_str()));
+        let fantasy = folders.iter().find(|folder| folder.name == "奇幻").unwrap();
+        assert_eq!(fantasy.parent_id.as_deref(), Some(series.id.as_str()));
+        let finished = folders.iter().find(|folder| folder.name == "完结").unwrap();
+        let library = get_library().lock().unwrap();
+        assert_eq!(
+            library
+                .iter()
+                .find(|novel| novel.file_path == second.to_string_lossy().as_ref())
+                .unwrap()
+                .folder_id
+                .as_deref(),
+            Some(finished.id.as_str())
+        );
+        drop(library);
+        organize_novels_by_source_path(
+            added.iter().map(|novel| novel.file_path.clone()).collect(),
+            root.to_string_lossy().into_owned(),
+            Some(target.id),
+        )
+        .unwrap();
+        assert_eq!(get_all_folders().unwrap().len(), folders.len());
+    }
+
+    #[test]
+    fn source_directory_structure_rejects_books_outside_root() {
+        let _serial = lock_db_test_serial();
+        assert_db_isolated();
+        reset_library_state();
+        let dir = case_dir("source_structure_outside");
+        let root = dir.join("书库");
+        let outside = write_plain_txt(&dir, "外面", "正文。");
+        std::fs::create_dir_all(&root).unwrap();
+        let added = add_single_novel(&outside);
+        assert!(organize_novels_by_source_path(
+            vec![added.file_path],
+            root.to_string_lossy().into_owned(),
+            None,
+        )
+        .is_err());
+    }
+
     // ── EPUB 分支（api 层）─────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn epub_detection_uses_spine_indexes_after_non_html_items() {
+        use std::io::{Read, Write};
+
+        let _serial = lock_db_test_serial();
+        assert_db_isolated();
+        reset_library_state();
+        let dir = case_dir("epub_detection_spine_index");
+        let original = write_minimal_epub(&dir, "原文件", "甲", "乙");
+        let source = std::fs::File::open(&original).unwrap();
+        let mut archive = zip::ZipArchive::new(source).unwrap();
+        let mut entries = Vec::new();
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index).unwrap();
+            let name = entry.name().to_string();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            if name == "OEBPS/content.opf" {
+                let opf = String::from_utf8(bytes).unwrap();
+                bytes = opf
+                    .replace(
+                        "<item id=\"ch1\"",
+                        "<item id=\"cover\" href=\"cover.png\" media-type=\"image/png\"/><item id=\"ch1\"",
+                    )
+                    .replace(
+                        "<itemref idref=\"ch1\"/>",
+                        "<itemref idref=\"cover\"/><itemref idref=\"ch1\"/>",
+                    )
+                    .into_bytes();
+            }
+            entries.push((name, bytes));
+        }
+        drop(archive);
+        let path = dir.join("含图片项.epub");
+        let output = std::fs::File::create(&path).unwrap();
+        let mut writer = zip::ZipWriter::new(output);
+        for (name, bytes) in entries {
+            writer.start_file(name, zip::write::FileOptions::default()).unwrap();
+            writer.write_all(&bytes).unwrap();
+        }
+        writer.start_file("OEBPS/cover.png", zip::write::FileOptions::default()).unwrap();
+        writer.write_all(b"not-an-image").unwrap();
+        writer.finish().unwrap();
+
+        let content = get_novel_content(path.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(
+            content.chapters.iter().map(|chapter| chapter.index).collect::<Vec<_>>(),
+            vec![1, 2],
+            "测试 EPUB 必须在首个正文前保留非 HTML spine 项"
+        );
+        let document = sample_novel_for_detection(
+            path.to_string_lossy().into_owned(),
+            "检测".to_string(),
+            None,
+            400,
+            4,
+        )
+        .await
+        .unwrap();
+        assert_eq!(document.total_chapters, 2);
+        assert_eq!(document.samples.len(), 2);
+        assert!(document.samples[0].content.contains('甲'));
+        assert!(!document.samples[0].content.contains('乙'));
+        assert!(document.samples[1].content.contains('乙'));
+    }
+
+    #[tokio::test]
+    async fn epub_detection_samples_plain_text_without_markup() {
+        let _serial = lock_db_test_serial();
+        assert_db_isolated();
+        reset_library_state();
+        let dir = case_dir("epub_detection");
+        let path = write_minimal_epub(&dir, "检测", "甲&amp;乙", "丙");
+        let document = sample_novel_for_detection(
+            path.to_string_lossy().into_owned(),
+            "检测".to_string(),
+            None,
+            400,
+            4,
+        )
+        .await
+        .unwrap();
+        assert_eq!(document.total_chapters, 2);
+        assert_eq!(document.sampled_chapters, 2);
+        assert_eq!(document.samples.len(), 2);
+        assert!(document.samples[0].content.contains("甲&乙"));
+        assert!(!document
+            .samples
+            .iter()
+            .any(|sample| sample.content.contains("<p>")));
+    }
 
     #[test]
     fn epub_content_and_chapter_via_api() {
@@ -2038,7 +2304,10 @@ mod tests {
 
         // epub 走按需加载分支
         let ch0 = get_chapter_content(p.to_string_lossy().into_owned(), 0).unwrap();
-        assert!(ch0.contains("风起于青萍之末"), "按需加载应返回章节 HTML 内容: {ch0}");
+        assert!(
+            ch0.contains("风起于青萍之末"),
+            "按需加载应返回章节 HTML 内容: {ch0}"
+        );
         let ch1 = get_chapter_content(p.to_string_lossy().into_owned(), 1).unwrap();
         assert!(ch1.contains("归于平静"));
         // 越界索引 → 解析器报错

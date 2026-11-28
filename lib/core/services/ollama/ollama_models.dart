@@ -5,7 +5,12 @@ class OllamaServer {
   bool isAvailable;
   DateTime? lastChecked;
 
-  OllamaServer({required this.url, this.apiKey, this.isAvailable = false, this.lastChecked});
+  OllamaServer({
+    required this.url,
+    this.apiKey,
+    this.isAvailable = false,
+    this.lastChecked,
+  });
 
   Map<String, dynamic> toJson() => {
     'url': url,
@@ -18,10 +23,17 @@ class OllamaServer {
     url: json['url'] as String,
     apiKey: json['apiKey'] as String?,
     isAvailable: json['isAvailable'] as bool? ?? false,
-    lastChecked: json['lastChecked'] != null ? DateTime.parse(json['lastChecked'] as String) : null,
+    lastChecked: json['lastChecked'] != null
+        ? DateTime.parse(json['lastChecked'] as String)
+        : null,
   );
 
-  OllamaServer copyWith({String? url, String? apiKey, bool? isAvailable, DateTime? lastChecked}) {
+  OllamaServer copyWith({
+    String? url,
+    String? apiKey,
+    bool? isAvailable,
+    DateTime? lastChecked,
+  }) {
     return OllamaServer(
       url: url ?? this.url,
       apiKey: apiKey ?? this.apiKey,
@@ -38,13 +50,20 @@ class OllamaModel {
   final int? size;
   final DateTime? modifiedAt;
 
-  OllamaModel({required this.name, this.description, this.size, this.modifiedAt});
+  OllamaModel({
+    required this.name,
+    this.description,
+    this.size,
+    this.modifiedAt,
+  });
 
   factory OllamaModel.fromJson(Map<String, dynamic> json) => OllamaModel(
     name: json['name'] as String,
     description: json['description'] as String?,
     size: json['size'] as int?,
-    modifiedAt: json['modified_at'] != null ? DateTime.parse(json['modified_at'] as String) : null,
+    modifiedAt: json['modified_at'] != null
+        ? DateTime.parse(json['modified_at'] as String)
+        : null,
   );
 
   Map<String, dynamic> toJson() => {
@@ -55,13 +74,31 @@ class OllamaModel {
   };
 }
 
+class OllamaModelOption {
+  final OllamaModel model;
+  final OllamaServer server;
+
+  OllamaModelOption({required this.model, required this.server});
+
+  String get id => '${server.url}\u0000${model.name}';
+
+  String get label {
+    final host = Uri.tryParse(server.url)?.host ?? server.url;
+    return '${model.name} ($host)';
+  }
+}
+
 /// 翻译语言对
 class TranslationLanguagePair {
   final String from;
   final String to;
   final String displayName;
 
-  const TranslationLanguagePair({required this.from, required this.to, required this.displayName});
+  const TranslationLanguagePair({
+    required this.from,
+    required this.to,
+    required this.displayName,
+  });
 
   static const List<TranslationLanguagePair> presets = [
     TranslationLanguagePair(from: '日文', to: '中文', displayName: '日文 → 中文'),

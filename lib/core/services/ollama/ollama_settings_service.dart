@@ -140,9 +140,14 @@ class OllamaSettingsService extends GetxService {
     servers.refresh();
   }
 
-  /// 获取可用模型列表
+  /// 获取当前服务器模型列表。
   Future<List<OllamaModel>> getModels() async {
     return await _ollamaService.getModels();
+  }
+
+  /// 获取所有已配置服务器上的可选模型。
+  Future<List<OllamaModelOption>> getModelOptions() async {
+    return await _ollamaService.getModelOptions();
   }
 
   @override

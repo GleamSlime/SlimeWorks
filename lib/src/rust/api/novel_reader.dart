@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `convert_chapter`, `convert_content`, `convert_folder`, `convert_keyword_apply_batch_result`, `convert_keyword_rule_input`, `convert_metadata`, `convert_scan_batch_result`, `convert_search_batch_result`, `convert_search_match`, `convert_search_result`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 扫描文件夹获取书籍列表
 List<NovelMetadata> scanNovelsFolder({required String folderPath}) => RustLib
@@ -46,6 +46,21 @@ Future<String> getChapterContent({
 }) => RustLib.instance.api.crateApiNovelReaderGetChapterContent(
   filePath: filePath,
   chapterIndex: chapterIndex,
+);
+
+/// 提取有界正文样本，供本地模型执行分类检测。
+Future<NovelDetectionDocument> sampleNovelForDetection({
+  required String filePath,
+  required String title,
+  String? author,
+  required BigInt maxSampleChars,
+  required BigInt maxSamples,
+}) => RustLib.instance.api.crateApiNovelReaderSampleNovelForDetection(
+  filePath: filePath,
+  title: title,
+  author: author,
+  maxSampleChars: maxSampleChars,
+  maxSamples: maxSamples,
 );
 
 /// 在书籍中搜索关键词
@@ -159,6 +174,16 @@ Future<List<ScanBatchResult>> scanNovelsFolderBatched({
 }) => RustLib.instance.api.crateApiNovelReaderScanNovelsFolderBatched(
   folderPath: folderPath,
   batchSize: batchSize,
+);
+
+Future<List<String>> organizeNovelsBySourcePath({
+  required List<String> filePaths,
+  required String scanRoot,
+  String? targetFolderId,
+}) => RustLib.instance.api.crateApiNovelReaderOrganizeNovelsBySourcePath(
+  filePaths: filePaths,
+  scanRoot: scanRoot,
+  targetFolderId: targetFolderId,
 );
 
 /// 对所有书籍分批应用关键词规则（Rust 并发执行，返回进度）
@@ -325,6 +350,72 @@ class NovelContent {
           runtimeType == other.runtimeType &&
           novelId == other.novelId &&
           chapters == other.chapters;
+}
+
+class NovelDetectionDocument {
+  final String title;
+  final String? author;
+  final BigInt totalChapters;
+  final BigInt sampledChapters;
+  final List<NovelDetectionSample> samples;
+
+  const NovelDetectionDocument({
+    required this.title,
+    this.author,
+    required this.totalChapters,
+    required this.sampledChapters,
+    required this.samples,
+  });
+
+  @override
+  int get hashCode =>
+      title.hashCode ^
+      author.hashCode ^
+      totalChapters.hashCode ^
+      sampledChapters.hashCode ^
+      samples.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NovelDetectionDocument &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          author == other.author &&
+          totalChapters == other.totalChapters &&
+          sampledChapters == other.sampledChapters &&
+          samples == other.samples;
+}
+
+class NovelDetectionSample {
+  final BigInt chapterIndex;
+  final String chapterTitle;
+  final String position;
+  final String content;
+
+  const NovelDetectionSample({
+    required this.chapterIndex,
+    required this.chapterTitle,
+    required this.position,
+    required this.content,
+  });
+
+  @override
+  int get hashCode =>
+      chapterIndex.hashCode ^
+      chapterTitle.hashCode ^
+      position.hashCode ^
+      content.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NovelDetectionSample &&
+          runtimeType == other.runtimeType &&
+          chapterIndex == other.chapterIndex &&
+          chapterTitle == other.chapterTitle &&
+          position == other.position &&
+          content == other.content;
 }
 
 class NovelFolder {

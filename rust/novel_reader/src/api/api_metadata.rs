@@ -398,6 +398,96 @@ pub fn add_novel_to_folder(
     Ok(result)
 }
 
+/// 按源目录结构归档书籍：所选根目录本身作为第一级，子目录逐级映射。
+#[frb(sync)]
+pub fn organize_novels_by_source_path(
+    file_paths: Vec<String>,
+    scan_root: String,
+    target_folder_id: Option<String>,
+) -> Result<Vec<String>, String> {
+    use std::collections::HashMap;
+    use std::path::{Component, Path};
+
+    if let Some(folder_id) = target_folder_id.as_deref() {
+        if get_all_folders()?
+            .iter()
+            .all(|folder| folder.id != folder_id)
+        {
+            return Err(format!("目标文件夹不存在 {}", folder_id));
+        }
+    }
+    let root = Path::new(&scan_root)
+        .canonicalize()
+        .map_err(|error| format!("扫描目录无效: {}", error))?;
+    let root_name = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "扫描目录没有有效名称".to_string())?
+        .to_string();
+    let folders = get_all_folders()?;
+    let mut cache: HashMap<(Option<String>, String), String> = HashMap::new();
+    for folder in &folders {
+        cache.insert(
+            (folder.parent_id.clone(), folder.name.clone()),
+            folder.id.clone(),
+        );
+    }
+    let novel_ids: HashMap<String, String> = super::get_all_novels()?
+        .into_iter()
+        .map(|novel| (novel.file_path.clone(), novel.id))
+        .collect();
+    let mut moved_ids = Vec::with_capacity(file_paths.len());
+    for file_path in file_paths {
+        let path = Path::new(&file_path)
+            .canonicalize()
+            .map_err(|error| format!("书籍路径无效 {}: {}", file_path, error))?;
+        let relative = path
+            .strip_prefix(&root)
+            .map_err(|_| format!("书籍不在扫描目录内: {}", file_path))?;
+        let mut segments = vec![root_name.clone()];
+        if let Some(parent) = relative.parent() {
+            for component in parent.components() {
+                let Component::Normal(name) = component else {
+                    return Err(format!("书籍目录层级无效: {}", file_path));
+                };
+                let name = name
+                    .to_str()
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty() && !name.starts_with('.'))
+                    .ok_or_else(|| format!("书籍目录名称无效: {}", file_path))?;
+                segments.push(name.to_string());
+            }
+        }
+        let mut parent_id = target_folder_id.clone();
+        for name in segments {
+            let key = (parent_id.clone(), name);
+            let folder_id = if let Some(folder_id) = cache.get(&key) {
+                folder_id.clone()
+            } else {
+                let folder = match parent_id.as_deref() {
+                    Some(parent_id) => create_child_folder(key.1.clone(), parent_id.to_string())?,
+                    None => create_folder(key.1.clone())?,
+                };
+                cache.insert(key, folder.id.clone());
+                folder.id
+            };
+            parent_id = Some(folder_id);
+        }
+        let novel_id = novel_ids
+            .get(&file_path)
+            .cloned()
+            .ok_or_else(|| format!("书籍未导入: {}", file_path))?;
+        let moved = move_novel_to_folder(novel_id.clone(), parent_id)?;
+        if !moved {
+            return Err(format!("小说不存在 {}", novel_id));
+        }
+        moved_ids.push(novel_id);
+    }
+    Ok(moved_ids)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 元数据层 DB 测试（全部走隔离 HOME，见 crate::api::test_env）
 // ─────────────────────────────────────────────────────────────────────────────

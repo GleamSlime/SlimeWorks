@@ -21,6 +21,15 @@ Future<void> logError({required String message}) =>
 Future<void> logDebug({required String message}) =>
     RustLib.instance.api.crateApiLoggerLogDebug(message: message);
 
+/// 追加一批客户端上报的日志到 logs/client_<日期>.log（节点侧专用）
+Future<String> appendClientLog({
+  required String header,
+  required List<String> lines,
+}) => RustLib.instance.api.crateApiLoggerAppendClientLog(
+  header: header,
+  lines: lines,
+);
+
 Future<String?> getLogDir() => RustLib.instance.api.crateApiLoggerGetLogDir();
 
 Future<BigInt> cleanupOldLogs({required int daysToKeep}) =>

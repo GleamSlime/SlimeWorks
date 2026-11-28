@@ -1,33 +1,46 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:get/get.dart';
 
 import 'package:slime_works/components/animations/state_transition_animation.dart';
+import 'package:slime_works/components/dialogs/node_directory_picker.dart';
 import 'package:slime_works/components/dropdown/gooey_dropdown_shader.dart';
 import 'package:slime_works/core/index.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/components/icons/stroke_geometry.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
+import 'package:slime_works/pages/collection/library/components/library_book_import_dialog.dart';
 
 class LibraryBookAppendButton extends StatefulWidget {
   final void Function()? onTap;
   final NovelLibraryViewModel viewModel;
 
-  const LibraryBookAppendButton({super.key, this.onTap, required this.viewModel});
+  const LibraryBookAppendButton({
+    super.key,
+    this.onTap,
+    required this.viewModel,
+  });
 
   @override
-  State<LibraryBookAppendButton> createState() => _LibraryBookAppendButtonState();
+  State<LibraryBookAppendButton> createState() =>
+      _LibraryBookAppendButtonState();
 }
 
 class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final loading = widget.viewModel.isScanning.value;
+      final loading =
+          widget.viewModel.isScanning.value ||
+          widget.viewModel.isDetecting.value;
       final status = widget.viewModel.scanStatusText.value;
       final progress = widget.viewModel.scanProgressText.value;
       final label = loading
-          ? (progress.isEmpty ? (status.isEmpty ? '扫描中...' : status) : '${status.isEmpty ? '扫描中' : status} $progress')
+          ? (progress.isEmpty
+                ? (status.isEmpty ? '扫描中...' : status)
+                : '${status.isEmpty ? '扫描中' : status} $progress')
           : '导入';
 
       return GooeyDropdownShader(
@@ -48,7 +61,9 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
               iconSize: AppTheme.metrics.fontSize15,
               loading: loading,
               height: AppTheme.metrics.kSpace40,
-              padding: EdgeInsets.symmetric(horizontal: AppTheme.metrics.kSpace16),
+              padding: EdgeInsets.symmetric(
+                horizontal: AppTheme.metrics.kSpace16,
+              ),
               decoration: BoxDecoration(
                 borderRadius: AppTheme.metrics.radius32,
                 // 工具条底色由页面自己铺，按钮这一档保持不铺色，免得和磨砂层叠出双层底
@@ -73,6 +88,41 @@ class _MessageContent extends StatelessWidget {
 
   const _MessageContent({required this.viewModel});
 
+  Future<void> _chooseImport(
+    BuildContext context, {
+    required bool scanFolder,
+  }) async {
+    final result = await showNovelImportDialog(
+      context: context,
+      scanFolder: scanFolder,
+      supportsDirectoryStructure:
+          !(Platform.isIOS || Platform.isAndroid) ||
+          viewModel.nodeSettingsService.isRemoteMode,
+    );
+    if (result == null || !context.mounted) return;
+    if (result.scanFolder) {
+      String? remotePath;
+      final node = viewModel.nodeSettingsService.activeNode;
+      if (viewModel.nodeSettingsService.isRemoteMode && node != null) {
+        remotePath = await showDialog<String>(
+          context: context,
+          builder: (_) => NodeDirectoryPicker(
+            nodeId: node.id,
+            nodeSettingsService: viewModel.nodeSettingsService,
+          ),
+        );
+        if (remotePath == null) return;
+      }
+      await viewModel.scanFolder(
+        detectionModel: result.model,
+        remoteFolderPath: remotePath,
+        preserveDirectoryStructure: result.preserveDirectoryStructure,
+      );
+    } else {
+      await viewModel.addSingleNovel(detectionModel: result.model);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppSemantic.of(context);
@@ -94,13 +144,13 @@ class _MessageContent extends StatelessWidget {
             _ImportOptionItem(
               icon: StrokeIcons.insertDriveFile,
               label: '添加单个文件',
-              onTap: viewModel.addSingleNovel,
+              onTap: () => _chooseImport(context, scanFolder: false),
             ),
             const Divider(),
             _ImportOptionItem(
               icon: StrokeIcons.folder,
               label: '扫描文件夹',
-              onTap: viewModel.scanFolder,
+              onTap: () => _chooseImport(context, scanFolder: true),
             ),
           ],
         ),
@@ -114,7 +164,11 @@ class _ImportOptionItem extends StatefulWidget {
   final String label;
   final Future<void> Function() onTap;
 
-  const _ImportOptionItem({required this.icon, required this.label, required this.onTap});
+  const _ImportOptionItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   State<_ImportOptionItem> createState() => _ImportOptionItemState();
@@ -141,7 +195,9 @@ class _ImportOptionItemState extends State<_ImportOptionItem> {
             vertical: AppTheme.metrics.kSpace10,
           ),
           decoration: BoxDecoration(
-            color: _isHovered ? AppSemantic.of(context).surface : Colors.transparent,
+            color: _isHovered
+                ? AppSemantic.of(context).surface
+                : Colors.transparent,
             borderRadius: AppTheme.metrics.radiusCard,
             boxShadow: _isHovered
                 ? [

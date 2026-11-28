@@ -28,7 +28,10 @@ fn u_field(params: &Value, key: &str) -> u64 {
 }
 
 /// 收信与连接自检走的是 std::net 的阻塞 TLS，必须挪出 tokio worker 线程
-async fn ledger_blocking<T>(what: &str, f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String>
+async fn ledger_blocking<T>(
+    what: &str,
+    f: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String>
 where
     T: Send + 'static,
 {
@@ -340,10 +343,8 @@ pub async fn dispatch_action(
             let force = params["force"].as_bool().unwrap_or(false);
             let collections = media_api::get_all_media_collections()
                 .map_err(|e| format!("获取媒体集合失败: {}", e))?;
-            let wanted_ids: Option<std::collections::HashSet<String>> = params
-                ["collection_ids"]
-                .as_array()
-                .map(|arr| {
+            let wanted_ids: Option<std::collections::HashSet<String>> =
+                params["collection_ids"].as_array().map(|arr| {
                     arr.iter()
                         .filter_map(|v| v.as_str())
                         .map(|s| s.to_string())
@@ -373,7 +374,8 @@ pub async fn dispatch_action(
                             media_api::invalidate_node_thumbnail(cover.clone(), width);
                         }
                     }
-                    if let Ok(items) = media_api::get_media_collection_items(collection.id.clone()) {
+                    if let Ok(items) = media_api::get_media_collection_items(collection.id.clone())
+                    {
                         for item in items {
                             media_api::invalidate_node_thumbnail(item.file_path, width);
                         }
@@ -739,10 +741,7 @@ pub async fn dispatch_action(
             let items = media_api::get_media_collection_items(collection_id.clone())
                 .map_err(|e| format!("删除条目本地文件失败: {}", e))?;
             let Some(item) = items.iter().find(|item| item.id == item_id) else {
-                return Err(format!(
-                    "删除条目本地文件失败: 媒体条目不存在 {}",
-                    item_id
-                ));
+                return Err(format!("删除条目本地文件失败: 媒体条目不存在 {}", item_id));
             };
             let file_path = item.file_path.clone();
             // 与 FFI 版 deleteMediaItemFile 用同一个底层函数：它负责删物理文件、
@@ -928,7 +927,11 @@ pub async fn dispatch_action(
             let header = format!(
                 "[客户端 {} / v{}] 上报 {} 行",
                 if client.is_empty() { "未知" } else { &client },
-                if app_version.is_empty() { "?" } else { &app_version },
+                if app_version.is_empty() {
+                    "?"
+                } else {
+                    &app_version
+                },
                 accepted
             );
             match crate::api::logger::append_client_log(&header, &lines[..accepted]) {
@@ -973,6 +976,27 @@ pub async fn dispatch_action(
             let content = novel_api::get_chapter_content(file_path, chapter_index)
                 .map_err(|e| format!("获取章节内容失败: {}", e))?;
             Ok(json!(content))
+        }
+
+        "sample_novel_for_detection" => {
+            let file_path = params["file_path"].as_str().unwrap_or("").to_string();
+            if file_path.trim().is_empty() {
+                return Err("提取小说检测样本失败: file_path 不能为空".to_string());
+            }
+            let title = params["title"].as_str().unwrap_or("").to_string();
+            let author = params["author"].as_str().map(|value| value.to_string());
+            let max_sample_chars = params["max_sample_chars"].as_u64().unwrap_or(1200) as usize;
+            let max_samples = params["max_samples"].as_u64().unwrap_or(24) as usize;
+            let document = novel_api::sample_novel_for_detection(
+                file_path,
+                title,
+                author,
+                max_sample_chars,
+                max_samples,
+            )
+            .await
+            .map_err(|error| format!("提取小说检测样本失败: {}", error))?;
+            Ok(json!(document))
         }
 
         // ── 小说文件夹（本机 FFI 的小说库文件夹能力在无头模式下的镜像）──────
@@ -1075,7 +1099,10 @@ pub async fn dispatch_action(
                 .collect();
             for folder_id in &folder_ids {
                 if !existing.contains(folder_id) {
-                    return Err(format!("排序小说文件夹失败: 小说文件夹不存在 {}", folder_id));
+                    return Err(format!(
+                        "排序小说文件夹失败: 小说文件夹不存在 {}",
+                        folder_id
+                    ));
                 }
             }
             novel_api::batch_update_folder_orders(folder_ids)
@@ -1119,11 +1146,18 @@ pub async fn dispatch_action(
         // 提示「已导入 N 本」但书库里没有——典型的假成功。
         "scan_novel_folder" => {
             let folder_path = params["folder_path"].as_str().unwrap_or("").to_string();
+            let target_folder_id = params["target_folder_id"]
+                .as_str()
+                .map(|value| value.to_string())
+                .filter(|value| !value.is_empty());
             if folder_path.trim().is_empty() {
                 return Err("扫描小说文件夹失败: folder_path 不能为空".to_string());
             }
             if !std::path::Path::new(&folder_path).is_dir() {
                 return Err(format!("扫描小说文件夹失败: 目录不存在 {}", folder_path));
+            }
+            if let Some(folder_id) = target_folder_id.as_deref() {
+                ensure_novel_folder_exists(folder_id, "扫描小说文件夹")?;
             }
             // 先记下「扫之前库里有什么」：batched 接口会在扫描过程中就入库，
             // 所以必须在调用**之前**取快照，否则拿返回的 novels 去和入库后的
@@ -1139,9 +1173,11 @@ pub async fn dispatch_action(
             let batches = novel_api::scan_novels_folder_batched(folder_path.clone(), 100_000)
                 .map_err(|e| format!("扫描小说文件夹失败: {}", e))?;
             if batches.is_empty() {
-                return Err(format!("扫描小说文件夹失败: 目录下没有可导入的书 {}", folder_path));
+                return Err(format!(
+                    "扫描小说文件夹失败: 目录下没有可导入的书 {}",
+                    folder_path
+                ));
             }
-            let mut fresh = 0usize;
             let mut total = 0usize;
             let mut seen = std::collections::HashSet::new();
             for batch in &batches {
@@ -1151,14 +1187,48 @@ pub async fn dispatch_action(
                         continue;
                     }
                     total += 1;
-                    if !existing.contains(&n.file_path) {
-                        fresh += 1;
-                    }
                 }
             }
+            let fresh_novels: Vec<_> = novel_api::get_all_novels()
+                .map_err(|e| format!("扫描小说文件夹失败: {}", e))?
+                .into_iter()
+                .filter(|novel| !existing.contains(&novel.file_path))
+                .collect();
+            let preserve_structure = params["preserve_directory_structure"]
+                .as_bool()
+                .unwrap_or(false);
+            if preserve_structure {
+                let scanned_paths: Vec<String> = batches
+                    .iter()
+                    .flat_map(|batch| batch.novels.iter().map(|novel| novel.file_path.clone()))
+                    .collect();
+                novel_api::organize_novels_by_source_path(
+                    scanned_paths,
+                    folder_path.clone(),
+                    target_folder_id.clone(),
+                )
+                .map_err(|error| format!("按原目录整理小说失败: {}", error))?;
+            }
+            let mut fresh_ids = Vec::with_capacity(fresh_novels.len());
+            for novel in fresh_novels {
+                if let Some(folder_id) = target_folder_id.as_deref().filter(|_| !preserve_structure)
+                {
+                    require_changed(
+                        novel_api::move_novel_to_folder(
+                            novel.id.clone(),
+                            Some(folder_id.to_string()),
+                        ),
+                        "移动小说到文件夹",
+                        format!("小说不存在 {}", novel.id),
+                    )?;
+                }
+                fresh_ids.push(novel.id);
+            }
+            let fresh = fresh_ids.len();
             Ok(json!({
                 "imported": fresh.to_string(),
                 "found": total.to_string(),
+                "ids": fresh_ids,
                 // 重复扫描时不报错、但如实说清「一本都没新增」
                 "message": if fresh == 0 {
                     format!("{} 本已在库中，未新增", total)
@@ -1181,8 +1251,27 @@ pub async fn dispatch_action(
             if paths.is_empty() {
                 return Err("导入小说失败: file_paths 不能为空".to_string());
             }
-            let novels = novel_api::add_novel(paths.clone())
-                .map_err(|e| format!("导入小说失败: {}", e))?;
+            let target_folder_id = params["target_folder_id"]
+                .as_str()
+                .map(|value| value.to_string())
+                .filter(|value| !value.is_empty());
+            if let Some(folder_id) = target_folder_id.as_deref() {
+                ensure_novel_folder_exists(folder_id, "导入小说")?;
+            }
+            let novels =
+                novel_api::add_novel(paths.clone()).map_err(|e| format!("导入小说失败: {}", e))?;
+            if let Some(folder_id) = target_folder_id.as_deref() {
+                for novel in &novels {
+                    require_changed(
+                        novel_api::move_novel_to_folder(
+                            novel.id.clone(),
+                            Some(folder_id.to_string()),
+                        ),
+                        "移动小说到文件夹",
+                        format!("小说不存在 {}", novel.id),
+                    )?;
+                }
+            }
             Ok(json!({
                 "imported": novels.len().to_string(),
                 "ids": novels.iter().map(|n| n.id.clone()).collect::<Vec<_>>(),
@@ -1198,7 +1287,11 @@ pub async fn dispatch_action(
             let novel_id = params["novel_id"].as_str().unwrap_or("").to_string();
             // 0.0~1.0 的归一化进度；越界钳一下而不是报错（前端偶尔算不准）
             let raw = params["progress"].as_f64().unwrap_or(0.0);
-            let progress = if raw.is_finite() { raw.clamp(0.0, 1.0) } else { 0.0 } as f32;
+            let progress = if raw.is_finite() {
+                raw.clamp(0.0, 1.0)
+            } else {
+                0.0
+            } as f32;
             require_changed(
                 novel_api::update_reading_progress(novel_id.clone(), progress),
                 "更新阅读进度",
@@ -1809,13 +1902,18 @@ pub async fn dispatch_action(
         }
 
         // ── 流水账（记账 + 邮件账单自动入账）───────────────────────────────────
-        "ledger_list_accounts" => ledger_json(ledger_module::api::ledger_list_accounts(), "获取账户列表"),
+        "ledger_list_accounts" => {
+            ledger_json(ledger_module::api::ledger_list_accounts(), "获取账户列表")
+        }
         "ledger_upsert_account" => ledger_scalar(
             ledger_module::api::ledger_upsert_account(s_field(&params, "account_json")),
             "id",
             "保存账户",
         ),
-        "ledger_delete_account" => ledger_text(ledger_module::api::ledger_delete_account(i_field(&params, "id")), "删除账户"),
+        "ledger_delete_account" => ledger_text(
+            ledger_module::api::ledger_delete_account(i_field(&params, "id")),
+            "删除账户",
+        ),
 
         "ledger_list_categories" => ledger_json(
             ledger_module::api::ledger_list_categories(s_field(&params, "direction")),
@@ -1826,10 +1924,14 @@ pub async fn dispatch_action(
             "id",
             "保存类别",
         ),
-        "ledger_delete_category" => ledger_text(ledger_module::api::ledger_delete_category(i_field(&params, "id")), "删除类别"),
-        "ledger_list_merchant_memory" => {
-            ledger_json(ledger_module::api::ledger_list_merchant_memory(), "获取商户记忆")
-        }
+        "ledger_delete_category" => ledger_text(
+            ledger_module::api::ledger_delete_category(i_field(&params, "id")),
+            "删除类别",
+        ),
+        "ledger_list_merchant_memory" => ledger_json(
+            ledger_module::api::ledger_list_merchant_memory(),
+            "获取商户记忆",
+        ),
         "ledger_forget_merchant" => ledger_void(
             ledger_module::api::ledger_forget_merchant(s_field(&params, "merchant_key")),
             "清除商户记忆",
@@ -1895,11 +1997,15 @@ pub async fn dispatch_action(
             "id",
             "保存邮箱规则",
         ),
-        "ledger_delete_rule" => {
-            ledger_void(ledger_module::api::ledger_delete_rule(i_field(&params, "id")), "删除邮箱规则")
-        }
+        "ledger_delete_rule" => ledger_void(
+            ledger_module::api::ledger_delete_rule(i_field(&params, "id")),
+            "删除邮箱规则",
+        ),
         "ledger_set_rule_enabled" => ledger_void(
-            ledger_module::api::ledger_set_rule_enabled(i_field(&params, "id"), b_field(&params, "enabled")),
+            ledger_module::api::ledger_set_rule_enabled(
+                i_field(&params, "id"),
+                b_field(&params, "enabled"),
+            ),
             "切换邮箱规则开关",
         ),
         "ledger_has_rule_password" => ledger_flag(
@@ -1930,10 +2036,7 @@ pub async fn dispatch_action(
                 return Err(format!("设置邮箱口令失败: 邮箱规则不存在 {}", rule_id));
             }
             ledger_void(
-                ledger_module::api::ledger_set_rule_password(
-                    rule_id,
-                    s_field(&params, "password"),
-                ),
+                ledger_module::api::ledger_set_rule_password(rule_id, s_field(&params, "password")),
                 "设置邮箱口令",
             )
         }
@@ -2000,9 +2103,11 @@ pub async fn dispatch_action(
             ledger_module::api::ledger_email_transactions(i_field(&params, "email_id")),
             "获取邮件对应流水",
         ),
-        "ledger_pending_count" => {
-            ledger_scalar(ledger_module::api::ledger_pending_count(), "count", "统计待确认数")
-        }
+        "ledger_pending_count" => ledger_scalar(
+            ledger_module::api::ledger_pending_count(),
+            "count",
+            "统计待确认数",
+        ),
         "ledger_confirm_tx" => ledger_void(
             ledger_module::api::ledger_confirm_tx(
                 i_field(&params, "tx_id"),
@@ -2033,11 +2138,16 @@ pub async fn dispatch_action(
             "清除邮件流水",
         ),
 
-        "ledger_scheduler_start" => ledger_void(ledger_module::api::ledger_scheduler_start(), "启动自动收信"),
-        "ledger_scheduler_stop" => ledger_void(ledger_module::api::ledger_scheduler_stop(), "停止自动收信"),
-        "ledger_scheduler_status" => {
-            ledger_json(ledger_module::api::ledger_scheduler_status(), "获取调度状态")
+        "ledger_scheduler_start" => {
+            ledger_void(ledger_module::api::ledger_scheduler_start(), "启动自动收信")
         }
+        "ledger_scheduler_stop" => {
+            ledger_void(ledger_module::api::ledger_scheduler_stop(), "停止自动收信")
+        }
+        "ledger_scheduler_status" => ledger_json(
+            ledger_module::api::ledger_scheduler_status(),
+            "获取调度状态",
+        ),
         "ledger_get_logs" => ledger_json(
             ledger_module::api::ledger_get_logs(i_field(&params, "limit")),
             "获取收信日志",
@@ -2164,8 +2274,8 @@ fn find_or_create_folder(name: &str, parent_id: &Option<String>) -> Result<Strin
 /// - 落点为空 = 文件夹还没有集合、或集合散落在多个父目录（歧义），
 ///   此时把候选目录交给客户端，由它走节点目录浏览器让用户手选。
 fn resolve_folder_target_dir(folder_id: &str) -> Result<(String, Vec<String>), String> {
-    let collections = media_api::get_all_media_collections()
-        .map_err(|e| format!("获取媒体集合失败: {}", e))?;
+    let collections =
+        media_api::get_all_media_collections().map_err(|e| format!("获取媒体集合失败: {}", e))?;
     Ok(pick_folder_target_dir(folder_id, &collections))
 }
 
@@ -2512,7 +2622,10 @@ mod folder_target_tests {
         ];
         let (target, candidates) = pick_folder_target_dir("f1", &collections);
         assert_eq!(target, "");
-        assert_eq!(candidates, vec!["/diskA/Lori".to_string(), "/diskB/Lori".to_string()]);
+        assert_eq!(
+            candidates,
+            vec!["/diskA/Lori".to_string(), "/diskB/Lori".to_string()]
+        );
     }
 
     #[test]
@@ -2524,7 +2637,10 @@ mod folder_target_tests {
         let (target, candidates) = pick_folder_target_dir("f-empty", &collections);
         assert_eq!(target, "");
         // 没有该文件夹的集合时，给出所有集合的父目录供用户手选
-        assert_eq!(candidates, vec!["/library/A".to_string(), "/media/B".to_string()]);
+        assert_eq!(
+            candidates,
+            vec!["/library/A".to_string(), "/media/B".to_string()]
+        );
     }
 
     #[test]
@@ -2536,7 +2652,10 @@ mod folder_target_tests {
         ];
         let (target, candidates) = pick_folder_target_dir("", &collections);
         assert_eq!(target, "");
-        assert_eq!(candidates, vec!["/library/A".to_string(), "/media/B".to_string()]);
+        assert_eq!(
+            candidates,
+            vec!["/library/A".to_string(), "/media/B".to_string()]
+        );
     }
 
     #[test]
@@ -2565,8 +2684,7 @@ mod dispatch_action_tests {
 
     /// 同步驱动 async dispatch_action：复用 node_server 的全局共享 runtime
     fn call(action: &str, params: Value) -> Result<Value, String> {
-        super::super::shared_runtime()
-            .block_on(dispatch_action(action, params, &test_config()))
+        super::super::shared_runtime().block_on(dispatch_action(action, params, &test_config()))
     }
 
     /// 生成本次测试专属临时目录（唯一后缀，避免并发测试互相踩踏）
@@ -2627,18 +2745,22 @@ mod dispatch_action_tests {
             json!([])
         );
         // 缺参数（None as_str → ""）同样短路
-        assert_eq!(
-            call("search_all_novels", json!({})).unwrap(),
-            json!([])
-        );
+        assert_eq!(call("search_all_novels", json!({})).unwrap(), json!([]));
     }
 
     #[test]
     fn update_novel_cover_base64_param_validation_before_any_db_write() {
         // novel_id / image_base64 为空的校验发生在解码与写盘之前
-        let err = call("update_novel_cover_base64", json!({"novel_id": "", "image_base64": "aGk="}))
-            .unwrap_err();
-        assert!(err.contains("novel_id or image_base64 is empty"), "实际: {}", err);
+        let err = call(
+            "update_novel_cover_base64",
+            json!({"novel_id": "", "image_base64": "aGk="}),
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("novel_id or image_base64 is empty"),
+            "实际: {}",
+            err
+        );
         let err = call("update_novel_cover_base64", json!({"novel_id": "n1"})).unwrap_err();
         assert!(err.contains("novel_id or image_base64 is empty"));
 
@@ -2754,7 +2876,8 @@ mod dispatch_action_tests {
         assert!(legacy[0]["cover_path"].is_string());
 
         // 显式 true 与缺省逐字段一致
-        let explicit = build_novel_list_json(novels, &folders, &counts, &json!({"with_cover": true}));
+        let explicit =
+            build_novel_list_json(novels, &folders, &counts, &json!({"with_cover": true}));
         // modified_at/added_at 用同一元数据实例生成，值应一致
         assert_eq!(legacy[0]["cover_base64"], explicit[0]["cover_base64"]);
         assert_eq!(legacy[0]["id"], explicit[0]["id"]);
@@ -2768,7 +2891,12 @@ mod dispatch_action_tests {
         let folders = std::collections::HashMap::new();
         let counts = std::collections::HashMap::new();
 
-        let lite = build_novel_list_json(novels.clone(), &folders, &counts, &json!({"with_cover": false}));
+        let lite = build_novel_list_json(
+            novels.clone(),
+            &folders,
+            &counts,
+            &json!({"with_cover": false}),
+        );
         assert_eq!(lite.len(), 1);
         assert!(lite[0]["cover_base64"].is_null(), "false 时不得内嵌 base64");
         // 其余元数据字段保留：客户端靠 cover_path 判有无封面
