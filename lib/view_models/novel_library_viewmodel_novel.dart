@@ -392,13 +392,16 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
           addNovel(filePaths: paths);
         }
         await loadNovels();
-        await _computeChapterCountsForPaths(paths);
-        await _autoTagByPaths(paths);
         if (detectionModel != null) {
           final imported = novels
               .where((n) => paths.contains(n.filePath))
               .toList();
           await _detectImportedNovels(imported, detectionModel);
+          scanStatusText.value = '计算章节信息...';
+          await _computeChapterCountsForPaths(paths);
+        } else {
+          await _computeChapterCountsForPaths(paths);
+          await _autoTagByPaths(paths);
         }
         scanStatusText.value = '';
         scanProgressText.value = '';
@@ -499,14 +502,17 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         await loadFolders();
         await loadNovels();
       }
-      await _computeChapterCountsForPaths(allScannedPaths);
-      // 对本次扫描中的新书籍应用 Dart 端关键词规则
-      await _autoTagByPaths(allScannedPaths);
       if (detectionModel != null) {
         final imported = novels
             .where((n) => allScannedPaths.contains(n.filePath))
             .toList();
         await _detectImportedNovels(imported, detectionModel);
+        scanStatusText.value = '计算章节信息...';
+        await _computeChapterCountsForPaths(allScannedPaths);
+      } else {
+        await _computeChapterCountsForPaths(allScannedPaths);
+        // 未选择大模型时，才对本次扫描中的新书籍应用关键词规则。
+        await _autoTagByPaths(allScannedPaths);
       }
       scanStatusText.value = '';
       scanProgressText.value = '';
@@ -522,6 +528,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
 
   /// 添加单个书籍。如果当前在文件夹内，自动将导入的书籍归入该文件夹
   Future<void> addSingleNovel({OllamaModelOption? detectionModel}) async {
+    var started = false;
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -534,6 +541,11 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         await _importRemoteFiles(paths, detectionModel: detectionModel);
         return;
       }
+
+      started = true;
+      isScanning.value = true;
+      scanStatusText.value = '导入中...';
+      scanProgressText.value = '0/${paths.length}';
       final fid = currentFolderId.value;
       if (fid != null) {
         addNovelToFolder(filePaths: paths, folderId: fid);
@@ -541,17 +553,26 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         addNovel(filePaths: paths);
       }
       await loadNovels();
-      await _computeChapterCountsForPaths(paths);
-      await _autoTagByPaths(paths);
       if (detectionModel != null) {
         final imported = novels
             .where((n) => paths.contains(n.filePath))
             .toList();
         await _detectImportedNovels(imported, detectionModel);
+        scanStatusText.value = '计算章节信息...';
+        await _computeChapterCountsForPaths(paths);
+      } else {
+        await _computeChapterCountsForPaths(paths);
+        await _autoTagByPaths(paths);
       }
       showSnack('成功', '已添加 ${result.files.length} 本书籍');
     } catch (e) {
       showSnack('错误', '添加书籍失败: $e');
+    } finally {
+      if (started) {
+        isScanning.value = false;
+        scanStatusText.value = '';
+        scanProgressText.value = '';
+      }
     }
   }
 
@@ -652,10 +673,14 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
     detectionCompleted.value = 0;
     detectionTotal.value = imported.length;
     detectionFailed.value = 0;
-    final service = NovelDetectionService(getIt.get<OllamaService>());
+    detectionSampleCompleted.value = 0;
+    detectionSampleTotal.value = 0;
     try {
+      final service = NovelDetectionService(getIt.get<OllamaService>());
       for (final novel in imported) {
-        scanStatusText.value = 'AI 检测 ${novel.title}';
+        detectionSampleCompleted.value = 0;
+        detectionSampleTotal.value = 0;
+        scanStatusText.value = '正在抽取正文样本：${novel.title}';
         scanProgressText.value =
             '${detectionCompleted.value}/${detectionTotal.value}';
         try {
@@ -710,14 +735,20 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
                   .toList(),
             );
           }
+          detectionSampleTotal.value = input.samples.length;
+          scanStatusText.value = 'AI 正在解析：${novel.title}';
+          scanProgressText.value =
+              '${detectionCompleted.value}/${detectionTotal.value} · 样本 0/${input.samples.length}';
           final detected = await service.detect(
             input: input,
             model: model,
             onProgress: (completed, total) {
+              detectionSampleCompleted.value = completed;
               scanProgressText.value =
                   '${detectionCompleted.value}/${detectionTotal.value} · 样本 $completed/$total';
             },
           );
+          scanStatusText.value = '正在写入检测标签：${novel.title}';
           final tags = novel.tags
               .where(
                 (tag) =>
@@ -748,6 +779,8 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
           _logger.log('[小说检测] ${novel.title} 失败: $error');
         }
         detectionCompleted.value++;
+        scanProgressText.value =
+            '${detectionCompleted.value}/${detectionTotal.value}';
       }
       if (nodeSettingsService.isRemoteMode) {
         await refreshRemoteNovels();
@@ -762,6 +795,8 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
       }
     } finally {
       isDetecting.value = false;
+      detectionSampleCompleted.value = 0;
+      detectionSampleTotal.value = 0;
       scanStatusText.value = '';
       scanProgressText.value = '';
     }

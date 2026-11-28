@@ -100,7 +100,7 @@ class _NovelImportDialogState extends State<_NovelImportDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                '可选择已配置的 Ollama 模型，在导入后校准小说类型，并将含露骨性描写的书籍标记为 H。',
+                '可选择已配置的 Ollama 模型，在导入后校准小说类型，并将含露骨性描写的书籍标记为 H。选择模型后将跳过关键词自动打标签。',
                 style: AppTextStyles.body(context),
               ),
               SizedBox(height: m.kSpace12),
@@ -185,8 +185,8 @@ class _NovelImportDialogState extends State<_NovelImportDialog> {
               SizedBox(height: m.kSpace8),
               Text(
                 selected == null
-                    ? '未选择模型：仅导入书籍，不执行 AI 检测。'
-                    : '将使用 ${selected.model.name} 抽样检测开头、中部和结尾；长书不会整本送入上下文。',
+                    ? '未选择模型：导入后按现有关键词规则自动打标签。'
+                    : '将使用 ${selected.model.name} 抽样检测开头、中部和结尾，并跳过关键词自动打标签；长书不会整本送入上下文。',
                 style: AppTextStyles.caption(context),
               ),
             ],

@@ -18,6 +18,7 @@ import 'package:slime_works/pages/collection/library/components/library_book_car
 import 'package:slime_works/pages/collection/library/components/library_folder_card.dart';
 import 'package:slime_works/pages/collection/library/components/library_item.dart';
 import 'package:slime_works/pages/collection/library/components/library_folder_breadcrumb.dart';
+import 'package:slime_works/pages/collection/library/components/library_import_progress.dart';
 import 'package:slime_works/pages/collection/library/components/library_selection_bar.dart';
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
@@ -489,7 +490,7 @@ class _CollectionLibraryScreenState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '导入书籍时，若书内包含关键词则自动添加对应标签。',
+                    '未选择大模型检测时，导入书籍会按关键词自动添加对应标签。',
                     style: AppTextStyles.role(context, fontSize: m.fontSize12, color: s.textSecondary),
                   ),
                   SizedBox(height: AppTheme.metrics.kSpace12),
@@ -774,6 +775,7 @@ class _CollectionLibraryScreenState
                   children: [
                     if (inFolder)
                       FolderBreadcrumb(folderName: folderName, onBack: viewModel.exitFolder),
+                    LibraryImportProgressBanner(viewModel: viewModel),
                     Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: appMetrics.kSpace12,

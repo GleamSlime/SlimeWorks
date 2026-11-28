@@ -83,7 +83,7 @@ void main() {
     await open(tester);
 
     expect(find.text('请选择大模型'), findsOneWidget);
-    expect(find.text('未选择模型：仅导入书籍，不执行 AI 检测。'), findsOneWidget);
+    expect(find.text('未选择模型：导入后按现有关键词规则自动打标签。'), findsOneWidget);
     await tester.tap(find.text('使用大模型检测书籍（可选）'));
     await tester.pumpAndSettle();
     expect(find.text('model-a (host-a)'), findsOneWidget);
@@ -91,6 +91,7 @@ void main() {
     await tester.tap(find.text('model-a (host-a)'));
     await tester.pumpAndSettle();
     expect(find.textContaining('将使用 model-a'), findsOneWidget);
+    expect(find.textContaining('并跳过关键词自动打标签'), findsOneWidget);
   });
 
   testWidgets('扫描文件夹时默认按原目录归档且可关闭', (tester) async {

@@ -5,6 +5,8 @@ import 'package:slime_works/src/rust/api/novel_reader.dart'
         KeywordApplyBatchResult,
         KeywordRuleInput,
         NovelDetectionDocument,
+        NovelDetectionSample,
+        NovelChapter,
         NovelContent,
         NovelFolder,
         NovelMetadata,
@@ -102,12 +104,32 @@ Future<NovelDetectionDocument> sampleNovelForDetection({
 }) async {
   if (MockMode.enabled) {
     final content = _m.contents[filePath];
+    final chapters = content?.chapters ?? const <NovelChapter>[];
+    final limit = maxSampleChars.toInt();
+    final samples = <int>{0, chapters.length ~/ 2, chapters.length - 1}
+        .where((index) => index >= 0 && index < chapters.length)
+        .take(maxSamples.toInt())
+        .map((index) {
+          final chapter = chapters[index];
+          final text = (chapter.content ?? '').trim();
+          return NovelDetectionSample(
+            chapterIndex: chapter.index,
+            chapterTitle: chapter.title,
+            position: index == 0
+                ? '（开头）'
+                : index == chapters.length - 1
+                ? '（结尾）'
+                : '（中部）',
+            content: text.length > limit ? text.substring(0, limit) : text,
+          );
+        })
+        .toList();
     return NovelDetectionDocument(
       title: title,
       author: author,
-      totalChapters: BigInt.from(content?.chapters.length ?? 0),
-      sampledChapters: BigInt.zero,
-      samples: [],
+      totalChapters: BigInt.from(chapters.length),
+      sampledChapters: BigInt.from(samples.length),
+      samples: samples,
     );
   }
   return rust.sampleNovelForDetection(

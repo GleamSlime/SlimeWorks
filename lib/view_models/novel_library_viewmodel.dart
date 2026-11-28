@@ -74,6 +74,8 @@ class NovelLibraryViewModel extends BaseViewModel {
   final detectionCompleted = 0.obs;
   final detectionTotal = 0.obs;
   final detectionFailed = 0.obs;
+  final detectionSampleCompleted = 0.obs;
+  final detectionSampleTotal = 0.obs;
   final scanStatusText = ''.obs;
   final scanProgressText = ''.obs;
   final searchQuery = ''.obs;
