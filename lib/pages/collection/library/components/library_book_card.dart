@@ -17,6 +17,7 @@ import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/widgets/app_text_field.dart';
+import 'package:slime_works/core/widgets/novel_text_cover.dart';
 
 class LibraryBookCard extends StatefulWidget {
   final NovelMetadata metadata;
@@ -285,7 +286,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
     );
   }
 
-  void _showRemoteReaderDialog(BuildContext ctx) {
+  Future<void> _showRemoteReaderDialog(BuildContext ctx) async {
     final nodeId = widget.viewModel.getRemoteNodeId(widget.metadata.id);
     final nodeName = widget.viewModel.getNovelNodeName(widget.metadata.id);
     if (nodeId == null || nodeName == null) {
@@ -296,14 +297,19 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
     // 旧实现桌面端用 showDialog 弹窗，导致同一本书「本机打开是全屏阅读器、
     // 远程打开是个弹窗」，功能与观感都不一致（用户明确要求无感）。
     // 弹窗里还缺目录/沉浸/侧滑等能力，长期看只能废弃。
-    _pushBookOpenRoute(
-      RemoteNovelReaderPage(metadata: widget.metadata, nodeId: nodeId, nodeName: nodeName),
+    await _pushBookOpenRoute(
+      RemoteNovelReaderPage(
+        metadata: widget.metadata,
+        nodeId: nodeId,
+        nodeName: nodeName,
+        onFavoriteChanged: widget.viewModel.refreshRemoteNovels,
+      ),
     );
   }
 
-  void _pushBookOpenRoute(Widget page) {
+  Future<void> _pushBookOpenRoute(Widget page) async {
     final s = AppSemantic.of(context);
-    Navigator.of(context, rootNavigator: true).push(
+    await Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder<void>(
         // 页面转场：进场 slow、退场取相邻的 base 一档
         transitionDuration: AppMotion.slow,
@@ -325,7 +331,7 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
           );
         },
       ),
-    );
+    ).whenComplete(widget.viewModel.refreshRemoteNovels);
   }
 
   // ── UI ───────────────────────────────────────────────────────────────────
@@ -926,16 +932,9 @@ class _LibraryBookCardState extends State<LibraryBookCard> {
   Widget _buildDefaultCover() {
     return Hero(
       tag: 'book_cover_${widget.metadata.id}',
-      child: Container(
-        color: AppSemantic.of(context).border,
-        child: Center(
-          // 这是占位封面，本身要压得住 art 上的白字，所以图标走媒体 chrome 档而非主题语义色
-          child: DrawIcon(
-            StrokeIcons.book,
-            size: scaleW(40),
-            color: AppSemantic.of(context).onMediaSecondary,
-          ),
-        ),
+      child: NovelTextCover(
+        title: widget.metadata.title,
+        fontSize: scaleW(64),
       ),
     );
   }

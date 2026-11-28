@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
@@ -271,12 +273,14 @@ class RemoteNovelReaderPage extends StatefulWidget {
   final NovelMetadata metadata;
   final String nodeId;
   final String nodeName;
+  final Future<void> Function()? onFavoriteChanged;
 
   const RemoteNovelReaderPage({
     super.key,
     required this.metadata,
     required this.nodeId,
     required this.nodeName,
+    this.onFavoriteChanged,
   });
 
   @override
@@ -287,6 +291,12 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   final NodeSettingsService _service = getIt<NodeSettingsService>();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final PageController _pageController = PageController();
+  final TextEditingController _searchController = TextEditingController();
+  final List<String> _searchHistory = <String>[];
+  List<Map<String, dynamic>> _searchResults = <Map<String, dynamic>>[];
+  int _activeSearchIndex = -1;
+  String _searchQuery = '';
+  int _searchRequestId = 0;
   final List<GlobalKey> _chapterKeys = <GlobalKey>[];
 
   bool _loading = true;
@@ -302,6 +312,8 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   int _pageIndex = 0;
   int? _pendingPageTarget;
   double? _pendingPageFraction;
+  Timer? _progressSaveTimer;
+  Future<void> _progressWrites = Future<void>.value();
   Object? _paginationKey;
   bool _selectionActive = false;
   int? _pointerId;
@@ -426,7 +438,15 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   void _onPageChanged(int index) {
     if (_pageIndex == index) return;
     setState(() => _pageIndex = index);
+    _scheduleProgressSave();
     if (!_isImmersive.value) _scheduleImmersiveIdle();
+  }
+
+  void _scheduleProgressSave() {
+    _progressSaveTimer?.cancel();
+    _progressSaveTimer = Timer(const Duration(milliseconds: 350), () {
+      _persistProgress();
+    });
   }
 
   void _goToPage(int index) {
@@ -439,6 +459,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
       );
     } else {
       setState(() => _pageIndex = index);
+      _scheduleProgressSave();
     }
     if (!_isImmersive.value) _scheduleImmersiveIdle();
   }
@@ -450,6 +471,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
         _goToPage(_pageIndex + 1);
       } else if (_selected < _chapters.length - 1) {
         HapticFeedback.selectionClick();
+        _persistProgress();
         _loadChapter(_selected + 1, initialPage: 0);
       }
     } else {
@@ -457,6 +479,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
         _goToPage(_pageIndex - 1);
       } else if (_selected > 0) {
         HapticFeedback.selectionClick();
+        _persistProgress();
         _loadChapter(_selected - 1, initialPage: -1);
       }
     }
@@ -635,10 +658,8 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   /// 节点侧 `search_in_novel` 早就实现了，缺的一直是这个入口。
   void _showInBookSearch() {
     _setImmersive(false);
-    final controller = TextEditingController();
+    _searchController.text = _searchQuery;
     var searching = false;
-    var queried = false;
-    List<Map<String, dynamic>> results = <Map<String, dynamic>>[];
     String? err;
 
     showModalBottomSheet<void>(
@@ -649,8 +670,9 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
         return StatefulBuilder(
           builder: (ctx, setModal) {
             Future<void> runSearch() async {
-              final kw = controller.text.trim();
+              final kw = _searchController.text.trim();
               if (kw.isEmpty) return;
+              final requestId = ++_searchRequestId;
               setModal(() {
                 searching = true;
                 err = null;
@@ -661,18 +683,19 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                   filePath: widget.metadata.filePath,
                   keyword: kw,
                 );
-                if (!ctx.mounted) return;
-                setModal(() {
-                  results = found;
-                  queried = true;
-                  searching = false;
-                });
+                if (!ctx.mounted || requestId != _searchRequestId) return;
+                _searchResults = found;
+                _searchQuery = kw;
+                _activeSearchIndex = -1;
+                searching = false;
+                await _saveSearchHistory(kw);
+                if (!ctx.mounted || requestId != _searchRequestId) return;
+                setModal(() {});
               } catch (e) {
-                if (!ctx.mounted) return;
+                if (!ctx.mounted || requestId != _searchRequestId) return;
                 setModal(() {
                   err = e.toString();
                   searching = false;
-                  queried = true;
                 });
               }
             }
@@ -708,7 +731,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                           children: [
                             Expanded(
                               child: TextField(
-                                controller: controller,
+                                controller: _searchController,
                                 autofocus: true,
                                 textInputAction: TextInputAction.search,
                                 onSubmitted: (_) => runSearch(),
@@ -735,20 +758,46 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                           ],
                         ),
                       ),
+                      if (_searchHistory.isNotEmpty)
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppTheme.metrics.kSpace16,
+                          ),
+                          child: Wrap(
+                            spacing: AppTheme.metrics.kSpace8,
+                            runSpacing: AppTheme.metrics.kSpace4,
+                            children: [
+                              for (final keyword in _searchHistory)
+                                ActionChip(
+                                  label: Text(keyword),
+                                  onPressed: searching
+                                      ? null
+                                      : () {
+                                          _searchController.text = keyword;
+                                          runSearch();
+                                        },
+                                ),
+                            ],
+                          ),
+                        ),
                       SizedBox(height: AppTheme.metrics.kSpace12),
                       Expanded(
                         child: err != null
                             ? Center(child: Text('搜索失败: $err'))
-                            : !queried
-                            ? const Center(child: Text('输入关键词后点搜索'))
-                            : results.isEmpty
-                            ? const Center(child: Text('没有找到匹配内容'))
+                            : _searchResults.isEmpty
+                            ? Center(
+                                child: Text(
+                                  _searchQuery.isEmpty
+                                      ? '输入关键词后点搜索'
+                                      : '没有找到匹配内容',
+                                ),
+                              )
                             : ListView.separated(
-                                itemCount: results.length,
+                                itemCount: _searchResults.length,
                                 separatorBuilder: (_, _) =>
                                     const Divider(height: 1),
                                 itemBuilder: (_, i) {
-                                  final r = results[i];
+                                  final r = _searchResults[i];
                                   final idx =
                                       int.tryParse(
                                         '${r['chapter_index'] ?? 0}',
@@ -765,9 +814,17 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
+                                    trailing: i == _activeSearchIndex
+                                        ? DrawIcon(
+                                            StrokeIcons.chevronRight,
+                                            color: AppSemantic.of(
+                                              context,
+                                            ).accent,
+                                          )
+                                        : null,
                                     onTap: () {
                                       Navigator.of(ctx).pop();
-                                      _loadChapter(idx);
+                                      _jumpToSearchResult(i);
                                     },
                                   );
                                 },
@@ -781,7 +838,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
           },
         );
       },
-    ).whenComplete(controller.dispose);
+    );
   }
 
   void _showReaderSettingsSheet() {
@@ -885,8 +942,52 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
   @override
   void initState() {
     super.initState();
+    _loadSearchHistory();
     _load();
     _scheduleImmersiveIdle();
+  }
+
+  String get _searchHistoryKey =>
+      'novel_search_history:${widget.nodeId}:${widget.metadata.filePath}';
+
+  Future<void> _loadSearchHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final saved = jsonDecode(prefs.getString(_searchHistoryKey) ?? '[]');
+    if (saved is! List) return;
+    setState(() {
+      _searchHistory
+        ..clear()
+        ..addAll(saved.whereType<String>().take(20));
+    });
+  }
+
+  Future<void> _saveSearchHistory(String keyword) async {
+    _searchHistory
+      ..remove(keyword)
+      ..insert(0, keyword);
+    if (_searchHistory.length > 20) {
+      _searchHistory.removeRange(20, _searchHistory.length);
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_searchHistoryKey, jsonEncode(_searchHistory));
+  }
+
+  Future<void> _jumpToSearchResult(int index) async {
+    final result = _searchResults[index];
+    final chapter = int.tryParse('${result['chapter_index'] ?? 0}') ?? 0;
+    final position = int.tryParse('${result['position'] ?? 0}') ?? 0;
+    setState(() => _activeSearchIndex = index);
+    _setImmersive(false);
+    final loaded = await _loadChapter(chapter);
+    if (!mounted || !loaded || _selected != chapter) return;
+    final searchText = _readerSearchText(_chapterText);
+    final fraction = searchText.isEmpty || position <= 0
+        ? 0.0
+        : position / searchText.runes.length;
+    // 新正文尚未完成分页，必须等排版回调换算真实页码，不能沿用上一章页数。
+    _pendingPageFraction = fraction.clamp(0.0, 1.0);
+    _scheduleProgressSave();
   }
 
   /// 把 0~1 的进度换算成章节下标（夹在合法范围内）。
@@ -917,29 +1018,39 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
         novelId: raw,
         isFavorite: next,
       );
+      await widget.onFavoriteChanged?.call();
     } catch (e) {
       if (!mounted) return;
       setState(() => _isFavorite = !next);
-      debugPrint('切换远程收藏失败: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('收藏操作失败: $e')));
     }
   }
 
   /// 把当前章节位置写回节点（下次打开能续读）。
-  Future<void> _persistProgress() async {
-    if (_chapters.isEmpty) return;
+  Future<void> _persistProgress() {
+    _progressSaveTimer?.cancel();
+    if (_chapters.isEmpty || _chapterLoading) return Future<void>.value();
     final pageFraction = _pages.length <= 1
-        ? 1.0
+        ? 0.0
         : _pageIndex / (_pages.length - 1);
-    final progress = (_selected + pageFraction) / _chapters.length;
-    try {
-      await _service.updateNodeNovelProgress(
-        nodeId: widget.nodeId,
-        novelId: _rawNovelIdFor(widget.metadata.id),
-        progress: progress.clamp(0.0, 1.0),
-      );
-    } catch (e) {
-      debugPrint('保存远程阅读进度失败: $e');
-    }
+    final progress = ((_selected + pageFraction) / _chapters.length).clamp(
+      0.0,
+      1.0,
+    );
+    _progressWrites = _progressWrites.then((_) async {
+      try {
+        await _service.updateNodeNovelProgress(
+          nodeId: widget.nodeId,
+          novelId: _rawNovelIdFor(widget.metadata.id),
+          progress: progress,
+        );
+      } catch (e) {
+        debugPrint('保存远程阅读进度失败: $e');
+      }
+    });
+    return _progressWrites;
   }
 
   @override
@@ -948,6 +1059,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     _persistProgress();
     _immersiveTimer?.cancel();
     _pageController.dispose();
+    _searchController.dispose();
     _isImmersive.close();
     super.dispose();
   }
@@ -994,13 +1106,13 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
     }
   }
 
-  Future<void> _loadChapter(
+  Future<bool> _loadChapter(
     int index, {
     int? initialPage,
     double? pageFraction,
   }) async {
     if (index < 0 || index >= _chapters.length) {
-      return;
+      return false;
     }
 
     final requestId = ++_chapterRequestId;
@@ -1011,6 +1123,7 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
           : _furthestChapterReached;
       _chapterLoading = true;
       _chapterError = null;
+      _paginationKey = null;
       _pageIndex = 0;
       _selectionActive = false;
       _pendingPageTarget = initialPage;
@@ -1023,18 +1136,20 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
         filePath: widget.metadata.filePath,
         chapterIndex: index,
       );
-      if (!mounted || requestId != _chapterRequestId) return;
+      if (!mounted || requestId != _chapterRequestId) return false;
       setState(() {
         _chapterText = content;
         _chapterLoading = false;
       });
+      return true;
     } catch (e) {
-      if (!mounted || requestId != _chapterRequestId) return;
+      if (!mounted || requestId != _chapterRequestId) return false;
       setState(() {
         _chapterText = '';
         _chapterError = e.toString();
         _chapterLoading = false;
       });
+      return false;
     }
   }
 
@@ -1370,6 +1485,63 @@ class _RemoteNovelReaderPageState extends State<RemoteNovelReaderPage> {
                     ),
                   ),
 
+                  if (_activeSearchIndex >= 0 && _searchResults.isNotEmpty)
+                    Positioned(
+                      right: AppTheme.metrics.kSpace12,
+                      top: MediaQuery.sizeOf(context).height * 0.42,
+                      child: Material(
+                        key: const ValueKey<String>('reader-search-navigator'),
+                        color: s2.surface,
+                        elevation: 4,
+                        shadowColor: s2.shadowKey,
+                        borderRadius: appMetrics.radius12,
+                        child: Column(
+                          children: [
+                            IconButton(
+                              tooltip: '上一个搜索结果',
+                              onPressed: _activeSearchIndex > 0
+                                  ? () => _jumpToSearchResult(
+                                      _activeSearchIndex - 1,
+                                    )
+                                  : null,
+                              icon: DrawIcon(StrokeIcons.expandLess),
+                            ),
+                            Text(
+                              '${_activeSearchIndex + 1}/${_searchResults.length}',
+                              key: const ValueKey<String>(
+                                'reader-search-position',
+                              ),
+                              style: AppTextStyles.role(
+                                context,
+                                fontSize: appMetrics.fontSize11,
+                                color: s2.textSecondary,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: '下一个搜索结果',
+                              onPressed:
+                                  _activeSearchIndex < _searchResults.length - 1
+                                  ? () => _jumpToSearchResult(
+                                      _activeSearchIndex + 1,
+                                    )
+                                  : null,
+                              icon: DrawIcon(StrokeIcons.expandMore),
+                            ),
+                            IconButton(
+                              tooltip: '关闭搜索结果',
+                              onPressed: () => setState(() {
+                                _activeSearchIndex = -1;
+                                _searchResults = <Map<String, dynamic>>[];
+                                _searchQuery = '';
+                                _searchController.clear();
+                              }),
+                              icon: DrawIcon(StrokeIcons.close),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
                   // ── 底部 BottomBar 覆盖层（沉浸时下滑隐藏）──────────────
                   Positioned(
                     bottom: 0,
@@ -1454,6 +1626,20 @@ String _readerHtmlToPlainText(String html) {
     '\n\n',
   );
   text = text.replaceAll(RegExp(r'<[^>]+>', dotAll: true), '');
+  text = _readerDecodeEntities(text);
+  text = text
+      .replaceAll(RegExp(r'[ \t]+\n'), '\n')
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n');
+  return text.trim();
+}
+
+String _readerSearchText(String html) {
+  return _readerDecodeEntities(
+    html.replaceAll(RegExp(r'<[^>]+>', dotAll: true), ''),
+  );
+}
+
+String _readerDecodeEntities(String text) {
   text = text
       .replaceAll('&nbsp;', ' ')
       .replaceAll('&amp;', '&')
@@ -1464,13 +1650,9 @@ String _readerHtmlToPlainText(String html) {
   text = text.replaceAllMapped(RegExp(r'&#(\d+);'), (match) {
     return _readerDecodeCodePoint(int.tryParse(match.group(1)!));
   });
-  text = text.replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (match) {
+  return text.replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (match) {
     return _readerDecodeCodePoint(int.tryParse(match.group(1)!, radix: 16));
   });
-  text = text
-      .replaceAll(RegExp(r'[ \t]+\n'), '\n')
-      .replaceAll(RegExp(r'\n{3,}'), '\n\n');
-  return text.trim();
 }
 
 String _readerDecodeCodePoint(int? code) {
@@ -1689,10 +1871,18 @@ class _RemoteReaderBottomBar extends StatelessWidget {
                   IconButton(
                     tooltip: isFavorite ? '取消收藏' : '收藏',
                     onPressed: onToggleFavorite,
-                    icon: DrawIcon(
-                      isFavorite
-                          ? StrokeIcons.favorite
-                          : StrokeIcons.favoriteBorder,
+                    icon: AnimatedSwitcher(
+                      duration: AppMotion.fast,
+                      switchInCurve: AppMotion.decelerate,
+                      switchOutCurve: AppMotion.accelerate,
+                      transitionBuilder: (child, animation) =>
+                          ScaleTransition(scale: animation, child: child),
+                      child: DrawIcon(
+                        isFavorite
+                            ? StrokeIcons.favorite
+                            : StrokeIcons.favoriteBorder,
+                        key: ValueKey<bool>(isFavorite),
+                      ),
                     ),
                   ),
                   IconButton(

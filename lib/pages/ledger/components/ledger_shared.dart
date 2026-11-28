@@ -703,7 +703,7 @@ class LedgerBottomNav extends StatelessWidget {
     final right = kLedgerPrimaryNav.skip(2).toList(growable: false);
     return Container(
       decoration: BoxDecoration(
-        color: s.surface,
+        color: AppTheme.mobileChromeColor(s.isDark),
         border: Border(top: BorderSide(color: s.hairline)),
       ),
       child: SafeArea(

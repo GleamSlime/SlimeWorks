@@ -177,7 +177,13 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   }
 
   void exitFolder() {
-    currentFolderId.value = null;
+    final folderId = currentFolderId.value;
+    final folder = folderId == null
+        ? null
+        : isRemoteFolderId(folderId)
+        ? _buildRemoteVirtualFolders().firstWhereOrNull((f) => f.id == folderId)
+        : folders.firstWhereOrNull((f) => f.id == folderId);
+    currentFolderId.value = folder?.parentId;
     exitSelection();
     resetPagination();
   }
@@ -913,6 +919,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
           isFavorite: !novel.isFavorite,
         );
         await refreshRemoteNovels();
+        showSnack('成功', novel.isFavorite ? '已取消收藏' : '已添加到收藏');
         return;
       }
 

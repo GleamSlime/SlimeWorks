@@ -6,6 +6,7 @@ import 'package:slime_works/core/index.dart';
 import 'package:slime_works/pages/collection/library/components/library_item.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
+import 'package:slime_works/core/widgets/novel_text_cover.dart';
 
 /// 拖拽排序时在目标前方显示的半透明"幽灵"占位卡
 class GhostPlaceholderCard extends StatefulWidget {
@@ -38,7 +39,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
 
   /// 幽灵占位的封面：支持本地文件 / data URI / 远程按需 URL；
   /// 任何缺失/失败都回退纯色底（占位卡不需要精确的丢失语义）
-  Widget _buildGhostCover(String? path, Color fallbackColor) {
+  Widget _buildGhostCover(String? path, String title) {
     if (path != null && path.isNotEmpty) {
       try {
         if (path.startsWith('http://') || path.startsWith('https://')) {
@@ -46,7 +47,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
             path,
             fit: BoxFit.cover,
             cacheWidth: 200,
-            errorBuilder: (_, _, _) => Container(color: fallbackColor),
+            errorBuilder: (_, _, _) => NovelTextCover(title: title, fontSize: 40),
           );
         }
         if (path.startsWith('data:image/')) {
@@ -60,7 +61,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
         }
       } catch (_) {}
     }
-    return Container(color: fallbackColor);
+    return NovelTextCover(title: title, fontSize: 40);
   }
 
   @override
@@ -72,7 +73,7 @@ class _GhostPlaceholderCardState extends State<GhostPlaceholderCard>
       content = Stack(
         fit: StackFit.expand,
         children: [
-          _buildGhostCover(meta.coverPath, s.border),
+          _buildGhostCover(meta.coverPath, meta.title),
           Positioned(
             left: 0,
             right: 0,

@@ -5,6 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/provider/screen_chrome.dart';
 import 'package:slime_works/core/provider/screen_provider.dart';
+import 'package:slime_works/core/theme/app_semantics.dart';
+import 'package:slime_works/core/theme/app_theme.dart';
 
 /// 页面 Chrome 管理器
 ///
@@ -24,7 +26,8 @@ class ScreenChrome extends StatefulWidget {
 
 class _ScreenChromeState extends State<ScreenChrome> {
   final Object _owner = Object();
-  late final DesktopScreenProvider _desktopScreen = getIt<DesktopScreenProvider>();
+  late final DesktopScreenProvider _desktopScreen =
+      getIt<DesktopScreenProvider>();
 
   /// 是否使用本地 Scaffold 渲染（移动端 或 桌面端窄屏模式 或 forceLocalChrome）
   bool get _useLocalChrome {
@@ -105,8 +108,14 @@ class _ScreenChromeState extends State<ScreenChrome> {
       // 移动端不铺整条面包屑：窄屏上"← 当前项"就够了，层级由返回手势承担
       final title = data.hasBreadcrumb
           ? Text(data.breadcrumb!.last.label)
-          : (data.titleWidget ?? (data.title != null ? Text(data.title!) : null));
+          : (data.titleWidget ??
+                (data.title != null ? Text(data.title!) : null));
+      final semantic = AppSemantic.of(context);
       appBar = AppBar(
+        backgroundColor: AppTheme.mobileChromeColor(semantic.isDark),
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         leading: data.hasLeading ? data.leading : null,
         automaticallyImplyLeading: !data.hasLeading,
         title: title,
@@ -128,9 +137,14 @@ class _ScreenChromeState extends State<ScreenChrome> {
     Widget? bottomBar;
     if (data.hasBottomBar) {
       final h = data.bottomBarHeight;
-      bottomBar = h != null && h > 0
-          ? SizedBox(height: h, child: data.bottomBar)
-          : data.bottomBar;
+      bottomBar = Material(
+        color: AppTheme.mobileChromeColor(AppSemantic.of(context).isDark),
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        child: h != null && h > 0
+            ? SizedBox(height: h, child: data.bottomBar)
+            : data.bottomBar,
+      );
     }
 
     return Scaffold(

@@ -103,6 +103,28 @@ class NovelReaderViewModel extends GetxController {
     });
   }
 
+  double currentChapterFraction = 0;
+  int _chapterRequestId = 0;
+
+  void _saveProgress() {
+    if (chapters.isEmpty) return;
+    final progress = ((currentChapterIndex.value + currentChapterFraction) /
+            chapters.length)
+        .clamp(0.0, 1.0);
+    try {
+      updateReadingProgress(novelId: novel.id, progress: progress);
+    } catch (e) {
+      _logger.info('[Novel UI] Failed to save progress: $e');
+    }
+  }
+
+  void updateChapterFraction(double fraction) {
+    final next = fraction.isFinite ? fraction.clamp(0.0, 1.0) : 0.0;
+    if ((next - currentChapterFraction).abs() < 0.001) return;
+    currentChapterFraction = next;
+    _saveProgress();
+  }
+
   @override
   void onClose() {
     // 关闭页面时，立即取消所有翻译任务
@@ -143,9 +165,8 @@ class NovelReaderViewModel extends GetxController {
     // 退出阅读器时保存当前阅读位置
     try {
       if (chapters.isNotEmpty) {
-        final progress = (currentChapterIndex.value + 1) / (chapters.length);
-        updateReadingProgress(novelId: novel.id, progress: progress);
-        _logger.info('[Novel UI] Saved progress $progress for novel ${novel.id} on close');
+        _saveProgress();
+        _logger.info('[Novel UI] Saved reading position on close');
       }
     } catch (e) {
       _logger.info('[Novel UI] Failed to save progress on close: $e');
@@ -223,9 +244,10 @@ class NovelReaderViewModel extends GetxController {
         try {
           final p = novel.progress;
           if (p > 0) {
-            startIndex = (p * len).ceil() - 1;
+            startIndex = (p * len).floor();
             if (startIndex < 0) startIndex = 0;
             if (startIndex >= len) startIndex = len - 1;
+            currentChapterFraction = (p * len - startIndex).clamp(0.0, 1.0);
           }
         } catch (_) {
           startIndex = 0;
@@ -238,7 +260,7 @@ class NovelReaderViewModel extends GetxController {
         _logger.info('[Novel UI] Set currentChapterIndex to $startIndex before loading content');
 
         final beforeChapter = DateTime.now();
-        await loadChapterContent(startIndex);
+        await loadChapterContent(startIndex, initialFraction: currentChapterFraction);
         final chapterLoadMs = DateTime.now().difference(beforeChapter).inMilliseconds;
         _logger.info('[Novel UI] Initial chapter load took ${chapterLoadMs}ms');
       }
@@ -262,8 +284,10 @@ class NovelReaderViewModel extends GetxController {
   }
 
   /// 加载章节内容
-  Future<void> loadChapterContent(int index) async {
+  Future<void> loadChapterContent(int index, {double initialFraction = 0}) async {
     if (index < 0 || index >= chapters.length) return;
+    currentChapterFraction = initialFraction.clamp(0.0, 1.0);
+    final requestId = ++_chapterRequestId;
 
     // 切换章节时取消正在进行的翻译
     _cancelTranslation();
@@ -283,6 +307,7 @@ class NovelReaderViewModel extends GetxController {
         filePath: novel.filePath,
         chapterIndex: BigInt.from(index),
       );
+      if (requestId != _chapterRequestId) return;
       final rustDuration = DateTime.now().difference(beforeRust);
       final contentLenKB = (content.length / 1024).toStringAsFixed(1);
 
@@ -295,27 +320,26 @@ class NovelReaderViewModel extends GetxController {
       _logger.info('[Novel UI] Updated currentContent.value');
 
       // 更新阅读进度
-      final progress = (index + 1) / chapters.length;
-      updateReadingProgress(novelId: novel.id, progress: progress);
-      _logger.info(
-        '[Reader] Updated progress for ${novel.title} to ${(progress * 100).toStringAsFixed(1)}% (chapter ${index + 1}/${chapters.length})',
-      );
+      _saveProgress();
 
       final now = DateTime.now();
       final totalDuration = now.millisecondsSinceEpoch - startMs;
       _logger.info('[Novel UI] --- Chapter display ready in ${totalDuration}ms ---');
     } catch (e, stackTrace) {
+      if (requestId != _chapterRequestId) return;
       final now = DateTime.now();
       final duration = now.millisecondsSinceEpoch - startMs;
       _logger.info('[Novel UI] *** ERROR loading chapter after ${duration}ms: $e ***');
       _logger.info('[Novel UI] Stack trace: $stackTrace');
       errorMessage.value = '加载章节失败: $e';
     } finally {
-      isLoading.value = false;
+      if (requestId == _chapterRequestId) {
+        isLoading.value = false;
 
-      // 在章节显示后异步执行翻译（不阻塞显示）
-      if (isAutoTranslateEnabled.value && translationModel.value != null) {
-        translateCurrentChapter();
+        // 在章节显示后异步执行翻译（不阻塞显示）
+        if (isAutoTranslateEnabled.value && translationModel.value != null) {
+          translateCurrentChapter();
+        }
       }
     }
   }

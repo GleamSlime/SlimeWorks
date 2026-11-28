@@ -41,6 +41,8 @@ class ReaderContent extends StatefulWidget {
   final EdgeInsets? contentPadding;
   final VoidCallback? onSwipeToPreviousChapter;
   final VoidCallback? onSwipeToNextChapter;
+  /// 当前章内的滚动比例，用于保存和恢复阅读位置
+  final ValueChanged<double>? onProgressChanged;
 
   const ReaderContent({
     super.key,
@@ -48,6 +50,7 @@ class ReaderContent extends StatefulWidget {
     this.contentPadding,
     this.onSwipeToPreviousChapter,
     this.onSwipeToNextChapter,
+    this.onProgressChanged,
   });
 
   @override
@@ -60,6 +63,7 @@ class _ReaderContentState extends State<ReaderContent> {
   late final ScrollController _scrollController;
   bool _showPlainTextMode = false;
   int _lastChapterIndex = -1;
+  String? _lastProgressContent;
   final GlobalKey _searchTargetKey = GlobalKey();
   double _leadingOverscroll = 0;
   double _trailingOverscroll = 0;
@@ -281,6 +285,17 @@ class _ReaderContentState extends State<ReaderContent> {
   }
 
   bool _handleChapterSwipeNotification(ScrollNotification notification) {
+    if ((notification is ScrollEndNotification ||
+            notification is UserScrollNotification &&
+                notification.direction == ScrollDirection.idle) &&
+        notification.depth == 0 &&
+        !widget.controller.isLoading.value &&
+        notification.metrics.maxScrollExtent > 0) {
+      widget.onProgressChanged?.call(
+        (notification.metrics.pixels / notification.metrics.maxScrollExtent)
+            .clamp(0.0, 1.0),
+      );
+    }
     if (widget.onSwipeToPreviousChapter == null && widget.onSwipeToNextChapter == null) {
       return false;
     }
@@ -466,14 +481,30 @@ class _ReaderContentState extends State<ReaderContent> {
       final shouldRenderHtml = _containsHtmlTags || _hasImages;
       final hasImages = _hasImages;
 
-      // 仅在章节变化时滚动到顶部（避免每次 rebuild 都滚动）
+      // 章节索引会先于正文更新，需等对应正文完成布局后再恢复位置
       final currentIndex = controller.currentChapterIndex.value;
-      if (currentIndex != _lastChapterIndex) {
+      if (currentIndex != _lastChapterIndex ||
+          currentContent != _lastProgressContent) {
+        final fraction = controller.currentChapterFraction;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _scrollToTop();
+          if (!mounted ||
+              controller.currentChapterIndex.value != currentIndex ||
+              controller.currentContent.value != currentContent) {
+            return;
+          }
+          if (_scrollController.hasClients &&
+              _scrollController.position.maxScrollExtent > 0 &&
+              fraction > 0) {
+            _scrollController.jumpTo(
+              _scrollController.position.maxScrollExtent * fraction,
+            );
+          } else {
+            _scrollToTop();
+          }
         });
-        _resetChapterSwipe();
+        if (currentIndex != _lastChapterIndex) _resetChapterSwipe();
         _lastChapterIndex = currentIndex;
+        _lastProgressContent = currentContent;
       }
 
       // 根据内容大小选择渲染策略

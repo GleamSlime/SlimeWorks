@@ -15,6 +15,7 @@ import 'package:slime_works/core/theme/app_semantics.dart';
 import 'package:slime_works/core/theme/app_theme.dart';
 import 'package:slime_works/core/utils/size_utils.dart';
 import 'package:slime_works/core/utils/logger.dart';
+import 'package:slime_works/core/widgets/novel_text_cover.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
 
 import 'package:slime_works/view_models/novel_library_viewmodel.dart';
@@ -316,6 +317,7 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                             return ReaderContent(
                               controller: controller,
                               contentPadding: _mobileReaderContentPadding(context),
+                              onProgressChanged: controller.updateChapterFraction,
                               onSwipeToPreviousChapter: controller.hasPreviousChapter()
                                   ? controller.previousChapter
                                   : null,
@@ -586,7 +588,10 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
                         return _buildErrorView();
                       }
 
-                      return ReaderContent(controller: controller);
+                      return ReaderContent(
+                        controller: controller,
+                        onProgressChanged: controller.updateChapterFraction,
+                      );
                     }),
                   ),
                 ],
@@ -654,15 +659,14 @@ class _NovelReaderPageState extends State<NovelReaderPage> {
   }
 
   Widget _defaultCoverThumb(double size) {
-    final s = AppSemantic.of(context);
-    return Container(
+    return SizedBox(
       width: size,
       height: size * 1.4,
-      decoration: BoxDecoration(
-        color: s.surfaceSunken,
+      child: NovelTextCover(
+        title: novel.title,
+        fontSize: size * 0.7,
         borderRadius: AppTheme.metrics.radius4,
       ),
-      child: DrawIcon(StrokeIcons.book, size: size * 0.5, color: s.textTertiary),
     );
   }
 }

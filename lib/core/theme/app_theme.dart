@@ -21,6 +21,10 @@ const Loggers _logger = Loggers(name: '主题');
 ThemeMetrics get appMetrics => AppTheme.metrics;
 
 class AppTheme {
+  static Color mobileChromeColor(bool isDark) {
+    final canvas = isDark ? AppSurfaces.darkCanvas : AppSurfaces.lightCanvas;
+    return Color.lerp(canvas, Colors.white, isDark ? 0.06 : 0.12)!;
+  }
   AppTheme._();
 
   static ThemeMode themeMode = ThemeMode.system;

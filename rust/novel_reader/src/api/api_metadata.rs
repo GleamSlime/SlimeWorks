@@ -12,14 +12,13 @@ pub fn update_reading_progress(novel_id: String, progress: f32) -> Result<bool, 
     let mut library = get_library().lock().map_err(|e| e.to_string())?;
 
     if let Some(novel) = library.iter_mut().find(|n| n.id == novel_id) {
-        novel.progress = progress.clamp(0.0, 1.0);
-        novel.last_read_at = Some(chrono::Utc::now());
-
-        // 持久化到数据库
-        if let Ok(json) = serde_json::to_string(&novel) {
-            let _ = db_module::db_set("novels".to_string(), novel.id.clone(), json);
-        }
-
+        let mut updated = novel.clone();
+        updated.progress = progress.clamp(0.0, 1.0);
+        updated.last_read_at = Some(chrono::Utc::now());
+        let json = serde_json::to_string(&updated).map_err(|e| e.to_string())?;
+        db_module::db_set("novels".to_string(), updated.id.clone(), json)
+            .map_err(|e| e.to_string())?;
+        *novel = updated;
         Ok(true)
     } else {
         Ok(false)

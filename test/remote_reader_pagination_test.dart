@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -40,12 +42,18 @@ Future<_StubNodeSettingsService> _mountReader(
   double progress = 0,
   String firstChapter = '',
   String secondChapter = '第二章正文很短。',
+  bool failFavorite = false,
+  bool resetPreferences = true,
+  Future<void> Function()? onFavoriteChanged,
 }) async {
-  SharedPreferences.setMockInitialValues(<String, Object>{});
+  if (resetPreferences) {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  }
   await getIt.reset();
   final service = _StubNodeSettingsService(
     firstChapter: firstChapter.isEmpty ? _longChapter('甲') : firstChapter,
     secondChapter: secondChapter,
+    failFavorite: failFavorite,
   );
   getIt.registerSingleton<NodeSettingsService>(service);
 
@@ -67,6 +75,7 @@ Future<_StubNodeSettingsService> _mountReader(
       metadata: metadata,
       nodeId: 'node-1',
       nodeName: '测试节点',
+      onFavoriteChanged: onFavoriteChanged,
     ),
     size: _phoneSize,
     designSize: _phoneSize,
@@ -274,6 +283,236 @@ void main() {
     expect(service.progressWrites.last, closeTo(expected, 0.000001));
   });
 
+  testWidgets('搜索历史与结果重开保留，悬浮导航可上下切换', (tester) async {
+    final service = await _mountReader(tester);
+    await tester.tap(find.byTooltip('搜索'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '山间');
+    await tester.tap(find.text('搜索'));
+    await tester.pumpAndSettle();
+    expect(find.text('命中一'), findsOneWidget);
+    expect(find.text('命中二'), findsOneWidget);
+
+    await tester.tap(find.text('命中一'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('reader-search-navigator')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey<String>('reader-search-position')),
+          )
+          .data,
+      '1/2',
+    );
+
+    await tester.tap(find.byTooltip('下一个搜索结果'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey<String>('reader-search-position')),
+          )
+          .data,
+      '2/2',
+    );
+    expect(_currentPage(tester), greaterThan(1));
+
+    await tester.tap(find.byTooltip('搜索'));
+    await tester.pumpAndSettle();
+    expect(find.text('命中一'), findsOneWidget);
+    expect(find.text('命中二'), findsOneWidget);
+    expect(find.widgetWithText(ActionChip, '山间'), findsOneWidget);
+    Navigator.of(tester.element(find.byType(BottomSheet))).pop();
+    await tester.pumpAndSettle();
+
+    await unmountPage(tester);
+    await _mountReader(tester, resetPreferences: false);
+    await tester.tap(find.byTooltip('搜索'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ActionChip, '山间'), findsOneWidget);
+    expect(service.searchKeywords, <String>['山间']);
+  });
+
+  testWidgets('搜索请求乱序返回时，旧响应不能覆盖新结果', (tester) async {
+    final service = await _mountReader(tester);
+    final oldRequest = Completer<List<Map<String, dynamic>>>();
+    final newRequest = Completer<List<Map<String, dynamic>>>();
+    service.searchOverrides['旧词'] = oldRequest;
+    service.searchOverrides['新词'] = newRequest;
+
+    await tester.tap(find.byTooltip('搜索'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '旧词');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), '新词');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+
+    newRequest.complete(<Map<String, dynamic>>[
+      <String, dynamic>{
+        'chapter_index': 0,
+        'chapter_title': '第一章',
+        'snippet': '新结果',
+        'position': 0,
+      },
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('新结果'), findsOneWidget);
+
+    oldRequest.complete(<Map<String, dynamic>>[
+      <String, dynamic>{
+        'chapter_index': 0,
+        'chapter_title': '第一章',
+        'snippet': '旧结果',
+        'position': 0,
+      },
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('新结果'), findsOneWidget);
+    expect(find.text('旧结果'), findsNothing);
+    expect(find.widgetWithText(ActionChip, '新词'), findsOneWidget);
+    expect(find.widgetWithText(ActionChip, '旧词'), findsNothing);
+  });
+
+  testWidgets('HTML 与表情章节按节点字符下标定位搜索命中', (tester) async {
+    final before = List.generate(
+      80,
+      (i) => '<p>😀第${i + 1}段，山间的风穿过竹林。</p>',
+    ).join();
+    final after = List.generate(
+      80,
+      (i) => '<p>第${i + 81}段，远处传来脚步声。</p>',
+    ).join();
+    final html = '<p>$before山间目标$after</p>';
+    final clean = html.replaceAll(RegExp(r'<[^>]+>', dotAll: true), '');
+    final position = clean.indexOf('山间目标');
+    final service = await _mountReader(tester, firstChapter: html);
+    service.searchResultsOverride = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'chapter_index': 0,
+        'chapter_title': '第一章',
+        'snippet': '命中目标',
+        'position': position,
+      },
+    ];
+
+    await tester.tap(find.byTooltip('搜索'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '山间目标');
+    await tester.tap(find.text('搜索'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('命中目标'));
+    await tester.pumpAndSettle();
+
+    final pages = _totalPages(tester);
+    final fraction = position / clean.runes.length;
+    final expected = (fraction * (pages - 1)).round();
+    expect(_currentPage(tester), inInclusiveRange(expected, expected + 1));
+    expect(_currentPage(tester), greaterThan(1));
+  });
+
+  testWidgets('连续跳转搜索结果时，旧章节响应不能覆盖新章节', (tester) async {
+    final service = await _mountReader(tester);
+    final first = Completer<String>();
+    final second = Completer<String>();
+    service.chapterOverrides[0] = first;
+    service.chapterOverrides[1] = second;
+    service.secondResultChapter = 1;
+
+    Future<void> pumpFrames() async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+    }
+
+    Future<void> openResults() async {
+      await tester.tap(find.byTooltip('搜索'));
+      await pumpFrames();
+      await tester.enterText(find.byType(TextField), '山间');
+      await tester.tap(find.text('搜索'));
+      await pumpFrames();
+    }
+
+    await openResults();
+    await tester.tap(find.text('命中一'));
+    await pumpFrames();
+    await openResults();
+    await tester.tap(find.text('命中二'));
+    await pumpFrames();
+
+    second.complete('第二章正文很短。');
+    await pumpFrames();
+    expect(find.text('第二章'), findsOneWidget);
+
+    first.complete(_longChapter('旧响应'));
+    await pumpFrames();
+    expect(find.text('第二章'), findsOneWidget);
+    expect(service.progressWrites, <double>[0.5]);
+  });
+
+  testWidgets('远程收藏立即播放动画，成功后通知书库刷新', (tester) async {
+    var refreshes = 0;
+    final service = await _mountReader(
+      tester,
+      onFavoriteChanged: () async {
+        refreshes++;
+      },
+    );
+    expect(
+      find.descendant(
+        of: find.byTooltip('收藏'),
+        matching: find.byType(AnimatedSwitcher),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('收藏'));
+    await tester.pumpAndSettle();
+
+    expect(service.favoriteWrites, <bool>[true]);
+    expect(refreshes, 1);
+    expect(find.byTooltip('取消收藏'), findsOneWidget);
+  });
+
+  testWidgets('远程收藏失败回滚图标并显示错误', (tester) async {
+    final service = await _mountReader(tester, failFavorite: true);
+
+    await tester.tap(find.byTooltip('收藏'));
+    await tester.pumpAndSettle();
+
+    expect(service.favoriteWrites, <bool>[true]);
+    expect(find.byTooltip('收藏'), findsOneWidget);
+    expect(find.textContaining('收藏操作失败'), findsOneWidget);
+  });
+
+  testWidgets('翻页立即保存进度，重新打开恢复到同一页', (tester) async {
+    final service = await _mountReader(tester);
+    final initial = _currentPage(tester);
+    await _tapReader(tester, _phoneSize.width * 0.9);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(service.progressWrites.last, greaterThan(0));
+    await unmountPage(tester);
+    final saved = service.progressWrites.last;
+
+    await _mountReader(tester, progress: saved, resetPreferences: false);
+    expect(_currentPage(tester), initial + 1);
+  });
+
+  testWidgets('单页章节保存章节起点，不跳到下一章', (tester) async {
+    final service = await _mountReader(tester);
+    await tester.tap(find.byTooltip('章节列表'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第二章'));
+    await tester.pumpAndSettle();
+    await unmountPage(tester);
+
+    expect(service.progressWrites.last, 0.5);
+  });
+
   testWidgets('字号设置会重排页数，目录显示当前位置和已读章节', (tester) async {
     final service = await _mountReader(tester);
     final initialPages = _totalPages(tester);
@@ -350,12 +589,22 @@ class _StubNodeSettingsService extends NodeSettingsService {
   _StubNodeSettingsService({
     required this.firstChapter,
     this.secondChapter = '第二章正文很短。',
+    this.failFavorite = false,
   });
 
   final String firstChapter;
   final String secondChapter;
+  final bool failFavorite;
   final List<int> chapterRequests = <int>[];
   final List<double> progressWrites = <double>[];
+  final List<bool> favoriteWrites = <bool>[];
+  final List<String> searchKeywords = <String>[];
+  int secondResultChapter = 0;
+  List<Map<String, dynamic>>? searchResultsOverride;
+  final Map<String, Completer<List<Map<String, dynamic>>>> searchOverrides =
+      <String, Completer<List<Map<String, dynamic>>>>{};
+  final Map<int, Completer<String>> chapterOverrides =
+      <int, Completer<String>>{};
 
   @override
   Future<List<Map<String, dynamic>>> fetchNodeNovelContent({
@@ -375,7 +624,45 @@ class _StubNodeSettingsService extends NodeSettingsService {
     required int chapterIndex,
   }) async {
     chapterRequests.add(chapterIndex);
+    final pending = chapterOverrides[chapterIndex];
+    if (pending != null) return pending.future;
     return chapterIndex == 0 ? firstChapter : secondChapter;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> searchInNodeNovel({
+    required String nodeId,
+    required String filePath,
+    required String keyword,
+  }) async {
+    searchKeywords.add(keyword);
+    final pending = searchOverrides[keyword];
+    if (pending != null) return pending.future;
+    if (searchResultsOverride != null) return searchResultsOverride!;
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'chapter_index': 0,
+        'chapter_title': '第一章',
+        'snippet': '命中一',
+        'position': 0,
+      },
+      <String, dynamic>{
+        'chapter_index': secondResultChapter,
+        'chapter_title': '第二章',
+        'snippet': '命中二',
+        'position': firstChapter.length ~/ 2,
+      },
+    ];
+  }
+
+  @override
+  Future<void> setNodeNovelFavorite({
+    required String nodeId,
+    required String novelId,
+    required bool isFavorite,
+  }) async {
+    favoriteWrites.add(isFavorite);
+    if (failFavorite) throw StateError('节点离线');
   }
 
   @override

@@ -26,8 +26,12 @@ void main() {
   final readerSrc = File(
     'lib/pages/collection/library/components/remote_novel_reader_dialog.dart',
   ).readAsStringSync();
-  final libPageSrc = File('lib/pages/novel_library/novel_library_page.dart').readAsStringSync();
-  final svcSrc = File('lib/core/services/node/node_settings_service.dart').readAsStringSync();
+  final libPageSrc = File(
+    'lib/pages/novel_library/novel_library_page.dart',
+  ).readAsStringSync();
+  final svcSrc = File(
+    'lib/core/services/node/node_settings_service.dart',
+  ).readAsStringSync();
 
   group('书中搜索', () {
     test('客户端必须真的调用 search_in_novel', () {
@@ -46,11 +50,10 @@ void main() {
     test('阅读页要有搜索入口，且搜索结果能跳到对应章节', () {
       expect(readerSrc.contains('_showInBookSearch'), isTrue);
       expect(readerSrc.contains("tooltip: '搜索'"), isTrue);
-      // 点结果必须调 _loadChapter，否则搜到了也跳不过去
       expect(
-        readerSrc.contains('_loadChapter(idx)'),
+        readerSrc.contains('_jumpToSearchResult(i)'),
         isTrue,
-        reason: '搜索命中项点击后应跳到那一章',
+        reason: '搜索命中项点击后应跳到那一章并定位到正文位置',
       );
     });
   });
@@ -96,9 +99,32 @@ void main() {
     });
   });
 
+  group('远程阅读返回列表刷新', () {
+    test('两个远程阅读入口都刷新节点书库，收藏与进度不滞留', () {
+      expect(
+        RegExp(r'onFavoriteChanged:\s*controller\.refreshRemoteNovels').hasMatch(libPageSrc),
+        isTrue,
+      );
+      expect(libPageSrc.contains('await controller.refreshRemoteNovels();'), isTrue);
+      final cardSrc = File(
+        'lib/pages/collection/library/components/library_book_card.dart',
+      ).readAsStringSync();
+      expect(
+        cardSrc.contains('onFavoriteChanged: widget.viewModel.refreshRemoteNovels'),
+        isTrue,
+      );
+      expect(
+        cardSrc.contains('whenComplete(widget.viewModel.refreshRemoteNovels)'),
+        isTrue,
+      );
+    });
+  });
+
   group('节点搜索 API 形状', () {
     test('searchInNodeNovel 参数与返回字段正确', () async {
-      SharedPreferences.setMockInitialValues(<String, Object>{'node_local_enabled': false});
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'node_local_enabled': false,
+      });
       await getIt.reset();
       getIt.registerSingleton<NodeSettingsService>(NodeSettingsService());
       final svc = getIt<NodeSettingsService>();

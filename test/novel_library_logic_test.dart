@@ -547,6 +547,46 @@ void main() {
       expect(vm.displayedItemCount.value, 100);
       expect(vm.isSelecting.value, isFalse);
     });
+
+    test('exitFolder 逐级返回父目录，顶级文件夹才返回根目录', () {
+      vm.folders.assignAll([
+        dir('root'),
+        dir('child', parentId: 'root'),
+        dir('grandchild', parentId: 'child'),
+      ]);
+
+      vm.enterFolder('grandchild');
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, 'child');
+
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, 'root');
+
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, isNull);
+    });
+
+    test('exitFolder 远程目录同样逐级返回父目录', () {
+      vm.remoteFolderRows.assignAll(<String, Map<String, dynamic>>{
+        'remote-folder:node-a:root': <String, dynamic>{
+          'name': '根目录',
+          'parent_id': null,
+          'order': 0,
+        },
+        'remote-folder:node-a:child': <String, dynamic>{
+          'name': '子目录',
+          'parent_id': 'root',
+          'order': 0,
+        },
+      });
+
+      vm.enterFolder('remote-folder:node-a:child');
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, 'remote-folder:node-a:root');
+
+      vm.exitFolder();
+      expect(vm.currentFolderId.value, isNull);
+    });
   });
 
   // ── 标签过滤 ───────────────────────────────────────────────────────────────

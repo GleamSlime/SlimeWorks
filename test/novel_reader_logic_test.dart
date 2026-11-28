@@ -9,15 +9,23 @@
 //   getIt.get<OllamaService>() 命中桩实现，可端到端验证 _cleanTranslationResult
 //   与 HTML 文本节点替换；全程不发网络。
 import 'package:dio/dio.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 // assignAll 等 Rx 集合扩展由 get 包提供（hide 避免与 dio 的同名类型冲突）
 // ignore: depend_on_referenced_packages
 import 'package:get/get.dart' hide Response, FormData, MultipartFile;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:slime_works/mock/data/novel_mock_data.dart';
+import 'package:slime_works/mock/mock_mode.dart';
+import 'package:slime_works/mock/seams/novel_api_seam.dart' as novel_api;
 import 'package:slime_works/core/provider/main.dart';
 import 'package:slime_works/core/services/ollama/ollama_models.dart';
 import 'package:slime_works/core/services/ollama/ollama_service.dart';
 import 'package:slime_works/src/rust/api/novel_reader.dart';
+import 'package:slime_works/pages/novel_reader/components/reader_content.dart';
 import 'package:slime_works/view_models/novel_reader_viewmodel.dart';
+
+import 'helpers/page_golden.dart';
 
 /// 桩 Ollama 服务：translate 从预设映射取译文，可指定按文本抛错。
 class _StubOllamaService extends OllamaService {
@@ -145,6 +153,87 @@ void main() {
   });
 
   // ── HTML 缓存与逐出 ───────────────────────────────────────────────────────
+
+  test('章内滚动比例被记录并夹紧，切章后回到新章起点', () async {
+    vm.chapters.assignAll([chapter(0), chapter(1)]);
+    vm.updateChapterFraction(0.42);
+    expect(vm.currentChapterFraction, closeTo(0.42, 0.0001));
+    vm.updateChapterFraction(2);
+    expect(vm.currentChapterFraction, 1.0);
+    vm.nextChapter();
+    expect(vm.currentChapterFraction, 0.0);
+    await settle();
+  });
+
+  test('本机恢复章内比例，并按章节加比例公式持久化', () async {
+    SharedPreferences.setMockInitialValues({});
+    await MockMode.setRuntimeEnabled(true);
+    addTearDown(() => MockMode.setRuntimeEnabled(false));
+    final data = MockNovelData.instance;
+    final added = novel_api.addNovel(filePaths: ['/mock/progress-check.txt']).single;
+    vm = NovelReaderViewModel(
+      NovelMetadata(
+        id: added.id,
+        title: added.title,
+        filePath: added.filePath,
+        format: added.format,
+        fileSize: added.fileSize,
+        modifiedAt: added.modifiedAt,
+        addedAt: added.addedAt,
+        progress: 0.26,
+        isFavorite: false,
+        tags: const [],
+      ),
+    );
+
+    await vm.loadNovelContent();
+    expect(vm.errorMessage.value, isEmpty);
+    expect(vm.currentChapterIndex.value, 1);
+    expect(vm.currentChapterFraction, closeTo(0.3, 0.0001));
+
+    vm.updateChapterFraction(0.4);
+    final saved = data.novels.firstWhere((n) => n.id == added.id);
+    expect(saved.progress, closeTo(1.4 / vm.chapters.length, 0.0001));
+
+    vm.nextChapter();
+    await settle();
+    final turned = data.novels.firstWhere((n) => n.id == added.id);
+    expect(turned.progress, closeTo(2 / vm.chapters.length, 0.0001));
+  });
+
+  testWidgets('本机切章等新正文布局完成后再恢复章内位置', (tester) async {
+    vm.chapters.assignAll([chapter(0), chapter(1)]);
+    vm.currentContent.value = List.generate(
+      120,
+      (i) => '旧正文第$i行，确保章节可以滚动。',
+    ).join('\n');
+    vm.currentChapterFraction = 0.5;
+    await pumpAppPage(
+      tester,
+      Scaffold(body: ReaderContent(controller: vm)),
+      size: const Size(390, 844),
+      designSize: const Size(390, 844),
+    );
+    await tester.pumpAndSettle();
+
+    vm.currentChapterIndex.value = 1;
+    await tester.pump();
+    vm.currentContent.value = List.generate(
+      160,
+      (i) => '新正文第$i行，确保章节可以滚动。',
+    ).join('\n');
+    await tester.pumpAndSettle();
+
+    final scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable).first,
+    );
+    expect(
+      scrollable.position.pixels,
+      closeTo(scrollable.position.maxScrollExtent * 0.5, 1),
+    );
+    await unmountPage(tester);
+    vm.onClose();
+  });
 
   group('cacheHtml / getCachedHtml', () {
     test('写入即读回，重复写入同 key 覆盖', () {

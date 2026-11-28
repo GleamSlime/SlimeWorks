@@ -585,10 +585,12 @@ class _NovelLibraryPageState extends State<NovelLibraryPage> {
                                             metadata: novel,
                                             nodeId: nodeId,
                                             nodeName: nodeName ?? '',
+                                            onFavoriteChanged:
+                                                controller.refreshRemoteNovels,
                                           ),
                                         ),
                                       );
-                                      controller.loadNovels();
+                                      await controller.refreshRemoteNovels();
                                       return;
                                     }
                                   }

@@ -11,6 +11,7 @@ import 'package:slime_works/view_models/novel_library_viewmodel.dart';
 import 'package:slime_works/components/icons/draw_icon.dart';
 import 'package:slime_works/components/icons/stroke_icons.g.dart';
 import 'package:slime_works/core/widgets/app_text_field.dart';
+import 'package:slime_works/core/widgets/novel_text_cover.dart';
 
 class LibraryBookInfoDialog extends StatefulWidget {
   final NovelMetadata metadata;
@@ -123,14 +124,9 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
 
   // ── 封面区域 ─────────────────────────────────────────────────────────────
 
-  /// 无封面/加载失败时的占位图标
-  Widget _coverPlaceholder(AppSemantic s) {
-    return Center(
-      child: DrawIcon(StrokeIcons.menuBook,
-        size: AppTheme.metrics.iconSize64,
-        color: s.accent.withValues(alpha: 0.4),
-      ),
-    );
+  /// 无封面/加载失败时的文字封面
+  Widget _coverPlaceholder() {
+    return NovelTextCover(title: widget.metadata.title, fontSize: 64);
   }
 
   Widget _buildCover(BuildContext context) {
@@ -147,7 +143,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        errorBuilder: (_, _, _) => _coverPlaceholder(s),
+        errorBuilder: (_, _, _) => _coverPlaceholder(),
       );
     } else if (coverSource != null && coverSource.startsWith('data:image/')) {
       final commaIndex = coverSource.indexOf(',');
@@ -159,13 +155,13 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
             fit: BoxFit.cover,
             width: double.infinity,
             height: double.infinity,
-            errorBuilder: (_, _, _) => _coverPlaceholder(s),
+            errorBuilder: (_, _, _) => _coverPlaceholder(),
           );
         } catch (_) {
-          coverWidget = _coverPlaceholder(s);
+          coverWidget = _coverPlaceholder();
         }
       } else {
-        coverWidget = _coverPlaceholder(s);
+        coverWidget = _coverPlaceholder();
       }
     } else if (coverSource != null && File(coverSource).existsSync()) {
       coverWidget = Image.file(
@@ -175,7 +171,7 @@ class _LibraryBookInfoDialogState extends State<LibraryBookInfoDialog> {
         height: double.infinity,
       );
     } else {
-      coverWidget = _coverPlaceholder(s);
+      coverWidget = _coverPlaceholder();
     }
 
     return GestureDetector(
