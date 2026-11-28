@@ -342,6 +342,7 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   Future<void> scanFolder({
     OllamaModelOption? detectionModel,
     String? remoteFolderPath,
+    String? localFolderPath,
     bool preserveDirectoryStructure = true,
   }) async {
     try {
@@ -405,7 +406,8 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
         return;
       }
 
-      final result = await FilePicker.platform.getDirectoryPath();
+      final result =
+          localFolderPath ?? await FilePicker.platform.getDirectoryPath();
       if (result == null) {
         showSnack('提示', '已取消扫描');
         _logger.log('[ScanDebug] 用户取消目录选择', name: '书库');
@@ -975,28 +977,47 @@ extension NovelLibraryNovelOps on NovelLibraryViewModel {
   // 外部拖拽文件导入
   // ─────────────────────────────────────────
 
-  /// 从外部拖入若干文件路径，过滤出支持的格式并导入
-  /// 如果当前在文件夹内，自动关联到该文件夹
+  /// 从外部拖入文件或文件夹；文件直接导入，文件夹按原目录结构扫描。
+  /// 如果当前在文件夹内，自动关联到该文件夹。
   Future<void> addDroppedFiles(List<String> filePaths) async {
-    final supported = filePaths
-        .where(
-          (p) =>
-              p.toLowerCase().endsWith('.txt') ||
-              p.toLowerCase().endsWith('.epub'),
-        )
-        .toList();
-    if (supported.isEmpty) return;
-    try {
-      final fid = currentFolderId.value;
-      if (fid != null) {
-        addNovelToFolder(filePaths: supported, folderId: fid);
-      } else {
-        addNovel(filePaths: supported);
+    final directories = <String>[];
+    final supported = <String>[];
+    for (final path in filePaths) {
+      if (Directory(path).existsSync()) {
+        directories.add(path);
+        continue;
       }
-      await loadNovels();
-      await _computeChapterCountsForPaths(supported);
-      await _autoTagByPaths(supported);
-      showSnack('导入成功', '已导入 ${supported.length} 本书籍');
+      final lower = path.toLowerCase();
+      if (lower.endsWith('.txt') || lower.endsWith('.epub')) {
+        supported.add(path);
+      }
+    }
+    if (directories.isEmpty && supported.isEmpty) return;
+    try {
+      if (nodeSettingsService.isRemoteMode) {
+        if (supported.isNotEmpty) {
+          await _importRemoteFiles(supported);
+        }
+        if (directories.isNotEmpty) {
+          showSnack('提示', '远程节点模式请使用「扫描文件夹」选择节点目录');
+        }
+        return;
+      }
+      if (supported.isNotEmpty) {
+        final fid = currentFolderId.value;
+        if (fid != null) {
+          addNovelToFolder(filePaths: supported, folderId: fid);
+        } else {
+          addNovel(filePaths: supported);
+        }
+        await loadNovels();
+        await _computeChapterCountsForPaths(supported);
+        await _autoTagByPaths(supported);
+        showSnack('导入成功', '已导入 ${supported.length} 本书籍');
+      }
+      for (final directory in directories) {
+        await scanFolder(localFolderPath: directory);
+      }
     } catch (e) {
       showSnack('错误', '导入失败: $e');
     }

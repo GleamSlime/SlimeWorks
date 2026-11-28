@@ -74,7 +74,10 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
         ),
         buttonColor: Colors.transparent,
         cardColor: Colors.transparent,
-        content: _MessageContent(viewModel: widget.viewModel),
+        content: _MessageContent(
+          viewModel: widget.viewModel,
+          pageContext: context,
+        ),
         buttonRadius: AppTheme.metrics.kSpace32,
         cardOffset: scaleW(30),
         duration: AppMotion.fast,
@@ -85,8 +88,9 @@ class _LibraryBookAppendButtonState extends State<LibraryBookAppendButton> {
 
 class _MessageContent extends StatelessWidget {
   final NovelLibraryViewModel viewModel;
+  final BuildContext pageContext;
 
-  const _MessageContent({required this.viewModel});
+  const _MessageContent({required this.viewModel, required this.pageContext});
 
   Future<void> _chooseImport(
     BuildContext context, {
@@ -111,7 +115,7 @@ class _MessageContent extends StatelessWidget {
             nodeSettingsService: viewModel.nodeSettingsService,
           ),
         );
-        if (remotePath == null) return;
+        if (remotePath == null || !context.mounted) return;
       }
       await viewModel.scanFolder(
         detectionModel: result.model,
@@ -144,13 +148,13 @@ class _MessageContent extends StatelessWidget {
             _ImportOptionItem(
               icon: StrokeIcons.insertDriveFile,
               label: '添加单个文件',
-              onTap: () => _chooseImport(context, scanFolder: false),
+              onTap: () => _chooseImport(pageContext, scanFolder: false),
             ),
             const Divider(),
             _ImportOptionItem(
               icon: StrokeIcons.folder,
               label: '扫描文件夹',
-              onTap: () => _chooseImport(context, scanFolder: true),
+              onTap: () => _chooseImport(pageContext, scanFolder: true),
             ),
           ],
         ),
